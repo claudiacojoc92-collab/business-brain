@@ -1,0 +1,57 @@
+{
+  "title": "Business Brain — Memory Intelligence",
+  "uid":   "bb-memory",
+  "tags":  ["businessbrain", "memory", "intelligence"],
+  "time":  { "from": "now-24h", "to": "now" },
+  "refresh": "5m",
+  "panels": [
+    {
+      "title": "Memory Layer Confidence by Layer",
+      "type":  "bargauge",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [{
+        "expr": "bb_memory_layer_confidence",
+        "legendFormat": "{{layer}}"
+      }]
+    },
+    {
+      "title": "Intelligence Events per Hour",
+      "type":  "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [{
+        "expr": "increase(bb_intelligence_events_total[1h])",
+        "legendFormat": "events/hour"
+      }]
+    },
+    {
+      "title": "Brain Snapshot Age (seconds)",
+      "type":  "gauge",
+      "gridPos": { "x": 0, "y": 8, "w": 8, "h": 6 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "value": 0,   "color": "green"  },
+              { "value": 240, "color": "yellow" },
+              { "value": 300, "color": "red"    }
+            ]
+          },
+          "unit": "s"
+        }
+      },
+      "targets": [{
+        "expr": "time() - bb_memory_snapshot_built_at_seconds",
+        "legendFormat": "snapshot age"
+      }]
+    },
+    {
+      "title": "Pattern Confidence Distribution",
+      "type":  "histogram",
+      "gridPos": { "x": 8, "y": 8, "w": 16, "h": 6 },
+      "targets": [{
+        "expr": "bb_pattern_confidence",
+        "legendFormat": "confidence"
+      }]
+    }
+  ]
+}

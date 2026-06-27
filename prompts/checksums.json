@@ -1,0 +1,12 @@
+{
+  "PR-001-interpreter": "ebe71ff7f6841b6f21b4542e9afb35dabacb78c3b414afcfc1305c60a3e33d85",
+  "PR-002-situation-modeller": "3bbaee4db4bc12923ea97832c7d621d17bea49bf3ca290a50a1c5613c416e877",
+  "PR-003-memory-interrogator": "c119ddf6e31e967738302d80172eacf52dddfe99ab6233d8b00a29fbbbfbd16f",
+  "PR-004-hypothesis-generator": "7ae391f92817f05392eb6a8ea08d835011d13ad73efbfe228637c0bfb613032f",
+  "PR-005-evaluator": "80a10cbe548b82a824139f1f2a29773b185aef4495ef63ce00379f7830400537",
+  "PR-006-soft-constraints": "f5b503ef3cda9b0f95131bd19498628edfa19ce10cdff74fbe634cd1a9b74c3a",
+  "PR-008-critic": "13259d38e8b0e27fe99702b86a8fc897ab11e05b1f8410d32429a8d7c98cea93",
+  "PR-009-decision-commit": "7efe6ae48d85b88fade47fe5a98100dc02745e7077a17f519b8075a568e9ab5d",
+  "PR-010-memory-updater": "9053010dd2295ac9535d507607509303b3ed8cf293f98ed9792d77e36ffd42ed",
+  "PR-011-fallback-generator": "a994166be63594dee5b6b46a87c58f4e559f1b5d47e1d328ac717fb30d3d8ee9"
+}

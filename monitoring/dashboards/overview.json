@@ -1,0 +1,63 @@
+{
+  "title": "Business Brain — System Overview",
+  "uid":   "bb-overview",
+  "tags":  ["businessbrain", "overview"],
+  "time":  { "from": "now-1h", "to": "now" },
+  "refresh": "30s",
+  "panels": [
+    {
+      "title": "API Request Rate",
+      "type":  "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 6 },
+      "targets": [{
+        "expr": "rate(bb_api_requests_total[5m])",
+        "legendFormat": "requests/s"
+      }]
+    },
+    {
+      "title": "API p95 Latency (ms)",
+      "type":  "timeseries",
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 6 },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, rate(bb_api_request_duration_ms_bucket[5m]))",
+        "legendFormat": "p95"
+      }]
+    },
+    {
+      "title": "API Error Rate",
+      "type":  "timeseries",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 6 },
+      "targets": [{
+        "expr": "rate(bb_api_requests_total{status=~\"5..\"}[5m]) / rate(bb_api_requests_total[5m])",
+        "legendFormat": "error rate"
+      }]
+    },
+    {
+      "title": "Worker Job Throughput",
+      "type":  "timeseries",
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 6 },
+      "targets": [{
+        "expr": "rate(bb_worker_job_duration_ms_count[5m])",
+        "legendFormat": "jobs/s"
+      }]
+    },
+    {
+      "title": "Outbox Relay Queue Depth",
+      "type":  "stat",
+      "gridPos": { "x": 12, "y": 6, "w": 6, "h": 6 },
+      "targets": [{
+        "expr": "bb_domain_events_unpublished",
+        "legendFormat": "unpublished events"
+      }]
+    },
+    {
+      "title": "Dead Letter Count",
+      "type":  "stat",
+      "gridPos": { "x": 18, "y": 6, "w": 6, "h": 6 },
+      "targets": [{
+        "expr": "increase(bb_events_dead_lettered_total[1h])",
+        "legendFormat": "dead-lettered (1h)"
+      }]
+    }
+  ]
+}

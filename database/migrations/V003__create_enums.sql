@@ -1,0 +1,119 @@
+CREATE SCHEMA IF NOT EXISTS bb_types;
+
+DO $$ BEGIN
+  CREATE TYPE bb_types.founder_status AS ENUM (
+    'CREATED','INTAKE_PENDING','INTAKE_COMPLETE',
+    'ACTIVE','RECALIBRATING','PAUSED','ARCHIVED'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE bb_types.marketing_mode AS ENUM (
+    'AUTHORITY','TRUST','EDUCATION','CONVERSION'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE bb_types.memory_layer AS ENUM (
+    'APPROVAL_INTELLIGENCE','EDIT_PATTERN_INTELLIGENCE',
+    'REJECTION_INTELLIGENCE','PERFORMANCE_INTELLIGENCE',
+    'BUSINESS_EVOLUTION','SEASONAL_CONTEXTUAL',
+    'OFFER_INTELLIGENCE','OUTCOME_INTELLIGENCE','AUDIENCE_TEMPERATURE'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE bb_types.approval_status AS ENUM (
+    'AWAITING_APPROVAL','APPROVED','APPROVED_WITH_EDITS',
+    'REJECTED','AUTO_APPROVED'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE bb_types.campaign_type AS ENUM (
+    'LAUNCH','REENGAGEMENT','POSITIONING','SEASONAL','MILESTONE'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE bb_types.campaign_status AS ENUM (
+    'PLANNED','ACTIVE','COMPLETED','SUCCEEDED','FAILED','INTERRUPTED'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE bb_types.edit_type AS ENUM (
+    'VOICE_CORRECTION','CTA_SOFTENING','SPECIFICITY_ADDITION',
+    'STRUCTURE_CHANGE','TONE_ADJUSTMENT','FACTUAL_CORRECTION',
+    'LENGTH_REDUCTION','LENGTH_EXPANSION','OPENING_CHANGE',
+    'CLOSING_CHANGE','UNCLASSIFIED'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE bb_types.rejection_reason_code AS ENUM (
+    'VOICE_MISMATCH','TOPIC_INAPPROPRIATE','CTA_AGGRESSIVE',
+    'FACTUALLY_INCORRECT','TONE_WRONG','OFF_BRAND','TIMING_WRONG',
+    'PRIVACY_CONCERN','COMPETITOR_MENTION','UNCLASSIFIED'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE bb_types.outcome_type AS ENUM (
+    'DM','ENQUIRY','DISCOVERY_CALL','CLIENT','REVENUE'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE bb_types.signal_type AS ENUM (
+    'PLATFORM','BEHAVIOURAL','OUTCOME','TEMPORAL'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE bb_types.recalibration_type AS ENUM (
+    'VOICE','STRATEGIC','CONTEXT','FULL'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE bb_types.notification_channel AS ENUM (
+    'EMAIL','IN_APP','PUSH'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE bb_types.offer_availability AS ENUM (
+    'OPEN','WAITLISTED','FULL','IN_DEVELOPMENT'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE bb_types.offer_maturity AS ENUM (
+    'NEW','ESTABLISHED','PROVEN'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE bb_types.offer_price_tier AS ENUM (
+    'ACCESSIBLE','MID','PREMIUM'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE bb_types.offer_sales_mechanism AS ENUM (
+    'DISCOVERY_CALL','APPLICATION','DIRECT_PURCHASE'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE bb_types.signal_direction AS ENUM (
+    'IMPROVING','STABLE','DECLINING','UNKNOWN'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE bb_types.pattern_status AS ENUM (
+    'ACTIVE','WEAK','SUPERSEDED'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;

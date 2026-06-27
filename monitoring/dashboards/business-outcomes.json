@@ -1,0 +1,54 @@
+{
+  "title": "Business Brain — Business Outcomes",
+  "uid":   "bb-outcomes",
+  "tags":  ["businessbrain", "outcomes", "attribution"],
+  "time":  { "from": "now-30d", "to": "now" },
+  "refresh": "10m",
+  "panels": [
+    {
+      "title": "Outcomes Reported (30d)",
+      "type":  "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "targets": [{
+        "expr": "increase(bb_outcomes_reported_total[30d])",
+        "legendFormat": "outcomes"
+      }]
+    },
+    {
+      "title": "Outcomes Confirmed (30d)",
+      "type":  "stat",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "targets": [{
+        "expr": "increase(bb_outcomes_confirmed_total[30d])",
+        "legendFormat": "confirmed"
+      }]
+    },
+    {
+      "title": "Attribution Confidence Distribution",
+      "type":  "histogram",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 4 },
+      "targets": [{
+        "expr": "bb_attribution_confidence",
+        "legendFormat": "confidence"
+      }]
+    },
+    {
+      "title": "Outcomes by Type",
+      "type":  "piechart",
+      "gridPos": { "x": 0, "y": 4, "w": 10, "h": 8 },
+      "targets": [{
+        "expr": "sum by (outcome_type) (bb_outcomes_reported_total)",
+        "legendFormat": "{{outcome_type}}"
+      }]
+    },
+    {
+      "title": "Weekly Outcome Trend",
+      "type":  "timeseries",
+      "gridPos": { "x": 10, "y": 4, "w": 14, "h": 8 },
+      "targets": [{
+        "expr": "increase(bb_outcomes_reported_total[1w])",
+        "legendFormat": "outcomes/week"
+      }]
+    }
+  ]
+}

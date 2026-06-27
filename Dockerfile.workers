@@ -1,0 +1,36 @@
+# Dockerfile.workers — Business Brain workers (referenced by docker-compose.yml + k8s).
+# Reuses the existing root build (tsc -b) and start script (node dist/main.js).
+# Production resolves @bb/* → dist via the 1.2a exports "default" condition.
+
+# ── build stage: install workspace deps + compile the workers project graph ──────
+FROM node:20-alpine AS build
+WORKDIR /app
+# bcrypt (@bb/infrastructure) builds a native addon via node-gyp.
+RUN apk add --no-cache python3 make g++
+
+COPY package.json package-lock.json ./
+COPY packages/shared/package.json          packages/shared/package.json
+COPY packages/domain/package.json          packages/domain/package.json
+COPY packages/application/package.json      packages/application/package.json
+COPY packages/infrastructure/package.json   packages/infrastructure/package.json
+COPY apps/api/package.json       apps/api/package.json
+COPY apps/workers/package.json   apps/workers/package.json
+COPY apps/web/package.json       apps/web/package.json
+RUN npm ci
+
+COPY tsconfig.json tsconfig.base.json ./
+COPY packages ./packages
+COPY apps ./apps
+RUN npx tsc -b
+RUN npm prune --omit=dev
+
+# ── run stage ────────────────────────────────────────────────────────────────────
+FROM node:20-alpine AS run
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/packages ./packages
+COPY --from=build /app/apps/workers ./apps/workers
+EXPOSE 3001
+CMD ["node", "apps/workers/dist/main.js"]

@@ -1,0 +1,142 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bb-postgres
+    environment:
+      POSTGRES_USER:     bbuser
+      POSTGRES_PASSWORD: bbpassword
+      POSTGRES_DB:       businessbrain
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bbuser -d businessbrain"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: bb-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    image: flyway/flyway:10-alpine
+    container_name: bb-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      FLYWAY_URL:      jdbc:postgresql://postgres:5432/businessbrain
+      FLYWAY_USER:     bbuser
+      FLYWAY_PASSWORD: bbpassword
+      FLYWAY_SCHEMAS:  founder,cycle,memory,campaign,outcome,app,audit
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_VALIDATE_ON_MIGRATE: "true"
+      FLYWAY_PLACEHOLDER_REPLACEMENT: "false"
+    volumes:
+      - ./database/migrations:/flyway/sql
+    command: migrate
+    profiles:
+      - migrate
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: bb-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL:      postgresql://bbuser:bbpassword@postgres:5432/businessbrain
+      REDIS_URL:         redis://redis:6379
+      NODE_ENV:          development
+      PORT:              "3000"
+      LOG_LEVEL:         debug
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    profiles:
+      - app
+
+  workers:
+    build:
+      context: .
+      dockerfile: Dockerfile.workers
+    container_name: bb-workers
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL:      postgresql://bbuser:bbpassword@postgres:5432/businessbrain
+      REDIS_URL:         redis://redis:6379
+      NODE_ENV:          development
+      SCHEDULER:         "true"
+      WORKER_HEALTH_PORT: "3001"
+      LOG_LEVEL:         debug
+    env_file:
+      - .env
+    ports:
+      - "3001:3001"
+    profiles:
+      - app
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: bb-web
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+    profiles:
+      - app
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: bb-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    profiles:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: bb-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED:  "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/dashboards:/etc/grafana/provisioning/dashboards
+    ports:
+      - "3002:3000"
+    profiles:
+      - monitoring
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:

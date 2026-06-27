@@ -1,0 +1,35 @@
+CREATE TABLE IF NOT EXISTS cycle.internal_briefs (
+  id                      TEXT        PRIMARY KEY,
+  cycle_id                TEXT        NOT NULL REFERENCES cycle.weekly_cycles(id),
+  founder_id              TEXT        NOT NULL,
+  mode                    TEXT        NOT NULL,
+  mode_confidence         NUMERIC(4,3) NOT NULL,
+  mode_reason             TEXT        NOT NULL,
+  belief_target_primary   TEXT        NOT NULL,
+  belief_target_secondary TEXT,
+  belief_gap_addressed    TEXT        NOT NULL,
+  audience_segment        TEXT        NOT NULL,
+  audience_temperature    TEXT        NOT NULL,
+  relationship_move_type  TEXT        NOT NULL,
+  relationship_move_desc  TEXT        NOT NULL,
+  voice_parameters        JSONB       NOT NULL DEFAULT '{}',
+  hard_blocks             JSONB       NOT NULL DEFAULT '[]',
+  voice_boundaries        JSONB       NOT NULL DEFAULT '[]',
+  offer_constraints       JSONB       NOT NULL DEFAULT '[]',
+  conviction_angle        TEXT        NOT NULL,
+  audience_language       JSONB       NOT NULL DEFAULT '{}',
+  strategic_purpose       TEXT        NOT NULL,
+  campaign_id             TEXT,
+  piece_objectives        JSONB       NOT NULL DEFAULT '[]',
+  brief_confidence        NUMERIC(4,3) NOT NULL,
+  uniqueness_score        INTEGER     NOT NULL,
+  validation_result       TEXT        NOT NULL,
+  review_flag             BOOLEAN     NOT NULL DEFAULT FALSE,
+  memory_confidence       NUMERIC(4,3) NOT NULL DEFAULT 0.000,
+  recalibration_needed    BOOLEAN     NOT NULL DEFAULT FALSE,
+  is_fallback             BOOLEAN     NOT NULL DEFAULT FALSE,
+  committed_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS internal_briefs_cycle_unique
+  ON cycle.internal_briefs (cycle_id);

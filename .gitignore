@@ -1,0 +1,29 @@
+node_modules/
+dist/
+*.env
+.env.*
+!.env.example
+coverage/
+.DS_Store
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Logs
+*.log
+logs/
+
+# Secrets / keys (defensive — none should ever be committed)
+*.pem
+*.key
+*.p12
+*.keystore
+
+# Editor / OS cruft
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+
+# Claude Code local tool state (not project source)
+.claude/

@@ -1,0 +1,25 @@
+{
+  "name": "@bb/workers",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./src/main.ts",
+  "scripts": {
+    "start":      "node dist/main.js",
+    "type-check": "tsc --noEmit",
+    "lint":       "eslint src --max-warnings 0",
+    "test":       "vitest run"
+  },
+  "dependencies": {
+    "@bb/shared":         "*",
+    "@bb/domain":         "*",
+    "@bb/application":    "*",
+    "@bb/infrastructure": "*",
+    "bullmq":             "^5.0.0",
+    "ioredis":            "^5.3.0"
+  },
+  "devDependencies": {
+    "typescript":  "^5.4.0",
+    "@types/node": "^22.0.0",
+    "vitest":      "^2.0.0"
+  }
+}

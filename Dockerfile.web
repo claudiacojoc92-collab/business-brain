@@ -1,0 +1,33 @@
+# Dockerfile.web — Business Brain web (apps/web) built with Vite, served by nginx.
+# Static-only: nginx serves the SPA and proxies /v1 + /auth to the api service
+# (same-origin; FE API_BASE='/'). The api is NOT involved in serving the web assets.
+
+# ── build stage: run the EXISTING apps/web build (tsc --noEmit && vite build) ─────
+FROM node:20-alpine AS build
+WORKDIR /app
+# Some workspace deps run native/postinstall scripts during npm ci (bcrypt node-gyp,
+# esbuild binary). Provide the toolchain so the monorepo install completes; none of
+# it ends up in the final nginx image.
+RUN apk add --no-cache python3 make g++
+
+# Workspace manifests first (npm ci needs every workspace's package.json).
+COPY package.json package-lock.json ./
+COPY packages/shared/package.json          packages/shared/package.json
+COPY packages/domain/package.json          packages/domain/package.json
+COPY packages/application/package.json      packages/application/package.json
+COPY packages/infrastructure/package.json   packages/infrastructure/package.json
+COPY apps/api/package.json       apps/api/package.json
+COPY apps/workers/package.json   apps/workers/package.json
+COPY apps/web/package.json       apps/web/package.json
+RUN npm ci
+
+# apps/web is a standalone FE (no @bb/* imports) — only its source is needed.
+COPY apps/web ./apps/web
+RUN npm run build --workspace @business-brain/web
+
+# ── run stage: nginx serves the static build ─────────────────────────────────────
+FROM nginx:1.27-alpine AS run
+COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/apps/web/dist /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

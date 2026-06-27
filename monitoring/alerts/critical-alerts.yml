@@ -1,0 +1,77 @@
+groups:
+  - name: businessbrain-critical
+    interval: 30s
+    rules:
+
+      # LLM Pipeline
+      - alert: LLMPipelineFallbackRateHigh
+        expr: |
+          rate(bb_llm_calls_total{result="fallback"}[1h])
+          / rate(bb_llm_calls_total[1h]) > 0.20
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LLM pipeline fallback rate exceeds 20%"
+          runbook: "monitoring/runbooks/llm-pipeline-failure.md"
+
+      - alert: LLMPipelineDeadLettered
+        expr: increase(bb_events_dead_lettered_total{job_type="LLM_PIPELINE"}[1h]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "LLM pipeline jobs dead-lettered — immediate investigation required"
+          runbook: "monitoring/runbooks/llm-pipeline-failure.md"
+
+      # Memory Staleness (F018)
+      - alert: BrainSnapshotStale
+        expr: |
+          (time() - bb_memory_snapshot_built_at_seconds) > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Brain snapshot is stale (>5 minutes)"
+          runbook: "monitoring/runbooks/memory-staleness.md"
+
+      # Outbox Relay Lag (F010/F013)
+      - alert: OutboxRelayLag
+        expr: |
+          count(bb_domain_events_unpublished) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox relay lag: >100 unpublished events"
+          runbook: "monitoring/runbooks/outbox-relay-lag.md"
+
+      - alert: OutboxRelayStuck
+        expr: |
+          count(bb_domain_events_unpublished) > 500
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Outbox relay stuck: >500 unpublished events for 15 minutes"
+          runbook: "monitoring/runbooks/outbox-relay-lag.md"
+
+      # API Health
+      - alert: APIHighErrorRate
+        expr: |
+          rate(bb_api_requests_total{status=~"5.."}[5m])
+          / rate(bb_api_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API error rate exceeds 5%"
+
+      - alert: APIHighLatency
+        expr: |
+          histogram_quantile(0.95, rate(bb_api_request_duration_ms_bucket[5m])) > 2000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API p95 latency exceeds 2000ms"

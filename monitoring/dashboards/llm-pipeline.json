@@ -1,0 +1,66 @@
+{
+  "title": "Business Brain — LLM Pipeline",
+  "uid":   "bb-llm-pipeline",
+  "tags":  ["businessbrain", "llm", "pipeline"],
+  "time":  { "from": "now-6h", "to": "now" },
+  "refresh": "60s",
+  "panels": [
+    {
+      "title": "Pipeline Executions per Hour",
+      "type":  "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 6 },
+      "targets": [{
+        "expr": "increase(bb_llm_calls_total[1h])",
+        "legendFormat": "LLM calls/hour"
+      }]
+    },
+    {
+      "title": "Fallback Rate",
+      "type":  "gauge",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 6 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "value": 0,    "color": "green"  },
+              { "value": 0.10, "color": "yellow" },
+              { "value": 0.20, "color": "red"    }
+            ]
+          },
+          "unit": "percentunit"
+        }
+      },
+      "targets": [{
+        "expr": "rate(bb_llm_calls_total{result=\"fallback\"}[1h]) / rate(bb_llm_calls_total[1h])",
+        "legendFormat": "fallback rate"
+      }]
+    },
+    {
+      "title": "Cycle Completion Rate (1h rolling)",
+      "type":  "stat",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 6 },
+      "targets": [{
+        "expr": "bb_cycle_completion_rate",
+        "legendFormat": "completion rate"
+      }]
+    },
+    {
+      "title": "LLM Token Usage (Input + Output)",
+      "type":  "timeseries",
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 6 },
+      "targets": [{
+        "expr": "rate(bb_llm_tokens_total[5m])",
+        "legendFormat": "tokens/s"
+      }]
+    },
+    {
+      "title": "Pipeline Stage Latency p95 (ms)",
+      "type":  "timeseries",
+      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 6 },
+      "targets": [{
+        "expr": "histogram_quantile(0.95, rate(bb_cycle_total_duration_ms_bucket[5m]))",
+        "legendFormat": "p95 cycle duration"
+      }]
+    }
+  ]
+}

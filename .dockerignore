@@ -1,0 +1,15 @@
+# Keep host build artefacts out of the image context so the image installs/builds
+# its own (correct-arch) deps and dist. node_modules especially must NOT leak in
+# (host bcrypt is built for the host OS/arch).
+node_modules
+**/node_modules
+dist
+**/dist
+*.tsbuildinfo
+**/*.tsbuildinfo
+.git
+.env
+.env.*
+*.log
+coverage
+**/coverage

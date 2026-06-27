@@ -1,0 +1,187 @@
+/* OnboardingScreen.module.css */
+
+/* ── Layout ─────────────────────────────────────────────────────────────────── */
+.container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 20px;
+  background: #0a0f1a;
+
+  /* Fade-in transition */
+  opacity: 0;
+  transition: opacity 300ms ease-in;
+}
+
+.container.visible {
+  opacity: 1;
+}
+
+.questionCard {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ── Prompt ──────────────────────────────────────────────────────────────────── */
+.prompt {
+  font-size: 1.25rem;
+  line-height: 1.65;
+  color: #e8e6e1;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+/* ── Textarea ────────────────────────────────────────────────────────────────── */
+.textarea {
+  width: 100%;
+  min-height: 140px;
+  background: #111827;
+  border: 1px solid #1f2937;
+  border-radius: 6px;
+  color: #e8e6e1;
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.6;
+  padding: 16px;
+  resize: vertical;
+  outline: none;
+  transition: border-color 200ms ease;
+  caret-color: #c9a84c;
+}
+
+.textarea:focus {
+  border-color: #374151;
+}
+
+.textarea::placeholder {
+  color: #374151;
+}
+
+/* ── Controls ────────────────────────────────────────────────────────────────── */
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  min-height: 28px;
+}
+
+.savingIndicator {
+  font-size: 0.75rem;
+  color: #4b5563;
+  letter-spacing: 0.03em;
+}
+
+.continueLink {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 0.875rem;
+  cursor: pointer;
+  padding: 4px 0;
+  letter-spacing: 0.02em;
+  transition: color 150ms ease;
+  font-family: inherit;
+}
+
+.continueLink:hover {
+  color: #e8e6e1;
+}
+
+/* ── Block reflection ────────────────────────────────────────────────────────── */
+.reflection {
+  font-size: 1.125rem;
+  line-height: 1.7;
+  color: #9ca3af;
+  font-style: italic;
+  font-weight: 300;
+}
+
+.continueBtn {
+  align-self: flex-start;
+  background: none;
+  border: 1px solid #1f2937;
+  color: #6b7280;
+  font-size: 0.875rem;
+  cursor: pointer;
+  padding: 8px 16px;
+  border-radius: 4px;
+  transition: border-color 150ms ease, color 150ms ease;
+  font-family: inherit;
+  letter-spacing: 0.02em;
+}
+
+.continueBtn:hover {
+  border-color: #374151;
+  color: #9ca3af;
+}
+
+/* ── Error banner ────────────────────────────────────────────────────────────── */
+.errorBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #1c1010;
+  border: 1px solid #7f1d1d;
+  border-radius: 4px;
+  padding: 10px 14px;
+  font-size: 0.8125rem;
+  color: #fca5a5;
+}
+
+.retryBtn {
+  background: none;
+  border: 1px solid #7f1d1d;
+  color: #fca5a5;
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 3px;
+  white-space: nowrap;
+  font-family: inherit;
+  transition: border-color 150ms;
+}
+
+.retryBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Completion screen ───────────────────────────────────────────────────────── */
+.completionCard {
+  width: 100%;
+  max-width: 600px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.completionHeading {
+  font-size: 2rem;
+  font-weight: 500;
+  color: #e8e6e1;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.completionBody {
+  font-size: 1rem;
+  line-height: 1.75;
+  color: #6b7280;
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────────── */
+@media (min-width: 768px) {
+  .prompt {
+    font-size: 1.375rem;
+  }
+
+  .completionHeading {
+    font-size: 2.5rem;
+  }
+}

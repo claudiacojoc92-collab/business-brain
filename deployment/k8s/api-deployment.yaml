@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bb-api
+  namespace: businessbrain
+  labels:
+    app: bb-api
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: bb-api
+  template:
+    metadata:
+      labels:
+        app: bb-api
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/health/metrics"
+        prometheus.io/port: "3000"
+    spec:
+      containers:
+        - name: bb-api
+          image: businessbrain/api:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "3000"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: database-url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: redis-url
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: anthropic-api-key
+            - name: JWT_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: jwt-private-key
+            - name: JWT_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: jwt-public-key
+            - name: KMS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: bb-secrets
+                  key: kms-key-id
+          envFrom:
+            - configMapRef:
+                name: bb-app-config
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu:    "250m"
+              memory: "512Mi"
+            limits:
+              cpu:    "1000m"
+              memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bb-api
+  namespace: businessbrain
+spec:
+  selector:
+    app: bb-api
+  ports:
+    - port: 80
+      targetPort: 3000
+      protocol: TCP
+      name: http
+  type: ClusterIP

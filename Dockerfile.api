@@ -1,0 +1,40 @@
+# Dockerfile.api — Business Brain API (referenced by docker-compose.yml + k8s).
+# Reuses the existing root build (tsc -b) and start script (node dist/main.js).
+# Production resolves @bb/* → dist via the 1.2a exports "default" condition
+# (the "development" condition is NOT activated here — no --conditions, no bundler).
+
+# ── build stage: install workspace deps + compile the api project graph ──────────
+FROM node:20-alpine AS build
+WORKDIR /app
+# bcrypt (@bb/infrastructure) builds a native addon via node-gyp.
+RUN apk add --no-cache python3 make g++
+
+# Dependency manifests first → cache the npm ci layer across source changes.
+COPY package.json package-lock.json ./
+COPY packages/shared/package.json          packages/shared/package.json
+COPY packages/domain/package.json          packages/domain/package.json
+COPY packages/application/package.json      packages/application/package.json
+COPY packages/infrastructure/package.json   packages/infrastructure/package.json
+COPY apps/api/package.json       apps/api/package.json
+COPY apps/workers/package.json   apps/workers/package.json
+COPY apps/web/package.json       apps/web/package.json
+RUN npm ci
+
+# Sources for the existing root build (tsc -b builds @bb/* in dependency order, then apps).
+COPY tsconfig.json tsconfig.base.json ./
+COPY packages ./packages
+COPY apps ./apps
+RUN npx tsc -b
+# Drop devDependencies (typescript etc.); keep prod deps + compiled bcrypt + @bb/* links.
+RUN npm prune --omit=dev
+
+# ── run stage: only the artefacts the api needs at runtime ───────────────────────
+FROM node:20-alpine AS run
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/packages ./packages
+COPY --from=build /app/apps/api ./apps/api
+EXPOSE 3000
+CMD ["node", "apps/api/dist/main.js"]
