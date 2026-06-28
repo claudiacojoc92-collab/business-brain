@@ -82,6 +82,10 @@ function humanize(s: string): string {
   const lower = s.replace(/_/g, ' ').toLowerCase();
   return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
+/** Teaser truncation — the full text is shown when the brief is opened. */
+function truncate(s: string, n: number): string {
+  return s.length > n ? `${s.slice(0, n).trimEnd()}…` : s;
+}
 
 export function DashboardPage() {
   const { logout } = useAuth();
@@ -96,6 +100,7 @@ export function DashboardPage() {
   const [currentErr, setCurrentErr] = useState<ErrInfo | null>(null);
   const [brief, setBrief] = useState<CycleBrief | null>(null);
   const [briefErr, setBriefErr] = useState<ErrInfo | null>(null);
+  const [briefOpen, setBriefOpen] = useState(false);
   const [history, setHistory] = useState<CycleHistory | null>(null);
   const [memory, setMemory] = useState<MemoryConfidence | null>(null);
   const [content, setContent] = useState<ContentPieceForApproval[]>([]);
@@ -196,8 +201,29 @@ export function DashboardPage() {
                   <>
                     <div style={kicker}>Latest strategic read{fmtDate(brief.committedAt) ? ` · ${fmtDate(brief.committedAt)}` : ''}</div>
                     <Known label="Mode">{humanize(brief.mode)}</Known>
-                    {brief.strategicPurpose ? <Known label="Strategy">{brief.strategicPurpose}</Known> : null}
-                    {brief.audienceSegment ? <Known label="Audience">{brief.audienceSegment}</Known> : null}
+                    {brief.strategicPurpose
+                      ? <Known label="Strategy">{briefOpen ? brief.strategicPurpose : truncate(brief.strategicPurpose, 110)}</Known>
+                      : null}
+                    {brief.audienceSegment
+                      ? <Known label="Audience">{briefOpen ? brief.audienceSegment : truncate(brief.audienceSegment, 110)}</Known>
+                      : null}
+
+                    {briefOpen && (
+                      <>
+                        {brief.validationResult ? <Known label="Status">{humanize(brief.validationResult)}</Known> : null}
+                        {brief.isFallback ? (
+                          <Plain>This was a fallback brief — produced with limited signal, so it’s a starting read rather than a fully-confident strategic call.</Plain>
+                        ) : null}
+                      </>
+                    )}
+
+                    <button
+                      onClick={() => setBriefOpen((o) => !o)}
+                      aria-expanded={briefOpen}
+                      style={{ marginTop: 10, background: 'none', border: 'none', color: accent, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', padding: 0 }}
+                    >
+                      {briefOpen ? 'Close brief' : 'Open full brief'}
+                    </button>
                   </>
                 ) : null}
               </div>

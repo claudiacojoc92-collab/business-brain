@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../api/client', () => {
@@ -135,5 +136,45 @@ describe('DashboardPage (Home v1)', () => {
     });
     renderHome();
     expect(await screen.findByText(/Cycle #4 — Reasoning/)).toBeInTheDocument();
+  });
+
+  // ── Brief Read v1 — opening the latest strategic read ──────────────────────
+  const LONG_STRATEGY =
+    'Establish the founder as the credible alternative to both budget self-paced courses and ' +
+    'high-volume agencies, bridging the pricing-resistance gap with premium-accessible positioning.';
+
+  it('Brief Read — teaser truncates; Open full brief reveals the full untruncated text + meta', async () => {
+    m(client.getCurrentBrief).mockResolvedValue({ ...BRIEF, strategicPurpose: LONG_STRATEGY });
+    renderHome();
+    // Teaser: full text NOT present yet; the open control is.
+    expect(await screen.findByRole('button', { name: /open full brief/i })).toBeInTheDocument();
+    expect(screen.queryByText(LONG_STRATEGY)).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: /open full brief/i }));
+
+    // Opened: full untruncated strategy + committed meta fields appear.
+    expect(await screen.findByText(LONG_STRATEGY)).toBeInTheDocument();
+    expect(screen.getByText('Committed')).toBeInTheDocument();           // validationResult, humanized
+    expect(screen.getByRole('button', { name: /close brief/i })).toBeInTheDocument();
+  });
+
+  it('Brief Read — confidence is never rendered as a percentage (briefConfidence stays omitted)', async () => {
+    renderHome();
+    await userEvent.click(await screen.findByRole('button', { name: /open full brief/i }));
+    expect(screen.queryByText(/\d+%/)).toBeNull();
+  });
+
+  it('Brief Read — a fallback brief is surfaced honestly when opened', async () => {
+    m(client.getCurrentBrief).mockResolvedValue({ ...BRIEF, isFallback: true });
+    renderHome();
+    await userEvent.click(await screen.findByRole('button', { name: /open full brief/i }));
+    expect(await screen.findByText(/fallback brief/i)).toBeInTheDocument();
+  });
+
+  it('Brief Read — no current brief (404) → honest empty state, no Open control', async () => {
+    m(client.getCurrentBrief).mockRejectedValue(apiError(404, 'CYCLE_NOT_FOUND'));
+    renderHome();
+    expect(await screen.findByText(/A strategic read of your audience and positioning/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /open full brief/i })).toBeNull();
   });
 });
