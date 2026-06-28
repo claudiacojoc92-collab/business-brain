@@ -19,6 +19,7 @@ function makeRepo(over: Partial<IWeeklyCycleRepository> = {}): IWeeklyCycleRepos
   return {
     findById: vi.fn().mockResolvedValue({ id: 'cycle-1' }),
     findAwaitingApprovalPieces: vi.fn().mockResolvedValue([]),
+    findContentPiecesByCycle: vi.fn().mockResolvedValue([]),
     ...over,
   } as unknown as IWeeklyCycleRepository;
 }
@@ -59,5 +60,35 @@ describe('GetContentForApprovalHandler (C3)', () => {
     const repo = makeRepo({ findById: vi.fn().mockResolvedValue(null) });
     await expect(new GetContentForApprovalHandler(repo).handle(query)).rejects.toMatchObject({ code: 'CYCLE_NOT_FOUND' });
     expect(repo.findAwaitingApprovalPieces).not.toHaveBeenCalled();
+  });
+
+  it('default (no status) reads AWAITING_APPROVAL only — unchanged behaviour', async () => {
+    const repo = makeRepo({
+      findAwaitingApprovalPieces: vi.fn().mockResolvedValue([makePiece('p1')]),
+      findContentPiecesByCycle:   vi.fn().mockResolvedValue([]),
+    });
+    const dtos = await new GetContentForApprovalHandler(repo).handle(query);
+    expect(repo.findAwaitingApprovalPieces).toHaveBeenCalledWith('cycle-1', 'founder-1');
+    expect(repo.findContentPiecesByCycle).not.toHaveBeenCalled();
+    expect(dtos).toHaveLength(1);
+  });
+
+  it('status filter (e.g. APPROVED) reads that status via findContentPiecesByCycle and skips the default', async () => {
+    const approved = new ContentPiece({
+      id: 'a1', cycleId: 'cycle-1', founderId: 'founder-1', briefId: 'brief-1',
+      pieceType: 'CAROUSEL', pieceRole: 'PRIMARY', contentBlobKey: null, contentPreview: '{"piece":"a1"}',
+      approvalStatus: 'APPROVED', approvalWindowExpiresAt: null, approvedAt: new Date(),
+      rejectedAt: null, rejectionReasonCode: null, publishedAt: null, platformPostId: null,
+    });
+    const repo = makeRepo({
+      findAwaitingApprovalPieces: vi.fn().mockResolvedValue([]),
+      findContentPiecesByCycle:   vi.fn().mockResolvedValue([approved]),
+    });
+    const dtos = await new GetContentForApprovalHandler(repo).handle({ ...query, status: 'APPROVED' });
+    expect(repo.findContentPiecesByCycle).toHaveBeenCalledWith('cycle-1', 'founder-1', 'APPROVED');
+    expect(repo.findAwaitingApprovalPieces).not.toHaveBeenCalled();
+    expect(dtos).toHaveLength(1);
+    expect(dtos[0]!.approvalStatus).toBe('APPROVED');     // serialises through the SAME DTO
+    expect(dtos[0]!.contentPieceId).toBe('a1');
   });
 });

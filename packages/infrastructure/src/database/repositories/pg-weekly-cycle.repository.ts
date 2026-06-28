@@ -84,6 +84,28 @@ export class PgWeeklyCycleRepository implements IWeeklyCycleRepository {
     return rows.map((r) => this.contentPieceToDomain(r));
   }
 
+  async findContentPiecesByCycle(
+    cycleId: string,
+    founderId: string,
+    approvalStatus: string,
+    tx?: unknown,
+  ): Promise<ContentPiece[]> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = (tx ?? this.db) as any;
+    // Same shape/order as findAwaitingApprovalPieces; only the status filter is parameterised
+    // (caller whitelists it). Founder-scoped (RLS is ENABLE-not-FORCE; scope explicitly).
+    const rows: unknown[] = await db
+      .selectFrom('cycle.content_pieces')
+      .selectAll()
+      .where('founder_id', '=', founderId)
+      .where('cycle_id', '=', cycleId)
+      .where('approval_status', '=', approvalStatus)
+      .orderBy('created_at', 'asc')
+      .orderBy('id', 'asc')
+      .execute();
+    return rows.map((r) => this.contentPieceToDomain(r));
+  }
+
   async findContentPieceById(
     pieceId: string,
     founderId: string,

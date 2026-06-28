@@ -2,7 +2,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { ICommandBus } from '@bb/application';
 import type { IQueryBus } from '@bb/application';
 import type { Command, Query } from '@bb/application';
-import { generateId, NotFoundError } from '@bb/shared';
+import { generateId, NotFoundError, ApprovalStatus } from '@bb/shared';
 
 interface FounderUser { sub: string }
 
@@ -56,10 +56,17 @@ export class CycleController {
       await reply.status(200).send([]);
       return;
     }
+    // Opt-in approval-status filter (whitelisted). Absent/unknown → default (AWAITING_APPROVAL only),
+    // exactly as before. A valid status (e.g. APPROVED) returns the cycle's pieces in that status.
+    const requested = (request.query as { status?: string }).status;
+    const status = requested && (Object.values(ApprovalStatus) as string[]).includes(requested)
+      ? (requested as ApprovalStatus)
+      : undefined;
     const dto = await this.queryBus.dispatch({
       type:          'GetContentForApproval',
       founderId:     user.sub,
       cycleId:       cycle.id,
+      status,
       correlationId: generateId(),
       traceId:       generateId(),
     } as Query);

@@ -1,7 +1,7 @@
 import type { WeeklyCycle } from '../aggregates/weekly-cycle.aggregate';
 import type { ContentPiece } from '../entities/content-piece.entity';
 import type { ForwardQuestion } from '../value-objects/forward-question.vo';
-import type { CycleSignalRecord } from '@bb/shared';
+import type { CycleSignalRecord, ApprovalStatus } from '@bb/shared';
 
 export interface CycleHistory {
   cycleId: string;
@@ -58,6 +58,18 @@ export interface IWeeklyCycleRepository {
     founderId: string,
     tx?: unknown,
   ): Promise<ContentPiece | null>;
+
+  /**
+   * Returns a cycle's content pieces in a specific approval status, founder-scoped, in the
+   * same order as findAwaitingApprovalPieces. Read-only sibling that makes approved/committed
+   * content retrievable (e.g. status = APPROVED) without changing the default pending read.
+   */
+  findContentPiecesByCycle(
+    cycleId: string,
+    founderId: string,
+    approvalStatus: ApprovalStatus,
+    tx?: unknown,
+  ): Promise<ContentPiece[]>;
 
   /**
    * Persists an approval decision (approve / edit-and-approve / reject) for a single content

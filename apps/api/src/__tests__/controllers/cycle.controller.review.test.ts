@@ -91,4 +91,30 @@ describe('CycleController — current review brief/content endpoints', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual([]);
   });
+
+  it('GET .../content?status=APPROVED passes the whitelisted status through to the query', async () => {
+    const queryBus = makeQueryBus(async (q) => {
+      if (q.type === 'GetCurrentReviewCycle') return { id: 'cycle-9' };
+      if (q.type === 'GetContentForApproval') return [{ contentPieceId: 'a1', cycleId: q.cycleId }];
+      return undefined;
+    });
+    const res = await setupServer(queryBus).inject({ method: 'GET', url: '/v1/founders/me/cycles/current/content?status=APPROVED' });
+    expect(res.statusCode).toBe(200);
+    expect(queryBus.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'GetContentForApproval', cycleId: 'cycle-9', status: 'APPROVED' }),
+    );
+  });
+
+  it('GET .../content?status=BOGUS ignores the unknown status (defaults to AWAITING-only)', async () => {
+    const queryBus = makeQueryBus(async (q) => {
+      if (q.type === 'GetCurrentReviewCycle') return { id: 'cycle-9' };
+      if (q.type === 'GetContentForApproval') return [];
+      return undefined;
+    });
+    const res = await setupServer(queryBus).inject({ method: 'GET', url: '/v1/founders/me/cycles/current/content?status=BOGUS' });
+    expect(res.statusCode).toBe(200);
+    expect(queryBus.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'GetContentForApproval', status: undefined }),
+    );
+  });
 });

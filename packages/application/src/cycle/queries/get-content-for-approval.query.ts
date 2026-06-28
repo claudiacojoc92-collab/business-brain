@@ -6,6 +6,12 @@ export interface GetContentForApprovalQuery extends Query {
   readonly type: 'GetContentForApproval';
   readonly founderId: string;
   readonly cycleId: string;
+  /**
+   * Optional opt-in approval-status filter. Omitted → existing default behaviour
+   * (AWAITING_APPROVAL only). Set → returns the cycle's pieces in that status
+   * (e.g. APPROVED), making already-approved/committed content retrievable.
+   */
+  readonly status?: ApprovalStatus;
 }
 
 export interface ContentForApprovalDTO {
