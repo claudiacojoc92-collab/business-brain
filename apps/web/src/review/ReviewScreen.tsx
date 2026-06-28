@@ -39,7 +39,7 @@ export function ReviewScreen() {
   const [content, setContent] = useState<ContentPieceForApproval[]>([]);
   const [contentErr, setContentErr] = useState<ErrInfo | null>(null);
   const [actingId, setActingId] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -67,12 +67,17 @@ export function ReviewScreen() {
       try {
         await fn(id);
         await refetchContent();
+        // Honest success confirmation, only after the backend confirms (approve is this cycle's
+        // deliberate write). Shown once the piece has left the pending list.
+        if (verb === 'approve') {
+          setNotice({ tone: 'ok', text: 'Approved — this piece is approved and no longer pending.' });
+        }
       } catch (e) {
         if (toErr(e).status === 409) {
-          setNotice('That piece was already decided. The list has been refreshed.');
+          setNotice({ tone: 'warn', text: 'That piece was already decided. The list has been refreshed.' });
           await refetchContent();
         } else {
-          setNotice(`We could not ${verb} that piece. Please try again.`);
+          setNotice({ tone: 'warn', text: `We could not ${verb} that piece. Please try again.` });
         }
       } finally {
         setActingId(null);
@@ -90,7 +95,14 @@ export function ReviewScreen() {
       <div style={inner}>
         <h1 style={{ fontSize: '1.25rem', fontWeight: 500, marginBottom: 24 }}>This week&apos;s review</h1>
 
-        {notice && <div style={{ ...card, borderColor: '#3b3320', color: '#d6c98a' }} role="status">{notice}</div>}
+        {notice && (
+          <div
+            style={{ ...card, borderColor: notice.tone === 'ok' ? '#23402a' : '#3b3320', color: notice.tone === 'ok' ? '#9fd6ab' : '#d6c98a' }}
+            role="status"
+          >
+            {notice.text}
+          </div>
+        )}
 
         {/* Brief panel (C1) */}
         {briefErr ? (

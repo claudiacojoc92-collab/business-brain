@@ -116,4 +116,24 @@ describe('ReviewScreen', () => {
     expect(await screen.findByText(/could not load your content/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
   });
+
+  it('Approve → explicit success confirmation after the backend confirms; piece leaves the list', async () => {
+    getContent.mockReset();
+    getContent.mockResolvedValueOnce([PIECE]).mockResolvedValue([]); // initial load shows it; refetch is empty
+    render(<ReviewScreen />);
+    await userEvent.click(await screen.findByRole('button', { name: /approve/i }));
+
+    expect(await screen.findByText(/this piece is approved and no longer pending/i)).toBeInTheDocument();
+    expect(await screen.findByText(/No content is waiting/i)).toBeInTheDocument();
+    expect(approve).toHaveBeenCalledWith('p1');
+  });
+
+  it('Approve failure → honest error and NO false success', async () => {
+    approve.mockRejectedValue(apiError(500, 'UNKNOWN_ERROR'));
+    render(<ReviewScreen />);
+    await userEvent.click(await screen.findByRole('button', { name: /approve/i }));
+
+    expect(await screen.findByText(/could not approve that piece/i)).toBeInTheDocument();
+    expect(screen.queryByText(/this piece is approved and no longer pending/i)).toBeNull();
+  });
 });
