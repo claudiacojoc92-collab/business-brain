@@ -100,7 +100,7 @@ export function DashboardPage() {
   const [currentErr, setCurrentErr] = useState<ErrInfo | null>(null);
   const [brief, setBrief] = useState<CycleBrief | null>(null);
   const [briefErr, setBriefErr] = useState<ErrInfo | null>(null);
-  const [briefOpen, setBriefOpen] = useState(false);
+  const [briefOpen, setBriefOpen] = useState(true); // the latest strategic read is the most valuable content — open by default
   const [history, setHistory] = useState<CycleHistory | null>(null);
   const [memory, setMemory] = useState<MemoryConfidence | null>(null);
   const [content, setContent] = useState<ContentPieceForApproval[]>([]);
@@ -222,7 +222,7 @@ export function DashboardPage() {
                       aria-expanded={briefOpen}
                       style={{ marginTop: 10, background: 'none', border: 'none', color: accent, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', padding: 0 }}
                     >
-                      {briefOpen ? 'Close brief' : 'Open full brief'}
+                      {briefOpen ? 'Collapse' : 'Open full brief'}
                     </button>
                   </>
                 ) : null}

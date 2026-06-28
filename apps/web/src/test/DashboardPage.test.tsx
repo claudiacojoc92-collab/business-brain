@@ -138,43 +138,52 @@ describe('DashboardPage (Home v1)', () => {
     expect(await screen.findByText(/Cycle #4 — Reasoning/)).toBeInTheDocument();
   });
 
-  // ── Brief Read v1 — opening the latest strategic read ──────────────────────
+  // ── Brief Read v1 — the latest strategic read is OPEN BY DEFAULT ────────────
   const LONG_STRATEGY =
     'Establish the founder as the credible alternative to both budget self-paced courses and ' +
     'high-volume agencies, bridging the pricing-resistance gap with premium-accessible positioning.';
 
-  it('Brief Read — teaser truncates; Open full brief reveals the full untruncated text + meta', async () => {
+  it('Brief Read — full strategy + meta render by default on load, with no interaction', async () => {
     m(client.getCurrentBrief).mockResolvedValue({ ...BRIEF, strategicPurpose: LONG_STRATEGY });
     renderHome();
-    // Teaser: full text NOT present yet; the open control is.
-    expect(await screen.findByRole('button', { name: /open full brief/i })).toBeInTheDocument();
-    expect(screen.queryByText(LONG_STRATEGY)).toBeNull();
-
-    await userEvent.click(screen.getByRole('button', { name: /open full brief/i }));
-
-    // Opened: full untruncated strategy + committed meta fields appear.
+    // No click: the full untruncated strategy and committed meta are already visible.
     expect(await screen.findByText(LONG_STRATEGY)).toBeInTheDocument();
-    expect(screen.getByText('Committed')).toBeInTheDocument();           // validationResult, humanized
-    expect(screen.getByRole('button', { name: /close brief/i })).toBeInTheDocument();
+    expect(screen.getByText('Committed')).toBeInTheDocument();             // validationResult, humanized
+    // The control reads as a collapse affordance (default-open), not "open".
+    expect(screen.getByRole('button', { name: /collapse/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /open full brief/i })).toBeNull();
+  });
+
+  it('Brief Read — Collapse hides the full text (teaser truncates) and offers Open again', async () => {
+    m(client.getCurrentBrief).mockResolvedValue({ ...BRIEF, strategicPurpose: LONG_STRATEGY });
+    renderHome();
+    expect(await screen.findByText(LONG_STRATEGY)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /collapse/i }));
+
+    // Collapsed: full text gone (truncated), and the open control returns.
+    expect(screen.queryByText(LONG_STRATEGY)).toBeNull();
+    expect(screen.getByRole('button', { name: /open full brief/i })).toBeInTheDocument();
   });
 
   it('Brief Read — confidence is never rendered as a percentage (briefConfidence stays omitted)', async () => {
     renderHome();
-    await userEvent.click(await screen.findByRole('button', { name: /open full brief/i }));
+    // Open by default — no interaction needed.
+    await screen.findByRole('button', { name: /collapse/i });
     expect(screen.queryByText(/\d+%/)).toBeNull();
   });
 
-  it('Brief Read — a fallback brief is surfaced honestly when opened', async () => {
+  it('Brief Read — a fallback brief is surfaced honestly by default', async () => {
     m(client.getCurrentBrief).mockResolvedValue({ ...BRIEF, isFallback: true });
     renderHome();
-    await userEvent.click(await screen.findByRole('button', { name: /open full brief/i }));
     expect(await screen.findByText(/fallback brief/i)).toBeInTheDocument();
   });
 
-  it('Brief Read — no current brief (404) → honest empty state, no Open control', async () => {
+  it('Brief Read — no current brief (404) → honest empty state, no toggle of any kind', async () => {
     m(client.getCurrentBrief).mockRejectedValue(apiError(404, 'CYCLE_NOT_FOUND'));
     renderHome();
     expect(await screen.findByText(/A strategic read of your audience and positioning/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /collapse/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /open full brief/i })).toBeNull();
   });
 });
