@@ -116,7 +116,7 @@ export function ReviewScreen() {
             <p style={{ lineHeight: 1.6, marginBottom: 8 }}>{brief.strategicPurpose}</p>
             <div style={muted}>Audience: {brief.audienceSegment}</div>
             <div style={muted}>
-              Confidence {Math.round(brief.briefConfidence * 100)}% · Uniqueness {brief.uniquenessScore}
+              Uniqueness {brief.uniquenessScore}
             </div>
           </div>
         ) : null}

@@ -55,6 +55,9 @@ describe('ReviewScreen', () => {
     expect(await screen.findByText('Build authority this week')).toBeInTheDocument();
     expect(screen.getByText('AUTHORITY')).toBeInTheDocument();
     expect(screen.getByText(/Audience: early adopters/)).toBeInTheDocument();
+    // Honesty: brief confidence is omitted (persists as 0 and would mislead), matching Home + Brief Read.
+    expect(screen.queryByText(/Confidence/)).toBeNull();
+    expect(screen.queryByText(/\d+%/)).toBeNull();
   });
 
   it('renders a content row incl. contentPreview from the C3 response', async () => {
