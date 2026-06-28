@@ -80,11 +80,22 @@ export class CycleController {
     const user    = (request as any).user as FounderUser;
     const cycleId = generateId();
 
+    // Next cycle number. Was hardcoded to 1, which collides with the
+    // founder_id+cycle_number unique constraint after the first cycle; derive from history.
+    const history = await this.queryBus.dispatch({
+      type:          'GetCycleHistory',
+      founderId:     user.sub,
+      limit:         1,
+      correlationId: generateId(),
+      traceId:       generateId(),
+    } as Query) as { items: Array<{ cycleNumber: number }> };
+    const cycleNumber = (history.items[0]?.cycleNumber ?? 0) + 1;
+
     const result = await this.commandBus.dispatch({
       type:              'StartWeeklyCycle',
       founderId:         user.sub,
       cycleId,
-      cycleNumber:       1,
+      cycleNumber,
       scheduledFor:      new Date(),
       contentDeliverBy:  new Date(Date.now() + 4 * 60 * 60 * 1000),
       campaignId:        null,
