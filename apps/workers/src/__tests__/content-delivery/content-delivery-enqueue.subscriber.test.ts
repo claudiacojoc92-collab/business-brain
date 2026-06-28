@@ -43,7 +43,7 @@ describe('ContentDeliveryEnqueueSubscriber', () => {
     expect(queueRegistry.enqueueContentDelivery).toHaveBeenCalledTimes(1);
     expect(queueRegistry.enqueueContentDelivery).toHaveBeenCalledWith(expect.objectContaining({
       jobType:    'CONTENT_DELIVERY',
-      jobId:      'cel:evt-1',
+      jobId:      'cel-evt-1',     // deterministic (event-derived) AND colon-free
       eventId:    'evt-1',
       cycleId:    'cycle-1',
       briefId:    'brief-1',
@@ -52,6 +52,10 @@ describe('ContentDeliveryEnqueueSubscriber', () => {
       correlationId: 'corr-1',
       traceId:    'trace-1',
     }));
+    // Guard the regression: BullMQ rejects ':' in a custom jobId. Fail if it is reintroduced.
+    const { jobId } = (queueRegistry.enqueueContentDelivery as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(jobId).not.toContain(':');
+    expect(jobId).toBe('cel-evt-1');
   });
 
   it('maps FallbackBriefCommitted → CONTENT_DELIVERY enqueue (isFallback true)', async () => {

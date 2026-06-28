@@ -29,7 +29,7 @@ export class ContentDeliveryEnqueueSubscriber {
     };
 
     await this.queueRegistry.enqueueContentDelivery({
-      jobId:         `cel:${event.event_id}`,
+      jobId:         `cel-${event.event_id}`, // colon-free: BullMQ forbids ':' in custom job ids
       jobType:       'CONTENT_DELIVERY',
       correlationId: event.correlation_id,
       traceId:       event.trace_id,
