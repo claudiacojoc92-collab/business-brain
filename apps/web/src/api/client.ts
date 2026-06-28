@@ -168,9 +168,14 @@ export function getCurrentBrief(): Promise<CycleBrief> {
   return request<CycleBrief>('v1/founders/me/cycles/current/brief');
 }
 
-/** GET current review cycle's AWAITING_APPROVAL pieces (C3); [] when none. */
-export function getCurrentContent(): Promise<ContentPieceForApproval[]> {
-  return request<ContentPieceForApproval[]>('v1/founders/me/cycles/current/content');
+/**
+ * GET current review cycle's content pieces (C3); [] when none.
+ * Default (no status) returns AWAITING_APPROVAL only — unchanged. Pass an approval status
+ * (e.g. 'APPROVED') to retrieve the cycle's pieces in that status via the existing endpoint.
+ */
+export function getCurrentContent(status?: string): Promise<ContentPieceForApproval[]> {
+  const q = status ? `?status=${encodeURIComponent(status)}` : '';
+  return request<ContentPieceForApproval[]>(`v1/founders/me/cycles/current/content${q}`);
 }
 
 /** POST approve a piece (C4). */

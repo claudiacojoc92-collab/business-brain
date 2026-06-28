@@ -44,7 +44,8 @@ function apiError(status: number, code: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   getBrief.mockResolvedValue(BRIEF);
-  getContent.mockResolvedValue([PIECE]);
+  // Pending (no status) → [PIECE]; approved (status='APPROVED') → [] by default.
+  getContent.mockImplementation((status?: string) => Promise.resolve(status === 'APPROVED' ? [] : [PIECE]));
   approve.mockResolvedValue({});
   reject.mockResolvedValue({});
 });
@@ -74,8 +75,8 @@ describe('ReviewScreen', () => {
     await userEvent.click(screen.getByRole('button', { name: /approve/i }));
 
     await waitFor(() => expect(approve).toHaveBeenCalledWith('p1'));
-    // initial load + refetch after success
-    expect(getContent).toHaveBeenCalledTimes(2);
+    // initial load (pending + approved) + post-success refetch (pending + approved) = 4
+    expect(getContent).toHaveBeenCalledTimes(4);
   });
 
   it('Reject → POSTs reject and REFETCHES the list', async () => {
@@ -84,7 +85,8 @@ describe('ReviewScreen', () => {
     await userEvent.click(screen.getByRole('button', { name: /reject/i }));
 
     await waitFor(() => expect(reject).toHaveBeenCalledWith('p1'));
-    expect(getContent).toHaveBeenCalledTimes(2);
+    // load (pending + approved) + post-success refetch (pending + approved) = 4
+    expect(getContent).toHaveBeenCalledTimes(4);
   });
 
   it('409 PIECE_ALREADY_DECIDED → notice + refetch', async () => {
@@ -94,7 +96,7 @@ describe('ReviewScreen', () => {
     await userEvent.click(screen.getByRole('button', { name: /approve/i }));
 
     expect(await screen.findByText(/already decided/i)).toBeInTheDocument();
-    expect(getContent).toHaveBeenCalledTimes(2); // refetched despite the 409
+    expect(getContent).toHaveBeenCalledTimes(4); // refetched (pending + approved) despite the 409
   });
 
   it('brief 403 CYCLE_NOT_COMMITTED → not-ready message', async () => {
@@ -140,5 +142,60 @@ describe('ReviewScreen', () => {
 
     expect(await screen.findByText(/could not approve that piece/i)).toBeInTheDocument();
     expect(screen.queryByText(/this piece is approved and no longer pending/i)).toBeNull();
+  });
+
+  // ── Approved section (read-only; ?status=APPROVED) ─────────────────────────
+  const APPROVED_PIECE = {
+    contentPieceId: 'a1', cycleId: 'c1', pieceType: 'CAROUSEL', pieceRole: 'PRIMARY',
+    contentPreview: '{"slide":"approved one"}', approvalStatus: 'APPROVED', approvalWindowExpiresAt: null,
+  };
+
+  it('Approved section renders approved pieces (real fields) and is read-only (no buttons)', async () => {
+    // No pending, one approved piece.
+    getContent.mockImplementation((status?: string) =>
+      Promise.resolve(status === 'APPROVED' ? [APPROVED_PIECE] : []));
+    render(<ReviewScreen />);
+
+    expect(await screen.findByText('{"slide":"approved one"}')).toBeInTheDocument();
+    expect(screen.getByText(/CAROUSEL · PRIMARY · APPROVED/)).toBeInTheDocument();
+    // Read-only: no approve/reject controls anywhere (pending empty + approved view-only).
+    expect(screen.queryByRole('button', { name: /approve/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /reject/i })).toBeNull();
+    // Heading present.
+    expect(screen.getByRole('heading', { name: /approved/i })).toBeInTheDocument();
+  });
+
+  it('Approved section shows an honest empty state when there is none', async () => {
+    getContent.mockImplementation(() => Promise.resolve([])); // both pending and approved empty
+    render(<ReviewScreen />);
+    expect(await screen.findByText(/Nothing approved yet/i)).toBeInTheDocument();
+  });
+
+  it('after a successful approve, the Approved section refetches and shows the piece', async () => {
+    let approved = false;
+    const justApproved = { ...APPROVED_PIECE, contentPieceId: 'p1', contentPreview: '{"approved":true}' };
+    getContent.mockImplementation((status?: string) => {
+      if (status === 'APPROVED') return Promise.resolve(approved ? [justApproved] : []);
+      return Promise.resolve(approved ? [] : [PIECE]);
+    });
+    approve.mockImplementation(async () => { approved = true; return {}; });
+
+    render(<ReviewScreen />);
+    await userEvent.click(await screen.findByRole('button', { name: /approve/i }));
+
+    // The just-approved piece now appears in the Approved section (via refetch, not optimism).
+    expect(await screen.findByText('{"approved":true}')).toBeInTheDocument();
+    expect(screen.getByText(/· APPROVED/)).toBeInTheDocument();
+  });
+
+  it('Approved fetch error does not break the pending section', async () => {
+    getContent.mockImplementation((status?: string) =>
+      status === 'APPROVED'
+        ? Promise.reject(apiError(500, 'UNKNOWN_ERROR'))
+        : Promise.resolve([PIECE]));
+    render(<ReviewScreen />);
+    // Pending still renders; approved shows its honest error.
+    expect(await screen.findByText('{"hook":"Stop guessing"}')).toBeInTheDocument();
+    expect(screen.getByText(/could not load your approved content/i)).toBeInTheDocument();
   });
 });

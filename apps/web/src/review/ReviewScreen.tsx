@@ -22,6 +22,20 @@ const card: React.CSSProperties = { border: '1px solid #1f2937', borderRadius: 6
 const muted: React.CSSProperties = { color: '#6b7280' };
 const btn: React.CSSProperties = { fontFamily: 'inherit', fontSize: '0.875rem', padding: '6px 14px', borderRadius: 4, cursor: 'pointer', marginRight: 8 };
 
+/** Shared content-piece body (header + readable preview), reused by the pending and approved lists. */
+function pieceBody(p: ContentPieceForApproval) {
+  return (
+    <>
+      <div style={{ ...muted, marginBottom: 8 }}>
+        {p.pieceType} · {p.pieceRole} · {p.approvalStatus}
+      </div>
+      <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', margin: '0 0 12px' }}>
+        {p.contentPreview ?? '(no preview)'}
+      </pre>
+    </>
+  );
+}
+
 /** Maps a brief load error to a founder-facing message via existing API codes. */
 function briefMessage(err: ErrInfo): string {
   switch (err.code) {
@@ -38,23 +52,37 @@ export function ReviewScreen() {
   const [briefErr, setBriefErr] = useState<ErrInfo | null>(null);
   const [content, setContent] = useState<ContentPieceForApproval[]>([]);
   const [contentErr, setContentErr] = useState<ErrInfo | null>(null);
+  const [approved, setApproved] = useState<ContentPieceForApproval[]>([]);
+  const [approvedErr, setApprovedErr] = useState<ErrInfo | null>(null);
   const [actingId, setActingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     setNotice(null);
-    const [b, c] = await Promise.allSettled([getCurrentBrief(), getCurrentContent()]);
+    const [b, c, a] = await Promise.allSettled([
+      getCurrentBrief(),
+      getCurrentContent(),
+      getCurrentContent('APPROVED'),
+    ]);
     if (b.status === 'fulfilled') { setBrief(b.value); setBriefErr(null); }
     else { setBrief(null); setBriefErr(toErr(b.reason)); }
     if (c.status === 'fulfilled') { setContent(c.value); setContentErr(null); }
     else { setContent([]); setContentErr(toErr(c.reason)); }
+    if (a.status === 'fulfilled') { setApproved(a.value); setApprovedErr(null); }
+    else { setApproved([]); setApprovedErr(toErr(a.reason)); }
     setLoading(false);
   }, []);
 
   const refetchContent = useCallback(async () => {
     try { setContent(await getCurrentContent()); setContentErr(null); }
     catch (e) { setContentErr(toErr(e)); }
+  }, []);
+
+  // Read-only: after an approval the just-approved piece moves here, closing the loop in place.
+  const refetchApproved = useCallback(async () => {
+    try { setApproved(await getCurrentContent('APPROVED')); setApprovedErr(null); }
+    catch (e) { setApprovedErr(toErr(e)); }
   }, []);
 
   useEffect(() => { void loadAll(); }, [loadAll]);
@@ -67,6 +95,8 @@ export function ReviewScreen() {
       try {
         await fn(id);
         await refetchContent();
+        // Refresh the Approved list so a just-approved piece appears there (loop closes in place).
+        await refetchApproved();
         // Honest success confirmation, only after the backend confirms (approve is this cycle's
         // deliberate write). Shown once the piece has left the pending list.
         if (verb === 'approve') {
@@ -76,6 +106,7 @@ export function ReviewScreen() {
         if (toErr(e).status === 409) {
           setNotice({ tone: 'warn', text: 'That piece was already decided. The list has been refreshed.' });
           await refetchContent();
+          await refetchApproved();
         } else {
           setNotice({ tone: 'warn', text: `We could not ${verb} that piece. Please try again.` });
         }
@@ -83,7 +114,7 @@ export function ReviewScreen() {
         setActingId(null);
       }
     },
-    [refetchContent],
+    [refetchContent, refetchApproved],
   );
 
   if (loading) {
@@ -131,12 +162,7 @@ export function ReviewScreen() {
         ) : (
           content.map((p) => (
             <div key={p.contentPieceId} style={card}>
-              <div style={{ ...muted, marginBottom: 8 }}>
-                {p.pieceType} · {p.pieceRole} · {p.approvalStatus}
-              </div>
-              <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', margin: '0 0 12px' }}>
-                {p.contentPreview ?? '(no preview)'}
-              </pre>
+              {pieceBody(p)}
               <button
                 style={{ ...btn, background: '#1a2e1a', border: '1px solid #2f4f2f', color: '#cfe8cf' }}
                 disabled={actingId === p.contentPieceId}
@@ -151,6 +177,21 @@ export function ReviewScreen() {
               >
                 Reject
               </button>
+            </div>
+          ))
+        )}
+
+        {/* Approved content (read-only) — what the founder has approved, so the loop visibly closes. */}
+        <h2 style={{ fontSize: '1rem', fontWeight: 500, margin: '24px 0 12px' }}>Approved</h2>
+
+        {approvedErr ? (
+          <div style={card}><span style={muted}>We could not load your approved content right now.</span></div>
+        ) : approved.length === 0 ? (
+          <div style={card}><span style={muted}>Nothing approved yet.</span></div>
+        ) : (
+          approved.map((p) => (
+            <div key={p.contentPieceId} style={card}>
+              {pieceBody(p)}
             </div>
           ))
         )}
