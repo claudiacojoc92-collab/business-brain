@@ -32,6 +32,28 @@ describe('JwtService', () => {
     expect(expiresIn).toBe(900);
   });
 
+  it('ingests \\n-escaped single-line PEM (env transport) and signs/verifies (RS256)', () => {
+    // Simulate env-var transport: real newlines collapsed to literal "\n".
+    const escapedPriv = privateKey.replace(/\n/g, '\\n');
+    const escapedPub  = publicKey.replace(/\n/g, '\\n');
+    expect(escapedPriv).not.toContain('\n');           // genuinely single-line
+    expect(escapedPriv).toContain('\\n');              // literal backslash-n present
+
+    const service = new JwtService(escapedPriv, escapedPub);
+    const { accessToken } = service.sign({ sub: 'founder-esc', role: 'founder', scopes: ['read'] });
+    const decoded = service.verify(accessToken);
+    expect(decoded.sub).toBe('founder-esc');
+    expect(decoded.scopes).toEqual(['read']);
+  });
+
+  it('is idempotent: real-newline PEM (no \\n) ingests unchanged and signs/verifies', () => {
+    expect(privateKey).toContain('\n');                // genuine multi-line PEM
+    expect(privateKey).not.toContain('\\n');
+    const service = new JwtService(privateKey, publicKey);
+    const decoded = service.verify(service.sign({ sub: 'founder-nl', role: 'founder', scopes: [] }).accessToken);
+    expect(decoded.sub).toBe('founder-nl');
+  });
+
   it('throws when verifying with wrong public key', () => {
     const { publicKey: wrongPublicKey } = generateKeyPairSync('rsa', {
       modulusLength:      2048,
