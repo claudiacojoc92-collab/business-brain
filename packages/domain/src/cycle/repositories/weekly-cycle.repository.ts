@@ -60,6 +60,14 @@ export interface IWeeklyCycleRepository {
   ): Promise<ContentPiece | null>;
 
   /**
+   * Persists an approval decision (approve / edit-and-approve / reject) for a single content
+   * piece: writes approval_status and the decision timestamps/reason back to cycle.content_pieces.
+   * content_pieces is a directly-written read model (not part of the cycle aggregate's save), so
+   * the decision must be persisted explicitly within the command's transaction.
+   */
+  updateContentPieceDecision(piece: ContentPiece, tx: unknown): Promise<void>;
+
+  /**
    * Resolves the founder's current REVIEW cycle: the latest cycle in COMMITTED or
    * FALLBACK_COMMITTED (FAILED and in-flight statuses excluded), ordered committed_at DESC
    * then created_at DESC then id DESC. Returns null when none exists. Founder-scoped.

@@ -101,6 +101,23 @@ export class PgWeeklyCycleRepository implements IWeeklyCycleRepository {
     return row ? this.contentPieceToDomain(row) : null;
   }
 
+  async updateContentPieceDecision(piece: ContentPiece, tx: unknown): Promise<void> {
+    // content_pieces is a directly-written read model; persist the approval decision the
+    // aggregate set on the piece (status + decision timestamps/reason) within the command tx.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = (tx ?? this.db) as any;
+    await db
+      .updateTable('cycle.content_pieces')
+      .set({
+        approval_status:       piece.approvalStatus,
+        approved_at:           piece.approvedAt?.toISOString() ?? null,
+        rejected_at:           piece.rejectedAt?.toISOString() ?? null,
+        rejection_reason_code: piece.rejectionReasonCode,
+      })
+      .where('id', '=', piece.id)
+      .execute();
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private contentPieceToDomain(row: any): ContentPiece {
     return new ContentPiece({

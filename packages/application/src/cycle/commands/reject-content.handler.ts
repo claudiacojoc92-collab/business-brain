@@ -41,6 +41,7 @@ export class RejectContentHandler
       if (result.isErr) return result;
 
       await this.cycleRepo.save(cycle, tx);
+      await this.cycleRepo.updateContentPieceDecision(cmd.contentPiece, tx);
       await this.eventStore.append(cycle.pullEvents(), tx);
 
       return ok({

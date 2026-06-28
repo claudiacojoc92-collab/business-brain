@@ -52,6 +52,7 @@ describe('RejectContentHandler (F003)', () => {
       findSignalsForCycle:         vi.fn().mockResolvedValue([]),
       insertSignal:                vi.fn().mockResolvedValue(undefined),
       save:                        vi.fn().mockResolvedValue(undefined),
+      updateContentPieceDecision:  vi.fn().mockResolvedValue(undefined),
       markForwardQuestionConsumed: vi.fn(),
     };
     const eventStore: IEventStore = { append: vi.fn().mockResolvedValue(undefined) };
@@ -79,6 +80,10 @@ describe('RejectContentHandler (F003)', () => {
       expect(result.value.reasonCode).toBe('VOICE_MISMATCH');
     }
     expect(cycleRepo.save).toHaveBeenCalledOnce();
+    // The decision must be persisted to the content_pieces read model (not only the event store),
+    // otherwise the GET read-back and the PIECE_ALREADY_DECIDED guard never reflect it.
+    expect(cycleRepo.updateContentPieceDecision).toHaveBeenCalledOnce();
+    expect(cycleRepo.updateContentPieceDecision).toHaveBeenCalledWith(piece, expect.anything());
     expect(eventStore.append).toHaveBeenCalledOnce();
   });
 });

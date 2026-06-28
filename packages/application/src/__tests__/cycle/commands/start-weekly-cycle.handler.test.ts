@@ -60,6 +60,7 @@ describe('StartWeeklyCycleHandler (F001)', () => {
       findSignalsForCycle:         vi.fn().mockResolvedValue([]),
       insertSignal:                vi.fn().mockResolvedValue(undefined),
       save:                        vi.fn().mockResolvedValue(undefined),
+      updateContentPieceDecision: vi.fn().mockResolvedValue(undefined),
       markForwardQuestionConsumed: vi.fn(),
     };
     const eventStore: IEventStore = { append: vi.fn().mockResolvedValue(undefined) };
@@ -108,6 +109,7 @@ describe('StartWeeklyCycleHandler (F001)', () => {
       findSignalsForCycle:         vi.fn().mockResolvedValue([]),
       insertSignal:                vi.fn().mockResolvedValue(undefined),
       save:                        vi.fn(),
+      updateContentPieceDecision: vi.fn().mockResolvedValue(undefined),
       markForwardQuestionConsumed: vi.fn(),
     };
     const eventStore: IEventStore = { append: vi.fn() };
@@ -157,6 +159,7 @@ describe('StartWeeklyCycleHandler (F001)', () => {
       findSignalsForCycle:         vi.fn().mockResolvedValue([]),
       insertSignal:                vi.fn().mockResolvedValue(undefined),
       save:                        vi.fn(),
+      updateContentPieceDecision: vi.fn().mockResolvedValue(undefined),
       markForwardQuestionConsumed: vi.fn(),
     };
     const eventStore: IEventStore = { append: vi.fn() };
