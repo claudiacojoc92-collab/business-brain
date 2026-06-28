@@ -188,3 +188,90 @@ export function rejectContent(contentPieceId: string): Promise<unknown> {
     body: JSON.stringify({ reason_code: 'UNCLASSIFIED', hard_boundary_flag: false }),
   });
 }
+
+// ─── Home v1 — read-only projections of existing backend state ────────────────
+// These all serve their handler DTOs as-is (camelCase). No new endpoints; each maps
+// to a route already registered in apps/api founder.routes.ts.
+
+/** GET /v1/founders/me — full founder profile (GetFounderStatus DTO, camelCase). */
+export interface FounderProfile {
+  founderId: string;
+  status: FounderStatus['status'];
+  name: string;
+  businessName: string;
+  timezone: string;
+  notificationChannel: string;
+  autoApproveOnWindowClose: boolean;
+  approvalWindowHours: number;
+  registeredAt: string;
+  activatedAt: string | null;
+  pausedAt: string | null;
+}
+export function getFounderProfile(): Promise<FounderProfile> {
+  return request<FounderProfile>('v1/founders/me');
+}
+
+/** GET /v1/founders/me/offer — current offer; throws NO_ACTIVE_OFFER (412) when none. */
+export interface OfferSummary {
+  offerId: string;
+  name: string;
+  primaryPromise: string;
+  priceTier: string;
+  availability: string;
+  maturity: string;
+  capacityAvailable: boolean;
+  trustMultiplier: number;
+}
+export function getOffer(): Promise<OfferSummary> {
+  return request<OfferSummary>('v1/founders/me/offer');
+}
+
+/** GET /v1/founders/me/memory/confidence — per-layer learning confidence. */
+export interface MemoryLayerConfidence {
+  layer: string;
+  confidence: number;
+  dataPoints: number;
+  lastUpdatedAt: string;
+}
+export interface MemoryConfidence {
+  founderId: string;
+  compositeConfidence: number;
+  layers: MemoryLayerConfidence[];
+}
+export function getMemoryConfidence(): Promise<MemoryConfidence> {
+  return request<MemoryConfidence>('v1/founders/me/memory/confidence');
+}
+
+/** GET /v1/founders/me/cycles/current — the in-flight cycle, or null when none is running. */
+export interface CurrentCycle {
+  cycleId: string;
+  cycleNumber: number;
+  status: string;
+  scheduledFor: string;
+  contentDeliverBy: string;
+  selectedMode: string | null;
+  isFallback: boolean;
+  startedAt: string | null;
+  committedAt: string | null;
+}
+export function getCurrentCycle(): Promise<CurrentCycle | null> {
+  return request<CurrentCycle | null>('v1/founders/me/cycles/current');
+}
+
+/** GET /v1/founders/me/cycles/history — committed cycles, newest first. */
+export interface CycleHistoryItem {
+  cycleId: string;
+  cycleNumber: number;
+  selectedMode: string | null;
+  contentPieceCount: number;
+  committedAt: string;
+  isFallback: boolean;
+}
+export interface CycleHistory {
+  items: CycleHistoryItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+export function getCycleHistory(limit = 5): Promise<CycleHistory> {
+  return request<CycleHistory>(`v1/founders/me/cycles/history?limit=${limit}`);
+}
