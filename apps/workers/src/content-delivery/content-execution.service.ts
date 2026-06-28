@@ -46,6 +46,13 @@ export interface PieceSpec {
   priority: number;
 }
 
+/** A piece_objective skipped because its format is outside the supported set (REEL/CAROUSEL). */
+export interface SkippedObjective {
+  index: number;
+  pieceType: string;                       // the unsupported value as written in the brief
+  reason: 'skipped_unsupported_format';
+}
+
 const PROMPT_ID = 'PR-012';
 
 function asString(v: unknown): string | undefined {
@@ -62,6 +69,15 @@ function detectFormat(obj: Record<string, unknown>): 'REEL' | 'CAROUSEL' | null 
   return null;
 }
 
+/** Best-effort label for an unsupported objective, for the skip record/log. */
+function describeUnsupportedType(obj: Record<string, unknown>): string {
+  for (const c of [obj.format, obj.piece_type, obj.pieceType, obj.type, obj.role]) {
+    const s = asString(c)?.trim();
+    if (s) return s;
+  }
+  return 'UNKNOWN';
+}
+
 function detectPriority(obj: Record<string, unknown>, index: number): number {
   const p = obj.priority;
   if (typeof p === 'number') return p;
@@ -72,10 +88,12 @@ function detectPriority(obj: Record<string, unknown>, index: number): number {
 /**
  * Resolve the ordered piece set from brief.pieceObjectives.
  * piece_objectives is unconstrained (z.record(z.unknown()) in the frozen S11), so format,
- * priority, role and belief target are read defensively; an objective whose format cannot be
- * determined, or a count beyond the schema enums (3 reels / 2 carousels), fails the job.
+ * priority, role and belief target are read defensively. An objective whose format is outside
+ * the supported set (REEL/CAROUSEL) is SKIPPED and recorded in `skipped` rather than failing the
+ * whole batch — the supported pieces still generate. A count beyond the schema enums
+ * (3 reels / 2 carousels) is a genuine constraint violation and still fails the job.
  */
-export function resolvePieceSpecs(brief: InternalBrief): PieceSpec[] {
+export function resolvePieceSpecs(brief: InternalBrief, skipped: SkippedObjective[] = []): PieceSpec[] {
   const objectives = (brief.pieceObjectives as unknown[]).map((o, i) => ({
     obj: (o ?? {}) as Record<string, unknown>,
     i,
@@ -88,7 +106,9 @@ export function resolvePieceSpecs(brief: InternalBrief): PieceSpec[] {
   for (const { obj, i } of objectives) {
     const format = detectFormat(obj);
     if (!format) {
-      throw new ContentExecutionError(`UNRESOLVABLE_PIECE_OBJECTIVE: cannot determine format for objective ${i}`);
+      // Unsupported format only: skip + record, keep processing the rest of the batch.
+      skipped.push({ index: i, pieceType: describeUnsupportedType(obj), reason: 'skipped_unsupported_format' });
+      continue;
     }
     let pieceId: string;
     if (format === 'REEL') {
@@ -141,8 +161,23 @@ export class ContentExecutionService {
   ) {}
 
   async execute(brief: InternalBrief): Promise<ContentPiece[]> {
-    const specs = resolvePieceSpecs(brief);
-    if (specs.length === 0) throw new ContentExecutionError('NO_PIECE_OBJECTIVES');
+    const skipped: SkippedObjective[] = [];
+    const specs = resolvePieceSpecs(brief, skipped);
+
+    if (skipped.length > 0) {
+      this.logger.warn(
+        { cycleId: brief.cycleId, founderId: brief.founderId, skipped },
+        'CEL: skipped unsupported piece objectives',
+      );
+    }
+    if (specs.length === 0) {
+      // Distinguish "brief had no objectives" from "every objective was an unsupported format".
+      throw new ContentExecutionError(
+        skipped.length > 0
+          ? `ALL_PIECE_OBJECTIVES_UNSUPPORTED: ${skipped.map((s) => `#${s.index}=${s.pieceType}`).join(', ')}`
+          : 'NO_PIECE_OBJECTIVES',
+      );
+    }
 
     const validation: ContentValidationContext = {
       neverList:            buildNeverList(brief),

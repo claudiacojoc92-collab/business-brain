@@ -9,6 +9,7 @@ import {
   ContentExecutionError,
   type LlmCaller,
   type ContentExecutionConfig,
+  type SkippedObjective,
 } from '../../content-delivery/content-execution.service';
 
 function makeBrief(overrides: Partial<ConstructorParameters<typeof InternalBrief>[0]> = {}): InternalBrief {
@@ -137,9 +138,17 @@ describe('ContentExecutionService — piece_objectives derivation', () => {
     expect(specs[1]!.beliefTargetRef).toBe('belief-primary');
   });
 
-  it('throws UNRESOLVABLE_PIECE_OBJECTIVE when format cannot be determined', () => {
-    expect(() => resolvePieceSpecs(makeBrief({ pieceObjectives: [{ role: 'BLOG', objective: 'x' }] })))
-      .toThrowError(/UNRESOLVABLE_PIECE_OBJECTIVE/);
+  it('skips + records an unsupported format instead of throwing; supported pieces still resolve', () => {
+    const skipped: SkippedObjective[] = [];
+    const specs = resolvePieceSpecs(makeBrief({
+      pieceObjectives: [
+        { role: 'REEL', objective: 'r1' },
+        { role: 'CAROUSEL', objective: 'c1' },
+        { piece_type: 'STORY', objective: 's1' },
+      ],
+    }), skipped);
+    expect(specs.map((s) => s.format)).toEqual(['REEL', 'CAROUSEL']);
+    expect(skipped).toEqual([{ index: 2, pieceType: 'STORY', reason: 'skipped_unsupported_format' }]);
   });
 
   it('throws TOO_MANY_REELS beyond 3 reels', () => {
@@ -156,10 +165,48 @@ describe('ContentExecutionService — piece_objectives derivation', () => {
     }))).toThrowError(/TOO_MANY_CAROUSELS/);
   });
 
-  it('execute() fails the job (throws) on an unresolvable objective — nothing returned', async () => {
+  it('execute() persists supported pieces and SKIPS an unsupported one (REEL+CAROUSEL+STORY → 2)', async () => {
+    const llm = validLlm();
+    const logger = { info: vi.fn(), warn: vi.fn() };
+    const svc = new ContentExecutionService(llm, logger, cfg());
+    const pieces = await svc.execute(makeBrief({
+      pieceObjectives: [
+        { role: 'REEL', objective: 'r1' },
+        { role: 'CAROUSEL', objective: 'c1' },
+        { piece_type: 'STORY', objective: 's1' },
+      ],
+    }));
+    expect(pieces).toHaveLength(2);
+    expect(pieces.map((p) => p.pieceType).sort()).toEqual(['CAROUSEL', 'REEL']);
+    expect((llm.call as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(2); // STORY never generated
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ skipped: [{ index: 2, pieceType: 'STORY', reason: 'skipped_unsupported_format' }] }),
+      expect.stringMatching(/skipped unsupported/i),
+    );
+  });
+
+  it('execute() fails distinctly when ALL objectives are unsupported (no empty-success)', async () => {
     const svc = new ContentExecutionService(validLlm(), silentLogger, cfg());
-    await expect(svc.execute(makeBrief({ pieceObjectives: [{ role: 'BLOG' }] })))
-      .rejects.toBeInstanceOf(ContentExecutionError);
+    await expect(svc.execute(makeBrief({ pieceObjectives: [{ piece_type: 'STORY' }, { piece_type: 'BLOG' }] })))
+      .rejects.toThrowError(/ALL_PIECE_OBJECTIVES_UNSUPPORTED/);
+  });
+
+  it('a real validation failure on a SUPPORTED piece still fails loudly, even alongside a skip', async () => {
+    // STORY is skipped; the REEL hits the NEVER-list → the job must still fail (skip path must not
+    // weaken the safety failures).
+    const llm: LlmCaller = {
+      call: vi.fn(async ({ variables }) => {
+        const po = JSON.parse(variables.PIECE_OBJECTIVE!);
+        const out = validOutputFor(po);
+        out.caption = 'this contains forbidden text';
+        return { content: JSON.stringify(out) };
+      }),
+    };
+    const svc = new ContentExecutionService(llm, silentLogger, cfg());
+    await expect(svc.execute(makeBrief({
+      hardBlocks:      ['forbidden'],
+      pieceObjectives: [{ piece_type: 'STORY' }, { role: 'REEL', objective: 'a' }],
+    }))).rejects.toThrowError(/NEVER_LIST_VIOLATION/);
   });
 });
 
