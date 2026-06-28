@@ -58,6 +58,8 @@ describe('ReviewScreen', () => {
     // Honesty: brief confidence is omitted (persists as 0 and would mislead), matching Home + Brief Read.
     expect(screen.queryByText(/Confidence/)).toBeNull();
     expect(screen.queryByText(/\d+%/)).toBeNull();
+    // Honesty parity: unlabeled uniqueness score is omitted too, matching Home + Brief Read.
+    expect(screen.queryByText(/Uniqueness/)).toBeNull();
   });
 
   it('renders a content row incl. contentPreview from the C3 response', async () => {
