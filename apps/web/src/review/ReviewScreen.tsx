@@ -54,16 +54,19 @@ export function ReviewScreen() {
   const [contentErr, setContentErr] = useState<ErrInfo | null>(null);
   const [approved, setApproved] = useState<ContentPieceForApproval[]>([]);
   const [approvedErr, setApprovedErr] = useState<ErrInfo | null>(null);
+  const [rejected, setRejected] = useState<ContentPieceForApproval[]>([]);
+  const [rejectedErr, setRejectedErr] = useState<ErrInfo | null>(null);
   const [actingId, setActingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     setNotice(null);
-    const [b, c, a] = await Promise.allSettled([
+    const [b, c, a, r] = await Promise.allSettled([
       getCurrentBrief(),
       getCurrentContent(),
       getCurrentContent('APPROVED'),
+      getCurrentContent('REJECTED'),
     ]);
     if (b.status === 'fulfilled') { setBrief(b.value); setBriefErr(null); }
     else { setBrief(null); setBriefErr(toErr(b.reason)); }
@@ -71,6 +74,8 @@ export function ReviewScreen() {
     else { setContent([]); setContentErr(toErr(c.reason)); }
     if (a.status === 'fulfilled') { setApproved(a.value); setApprovedErr(null); }
     else { setApproved([]); setApprovedErr(toErr(a.reason)); }
+    if (r.status === 'fulfilled') { setRejected(r.value); setRejectedErr(null); }
+    else { setRejected([]); setRejectedErr(toErr(r.reason)); }
     setLoading(false);
   }, []);
 
@@ -85,6 +90,12 @@ export function ReviewScreen() {
     catch (e) { setApprovedErr(toErr(e)); }
   }, []);
 
+  // Read-only: after a rejection the just-rejected piece moves here, mirroring approve.
+  const refetchRejected = useCallback(async () => {
+    try { setRejected(await getCurrentContent('REJECTED')); setRejectedErr(null); }
+    catch (e) { setRejectedErr(toErr(e)); }
+  }, []);
+
   useEffect(() => { void loadAll(); }, [loadAll]);
 
   // Approve/Reject: on success ALWAYS refetch the list (no local row mutation).
@@ -95,8 +106,9 @@ export function ReviewScreen() {
       try {
         await fn(id);
         await refetchContent();
-        // Refresh the Approved list so a just-approved piece appears there (loop closes in place).
+        // Refresh Approved + Rejected so a just-decided piece appears in its section (loop closes in place).
         await refetchApproved();
+        await refetchRejected();
         // Honest success confirmation, only after the backend confirms (approve is this cycle's
         // deliberate write). Shown once the piece has left the pending list.
         if (verb === 'approve') {
@@ -107,6 +119,7 @@ export function ReviewScreen() {
           setNotice({ tone: 'warn', text: 'That piece was already decided. The list has been refreshed.' });
           await refetchContent();
           await refetchApproved();
+          await refetchRejected();
         } else {
           setNotice({ tone: 'warn', text: `We could not ${verb} that piece. Please try again.` });
         }
@@ -114,7 +127,7 @@ export function ReviewScreen() {
         setActingId(null);
       }
     },
-    [refetchContent, refetchApproved],
+    [refetchContent, refetchApproved, refetchRejected],
   );
 
   if (loading) {
@@ -190,6 +203,21 @@ export function ReviewScreen() {
           <div style={card}><span style={muted}>Nothing approved yet.</span></div>
         ) : (
           approved.map((p) => (
+            <div key={p.contentPieceId} style={card}>
+              {pieceBody(p)}
+            </div>
+          ))
+        )}
+
+        {/* Rejected content (read-only) — mirrors Approved, so both decisions have a visible home. */}
+        <h2 style={{ fontSize: '1rem', fontWeight: 500, margin: '24px 0 12px' }}>Rejected</h2>
+
+        {rejectedErr ? (
+          <div style={card}><span style={muted}>We could not load your rejected content right now.</span></div>
+        ) : rejected.length === 0 ? (
+          <div style={card}><span style={muted}>Nothing rejected yet.</span></div>
+        ) : (
+          rejected.map((p) => (
             <div key={p.contentPieceId} style={card}>
               {pieceBody(p)}
             </div>
