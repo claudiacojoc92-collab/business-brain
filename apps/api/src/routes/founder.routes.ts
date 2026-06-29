@@ -61,6 +61,7 @@ export async function registerFounderRoutes(
   server.get(`${prefix}/cycles/current`,         cycle.getCurrent.bind(cycle));
   server.get(`${prefix}/cycles/current/brief`,   cycle.getCurrentBrief.bind(cycle));
   server.get(`${prefix}/cycles/current/content`, cycle.getCurrentContent.bind(cycle));
+  server.get(`${prefix}/cycles/:cycleId/brief`,  cycle.getBriefByCycle.bind(cycle));
   server.post(`${prefix}/cycles/trigger`,        cycle.trigger.bind(cycle));
   server.get(`${prefix}/cycles/history`,         cycle.getHistory.bind(cycle));
 

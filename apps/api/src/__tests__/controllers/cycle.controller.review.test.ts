@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import Fastify from 'fastify';
 import { CycleController } from '../../controllers/cycle.controller';
 import type { ICommandBus, IQueryBus } from '@bb/application';
-import { PreconditionFailed } from '@bb/shared';
+import { PreconditionFailed, NotFoundError } from '@bb/shared';
 import { registerErrorHandler } from '../../plugins/error-handler.plugin';
 import { createLogger } from '@bb/infrastructure';
 
@@ -22,6 +22,7 @@ function setupServer(queryBus: IQueryBus) {
   });
   server.get('/v1/founders/me/cycles/current/brief', controller.getCurrentBrief.bind(controller));
   server.get('/v1/founders/me/cycles/current/content', controller.getCurrentContent.bind(controller));
+  server.get('/v1/founders/me/cycles/:cycleId/brief', controller.getBriefByCycle.bind(controller));
   return server;
 }
 
@@ -116,5 +117,36 @@ describe('CycleController — current review brief/content endpoints', () => {
     expect(queryBus.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'GetContentForApproval', status: undefined }),
     );
+  });
+
+  it('GET .../cycles/:cycleId/brief returns that cycle\'s brief via the founder-scoped GetCycleBrief query', async () => {
+    const queryBus = makeQueryBus(async (q) =>
+      q.type === 'GetCycleBrief' ? { briefId: 'b7', cycleId: q.cycleId } : undefined);
+    const res = await setupServer(queryBus).inject({ method: 'GET', url: '/v1/founders/me/cycles/cycle-7/brief' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ briefId: 'b7', cycleId: 'cycle-7' });
+    expect(queryBus.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'GetCycleBrief', cycleId: 'cycle-7', founderId: 'founder-test-01' }),
+    );
+  });
+
+  it('GET .../cycles/:cycleId/brief → 404 when the cycle is not the founder\'s (handler CYCLE_NOT_FOUND)', async () => {
+    const queryBus = makeQueryBus(async () => { throw new NotFoundError('CYCLE_NOT_FOUND', 'not found'); });
+    const res = await setupServer(queryBus).inject({ method: 'GET', url: '/v1/founders/me/cycles/someone-elses/brief' });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('CYCLE_NOT_FOUND');
+  });
+
+  it('GET .../cycles/current/brief still resolves via GetCurrentReviewCycle (unchanged behaviour)', async () => {
+    const queryBus = makeQueryBus(async (q) => {
+      if (q.type === 'GetCurrentReviewCycle') return { id: 'cycle-9' };
+      if (q.type === 'GetCycleBrief') return { briefId: 'b1', cycleId: q.cycleId };
+      return undefined;
+    });
+    const res = await setupServer(queryBus).inject({ method: 'GET', url: '/v1/founders/me/cycles/current/brief' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ briefId: 'b1', cycleId: 'cycle-9' });
   });
 });

@@ -46,6 +46,23 @@ export class CycleController {
     await reply.status(200).send(dto);
   }
 
+  /** Return the committed brief for a specific cycle, founder-scoped (read-only). */
+  async getBriefByCycle(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const user   = (request as any).user as FounderUser;
+    const params = request.params as { cycleId: string };
+    // Reuses the existing GetCycleBrief query, which scopes by founderId (a cycle not belonging
+    // to this founder yields the existing CYCLE_NOT_FOUND pathway — no cross-founder leakage).
+    const dto = await this.queryBus.dispatch({
+      type:          'GetCycleBrief',
+      cycleId:       params.cycleId,
+      founderId:     user.sub,
+      correlationId: generateId(),
+      traceId:       generateId(),
+    } as Query);
+    await reply.status(200).send(dto);
+  }
+
   /** Resolve the founder's current review cycle, then return its approval list (C3). */
   async getCurrentContent(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
