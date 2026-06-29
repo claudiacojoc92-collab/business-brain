@@ -14,14 +14,20 @@ export class GetCycleHistoryHandler
       query.cursor,
     );
 
+    // Real per-cycle content-piece counts (read-model), founder-scoped, in one batched query.
+    const counts = await this.cycleRepo.countContentPiecesByCycleIds(
+      query.founderId,
+      paged.items.map((cycle) => cycle.id),
+    );
+
     return {
       items: paged.items.map((cycle) => ({
-        cycleId:          cycle.id,
-        cycleNumber:      cycle.cycleNumber,
-        selectedMode:     cycle.selectedMode,
-        contentPieceCount:0,
-        committedAt:      cycle.committedAt ?? new Date(),
-        isFallback:       cycle.isFallback,
+        cycleId:           cycle.id,
+        cycleNumber:       cycle.cycleNumber,
+        selectedMode:      cycle.selectedMode,
+        contentPieceCount: counts.get(cycle.id) ?? 0,
+        committedAt:       cycle.committedAt ?? new Date(),
+        isFallback:        cycle.isFallback,
       })),
       nextCursor: paged.nextCursor,
       hasMore:    paged.hasMore,

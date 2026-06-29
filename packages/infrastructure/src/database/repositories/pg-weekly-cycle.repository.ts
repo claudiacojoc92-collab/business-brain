@@ -106,6 +106,23 @@ export class PgWeeklyCycleRepository implements IWeeklyCycleRepository {
     return rows.map((r) => this.contentPieceToDomain(r));
   }
 
+  async countContentPiecesByCycleIds(founderId: string, cycleIds: string[]): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
+    if (cycleIds.length === 0) return counts;
+    // Single founder-scoped query; tallied in the read model (cycle-history piece volume is small).
+    // No N+1, no schema change, no WeeklyCycle aggregate involvement.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = this.db as any;
+    const rows: { cycle_id: string }[] = await db
+      .selectFrom('cycle.content_pieces')
+      .select('cycle_id')
+      .where('founder_id', '=', founderId)
+      .where('cycle_id', 'in', cycleIds)
+      .execute();
+    for (const r of rows) counts.set(r.cycle_id, (counts.get(r.cycle_id) ?? 0) + 1);
+    return counts;
+  }
+
   async findContentPieceById(
     pieceId: string,
     founderId: string,

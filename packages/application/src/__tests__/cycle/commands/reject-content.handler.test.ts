@@ -46,6 +46,7 @@ describe('RejectContentHandler (F003)', () => {
       findAwaitingApprovalPieces:  vi.fn().mockResolvedValue([]),
       findContentPieceById:        vi.fn().mockResolvedValue(null),
       findContentPiecesByCycle:    vi.fn().mockResolvedValue([]),
+      countContentPiecesByCycleIds: vi.fn().mockResolvedValue(new Map()),
       findCurrentReviewCycle:      vi.fn().mockResolvedValue(null),
       findHistory:                 vi.fn(),
       findPreceding:               vi.fn(),

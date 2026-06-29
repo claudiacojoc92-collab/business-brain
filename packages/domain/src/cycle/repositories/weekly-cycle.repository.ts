@@ -125,6 +125,13 @@ export interface IWeeklyCycleRepository {
     collectedAt:     Date;
   }, tx?: unknown): Promise<void>;
 
+  /**
+   * Returns the per-cycle content-piece count for the given cycles, founder-scoped, as a
+   * Map keyed by cycleId (cycles with no pieces are absent → caller treats as 0). Read-only
+   * read-model count for the cycle-history surface; does not touch the WeeklyCycle aggregate.
+   */
+  countContentPiecesByCycleIds(founderId: string, cycleIds: string[]): Promise<Map<string, number>>;
+
   save(cycle: WeeklyCycle, tx: unknown): Promise<void>;
 
   markForwardQuestionConsumed(
