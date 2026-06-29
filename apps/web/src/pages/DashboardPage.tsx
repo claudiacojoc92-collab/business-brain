@@ -139,12 +139,20 @@ export function DashboardPage() {
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40 }}>
           <h1 style={{ fontSize: '1.25rem', fontWeight: 500 }}>Business Brain</h1>
-          <button
-            onClick={logout}
-            style={{ background: 'none', border: '1px solid #1f2937', color: '#6b7280', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.875rem', padding: '6px 14px', borderRadius: 4 }}
-          >
-            Sign out
-          </button>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              onClick={() => navigate('/history')}
+              style={{ background: 'none', border: '1px solid #1f2937', color: '#6b7280', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.875rem', padding: '6px 14px', borderRadius: 4 }}
+            >
+              Past cycles
+            </button>
+            <button
+              onClick={logout}
+              style={{ background: 'none', border: '1px solid #1f2937', color: '#6b7280', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.875rem', padding: '6px 14px', borderRadius: 4 }}
+            >
+              Sign out
+            </button>
+          </div>
         </div>
 
         {loading ? (

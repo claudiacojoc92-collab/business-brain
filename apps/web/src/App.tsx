@@ -5,6 +5,7 @@ import { LoginPage } from './pages/LoginPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ReviewPage } from './pages/ReviewPage';
+import { HistoryPage } from './pages/HistoryPage';
 
 /**
  * Route guard: redirect based on founder status.
@@ -84,6 +85,16 @@ export function App() {
             element={
               <ActiveGuard>
                 <ReviewPage />
+              </ActiveGuard>
+            }
+          />
+
+          {/* History — read-only past committed cycles (ACTIVE founders) */}
+          <Route
+            path="/history"
+            element={
+              <ActiveGuard>
+                <HistoryPage />
               </ActiveGuard>
             }
           />
