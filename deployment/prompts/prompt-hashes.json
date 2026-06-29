@@ -1,0 +1,82 @@
+{
+  "_comment": "DB-free gate source of truth (P2). sha256 = sha256(system_template file bytes) == live app.prompt_registry.validation_hash at capture. user_template is presence-checked only, not hashed.",
+  "prompts": [
+    {
+      "prompt_id": "PR-001",
+      "system_file": "PR-001-interpreter.txt",
+      "user_file": "PR-001-interpreter.user.txt",
+      "sha256": "ebe71ff7f6841b6f21b4542e9afb35dabacb78c3b414afcfc1305c60a3e33d85",
+      "ends_with_newline": false
+    },
+    {
+      "prompt_id": "PR-002",
+      "system_file": "PR-002-situation-modeller.txt",
+      "user_file": "PR-002-situation-modeller.user.txt",
+      "sha256": "3bbaee4db4bc12923ea97832c7d621d17bea49bf3ca290a50a1c5613c416e877",
+      "ends_with_newline": false
+    },
+    {
+      "prompt_id": "PR-003",
+      "system_file": "PR-003-memory-interrogator.txt",
+      "user_file": "PR-003-memory-interrogator.user.txt",
+      "sha256": "c119ddf6e31e967738302d80172eacf52dddfe99ab6233d8b00a29fbbbfbd16f",
+      "ends_with_newline": false
+    },
+    {
+      "prompt_id": "PR-004",
+      "system_file": "PR-004-hypothesis-generator.txt",
+      "user_file": "PR-004-hypothesis-generator.user.txt",
+      "sha256": "7ae391f92817f05392eb6a8ea08d835011d13ad73efbfe228637c0bfb613032f",
+      "ends_with_newline": false
+    },
+    {
+      "prompt_id": "PR-005",
+      "system_file": "PR-005-evaluator.txt",
+      "user_file": "PR-005-evaluator.user.txt",
+      "sha256": "80a10cbe548b82a824139f1f2a29773b185aef4495ef63ce00379f7830400537",
+      "ends_with_newline": false
+    },
+    {
+      "prompt_id": "PR-006",
+      "system_file": "PR-006-soft-constraints.txt",
+      "user_file": "PR-006-soft-constraints.user.txt",
+      "sha256": "f5b503ef3cda9b0f95131bd19498628edfa19ce10cdff74fbe634cd1a9b74c3a",
+      "ends_with_newline": false
+    },
+    {
+      "prompt_id": "PR-008",
+      "system_file": "PR-008-critic.txt",
+      "user_file": "PR-008-critic.user.txt",
+      "sha256": "13259d38e8b0e27fe99702b86a8fc897ab11e05b1f8410d32429a8d7c98cea93",
+      "ends_with_newline": false
+    },
+    {
+      "prompt_id": "PR-009",
+      "system_file": "PR-009-decision-commit.txt",
+      "user_file": "PR-009-decision-commit.user.txt",
+      "sha256": "7efe6ae48d85b88fade47fe5a98100dc02745e7077a17f519b8075a568e9ab5d",
+      "ends_with_newline": false
+    },
+    {
+      "prompt_id": "PR-010",
+      "system_file": "PR-010-memory-updater.txt",
+      "user_file": "PR-010-memory-updater.user.txt",
+      "sha256": "9053010dd2295ac9535d507607509303b3ed8cf293f98ed9792d77e36ffd42ed",
+      "ends_with_newline": false
+    },
+    {
+      "prompt_id": "PR-011",
+      "system_file": "PR-011-fallback-generator.txt",
+      "user_file": "PR-011-fallback-generator.user.txt",
+      "sha256": "a994166be63594dee5b6b46a87c58f4e559f1b5d47e1d328ac717fb30d3d8ee9",
+      "ends_with_newline": false
+    },
+    {
+      "prompt_id": "PR-012",
+      "system_file": "PR-012-content-executor.txt",
+      "user_file": "PR-012-content-executor.user.txt",
+      "sha256": "6eab8c7ed0f6635ffb71ac17f499b5621a9dcc9da891646be1946f560388fda8",
+      "ends_with_newline": true
+    }
+  ]
+}

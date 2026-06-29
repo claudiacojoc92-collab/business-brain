@@ -34,7 +34,31 @@ becomes a faithful, hash-verified copy of what is already live.
   manages `user_template`, **P4** release wiring (run the loader on deploy, like Flyway migrate).
 
 ## Verify
-```
-python3 deployment/prompts/verify-prompts.py
-```
-Exits non-zero on any mismatch/missing file.
+
+Two complementary checks:
+
+- **`verify-prompts.py` (DB-truth, P1)** — compares each `system_template` file to the **live**
+  `app.prompt_registry.validation_hash` (reads the DB). Use in a dev environment to confirm the
+  files still mirror live truth.
+  ```
+  python3 deployment/prompts/verify-prompts.py
+  ```
+- **`check-prompts.py` (DB-FREE gate, P2)** — compares each `system_template` file to the
+  **committed manifest** `prompt-hashes.json` (no DB). Runs anywhere, including CI. Enforces:
+  hash match, coverage (every manifest prompt has a file), no-extra (no untracked system file),
+  byte-exact newlines (LF-only; per-prompt trailing-newline), and `user_template` companion
+  presence (presence only — **not** hashed).
+  ```
+  python3 deployment/prompts/check-prompts.py
+  ```
+  Both exit non-zero on any mismatch/missing/extra file.
+
+## P2 — the committed hash manifest (`prompt-hashes.json`)
+`prompt-hashes.json` is the **DB-free source of truth** for the gate: per prompt it records the
+`system_file`, `user_file`, the `system_template` `sha256`, and the `ends_with_newline` state. It
+was captured **once** from live truth in P2 and verified so that, for every prompt,
+`sha256(committed system_template bytes) == manifest sha256 == live validation_hash`. Thereafter
+`check-prompts.py` never reads the DB. `user_template` is **not** in the hash set (captured-only).
+
+**CI status:** no CI exists in this repo yet (`.github/workflows/` absent), so wiring is
+**deferred** — run `check-prompts.py` as the CI step once CI is introduced (P2 follow-up).
