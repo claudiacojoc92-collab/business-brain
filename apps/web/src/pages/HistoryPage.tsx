@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ApiError, getCycleHistory, type CycleHistoryItem } from '../api/client';
+import { ApiError, getCycleHistory, getCycleBrief, type CycleHistoryItem, type CycleBrief } from '../api/client';
 
 /**
  * Past cycles — a read-only history of the founder's committed cycles, newest first, so the
@@ -33,12 +33,37 @@ function humanize(s: string): string {
   return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
 
+const accent = '#5b8db8';
+
+/** Founder-facing message for a brief load failure, via existing API codes. */
+function briefMessage(err: ErrInfo): string {
+  switch (err.code) {
+    case 'CYCLE_NOT_COMMITTED': return 'This cycle’s brief is not available yet.';
+    case 'CYCLE_NOT_FOUND':     return 'This cycle could not be found.';
+    case 'BRIEF_NOT_FOUND':     return 'No brief is available for this cycle.';
+    default:                    return 'We could not load this brief right now.';
+  }
+}
+
 export function HistoryPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<CycleHistoryItem[]>([]);
   const [err, setErr] = useState<ErrInfo | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  // Expand-in-place: at most one cycle's brief is open at a time.
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [brief, setBrief] = useState<CycleBrief | null>(null);
+  const [briefLoading, setBriefLoading] = useState(false);
+  const [briefErr, setBriefErr] = useState<ErrInfo | null>(null);
+
+  const toggleBrief = useCallback(async (cycleId: string) => {
+    if (openId === cycleId) { setOpenId(null); return; } // collapse
+    setOpenId(cycleId); setBrief(null); setBriefErr(null); setBriefLoading(true);
+    try { setBrief(await getCycleBrief(cycleId)); }
+    catch (e) { setBriefErr(toErr(e)); }
+    finally { setBriefLoading(false); }
+  }, [openId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -87,6 +112,33 @@ export function HistoryPage() {
                 {c.selectedMode ? <div style={muted}>Mode: {humanize(c.selectedMode)}</div> : null}
                 {c.isFallback ? (
                   <div style={muted}>Fallback brief — produced with limited signal.</div>
+                ) : null}
+
+                <button
+                  onClick={() => void toggleBrief(c.cycleId)}
+                  aria-expanded={openId === c.cycleId}
+                  style={{ marginTop: 10, background: 'none', border: 'none', color: accent, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', padding: 0 }}
+                >
+                  {openId === c.cycleId ? 'Hide brief' : 'View brief'}
+                </button>
+
+                {openId === c.cycleId ? (
+                  <div style={{ marginTop: 12, borderTop: '1px solid #1f2937', paddingTop: 12 }}>
+                    {briefLoading ? (
+                      <span style={muted}>Loading brief…</span>
+                    ) : briefErr ? (
+                      <span style={muted}>{briefMessage(briefErr)}</span>
+                    ) : brief ? (
+                      <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <strong>{humanize(brief.mode)}</strong>
+                          <span style={muted}>{brief.isFallback ? 'Fallback brief' : humanize(brief.validationResult)}</span>
+                        </div>
+                        <p style={{ lineHeight: 1.6, margin: '0 0 8px' }}>{brief.strategicPurpose}</p>
+                        <div style={muted}>Audience: {brief.audienceSegment}</div>
+                      </>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
             ))}

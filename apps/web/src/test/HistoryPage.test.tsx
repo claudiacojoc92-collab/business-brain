@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../api/client', () => {
@@ -9,7 +10,7 @@ vi.mock('../api/client', () => {
       this.name = 'ApiError';
     }
   }
-  return { ApiError, getCycleHistory: vi.fn() };
+  return { ApiError, getCycleHistory: vi.fn(), getCycleBrief: vi.fn() };
 });
 
 vi.mock('../auth/AuthContext', () => ({
@@ -36,9 +37,17 @@ const HISTORY = {
   hasMore: false,
 };
 
+const BRIEF = {
+  briefId: 'b3', cycleId: 'c3', mode: 'TRUST', modeConfidence: 0,
+  strategicPurpose: 'Establish the credible alternative', audienceSegment: 'Service-based professionals',
+  briefConfidence: 0, uniquenessScore: 50, validationResult: 'COMMITTED', isFallback: false, reviewFlag: false,
+  committedAt: '2026-06-28T09:47:44.989Z',
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   m(client.getCycleHistory).mockResolvedValue(HISTORY);
+  m(client.getCycleBrief).mockResolvedValue(BRIEF);
 });
 
 describe('HistoryPage (Past cycles)', () => {
@@ -78,5 +87,31 @@ describe('HistoryPage (Past cycles)', () => {
     renderHistory();
     expect(await screen.findByText(/could not load your history/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
+  });
+
+  it('opens a past cycle to view its brief read-only, with no confidence/uniqueness', async () => {
+    renderHistory();
+    await screen.findByText('Cycle #3');
+    await userEvent.click((await screen.findAllByRole('button', { name: /view brief/i }))[0]!);
+
+    expect(await screen.findByText('Establish the credible alternative')).toBeInTheDocument();
+    expect(screen.getByText(/Audience: Service-based professionals/)).toBeInTheDocument();
+    // honesty omissions hold here too
+    expect(screen.queryByText(/Confidence/)).toBeNull();
+    expect(screen.queryByText(/Uniqueness/)).toBeNull();
+    expect(screen.queryByText(/\d+%/)).toBeNull();
+    // view-only: no approve/reject/edit actions
+    expect(screen.queryByRole('button', { name: /approve|reject|edit/i })).toBeNull();
+    expect(client.getCycleBrief).toHaveBeenCalledWith('c3');
+  });
+
+  it('shows an honest error when a past brief fails to load; the list still works', async () => {
+    m(client.getCycleBrief).mockRejectedValue(apiError(404, 'BRIEF_NOT_FOUND'));
+    renderHistory();
+    await screen.findByText('Cycle #3');
+    await userEvent.click((await screen.findAllByRole('button', { name: /view brief/i }))[0]!);
+
+    expect(await screen.findByText(/No brief is available for this cycle/i)).toBeInTheDocument();
+    expect(screen.getByText('Cycle #3')).toBeInTheDocument(); // list intact
   });
 });

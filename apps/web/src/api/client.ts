@@ -168,6 +168,11 @@ export function getCurrentBrief(): Promise<CycleBrief> {
   return request<CycleBrief>('v1/founders/me/cycles/current/brief');
 }
 
+/** GET a specific (past) cycle's committed brief, founder-scoped; same DTO as getCurrentBrief. */
+export function getCycleBrief(cycleId: string): Promise<CycleBrief> {
+  return request<CycleBrief>(`v1/founders/me/cycles/${encodeURIComponent(cycleId)}/brief`);
+}
+
 /**
  * GET current review cycle's content pieces (C3); [] when none.
  * Default (no status) returns AWAITING_APPROVAL only — unchanged. Pass an approval status
