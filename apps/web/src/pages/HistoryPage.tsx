@@ -110,6 +110,7 @@ export function HistoryPage() {
                   <span style={muted}>{fmtDate(c.committedAt) ?? 'committed'}</span>
                 </div>
                 {c.selectedMode ? <div style={muted}>Mode: {humanize(c.selectedMode)}</div> : null}
+                <div style={muted}>{c.contentPieceCount} content piece{c.contentPieceCount === 1 ? '' : 's'}</div>
                 {c.isFallback ? (
                   <div style={muted}>Fallback brief — produced with limited signal.</div>
                 ) : null}

@@ -30,8 +30,8 @@ function renderHistory() {
 
 const HISTORY = {
   items: [
-    { cycleId: 'c3', cycleNumber: 3, selectedMode: null, contentPieceCount: 0, committedAt: '2026-06-28T09:47:44.948Z', isFallback: false },
-    { cycleId: 'c1', cycleNumber: 1, selectedMode: 'TRUST', contentPieceCount: 0, committedAt: '2026-06-28T06:47:57.667Z', isFallback: true },
+    { cycleId: 'c3', cycleNumber: 3, selectedMode: null, contentPieceCount: 2, committedAt: '2026-06-28T09:47:44.948Z', isFallback: false },
+    { cycleId: 'c1', cycleNumber: 1, selectedMode: 'TRUST', contentPieceCount: 1, committedAt: '2026-06-28T06:47:57.667Z', isFallback: true },
   ],
   nextCursor: null,
   hasMore: false,
@@ -61,11 +61,20 @@ describe('HistoryPage (Past cycles)', () => {
     expect(screen.getByText(/Mode: Trust/)).toBeInTheDocument();
   });
 
-  it('never shows the hardcoded contentPieceCount (no fabricated count)', async () => {
+  it('shows the real content-piece count with correct singular/plural', async () => {
     renderHistory();
     await screen.findByText('Cycle #3');
-    expect(screen.queryByText(/piece/i)).toBeNull();
-    expect(screen.queryByText(/contentPieceCount/)).toBeNull();
+    expect(screen.getByText('2 content pieces')).toBeInTheDocument(); // c3 (plural)
+    expect(screen.getByText('1 content piece')).toBeInTheDocument();  // c1 (singular)
+  });
+
+  it('shows a genuine 0 honestly (committed cycle with no pieces)', async () => {
+    m(client.getCycleHistory).mockResolvedValue({
+      items: [{ cycleId: 'c9', cycleNumber: 9, selectedMode: null, contentPieceCount: 0, committedAt: '2026-06-28T00:00:00.000Z', isFallback: false }],
+      nextCursor: null, hasMore: false,
+    });
+    renderHistory();
+    expect(await screen.findByText('0 content pieces')).toBeInTheDocument();
   });
 
   it('does not reintroduce briefConfidence or uniquenessScore', async () => {
