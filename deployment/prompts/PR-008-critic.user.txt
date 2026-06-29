@@ -1,0 +1,1 @@
+Hypothesis: {{SELECTED_HYPOTHESIS}}\nConfidence: {{CONFIDENCE_ASSESSMENT}}\nFounder: {{FOUNDER_SNAPSHOT}}\nMemory: {{MEMORY_PACKAGE}}\nHard constraints: {{HARD_CONSTRAINTS}}\nSoft constraints: {{SOFT_CONSTRAINTS}}

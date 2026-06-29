@@ -1,0 +1,1 @@
+Situation: {{SITUATION_MODEL}}\nMemory interrogation: {{MEMORY_INTERROGATION}}\nFounder: {{FOUNDER_SNAPSHOT}}\nMemory: {{MEMORY_PACKAGE}}

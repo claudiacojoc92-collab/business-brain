@@ -1,0 +1,9 @@
+# Scoped to the prompt source files. These mirror app.prompt_registry byte-for-byte and are
+# hash-verified, so editors must NOT insert a final newline or trim whitespace — doing so would
+# change the hashed bytes and break the runtime checksum. Most files end WITHOUT a final newline
+# (PR-012 ends with exactly one); preserve each file's bytes exactly.
+[*.txt]
+end_of_line = lf
+insert_final_newline = false
+trim_trailing_whitespace = false
+charset = utf-8

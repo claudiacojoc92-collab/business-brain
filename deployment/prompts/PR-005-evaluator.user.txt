@@ -1,0 +1,1 @@
+Hypotheses: {{HYPOTHESES}}\nSituation: {{SITUATION_MODEL}}\nMemory: {{MEMORY_PACKAGE}}\nFounder: {{FOUNDER_SNAPSHOT}}

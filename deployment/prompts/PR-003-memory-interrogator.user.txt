@@ -1,0 +1,1 @@
+Memory: {{MEMORY_PACKAGE}}\nSituation: {{SITUATION_MODEL}}\nFounder: {{FOUNDER_SNAPSHOT}}\nForward question: {{FORWARD_QUESTION}}

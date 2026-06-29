@@ -1,0 +1,1 @@
+Typed signals: {{TYPED_SIGNALS}}\nFounder: {{FOUNDER_SNAPSHOT}}\nMemory: {{MEMORY_PACKAGE}}\nSituation summary: {{SITUATION_SUMMARY}}

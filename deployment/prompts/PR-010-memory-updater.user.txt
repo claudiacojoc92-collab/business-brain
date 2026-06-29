@@ -1,0 +1,1 @@
+Brief: {{COMMITTED_BRIEF}}\nSituation: {{SITUATION_MODEL}}\nMemory: {{MEMORY_PACKAGE}}\nSignals: {{TYPED_SIGNALS}}\nFounder: {{FOUNDER_SNAPSHOT}}

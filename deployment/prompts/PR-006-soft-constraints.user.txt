@@ -1,0 +1,1 @@
+Founder: {{FOUNDER_SNAPSHOT}}\nMemory: {{MEMORY_PACKAGE}}\nHard constraints: {{HARD_CONSTRAINTS}}

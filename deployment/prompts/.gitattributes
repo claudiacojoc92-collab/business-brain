@@ -1,0 +1,4 @@
+# Prompt source files are hash-verified (sha256(system_template) === validation_hash).
+# Force LF and never let Git/editors rewrite line endings — a single byte change
+# (CRLF, or an added/stripped final newline) would trip PROMPT_CHECKSUM_MISMATCH at runtime.
+*.txt text eol=lf

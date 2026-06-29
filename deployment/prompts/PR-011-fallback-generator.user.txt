@@ -1,0 +1,1 @@
+Founder: {{FOUNDER_SNAPSHOT}}\nErrors encountered: {{ERRORS}}\nCycle number: {{CYCLE_NUMBER}}

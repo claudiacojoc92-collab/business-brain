@@ -1,0 +1,1 @@
+Signals: {{SIGNALS}}\nMemory: {{MEMORY_PACKAGE}}\nFounder: {{FOUNDER_SNAPSHOT}}

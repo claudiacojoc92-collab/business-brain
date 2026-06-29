@@ -1,0 +1,1 @@
+Brief: {{COMMITTED_BRIEF}}\nPiece objective: {{PIECE_OBJECTIVE}}\nConviction angle: {{CONVICTION_ANGLE}}\nAudience language: {{AUDIENCE_LANGUAGE}}\nVoice parameters: {{VOICE_PARAMETERS}}\nNEVER-list: {{NEVER_LIST}}\nCTA style: {{CTA_STYLE}}
