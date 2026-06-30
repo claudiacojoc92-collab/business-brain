@@ -8,7 +8,7 @@
  * into the Gift (the one live coupling in M1); `conversationFixtureAnswer` below is a
  * placeholder sample only and is NOT used for the echo.
  */
-import type { EvidenceData, GiftDraft, Rich, WeekItem } from './types';
+import type { CarriedUnderstanding, EvidenceData, GiftDraft, Rich, WeekItem } from './types';
 
 // ── Reveal timing (ms) — matched to the prototype's say()/wait() pacing ──────────
 export const TIMING = {
@@ -60,25 +60,36 @@ export const connect = {
 
 export const analyzingLine = 'Give me a moment with it.';
 
+// Every item is SAMPLE evidence (origin 'i-observed-sample') — never the founder's own.
+// `source` is matched against the founder's Connect selection so only connected sources render.
 export const evidence: ReadonlyArray<EvidenceData> = [
-  { key: 'site', source: 'website',  relevant: false, pos: { left: '1%',  top: '7%'  }, text: '"The Marketing Clarity Package — done-for-you content systems for busy founders."' },
-  { key: 'a',    source: 'instagram',relevant: true,  pos: { left: '57%', top: '3%'  }, text: '"Stop posting daily and hoping. Most founders are exhausted by content that never converts."' },
-  { key: 'b',    source: 'instagram',relevant: true,  pos: { left: '65%', top: '40%' }, text: '"I\'m so tired of watching good founders burn out on content nobody asked for."' },
-  { key: 'yt',   source: 'youtube',  relevant: true,  pos: { left: '3%',  top: '52%' }, text: '▶ "Why your content isn\'t the problem — your offer is"' },
-  { key: 'li',   source: 'linkedin', relevant: false, pos: { left: '55%', top: '73%' }, text: '"5 tools every founder needs in their stack this year."' },
-  { key: 'news', source: 'newsletter',relevant: false,pos: { left: '7%',  top: '81%' }, text: '"This week: a calmer system for showing up without the grind."' },
-  { key: 'c',    source: 'instagram',relevant: true,  pos: { left: '30%', top: '85%' }, text: '"The whole \'post 3x a day\' advice is why you\'re tired and broke."' },
-  { key: 'cal',  source: 'calendar', relevant: false, pos: { left: '33%', top: '1%'  }, text: "Podcast guest — 'The Anti-Hustle Marketing Show'" },
+  { key: 'site', source: 'website',   relevant: false, origin: 'i-observed-sample', pos: { left: '1%',  top: '7%'  }, text: '"The Marketing Clarity Package — done-for-you content systems for busy founders."' },
+  { key: 'a',    source: 'instagram', relevant: true,  origin: 'i-observed-sample', pos: { left: '57%', top: '3%'  }, text: '"Stop posting daily and hoping. Most founders are exhausted by content that never converts."' },
+  { key: 'b',    source: 'instagram', relevant: true,  origin: 'i-observed-sample', pos: { left: '65%', top: '40%' }, text: '"I\'m so tired of watching good founders burn out on content nobody asked for."' },
+  { key: 'yt',   source: 'youtube',   relevant: true,  origin: 'i-observed-sample', pos: { left: '3%',  top: '52%' }, text: '▶ "Why your content isn\'t the problem — your offer is"' },
+  { key: 'li',   source: 'linkedin',  relevant: false, origin: 'i-observed-sample', pos: { left: '55%', top: '73%' }, text: '"5 tools every founder needs in their stack this year."' },
+  { key: 'news', source: 'newsletter',relevant: false, origin: 'i-observed-sample', pos: { left: '7%',  top: '81%' }, text: '"This week: a calmer system for showing up without the grind."' },
+  { key: 'c',    source: 'instagram', relevant: true,  origin: 'i-observed-sample', pos: { left: '30%', top: '85%' }, text: '"The whole \'post 3x a day\' advice is why you\'re tired and broke."' },
+  { key: 'cal',  source: 'calendar',  relevant: false, origin: 'i-observed-sample', pos: { left: '33%', top: '1%'  }, text: "Podcast guest — 'The Anti-Hustle Marketing Show'" },
 ];
 
 export const seeing = {
-  kicker: 'What I see',
+  kicker: "How I'd read this",
+  // #2/#3 + #6: the Seeing is a labeled SAMPLE; it must not read as the founder's own.
+  sampleMarker: 'A sample business — so you can feel how this reads, not a claim about yours.',
+  framing: "In this sample business, here's how I'd read the evidence from the sources you connected —",
   observation: [
     "You're sharpest when you're ",
     { em: 'frustrated' },
     '. The posts where you call out the daily-hustle advice are your most ignored — and your best — work.',
   ] as Rich,
-  reframe: 'What that means: your audience trusts your conviction before your expertise.',
+  observationOrigin: 'i-observed-sample' as const,
+  // Plain version carried forward when the founder confirms the read.
+  observationPlain:
+    "you're sharpest when you're frustrated — the posts calling out daily-hustle advice are your most ignored, and your best, work",
+  // #5: reframe is an inference → reads as a hypothesis (matches its 'i-suspect' origin).
+  reframe: 'My current hypothesis: your audience trusts your conviction before your expertise.',
+  reframeOrigin: 'i-suspect' as const,
 } as const;
 
 export const verdict = {
@@ -93,10 +104,11 @@ export const verdict = {
 } as const;
 
 export const conversation = {
+  // #8 reasoning bridge (provenance): why the question follows from the sample read.
   intro: [
-    'I understand your business now. To go further I need to understand how ',
+    'Because that frustrated, conviction-first thread is the strongest signal in the sample — to go further I need to hear how ',
     { em: 'you' },
-    ' think about it.',
+    ' actually think.',
   ] as Rich,
   kicker: 'One real question',
   question: [
@@ -135,6 +147,7 @@ export const gift = {
   echoSuffix: ' — I leaned the draft toward that, not the calm homepage version.',
   echoFallback: 'Built toward your sharper voice — the frustrated register, not the calm homepage one.',
   echoMax: 120,
+  draftOrigin: 'you-told-me' as const, // the draft is shaped by what the founder told us
   reactions: [
     { id: 'gy', label: "That's me" },
     { id: 'ga', label: 'Almost' },
@@ -156,10 +169,11 @@ export const week = {
     "So here's your first week — already shaped around what I've learned. You decide; I'll handle the rest.",
   kicker: 'Your first week · drafted, awaiting your call',
   items: [
-    { day: 'Tue', title: 'The "post daily" callout reel, in your frustrated voice.', note: 'your sharpest register — leading the week on conviction' },
-    { day: 'Thu', title: 'Carousel: "Clarity beats volume" — reframing your homepage promise.', note: 'closes the gap between your page and your posts' },
-    { day: 'Fri', title: 'Newsletter open, rewritten to sound like you — not the calm version.', note: "carries the week's thread into your list" },
+    { day: 'Tue', title: 'The "post daily" callout reel, in your frustrated voice.', note: 'your sharpest register — leading the week on conviction', origin: 'you-told-me' },
+    { day: 'Thu', title: 'Carousel: "Clarity beats volume" — reframing your homepage promise.', note: 'closes the gap between your page and your posts', origin: 'you-told-me' },
+    { day: 'Fri', title: 'Newsletter open, rewritten to sound like you — not the calm version.', note: "carries the week's thread into your list", origin: 'you-told-me' },
   ] as WeekItem[],
+  bridgeKicker: 'Why this shape',
   approve: 'Approve the week',
   hold: 'Hold one to review',
   note: ['Nothing posts without your yes. I prepared it — ', { em: 'you decide' }, '.'] as Rich,
@@ -168,3 +182,19 @@ export const week = {
     { kind: 'med' as const, pause: 300, rich: ['This is where the relationship begins.'] as Rich },
   ],
 } as const;
+
+/**
+ * #8 Week reasoning bridge (provenance). Surfaces the carried understanding so a
+ * "Not quite" correction visibly carries through (you-told-me), and a confirm reads
+ * as confirmed — never citing a demoted first read as understood.
+ */
+export function weekBridge(carried: CarriedUnderstanding | null): string {
+  if (!carried) return 'This follows from the read we just worked through.';
+  if (carried.source === 'confirmed') {
+    return `This follows from what you just confirmed — ${carried.text}.`;
+  }
+  if (carried.text) {
+    return `This follows from what you told me — “${carried.text}” — not from my first read.`;
+  }
+  return "I set my first read aside, so this is a lighter starting shape — you'll steer it.";
+}
