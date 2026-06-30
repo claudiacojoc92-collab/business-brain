@@ -60,6 +60,7 @@ export class PgInternalBriefRepository implements IInternalBriefRepository {
       convictionAngle:       row.conviction_angle,
       audienceLanguage:      row.audience_language ?? {},
       strategicPurpose:      row.strategic_purpose,
+      founderFocus:          row.founder_focus ?? null,
       campaignId:            row.campaign_id ?? null,
       pieceObjectives:       row.piece_objectives ?? [],
       briefConfidence:       Number(row.brief_confidence),

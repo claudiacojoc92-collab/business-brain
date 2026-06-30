@@ -237,6 +237,18 @@ export function DashboardPage() {
               </div>
             </div>
 
+            {/* ── This week's leverage — the founder-facing voice (PR-009 founder_focus) ──
+                Renders ONLY when the engine produced a sentence. Absent/null → no card,
+                matching how brief sub-fields hide when empty (never a fabricated default). */}
+            {brief && brief.founderFocus ? (
+              <div style={section}>
+                <div style={kicker}>This week’s leverage</div>
+                <div style={card}>
+                  <p style={{ margin: 0, lineHeight: 1.6, color: '#e8e6e1' }}>{brief.founderFocus}</p>
+                </div>
+              </div>
+            ) : null}
+
             {/* ── Section 2 — Now ───────────────────────────────────────────── */}
             <div style={section}>
               <div style={kicker}>What’s happening now</div>

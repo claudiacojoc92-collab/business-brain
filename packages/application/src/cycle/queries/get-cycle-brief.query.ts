@@ -14,6 +14,7 @@ export interface CycleBriefDTO {
   mode: MarketingMode;
   modeConfidence: number;
   strategicPurpose: string;
+  founderFocus: string | null;
   audienceSegment: string;
   briefConfidence: number;
   uniquenessScore: number;

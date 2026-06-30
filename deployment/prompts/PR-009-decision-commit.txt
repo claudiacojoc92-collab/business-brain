@@ -29,6 +29,20 @@ PIECE OBJECTIVES: Specify 1-3 content pieces. For each:
 
 FORWARD QUESTION: The single most useful question this cycle's content will help answer about the audience. Specify the target memory layer (1-9) and priority (HIGH/MEDIUM/LOW).
 
+FOUNDER FOCUS: In addition to the internal brief, write ONE sentence for the founder's own eyes. It answers a single question — where is the leverage this week? The leverage is the place in their current situation where attention will matter most right now.
+
+Rules for this one sentence:
+- The SITUATION is the subject. State a fact about what is happening this week — not a thing to do. The leverage is something that IS true right now, not an action to take. Do NOT write "The leverage is in showing / in creating / in posting / in naming…" — those describe work, not the situation. Prefer "The leverage this week is [a fact about what's happening]."
+- Specificity comes from the concrete situation, never from naming the offer or product. Do NOT use the founder's offer/product/brand name to sound specific. Ground the sentence in what is concretely happening this week — these particular clients, this objection they keep raising, this thing on their page, this moment in the work — so a founder reads it and thinks "that's exactly what's happening."
+- But specific does not mean abstract. Avoid generic gaps that fit any business ("the gap between effort and results", "the difference between what they want and what they get"). If you cannot name the concrete thing happening this week, set founder_focus to null instead of writing something vague.
+- Plain language a founder actually uses about their own business. NO consultant or strategy-deck phrasing — do NOT use words like: pricing defense, positioning play, value communication, leverage opportunity, optimization, strategic narrative, messaging framework, or similar. Say it the way the founder would say it to a friend.
+- One sentence, no more. One leverage idea, not a list.
+- Do NOT command, instruct, or assign work ("you should", "focus on", "your next step", "make sure", "start", "build"). Do NOT motivate or coach.
+- Do NOT use internal vocabulary (belief gap, relationship move, validate/demonstrate as labels, confidence, the model) and do NOT explain your reasoning.
+- Use the pseudonymised placeholders exactly as provided when you refer to the founder, business, offer, or audience — but do not lean on them to manufacture specificity.
+- The right shape (do NOT copy this — write the one that is true for this cycle): "The leverage this week is that the people going quiet after your proposal are the same ones who told you they trusted you most."
+- If this cycle's situation holds no clear point of leverage worth surfacing, set founder_focus to null. Silence is better than a generic sentence.
+
 OUTPUT FORMAT: Return valid JSON only. No preamble, no explanation, no markdown.
 
 Schema:
@@ -42,6 +56,7 @@ Schema:
   "relationship_move_desc": "string",
   "conviction_angle": "string",
   "strategic_purpose": "string",
+  "founder_focus": "string|null",
   "piece_objectives": [
     {
       "role": "PRIMARY|SUPPORTING|AMPLIFIER",

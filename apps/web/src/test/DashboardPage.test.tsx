@@ -50,7 +50,7 @@ const BRIEF = {
   briefId: 'b1', cycleId: 'c3', mode: 'TRUST', modeConfidence: 0,
   strategicPurpose: 'Establish the credible alternative', audienceSegment: 'Service-based professionals',
   briefConfidence: 0, uniquenessScore: 50, validationResult: 'COMMITTED', isFallback: false, reviewFlag: false,
-  committedAt: '2026-06-28T09:47:44.989Z',
+  committedAt: '2026-06-28T09:47:44.989Z', founderFocus: null,
 };
 const HISTORY = {
   items: [{ cycleId: 'c3', cycleNumber: 3, selectedMode: null, contentPieceCount: 0, committedAt: '2026-06-28T09:47:44.948Z', isFallback: false }],
@@ -177,6 +177,21 @@ describe('DashboardPage (Home v1)', () => {
     m(client.getCurrentBrief).mockResolvedValue({ ...BRIEF, isFallback: true });
     renderHome();
     expect(await screen.findByText(/fallback brief/i)).toBeInTheDocument();
+  });
+
+  it('This week’s leverage — renders the founder_focus sentence when present', async () => {
+    const sentence = 'The leverage this week is in naming the frustration your audience has not been saying out loud.';
+    m(client.getCurrentBrief).mockResolvedValue({ ...BRIEF, founderFocus: sentence });
+    renderHome();
+    expect(await screen.findByText(/this week’s leverage/i)).toBeInTheDocument();
+    expect(screen.getByText(sentence)).toBeInTheDocument();
+  });
+
+  it('This week’s leverage — no card when founder_focus is null (honest silence)', async () => {
+    m(client.getCurrentBrief).mockResolvedValue({ ...BRIEF, founderFocus: null });
+    renderHome();
+    await screen.findByRole('button', { name: /collapse/i }); // home loaded
+    expect(screen.queryByText(/this week’s leverage/i)).toBeNull();
   });
 
   it('Brief Read — no current brief (404) → honest empty state, no toggle of any kind', async () => {

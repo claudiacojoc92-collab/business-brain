@@ -144,6 +144,7 @@ export interface CycleBrief {
   mode: string;
   modeConfidence: number;
   strategicPurpose: string;
+  founderFocus: string | null;
   audienceSegment: string;
   briefConfidence: number;
   uniquenessScore: number;

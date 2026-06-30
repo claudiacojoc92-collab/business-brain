@@ -33,6 +33,7 @@ export interface InternalBriefProps {
   strategicPurpose: string;
   campaignId: string | null;
   pieceObjectives: unknown[];
+  founderFocus?: string | null;
   briefConfidence: number;
   uniquenessScore: number;
   validationResult: ValidationResult;
@@ -70,6 +71,7 @@ export class InternalBrief extends Entity {
   readonly strategicPurpose: string;
   readonly campaignId: string | null;
   readonly pieceObjectives: readonly unknown[];
+  readonly founderFocus: string | null;
   readonly briefConfidence: number;
   readonly uniquenessScore: number;
   readonly validationResult: ValidationResult;
@@ -102,6 +104,7 @@ export class InternalBrief extends Entity {
     this.strategicPurpose     = props.strategicPurpose;
     this.campaignId           = props.campaignId;
     this.pieceObjectives      = Object.freeze([...props.pieceObjectives]);
+    this.founderFocus         = props.founderFocus ?? null;
     this.briefConfidence      = props.briefConfidence;
     this.uniquenessScore      = props.uniquenessScore;
     this.validationResult     = props.validationResult;

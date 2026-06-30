@@ -40,6 +40,7 @@ export class GetCycleBriefHandler
       mode:             brief.mode,
       modeConfidence:   brief.modeConfidence,
       strategicPurpose: brief.strategicPurpose,
+      founderFocus:     brief.founderFocus,
       audienceSegment:  brief.audienceSegment,
       briefConfidence:  brief.briefConfidence,
       uniquenessScore:  brief.uniquenessScore,

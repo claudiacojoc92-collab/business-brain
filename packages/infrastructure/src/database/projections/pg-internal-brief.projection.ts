@@ -32,6 +32,10 @@ export class PgInternalBriefProjection {
     const pieceObjectives = Array.isArray(brief['piece_objectives'])
       ? (brief['piece_objectives'] as unknown[])
       : [];
+    // Founder-facing leverage sentence (S11/PR-009 only). NULL unless a non-empty
+    // string was produced — so fallback briefs (S11F) and absent values stay silent.
+    const ff = brief['founder_focus'];
+    const founderFocus = typeof ff === 'string' && ff.trim().length > 0 ? ff : null;
 
     const row = {
       id:                      generateId(),
@@ -54,6 +58,7 @@ export class PgInternalBriefProjection {
       conviction_angle:        str('conviction_angle'),
       audience_language:       '{}',
       strategic_purpose:       str('strategic_purpose'),
+      founder_focus:           founderFocus,
       campaign_id:             null,
       piece_objectives:        JSON.stringify(pieceObjectives),
       brief_confidence:        0,

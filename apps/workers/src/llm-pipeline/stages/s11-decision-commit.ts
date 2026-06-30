@@ -16,6 +16,7 @@ const CommitOutputSchema = z.object({
   relationship_move_desc:  z.string(),
   conviction_angle:        z.string(),
   strategic_purpose:       z.string(),
+  founder_focus:           z.string().nullable().optional(),
   piece_objectives:        z.array(z.record(z.unknown())),
   forward_question:        z.object({
     question:     z.string(),
