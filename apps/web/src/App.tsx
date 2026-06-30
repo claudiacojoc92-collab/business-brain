@@ -6,6 +6,7 @@ import { OnboardingPage } from './pages/OnboardingPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ReviewPage } from './pages/ReviewPage';
 import { HistoryPage } from './pages/HistoryPage';
+import { ActOnePreviewPage } from './actone/ActOnePreviewPage';
 
 /**
  * Route guard: redirect based on founder status.
@@ -108,6 +109,12 @@ export function App() {
               </ProtectedRoute>
             }
           />
+
+          {/* Dev-only: Act I static-flow preview (fixtures). Not registered in production
+              builds (import.meta.env.DEV === false) → wizard & default routing untouched. */}
+          {import.meta.env.DEV && (
+            <Route path="/actone-preview" element={<ActOnePreviewPage />} />
+          )}
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
