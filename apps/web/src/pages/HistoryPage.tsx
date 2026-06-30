@@ -16,11 +16,11 @@ function toErr(e: unknown): ErrInfo {
   return { status: 0, code: 'UNKNOWN_ERROR' };
 }
 
-const wrap: React.CSSProperties = { minHeight: '100vh', background: '#0a0f1a', padding: '40px 20px', color: '#e8e6e1' };
+const wrap: React.CSSProperties = { minHeight: '100vh', background: 'var(--paper)', padding: '40px 20px', color: 'var(--ink)' };
 const inner: React.CSSProperties = { maxWidth: 720, margin: '0 auto' };
-const card: React.CSSProperties = { border: '1px solid #1f2937', borderRadius: 6, padding: 16, marginBottom: 16 };
-const muted: React.CSSProperties = { color: '#6b7280' };
-const linkBtn: React.CSSProperties = { background: 'none', border: '1px solid #1f2937', color: '#6b7280', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.875rem', padding: '6px 14px', borderRadius: 4 };
+const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line-2)', borderRadius: 10, padding: 18, marginBottom: 16, boxShadow: 'var(--shadow-soft)' };
+const muted: React.CSSProperties = { color: 'var(--ink-3)' };
+const linkBtn: React.CSSProperties = { background: 'none', border: '1px solid var(--line-2)', color: 'var(--ink-3)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.875rem', padding: '6px 14px', borderRadius: 8 };
 
 function fmtDate(iso: string | null | undefined): string | null {
   if (!iso) return null;
@@ -33,7 +33,8 @@ function humanize(s: string): string {
   return lower.charAt(0).toUpperCase() + lower.slice(1);
 }
 
-const accent = '#5b8db8';
+// Quiet link accent (was decorative blue). Gold stays reserved for decisions.
+const accent = 'var(--ink-2)';
 
 /** Founder-facing message for a brief load failure, via existing API codes. */
 function briefMessage(err: ErrInfo): string {
@@ -83,21 +84,21 @@ export function HistoryPage() {
     <div style={wrap}>
       <div style={inner}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40 }}>
-          <h1 style={{ fontSize: '1.25rem', fontWeight: 500 }}>Business Brain</h1>
+          <h1 style={{ fontFamily: 'var(--serif)', fontSize: '1.35rem', fontWeight: 500, letterSpacing: '0.01em' }}>Business Brain</h1>
           <button onClick={() => navigate('/dashboard')} style={linkBtn}>Back</button>
         </div>
 
-        <div style={{ fontSize: '0.7rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#6b7280', marginBottom: 6 }}>
+        <div style={{ fontSize: '0.7rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 6 }}>
           The relationship so far
         </div>
-        <h2 style={{ fontSize: '1.05rem', fontWeight: 500, margin: '0 0 16px' }}>Past cycles</h2>
+        <h2 style={{ fontFamily: 'var(--serif)', fontSize: '1.2rem', fontWeight: 500, letterSpacing: '-0.01em', margin: '0 0 16px' }}>Past cycles</h2>
 
         {loading ? (
           <span style={muted}>Loading…</span>
         ) : err ? (
           <div style={card}>
             <span style={muted}>We could not load your history right now. </span>
-            <button style={{ ...linkBtn, color: '#e8e6e1' }} onClick={() => void load()}>Retry</button>
+            <button style={{ ...linkBtn, color: 'var(--ink)' }} onClick={() => void load()}>Retry</button>
           </div>
         ) : items.length === 0 ? (
           <div style={card}><span style={muted}>No past cycles yet — your history will build here as cycles complete.</span></div>
@@ -124,7 +125,7 @@ export function HistoryPage() {
                 </button>
 
                 {openId === c.cycleId ? (
-                  <div style={{ marginTop: 12, borderTop: '1px solid #1f2937', paddingTop: 12 }}>
+                  <div style={{ marginTop: 12, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
                     {briefLoading ? (
                       <span style={muted}>Loading brief…</span>
                     ) : briefErr ? (
@@ -135,7 +136,7 @@ export function HistoryPage() {
                           <strong>{humanize(brief.mode)}</strong>
                           <span style={muted}>{brief.isFallback ? 'Fallback brief' : humanize(brief.validationResult)}</span>
                         </div>
-                        <p style={{ lineHeight: 1.6, margin: '0 0 8px' }}>{brief.strategicPurpose}</p>
+                        <p style={{ fontFamily: 'var(--serif)', fontSize: '1.1rem', lineHeight: 1.55, color: 'var(--ink)', margin: '0 0 8px' }}>{brief.strategicPurpose}</p>
                         <div style={muted}>Audience: {brief.audienceSegment}</div>
                       </>
                     ) : null}
