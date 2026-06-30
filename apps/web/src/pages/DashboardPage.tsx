@@ -35,15 +35,17 @@ function toErr(e: unknown): ErrInfo {
 }
 
 // ─── Styling (matches the existing inline-style dark theme) ───────────────────
-const wrap: React.CSSProperties = { minHeight: '100vh', background: '#0a0f1a', padding: '40px 20px', color: '#e8e6e1' };
+const wrap: React.CSSProperties = { minHeight: '100vh', background: 'var(--paper)', padding: '40px 20px', color: 'var(--ink)' };
 const inner: React.CSSProperties = { maxWidth: 720, margin: '0 auto' };
-const muted: React.CSSProperties = { color: '#6b7280' };
+const muted: React.CSSProperties = { color: 'var(--ink-3)' };
 const section: React.CSSProperties = { marginBottom: 36 };
-const kicker: React.CSSProperties = { fontSize: '0.7rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#6b7280', marginBottom: 6 };
-const h2: React.CSSProperties = { fontSize: '1.05rem', fontWeight: 500, margin: '0 0 14px' };
-const card: React.CSSProperties = { border: '1px solid #1f2937', borderRadius: 6, padding: '14px 16px' };
+const kicker: React.CSSProperties = { fontSize: '0.7rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 6 };
+const h2: React.CSSProperties = { fontFamily: 'var(--serif)', fontSize: '1.15rem', fontWeight: 500, margin: '0 0 14px', color: 'var(--ink)', letterSpacing: '-0.01em' };
+const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line-2)', borderRadius: 10, padding: '16px 18px', boxShadow: 'var(--shadow-soft)' };
 const rowBase: React.CSSProperties = { display: 'flex', gap: 10, alignItems: 'baseline', padding: '5px 0', lineHeight: 1.55 };
-const accent = '#5b8db8';
+// Calm chrome accent (was a decorative blue). Gold is reserved for the one
+// strategic focus (the "this week's leverage" kicker) — never decorative.
+const accent = 'var(--ink-2)';
 
 // ─── Honesty primitives: a KNOWN fact vs an UNKNOWN gap are visually distinct ──
 function Known({ label, children }: { label?: string; children: React.ReactNode }) {
@@ -52,23 +54,24 @@ function Known({ label, children }: { label?: string; children: React.ReactNode 
       <span aria-hidden style={{ color: accent, fontSize: '0.7rem', lineHeight: 1.9 }}>●</span>
       <span>
         {label && <span style={muted}>{label}: </span>}
-        <span style={{ color: '#e8e6e1' }}>{children}</span>
+        <span style={{ color: 'var(--ink)' }}>{children}</span>
       </span>
     </div>
   );
 }
 function Unknown({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ ...rowBase, color: '#6b7280' }}>
-      <span aria-hidden style={{ color: '#475569', fontSize: '0.7rem', lineHeight: 1.9 }}>○</span>
+    <div style={{ ...rowBase, color: 'var(--ink-3)' }}>
+      <span aria-hidden style={{ color: 'var(--faint)', fontSize: '0.7rem', lineHeight: 1.9 }}>○</span>
       <span>
-        {children} <span style={{ color: '#475569' }}>· not yet known</span>
+        {children} <span style={{ color: 'var(--faint)' }}>· not yet known</span>
       </span>
     </div>
   );
 }
 function Plain({ children }: { children: React.ReactNode }) {
-  return <p style={{ ...muted, lineHeight: 1.6, margin: '4px 0' }}>{children}</p>;
+  // Business Brain speaking softly → serif voice (chrome stays sans).
+  return <p style={{ fontFamily: 'var(--serif)', color: 'var(--ink-2)', lineHeight: 1.65, margin: '4px 0' }}>{children}</p>;
 }
 
 // ─── Formatting helpers (display-only; no derived intelligence) ────────────────
@@ -138,17 +141,17 @@ export function DashboardPage() {
       <div style={inner}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40 }}>
-          <h1 style={{ fontSize: '1.25rem', fontWeight: 500 }}>Business Brain</h1>
+          <h1 style={{ fontFamily: 'var(--serif)', fontSize: '1.35rem', fontWeight: 500, letterSpacing: '0.01em' }}>Business Brain</h1>
           <div style={{ display: 'flex', gap: 10 }}>
             <button
               onClick={() => navigate('/history')}
-              style={{ background: 'none', border: '1px solid #1f2937', color: '#6b7280', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.875rem', padding: '6px 14px', borderRadius: 4 }}
+              style={{ background: 'none', border: '1px solid var(--line-2)', color: 'var(--ink-3)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.875rem', padding: '6px 14px', borderRadius: 8 }}
             >
               Past cycles
             </button>
             <button
               onClick={logout}
-              style={{ background: 'none', border: '1px solid #1f2937', color: '#6b7280', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.875rem', padding: '6px 14px', borderRadius: 4 }}
+              style={{ background: 'none', border: '1px solid var(--line-2)', color: 'var(--ink-3)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.875rem', padding: '6px 14px', borderRadius: 8 }}
             >
               Sign out
             </button>
@@ -162,7 +165,7 @@ export function DashboardPage() {
             {/* Legend — makes the known/unknown distinction explicit */}
             <div style={{ ...muted, fontSize: '0.8rem', display: 'flex', gap: 18, marginBottom: 28 }}>
               <span><span style={{ color: accent }}>●</span> known</span>
-              <span><span style={{ color: '#475569' }}>○</span> not yet known</span>
+              <span><span style={{ color: 'var(--faint)' }}>○</span> not yet known</span>
             </div>
 
             {/* ── Section 1 — Understanding ─────────────────────────────────── */}
@@ -183,7 +186,7 @@ export function DashboardPage() {
                   </>
                 ) : null}
 
-                <div style={{ height: 1, background: '#1f2937', margin: '12px 0' }} />
+                <div style={{ height: 1, background: 'var(--line)', margin: '12px 0' }} />
 
                 {offerMissing ? (
                   <Unknown>Your offer isn’t defined</Unknown>
@@ -199,7 +202,7 @@ export function DashboardPage() {
                   </>
                 ) : null}
 
-                <div style={{ height: 1, background: '#1f2937', margin: '12px 0' }} />
+                <div style={{ height: 1, background: 'var(--line)', margin: '12px 0' }} />
 
                 {briefMissing ? (
                   <Unknown>A strategic read of your audience and positioning</Unknown>
@@ -210,10 +213,10 @@ export function DashboardPage() {
                     <div style={kicker}>Latest strategic read{fmtDate(brief.committedAt) ? ` · ${fmtDate(brief.committedAt)}` : ''}</div>
                     <Known label="Mode">{humanize(brief.mode)}</Known>
                     {brief.strategicPurpose
-                      ? <Known label="Strategy">{briefOpen ? brief.strategicPurpose : truncate(brief.strategicPurpose, 110)}</Known>
+                      ? <Known label="Strategy"><span style={{ fontFamily: 'var(--serif)' }}>{briefOpen ? brief.strategicPurpose : truncate(brief.strategicPurpose, 110)}</span></Known>
                       : null}
                     {brief.audienceSegment
-                      ? <Known label="Audience">{briefOpen ? brief.audienceSegment : truncate(brief.audienceSegment, 110)}</Known>
+                      ? <Known label="Audience"><span style={{ fontFamily: 'var(--serif)' }}>{briefOpen ? brief.audienceSegment : truncate(brief.audienceSegment, 110)}</span></Known>
                       : null}
 
                     {briefOpen && (
@@ -241,10 +244,15 @@ export function DashboardPage() {
                 Renders ONLY when the engine produced a sentence. Absent/null → no card,
                 matching how brief sub-fields hide when empty (never a fabricated default). */}
             {brief && brief.founderFocus ? (
-              <div style={section}>
-                <div style={kicker}>This week’s leverage</div>
-                <div style={card}>
-                  <p style={{ margin: 0, lineHeight: 1.6, color: '#e8e6e1' }}>{brief.founderFocus}</p>
+              // The persistent equivalent of Business Brain speaking — the strategic
+              // read of the page. Given real presence: the one gold kicker on Home,
+              // a large serif line, and generous breathing room. Everything else supports it.
+              <div style={{ ...section, marginTop: 8, marginBottom: 48 }}>
+                <div style={{ ...kicker, color: 'var(--gold)', fontWeight: 600, marginBottom: 12 }}>This week’s leverage</div>
+                <div style={{ ...card, padding: '26px 28px' }}>
+                  <p style={{ margin: 0, fontFamily: 'var(--serif)', fontSize: '1.35rem', fontWeight: 400, lineHeight: 1.5, letterSpacing: '-0.01em', color: 'var(--ink)' }}>
+                    {brief.founderFocus}
+                  </p>
                 </div>
               </div>
             ) : null}
@@ -297,14 +305,14 @@ export function DashboardPage() {
             <div style={section}>
               <div style={kicker}>What Business Brain doesn’t know yet</div>
               <h2 style={h2}>Still learning</h2>
-              <div style={{ ...card, borderColor: '#26303f' }}>
+              <div style={{ ...card, borderColor: 'var(--line-2)' }}>
                 <Plain>This is what Business Brain learns from your behavior as you review and act — it accumulates over cycles, and is separate from the strategic read above.</Plain>
                 {memory ? (
                   <>
                     {memory.compositeConfidence > 0
                       ? <Known label="Behavioral learning confidence">{Math.round(memory.compositeConfidence * 100)}%</Known>
                       : <Unknown>Behavioral learning confidence is not yet established</Unknown>}
-                    <div style={{ height: 1, background: '#1f2937', margin: '12px 0' }} />
+                    <div style={{ height: 1, background: 'var(--line)', margin: '12px 0' }} />
                     {memory.layers.map((l) =>
                       l.dataPoints > 0 ? (
                         <Known key={l.layer} label={humanize(l.layer)}>
@@ -337,7 +345,7 @@ export function DashboardPage() {
                     <Known>{content.length} piece{content.length === 1 ? '' : 's'} awaiting your review.</Known>
                     <button
                       onClick={() => navigate('/review')}
-                      style={{ marginTop: 10, fontFamily: 'inherit', fontSize: '0.875rem', padding: '8px 16px', borderRadius: 4, cursor: 'pointer', background: '#16243a', border: `1px solid ${accent}`, color: '#cfe0f0' }}
+                      style={{ marginTop: 10, fontFamily: 'inherit', fontWeight: 500, fontSize: '0.875rem', padding: '10px 20px', borderRadius: 10, cursor: 'pointer', background: 'var(--ink)', border: 'none', color: 'var(--paper)', boxShadow: '0 6px 18px -8px rgba(38,34,28,.5)' }}
                     >
                       Open review
                     </button>
