@@ -3,19 +3,24 @@ import { verdict } from '../fixtures';
 import styles from '../actone.module.css';
 
 /**
- * The verdict on the observation. Confirm advances; "Not quite" opens a one-line
- * correction → a (canned) sharpened line → then advances. Both paths reach the
- * next phase (conversation).
+ * The verdict on the observation (§7 + Evidence & Trust Model).
+ *  - Confirm → promotes the observation (resolved as confirmed).
+ *  - "Not quite" → the typed correction becomes a you-told-me that REPLACES the read;
+ *    the original is NOT promoted. A canned sharpened line shows, then it resolves.
+ * Both paths reach the next phase (conversation), carrying the resolution up.
  */
-export function VerdictBar({ onComplete }: { onComplete: () => void }) {
+export type VerdictResolution = { confirmed: true } | { confirmed: false; text: string };
+
+export function VerdictBar({ onResolve }: { onResolve: (r: VerdictResolution) => void }) {
   const [mode, setMode] = useState<'choose' | 'correcting' | 'sharpened'>('choose');
   const [text, setText] = useState('');
   const [sharpened, setSharpened] = useState('');
 
   const send = () => {
-    setSharpened(text.trim() ? verdict.sharpenedWithText : verdict.sharpenedEmpty);
+    const corrected = text.trim();
+    setSharpened(corrected ? verdict.sharpenedWithText : verdict.sharpenedEmpty);
     setMode('sharpened');
-    window.setTimeout(onComplete, 1400);
+    window.setTimeout(() => onResolve({ confirmed: false, text: corrected }), 1400);
   };
 
   if (mode === 'sharpened') {
@@ -52,7 +57,7 @@ export function VerdictBar({ onComplete }: { onComplete: () => void }) {
   return (
     <div className={styles.block}>
       <div className={styles.btnrow}>
-        <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={onComplete}>{verdict.confirm}</button>
+        <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={() => onResolve({ confirmed: true })}>{verdict.confirm}</button>
         <button className={`${styles.btn} ${styles.btnGhost}`} onClick={() => setMode('correcting')}>{verdict.deny}</button>
       </div>
     </div>

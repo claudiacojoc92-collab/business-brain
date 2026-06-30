@@ -3,8 +3,11 @@ import { connect } from '../fixtures';
 import { ConnectionCard } from './ConnectionCard';
 import styles from '../actone.module.css';
 
-/** Scene 2 — Connect: the lightest give (a tap). Enables once ≥1 source is selected. */
-export function ConnectionPanel({ onConnect }: { onConnect: () => void }) {
+/**
+ * Scene 2 — Connect: the lightest give (a tap). Enables once ≥1 source is selected.
+ * The selected source names are lifted up so the Seeing renders ONLY connected sources.
+ */
+export function ConnectionPanel({ onConnect }: { onConnect: (sources: string[]) => void }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [spent, setSpent] = useState(false);
 
@@ -28,7 +31,7 @@ export function ConnectionPanel({ onConnect }: { onConnect: () => void }) {
         <button
           className={`${styles.btn} ${styles.btnPrimary}`}
           disabled={count === 0 || spent}
-          onClick={() => { setSpent(true); onConnect(); }}
+          onClick={() => { setSpent(true); onConnect([...selected]); }}
         >
           {connect.button}
         </button>

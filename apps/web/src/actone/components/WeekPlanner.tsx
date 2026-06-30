@@ -1,12 +1,23 @@
 import { useState } from 'react';
-import { week } from '../fixtures';
+import { week, weekBridge } from '../fixtures';
+import type { CarriedUnderstanding } from '../types';
 import { useTimeline } from '../useTimeline';
 import { SayLine } from './SayLine';
 import { ApprovalBar } from './ApprovalBar';
 import styles from '../actone.module.css';
 
-/** Scene 6 — Week One. Three drafted items, then the approval decision. */
-export function WeekPlanner({ onDecide }: { onDecide: () => void }) {
+/**
+ * Scene 6 — Week One. Three drafted items, then the approval decision. The provenance
+ * bridge (§8) surfaces the carried understanding — so a "Not quite" correction visibly
+ * carries through as what shaped the week.
+ */
+export function WeekPlanner({
+  carried,
+  onDecide,
+}: {
+  carried: CarriedUnderstanding | null;
+  onDecide: () => void;
+}) {
   const [step, setStep] = useState(0); // 0 intro · 1 kicker · 2 plan · 3 approval
 
   useTimeline([
@@ -19,6 +30,7 @@ export function WeekPlanner({ onDecide }: { onDecide: () => void }) {
     <>
       <SayLine rich={[week.intro]} kind="med" />
       {step >= 1 && <span className={styles.kick}>{week.kicker}</span>}
+      {step >= 2 && <div className={styles.note}>{weekBridge(carried)}</div>}
       {step >= 2 && (
         <div className={styles.block}>
           <div className={styles.plan}>
