@@ -16,11 +16,14 @@ function toErr(e: unknown): ErrInfo {
   return { status: 0, code: 'UNKNOWN_ERROR' };
 }
 
-const wrap: React.CSSProperties = { minHeight: '100vh', background: '#0a0f1a', padding: '40px 20px', color: '#e8e6e1' };
+const wrap: React.CSSProperties = { minHeight: '100vh', background: 'var(--paper)', padding: '40px 20px', color: 'var(--ink)' };
 const inner: React.CSSProperties = { maxWidth: 720, margin: '0 auto' };
-const card: React.CSSProperties = { border: '1px solid #1f2937', borderRadius: 6, padding: 16, marginBottom: 16 };
-const muted: React.CSSProperties = { color: '#6b7280' };
-const btn: React.CSSProperties = { fontFamily: 'inherit', fontSize: '0.875rem', padding: '6px 14px', borderRadius: 4, cursor: 'pointer', marginRight: 8 };
+const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--line-2)', borderRadius: 10, padding: 18, marginBottom: 16, boxShadow: 'var(--shadow-soft)' };
+const muted: React.CSSProperties = { color: 'var(--ink-3)' };
+const btn: React.CSSProperties = { fontFamily: 'inherit', fontWeight: 500, fontSize: '0.875rem', padding: '9px 18px', borderRadius: 9, cursor: 'pointer', marginRight: 8 };
+// Buttons (editorial): gold = the decision; ghost = the quieter choice. Never decorative.
+const btnGold: React.CSSProperties = { ...btn, background: 'var(--gold)', border: 'none', color: '#fff', boxShadow: '0 6px 18px -8px rgba(176,125,51,.6)' };
+const btnGhost: React.CSSProperties = { ...btn, background: 'transparent', border: '1px solid var(--line-2)', color: 'var(--ink-2)' };
 
 /** Shared content-piece body (header + readable preview), reused by the pending and approved lists. */
 function pieceBody(p: ContentPieceForApproval) {
@@ -29,7 +32,7 @@ function pieceBody(p: ContentPieceForApproval) {
       <div style={{ ...muted, marginBottom: 8 }}>
         {p.pieceType} · {p.pieceRole} · {p.approvalStatus}
       </div>
-      <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', margin: '0 0 12px' }}>
+      <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--serif)', fontSize: '1rem', lineHeight: 1.6, color: 'var(--ink)', margin: '0 0 12px' }}>
         {p.contentPreview ?? '(no preview)'}
       </pre>
     </>
@@ -137,11 +140,17 @@ export function ReviewScreen() {
   return (
     <div style={wrap}>
       <div style={inner}>
-        <h1 style={{ fontSize: '1.25rem', fontWeight: 500, marginBottom: 24 }}>This week&apos;s review</h1>
+        <h1 style={{ fontFamily: 'var(--serif)', fontSize: '1.6rem', fontWeight: 500, letterSpacing: '-0.01em', marginBottom: 24 }}>This week&apos;s review</h1>
 
         {notice && (
           <div
-            style={{ ...card, borderColor: notice.tone === 'ok' ? '#23402a' : '#3b3320', color: notice.tone === 'ok' ? '#9fd6ab' : '#d6c98a' }}
+            style={{
+              ...card,
+              boxShadow: 'none',
+              background: notice.tone === 'ok' ? 'var(--ok-bg)' : 'var(--warn-bg)',
+              borderColor: notice.tone === 'ok' ? 'var(--ok-line)' : 'var(--warn-line)',
+              color: notice.tone === 'ok' ? 'var(--ok-ink)' : 'var(--warn-ink)',
+            }}
             role="status"
           >
             {notice.text}
@@ -157,18 +166,18 @@ export function ReviewScreen() {
               <strong>{brief.mode}</strong>
               <span style={muted}>{brief.isFallback ? 'Fallback brief' : brief.validationResult}</span>
             </div>
-            <p style={{ lineHeight: 1.6, marginBottom: 8 }}>{brief.strategicPurpose}</p>
+            <p style={{ fontFamily: 'var(--serif)', fontSize: '1.15rem', lineHeight: 1.55, color: 'var(--ink)', marginBottom: 8 }}>{brief.strategicPurpose}</p>
             <div style={muted}>Audience: {brief.audienceSegment}</div>
           </div>
         ) : null}
 
         {/* Content list (C3) */}
-        <h2 style={{ fontSize: '1rem', fontWeight: 500, margin: '24px 0 12px' }}>Pending content</h2>
+        <h2 style={{ fontFamily: 'var(--serif)', fontSize: '1.2rem', fontWeight: 500, margin: '28px 0 12px' }}>Pending content</h2>
 
         {contentErr ? (
           <div style={card}>
             <span style={muted}>We could not load your content. </span>
-            <button style={{ ...btn, background: 'none', border: '1px solid #1f2937', color: '#e8e6e1' }} onClick={() => void loadAll()}>Retry</button>
+            <button style={btnGhost} onClick={() => void loadAll()}>Retry</button>
           </div>
         ) : content.length === 0 ? (
           <div style={card}><span style={muted}>No content is waiting for your review.</span></div>
@@ -177,14 +186,14 @@ export function ReviewScreen() {
             <div key={p.contentPieceId} style={card}>
               {pieceBody(p)}
               <button
-                style={{ ...btn, background: '#1a2e1a', border: '1px solid #2f4f2f', color: '#cfe8cf' }}
+                style={btnGold}
                 disabled={actingId === p.contentPieceId}
                 onClick={() => void act(p.contentPieceId, approveContent, 'approve')}
               >
                 Approve
               </button>
               <button
-                style={{ ...btn, background: '#2e1a1a', border: '1px solid #4f2f2f', color: '#e8cfcf' }}
+                style={btnGhost}
                 disabled={actingId === p.contentPieceId}
                 onClick={() => void act(p.contentPieceId, rejectContent, 'reject')}
               >
@@ -195,7 +204,7 @@ export function ReviewScreen() {
         )}
 
         {/* Approved content (read-only) — what the founder has approved, so the loop visibly closes. */}
-        <h2 style={{ fontSize: '1rem', fontWeight: 500, margin: '24px 0 12px' }}>Approved</h2>
+        <h2 style={{ fontFamily: 'var(--serif)', fontSize: '1.2rem', fontWeight: 500, margin: '28px 0 12px' }}>Approved</h2>
 
         {approvedErr ? (
           <div style={card}><span style={muted}>We could not load your approved content right now.</span></div>
@@ -203,14 +212,14 @@ export function ReviewScreen() {
           <div style={card}><span style={muted}>Nothing approved yet.</span></div>
         ) : (
           approved.map((p) => (
-            <div key={p.contentPieceId} style={card}>
+            <div key={p.contentPieceId} style={{ ...card, borderLeft: '3px solid var(--ok-line)' }}>
               {pieceBody(p)}
             </div>
           ))
         )}
 
         {/* Rejected content (read-only) — mirrors Approved, so both decisions have a visible home. */}
-        <h2 style={{ fontSize: '1rem', fontWeight: 500, margin: '24px 0 12px' }}>Rejected</h2>
+        <h2 style={{ fontFamily: 'var(--serif)', fontSize: '1.2rem', fontWeight: 500, margin: '28px 0 12px' }}>Rejected</h2>
 
         {rejectedErr ? (
           <div style={card}><span style={muted}>We could not load your rejected content right now.</span></div>
@@ -218,7 +227,7 @@ export function ReviewScreen() {
           <div style={card}><span style={muted}>Nothing rejected yet.</span></div>
         ) : (
           rejected.map((p) => (
-            <div key={p.contentPieceId} style={card}>
+            <div key={p.contentPieceId} style={{ ...card, borderLeft: '3px solid var(--warn-line)' }}>
               {pieceBody(p)}
             </div>
           ))

@@ -1,0 +1,55 @@
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Inter:wght@400;450;500;600&display=swap');
+/* ─────────────────────────────────────────────────────────────────────────────
+   Editorial Clarity — design tokens
+   Source of truth: the approved prototype apps/web/design/act-one-editorial.html
+   (:root). The standalone business-brain-design-system.css was not available;
+   the prototype embeds the approved token set verbatim, so values are taken from
+   it unchanged. Prototype names are canonical; --bb-* aliases are provided so
+   later (Act I) work that references --bb-* resolves to the same values.
+
+   NOTE: the @import MUST stay the first statement (CSS spec; prod minifiers drop
+   a non-first remote @import). Keep it on line 1, above this comment.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* paper / ink / accent — verbatim from prototype */
+  --paper:#f7f4ee;        /* warm off-white */
+  --paper-2:#f1ece3;      /* soft beige panel */
+  --paper-3:#eae2d6;      /* deeper beige */
+  --ink:#26221c;          /* near-black warm ink */
+  --ink-2:#4a443b;        /* secondary */
+  --ink-3:#8a8275;        /* tertiary / meta */
+  --faint:#b8b0a1;        /* faintest */
+  --line:#e2dccf;         /* hairline */
+  --line-2:#d8d0c0;
+  --gold:#b07d33;         /* restrained accent — decisions/state/the one action only */
+  --gold-soft:#c79a55;
+  --gold-bg:rgba(176,125,51,.08);
+  --serif:'Newsreader',Georgia,serif;
+  --sans:'Inter',system-ui,sans-serif;
+
+  /* surfaces + soft shadow (from prototype .draft) */
+  --surface:#fffdf9;
+  --shadow-soft:0 12px 40px -22px rgba(38,34,28,.3);
+
+  /* motion + layout (from prototype) */
+  --ease:cubic-bezier(.2,.7,.2,1);
+  --reading:680px;
+  --rail:230px;
+
+  /* warm semantic states for Review — light-native; read clearly as
+     approved / rejected and deliberately do NOT drift toward gold */
+  --ok-bg:#edf2e7;   --ok-line:#cdd9bd;   --ok-ink:#566b3f;   /* warm sage green */
+  --warn-bg:#f5e9e2; --warn-line:#e3c8b9; --warn-ink:#9b5a44; /* warm terracotta  */
+
+  /* --bb-* aliases (forward references for Act I / design-system naming) */
+  --bb-paper:var(--paper); --bb-paper-2:var(--paper-2); --bb-paper-3:var(--paper-3);
+  --bb-ink:var(--ink); --bb-ink-2:var(--ink-2); --bb-ink-3:var(--ink-3); --bb-faint:var(--faint);
+  --bb-line:var(--line); --bb-line-2:var(--line-2);
+  --bb-gold:var(--gold); --bb-gold-soft:var(--gold-soft); --bb-gold-bg:var(--gold-bg);
+  --bb-serif:var(--serif); --bb-sans:var(--sans);
+  --bb-surface:var(--surface); --bb-shadow-soft:var(--shadow-soft);
+  --bb-ease:var(--ease); --bb-reading:var(--reading); --bb-rail:var(--rail);
+  --bb-ok-bg:var(--ok-bg); --bb-ok-line:var(--ok-line); --bb-ok-ink:var(--ok-ink);
+  --bb-warn-bg:var(--warn-bg); --bb-warn-line:var(--warn-line); --bb-warn-ink:var(--warn-ink);
+}

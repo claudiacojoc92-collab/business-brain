@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Business Brain</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Inter:wght@400;450;500;600&display=swap');
+:root{
+  --paper:#f7f4ee;          /* warm off-white */
+  --paper-2:#f1ece3;        /* soft beige panel */
+  --paper-3:#eae2d6;        /* deeper beige */
+  --ink:#26221c;            /* near-black warm ink */
+  --ink-2:#4a443b;          /* secondary */
+  --ink-3:#8a8275;          /* tertiary / meta */
+  --faint:#b8b0a1;          /* faintest */
+  --line:#e2dccf;           /* hairline */
+  --line-2:#d8d0c0;
+  --gold:#b07d33;           /* restrained accent */
+  --gold-soft:#c79a55;
+  --gold-bg:rgba(176,125,51,.08);
+  --serif:'Newsreader',Georgia,serif;
+  --sans:'Inter',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--sans);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  min-height:100vh;overflow-x:hidden;
+}
+
+/* ---------- orientation rail (left, the "deepening" marker) ---------- */
+.rail{
+  position:fixed;top:0;left:0;height:100vh;width:230px;
+  padding:38px 30px;display:flex;flex-direction:column;
+  border-right:1px solid var(--line);background:rgba(247,244,238,.7);backdrop-filter:blur(4px);
+  z-index:10;
+}
+.rail .mark{display:flex;align-items:center;gap:10px;margin-bottom:46px}
+.rail .mark .glyph{width:22px;height:22px;border-radius:6px;
+  background:linear-gradient(140deg,var(--gold-soft),var(--gold));opacity:.92}
+.rail .mark .nm{font-family:var(--serif);font-size:16px;color:var(--ink);letter-spacing:.01em}
+.rail .gl{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-bottom:20px}
+.rail .step{display:flex;align-items:center;gap:12px;padding:9px 0;color:var(--faint);
+  font-size:14px;transition:color .6s ease}
+.rail .step .ic{width:15px;height:15px;flex-shrink:0;position:relative}
+.rail .step .ic::before{content:"";position:absolute;inset:2px;border-radius:50%;
+  border:1.5px solid currentColor;transition:all .5s ease}
+.rail .step.done{color:var(--ink-2)}
+.rail .step.done .ic::before{background:var(--gold);border-color:var(--gold)}
+.rail .step.active{color:var(--ink)}
+.rail .step.active .ic::before{border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-bg)}
+.rail .step.active .ic::after{content:"";position:absolute;inset:5px;border-radius:50%;background:var(--gold);
+  animation:soft 2.6s ease-in-out infinite}
+@keyframes soft{0%,100%{opacity:.5}50%{opacity:1}}
+.rail .foot{margin-top:auto;font-size:12px;color:var(--faint);line-height:1.5}
+
+/* ---------- main column ---------- */
+.stage{max-width:680px;margin:0 auto;padding:104px 40px 160px;position:relative;z-index:5}
+@media(max-width:880px){.rail{display:none}.stage{padding:80px 28px 140px}}
+
+.say{font-family:var(--serif);opacity:0;transform:translateY(8px);
+  transition:opacity 1.05s ease,transform 1.05s cubic-bezier(.2,.7,.2,1);margin-bottom:18px;line-height:1.52}
+.say.in{opacity:1;transform:none}
+.say.big{font-size:28px;color:var(--ink);font-weight:400;letter-spacing:-.012em;line-height:1.38}
+.say.med{font-size:19px;color:var(--ink-2);line-height:1.62}
+.say.med em{color:var(--ink);font-style:italic}
+.say.admit{font-size:18px;color:var(--ink-2);padding-left:20px;border-left:2px solid var(--gold-soft);line-height:1.62}
+.say.admit b{color:var(--ink);font-weight:500}
+
+.kick{display:block;font-family:var(--sans);font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--gold);font-weight:600;opacity:0;transition:opacity .9s ease;margin:38px 0 18px}
+.kick.in{opacity:1}
+
+.block{opacity:0;transform:translateY(10px);transition:opacity .9s ease,transform .9s ease}
+.block.in{opacity:1;transform:none}
+
+/* inputs */
+textarea,input.txt{width:100%;background:#fffdf9;border:1px solid var(--line-2);border-radius:14px;
+  color:var(--ink);font-family:var(--serif);font-size:18px;line-height:1.55;padding:16px 18px;outline:none;resize:none;
+  transition:border-color .25s,box-shadow .25s}
+textarea:focus,input.txt:focus{border-color:var(--gold-soft);box-shadow:0 0 0 3px var(--gold-bg)}
+textarea::placeholder,input.txt::placeholder{color:var(--faint);font-style:italic}
+
+.btnrow{display:flex;gap:11px;margin-top:14px;flex-wrap:wrap;align-items:center}
+.btn{all:unset;cursor:pointer;font-family:var(--sans);font-weight:500;font-size:14px;
+  padding:12px 22px;border-radius:11px;transition:transform .14s,box-shadow .22s,background .2s,color .2s,border-color .2s}
+.btn-primary{background:var(--ink);color:var(--paper);box-shadow:0 6px 18px -8px rgba(38,34,28,.5)}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 10px 22px -8px rgba(38,34,28,.5)}
+.btn-primary:disabled{opacity:.35;transform:none;box-shadow:none;cursor:default}
+.btn-ghost{background:transparent;border:1px solid var(--line-2);color:var(--ink-2)}
+.btn-ghost:hover{border-color:var(--ink-3);color:var(--ink)}
+.btn-gold{background:var(--gold);color:#fff;box-shadow:0 6px 18px -8px rgba(176,125,51,.6)}
+.btn-gold:hover{transform:translateY(-1px)}
+.minihint{font-size:13px;color:var(--ink-3)}
+
+/* connect — quiet, low-weight (the lightest give) */
+.sources{display:grid;grid-template-columns:repeat(auto-fill,minmax(146px,1fr));gap:10px;margin-top:6px}
+.src{display:flex;align-items:center;gap:10px;padding:13px 14px;border-radius:12px;background:#fffdf9;
+  border:1px solid var(--line);cursor:pointer;transition:border-color .2s,background .2s,transform .12s}
+.src:hover{border-color:var(--line-2);transform:translateY(-1px)}
+.src.on{border-color:var(--gold-soft);background:var(--gold-bg)}
+.src .dot{width:8px;height:8px;border-radius:50%;background:var(--faint);transition:background .2s}
+.src.on .dot{background:var(--gold)}
+.src .nm{font-size:13.5px;color:var(--ink-2)}
+.src.on .nm{color:var(--ink)}
+
+/* seeing constellation — light-native brighten/recede */
+.cloud{position:relative;height:330px;margin:8px 0 4px}
+.ev{position:absolute;max-width:188px;padding:12px 14px;border-radius:12px;background:#fffdf9;
+  border:1px solid var(--line);color:var(--ink-3);font-size:12px;line-height:1.45;
+  filter:saturate(.6);opacity:.55;transform:scale(.96);
+  transition:opacity 1.1s cubic-bezier(.2,.7,.2,1),transform 1.1s cubic-bezier(.2,.7,.2,1),color 1.1s,border-color 1.1s,box-shadow 1.1s,background 1.1s}
+.ev .t{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
+.ev.recede{opacity:.22;transform:scale(.9);filter:saturate(.2)}     /* fades to pale grey */
+.ev.bright{opacity:1;transform:scale(1);color:var(--ink);background:#fff;border-color:var(--gold-soft);
+  box-shadow:0 10px 30px -12px rgba(176,125,51,.35);filter:saturate(1)}  /* darkens to full ink */
+.ev.bright .t{color:var(--gold)}
+
+.obs{font-family:var(--serif);font-size:26px;line-height:1.42;color:var(--ink);margin:4px 0;font-weight:400;letter-spacing:-.01em}
+.obs em{font-style:italic;color:#1a1712}
+.obs .w{opacity:0;filter:blur(4px);transition:opacity .42s,filter .42s}
+.obs .w.in{opacity:1;filter:blur(0)}
+.reframe{font-family:var(--serif);font-size:20px;font-style:italic;color:var(--gold);margin-top:18px;line-height:1.5;
+  opacity:0;transform:translateY(8px);transition:opacity .9s,transform .9s}
+.reframe.in{opacity:1;transform:none}
+
+/* the conversation answer — given more visual room (heavier give) */
+.deepfield{background:linear-gradient(180deg,#fffdf9,#fbf8f1);border:1px solid var(--line-2);border-radius:18px;padding:8px}
+.deepfield textarea{border:none;background:transparent;box-shadow:none;min-height:120px;font-size:19px}
+.deepfield textarea:focus{box-shadow:none}
+
+/* gift draft — on a "card" that reads like a page */
+.draft{background:#fffdf9;border:1px solid var(--line-2);border-radius:16px;padding:22px 24px;margin-top:4px;
+  box-shadow:0 12px 40px -22px rgba(38,34,28,.3)}
+.draft .dl{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--gold);margin-bottom:13px;font-weight:600}
+.draft .hook{font-family:var(--serif);font-size:21px;color:var(--ink);line-height:1.4;margin-bottom:14px;font-weight:500}
+.draft .body{font-family:var(--serif);font-size:16px;color:var(--ink-2);line-height:1.62}
+.draft .echo{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);font-size:13.5px;color:var(--ink-3);
+  font-family:var(--sans);line-height:1.55}
+.draft .echo b{color:var(--gold);font-weight:600}
+
+/* week plan */
+.plan{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+.pday{display:flex;gap:16px;align-items:flex-start;padding:16px 18px;border-radius:13px;background:#fffdf9;border:1px solid var(--line)}
+.pday .d{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);width:54px;flex-shrink:0;padding-top:2px;font-weight:600}
+.pday .c{font-family:var(--serif);font-size:16px;color:var(--ink);line-height:1.5}
+.pday .c span{display:block;color:var(--ink-3);font-size:13px;font-family:var(--sans);margin-top:4px}
+
+.note{font-size:13px;color:var(--ink-3);margin-top:18px;line-height:1.6}
+.note em{color:var(--gold);font-style:normal}
+.spacer{height:28px}
+
+.replay{position:fixed;bottom:16px;right:20px;font-size:12px;color:var(--faint);cursor:pointer;z-index:30}
+.replay:hover{color:var(--ink-3)}
+</style>
+</head>
+<body>
+
+<aside class="rail" id="rail">
+  <div class="mark"><div class="glyph"></div><div class="nm">Business&nbsp;Brain</div></div>
+  <div class="gl">Getting to know</div>
+  <div class="step" data-s="business"><div class="ic"></div>your business</div>
+  <div class="step" data-s="thinking"><div class="ic"></div>your thinking</div>
+  <div class="step" data-s="voice"><div class="ic"></div>your voice</div>
+  <div class="step" data-s="rhythm"><div class="ic"></div>your operating rhythm</div>
+  <div class="foot">No rush. We go as deep as you let me.</div>
+</aside>
+
+<div class="stage" id="stage"></div>
+<div class="replay" id="replay">↺ start over</div>
+
+<script>
+const stage=document.getElementById('stage');
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+let founderAnswer="", giftReaction="";
+function el(h){const d=document.createElement('div');d.innerHTML=h.trim();return d.firstChild;}
+function add(n){stage.appendChild(n);return n;}
+function reveal(n,c='in'){requestAnimationFrame(()=>n.classList.add(c));}
+async function say(t,k='med',p=1400){const n=add(el(`<div class="say ${k}">${t}</div>`));await wait(60);reveal(n);await wait(p);return n;}
+function scrollDown(){window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});}
+function railSet(active,done){
+  document.querySelectorAll('.rail .step').forEach(s=>{
+    s.classList.remove('active');
+    if(done.includes(s.dataset.s)) s.classList.add('done');
+    if(s.dataset.s===active) s.classList.add('active');
+  });
+}
+async function composeWords(node,html){
+  const tmp=document.createElement('div');tmp.innerHTML=html;const out=[];
+  const wrap=t=>t.split(/(\s+)/).forEach(tok=>out.push(tok.trim()===''?tok:`<span class="w">${tok}</span>`));
+  tmp.childNodes.forEach(n=>{if(n.nodeType===3)wrap(n.textContent);else if(n.tagName==='EM'){out.push('<em>');wrap(n.textContent);out.push('</em>');}});
+  node.innerHTML=out.join('');const ws=[...node.querySelectorAll('.w')];
+  ws.forEach((w,i)=>setTimeout(()=>w.classList.add('in'),82*i));await wait(ws.length*82+260);
+}
+
+// SCENE 1 — FIRST CONTACT
+async function sceneContact(){
+  railSet('business',[]);
+  await say("Most founders I'm built for are remarkable at the work — and worn down by the marketing.",'big',1850);
+  await say("You've likely lived the cycle: business comes from referrals until it doesn't, then it's <em>post more</em>, and the posting never quite sounds like you.",'med',2050);
+  await say("I understand businesses <b>like</b> yours. I don't yet understand <b>yours</b> — and I won't pretend to. Let's begin there.",'admit',1500);
+  await sceneConnect();
+}
+
+// SCENE 2 — CONNECT (lightest give: a tap)
+async function sceneConnect(){
+  const k=add(el(`<span class="kick">Open the door</span>`));reveal(k);await wait(400);
+  await say("Connect what's already public. I'll read — no questions yet.",'med',700);
+  const wrap=add(el(`<div class="block"><div class="sources"></div>
+    <div class="btnrow"><button class="btn btn-primary" id="cb" disabled>Let me read</button>
+    <span class="minihint" id="ch">connect at least one</span></div></div>`));
+  reveal(wrap);
+  const grid=wrap.querySelector('.sources');let on=new Set();
+  ['Website','Instagram','LinkedIn','Newsletter','YouTube','Calendar'].forEach(s=>{
+    const c=el(`<div class="src"><div class="dot"></div><div class="nm">${s}</div></div>`);
+    c.onclick=()=>{c.classList.toggle('on');c.classList.contains('on')?on.add(s):on.delete(s);
+      wrap.querySelector('#cb').disabled=on.size===0;
+      wrap.querySelector('#ch').textContent=on.size===0?'connect at least one':on.size+' connected';};
+    grid.appendChild(c);
+  });
+  scrollDown();
+  await new Promise(res=>wrap.querySelector('#cb').onclick=()=>{wrap.querySelector('.btnrow').style.opacity=.4;wrap.querySelector('#cb').disabled=true;res();});
+  await wait(550);await sceneSeeing();
+}
+
+// SCENE 3 — THE SEEING (light-native brighten/recede)
+async function sceneSeeing(){
+  await say("Give me a moment with it.",'med',1000);
+  const k=add(el(`<span class="kick">What I see</span>`));reveal(k);await wait(250);
+  const cloud=add(el(`<div class="block cloud" id="cloud"></div>`));reveal(cloud);
+  const items=[
+    {t:'website',x:'1%',y:'7%',txt:'"The Marketing Clarity Package — done-for-you content systems for busy founders."',k:'site'},
+    {t:'instagram',x:'57%',y:'3%',txt:'"Stop posting daily and hoping. Most founders are exhausted by content that never converts."',k:'a'},
+    {t:'instagram',x:'65%',y:'40%',txt:'"I\'m so tired of watching good founders burn out on content nobody asked for."',k:'b'},
+    {t:'youtube',x:'3%',y:'52%',txt:'▶ "Why your content isn\'t the problem — your offer is"',k:'yt'},
+    {t:'linkedin',x:'55%',y:'73%',txt:'"5 tools every founder needs in their stack this year."',k:'li'},
+    {t:'newsletter',x:'7%',y:'81%',txt:'"This week: a calmer system for showing up without the grind."',k:'news'},
+    {t:'instagram',x:'30%',y:'85%',txt:'"The whole \'post 3x a day\' advice is why you\'re tired and broke."',k:'c'},
+    {t:'calendar',x:'33%',y:'1%',txt:'Podcast guest — \'The Anti-Hustle Marketing Show\'',k:'cal'},
+  ];
+  items.forEach(it=>cloud.appendChild(el(`<div class="ev" data-k="${it.k}" style="left:${it.x};top:${it.y}"><div class="t">${it.t}</div>${it.txt}</div>`)));
+  const evk=k=>cloud.querySelector(`.ev[data-k="${k}"]`);
+  await wait(850);
+  ['site','li','news','cal'].forEach(x=>evk(x).classList.add('recede'));
+  await wait(550);
+  ['a','b','c','yt'].forEach((x,i)=>setTimeout(()=>evk(x).classList.add('bright'),i*250));
+  await wait(1450);
+  const ow=add(el(`<div class="block"><div class="obs" id="obs"></div></div>`));reveal(ow);
+  await composeWords(document.getElementById('obs'),
+    `You're sharpest when you're <em>frustrated</em>. The posts where you call out the daily-hustle advice are your most ignored — and your best — work.`);
+  await wait(800);
+  const rf=add(el(`<div class="block"><div class="reframe" id="rf">What that means: your audience trusts your conviction before your expertise.</div></div>`));
+  reveal(rf);reveal(document.getElementById('rf'));await wait(1700);
+  const cf=add(el(`<div class="block"><div class="btnrow">
+    <button class="btn btn-primary" id="y">Yes — that's right</button>
+    <button class="btn btn-ghost" id="n">Not quite</button></div></div>`));
+  reveal(cf);scrollDown();
+  await new Promise(res=>{
+    cf.querySelector('#y').onclick=()=>{cf.querySelector('.btnrow').style.opacity=.4;res();};
+    cf.querySelector('#n').onclick=()=>{cf.querySelector('.btnrow').style.display='none';
+      const c=add(el(`<div class="block"><div class="say med in" style="font-style:italic;color:var(--ink-2)">Tell me what I'm reading wrong — one line.</div>
+        <input class="txt" id="ci" placeholder="e.g. the frustration is deliberate, not my mood…"/>
+        <div class="btnrow"><button class="btn btn-primary" id="cs">Send</button></div></div>`));reveal(c);
+      c.querySelector('#cs').onclick=()=>{const v=c.querySelector('#ci').value.trim();c.querySelector('.btnrow').style.opacity=.4;
+        const s=add(el(`<div class="block"><div class="reframe in" style="opacity:1;transform:none">${v?'That sharpens it — if it\'s deliberate, it isn\'t your mood, it\'s your positioning. Stronger.':'Noted — I\'ll hold it differently and keep watching for your real edge.'}</div></div>`));reveal(s);setTimeout(res,1400);};};
+  });
+  await wait(650);await sceneConversation();
+}
+
+// SCENE 4 — THE CONVERSATION (heaviest give: a deep field, more room, the rail turns to "thinking")
+async function sceneConversation(){
+  railSet('thinking',['business']);
+  await say("I understand your business now. To go further I need to understand how <em>you</em> think about it.",'med',1650);
+  const k=add(el(`<span class="kick">One real question</span>`));reveal(k);await wait(250);
+  await say("Your homepage sells <em>calm clarity</em>. Your sharpest posts sell <em>righteous frustration</em>. Which one is the real you — and which are you hiding?",'big',700);
+  const ans=add(el(`<div class="block"><div class="deepfield"><textarea id="ca" rows="4" placeholder="Take your time. Say it the way you'd say it to someone you trust…"></textarea></div>
+    <div class="btnrow"><button class="btn btn-gold" id="cg" disabled>Tell Business Brain</button>
+    <span class="minihint">this is the thread everything else pulls on</span></div></div>`));
+  reveal(ans);scrollDown();
+  const ta=ans.querySelector('#ca'),gv=ans.querySelector('#cg');
+  ta.oninput=()=>gv.disabled=ta.value.trim().length<3;
+  await new Promise(res=>gv.onclick=()=>{founderAnswer=ta.value.trim();ans.querySelector('.btnrow').style.opacity=.4;gv.disabled=true;res();});
+  await wait(650);
+  await say("Then that's the thread I'll pull on. I'll hold it as something <em>you told me</em> — never something I assumed.",'med',1700);
+  await sceneGift();
+}
+
+// SCENE 5 — FIRST GIFT (visibly built FROM the Conversation answer)
+async function sceneGift(){
+  railSet('voice',['business','thinking']);
+  await say("I understand enough to try. Here's a first attempt at your voice — tell me where I'm wrong, that's how I learn it.",'med',1500);
+  const k=add(el(`<span class="kick">First draft · in your voice</span>`));reveal(k);await wait(250);
+  // echo the founder's own words back into the gift — the "it listened" proof
+  const echo = founderAnswer
+    ? `Built from what you just told me: <b>“${escapeHtml(founderAnswer.length>120?founderAnswer.slice(0,120)+'…':founderAnswer)}”</b> — I leaned the draft toward that, not the calm homepage version.`
+    : `Built toward your sharper voice — the frustrated register, not the calm homepage one.`;
+  const draft=add(el(`<div class="block"><div class="draft">
+    <div class="dl">Reel · drafted · nothing posted</div>
+    <div class="hook">"The people who tell you to post daily have never run your business."</div>
+    <div class="body">Open frustrated, straight to camera. Name the lie — that volume equals trust. Then turn: the founders who win aren't the loudest, they're the clearest about what they actually believe. End on conviction, not a tip.</div>
+    <div class="echo">${echo}</div>
+  </div></div>`));
+  reveal(draft);await wait(1500);
+  const r=add(el(`<div class="block"><div class="btnrow">
+    <button class="btn btn-primary" id="gy">That's me</button>
+    <button class="btn btn-ghost" id="ga">Almost</button>
+    <button class="btn btn-ghost" id="gn">Not me</button></div></div>`));
+  reveal(r);scrollDown();
+  await new Promise(res=>r.querySelectorAll('.btn').forEach(b=>b.onclick=()=>{giftReaction=b.id;r.querySelector('.btnrow').style.opacity=.4;r.querySelectorAll('.btn').forEach(x=>x.disabled=true);res();}));
+  let line=giftReaction==='gy'?"Good. That tells me more about your voice than ten questions could — I'll lean into it."
+    :giftReaction==='ga'?"Useful. The 'almost' is exactly where your real voice lives — I'll find the gap.":
+    "That's the most useful thing you've done yet. Knowing what <em>isn't</em> you narrows your real voice fast.";
+  await wait(450);await say(line,'med',1700);
+  await sceneWeek();
+}
+
+// SCENE 6 — WEEK ONE
+async function sceneWeek(){
+  railSet('rhythm',['business','thinking','voice']);
+  await say("So here's your first week — already shaped around what I've learned. You decide; I'll handle the rest.",'med',1450);
+  const k=add(el(`<span class="kick">Your first week · drafted, awaiting your call</span>`));reveal(k);await wait(250);
+  const plan=add(el(`<div class="block"><div class="plan">
+    <div class="pday"><div class="d">Tue</div><div class="c">The "post daily" callout reel, in your frustrated voice.<span>your sharpest register — leading the week on conviction</span></div></div>
+    <div class="pday"><div class="d">Thu</div><div class="c">Carousel: "Clarity beats volume" — reframing your homepage promise.<span>closes the gap between your page and your posts</span></div></div>
+    <div class="pday"><div class="d">Fri</div><div class="c">Newsletter open, rewritten to sound like you — not the calm version.<span>carries the week's thread into your list</span></div></div>
+  </div></div>`));
+  reveal(plan);await wait(1400);
+  const cta=add(el(`<div class="block"><div class="btnrow">
+    <button class="btn btn-gold" id="ap">Approve the week</button>
+    <button class="btn btn-ghost" id="hd">Hold one to review</button></div>
+    <div class="note">Nothing posts without your yes. I prepared it — <em>you decide</em>.</div></div>`));
+  reveal(cta);scrollDown();
+  await new Promise(res=>cta.querySelectorAll('.btn').forEach(b=>b.onclick=res));
+  railSet('',['business','thinking','voice','rhythm']);
+  await wait(400);add(el(`<div class="block spacer"></div>`));
+  await say("That's how we'll work. Every week I'll have already started — you'll just decide.",'big',500);
+  await say("This is where the relationship begins.",'med',300);scrollDown();
+}
+
+function escapeHtml(s){return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+document.getElementById('replay').onclick=()=>location.reload();
+sceneContact();
+</script>
+</body>
+</html>

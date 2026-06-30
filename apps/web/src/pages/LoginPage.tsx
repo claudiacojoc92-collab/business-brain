@@ -38,7 +38,7 @@ export function LoginPage() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: '#0a0f1a',
+      background: 'var(--paper)',
       padding: '24px 20px',
     }}>
       <form
@@ -51,12 +51,12 @@ export function LoginPage() {
           gap: 20,
         }}
       >
-        <h1 style={{ color: '#e8e6e1', fontSize: '1.5rem', fontWeight: 500, marginBottom: 8 }}>
+        <h1 style={{ fontFamily: 'var(--serif)', color: 'var(--ink)', fontSize: '1.75rem', fontWeight: 500, letterSpacing: '0.01em', marginBottom: 8 }}>
           Business Brain
         </h1>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <label htmlFor="email" style={{ color: '#6b7280', fontSize: '0.875rem' }}>Email</label>
+          <label htmlFor="email" style={{ color: 'var(--ink-3)', fontSize: '0.875rem' }}>Email</label>
           <input
             id="email"
             type="email"
@@ -65,10 +65,10 @@ export function LoginPage() {
             required
             autoComplete="email"
             style={{
-              background: '#111827',
-              border: '1px solid #1f2937',
-              borderRadius: 6,
-              color: '#e8e6e1',
+              background: 'var(--surface)',
+              border: '1px solid var(--line-2)',
+              borderRadius: 10,
+              color: 'var(--ink)',
               fontSize: '1rem',
               padding: '12px 14px',
               outline: 'none',
@@ -78,7 +78,7 @@ export function LoginPage() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <label htmlFor="password" style={{ color: '#6b7280', fontSize: '0.875rem' }}>Password</label>
+          <label htmlFor="password" style={{ color: 'var(--ink-3)', fontSize: '0.875rem' }}>Password</label>
           <input
             id="password"
             type="password"
@@ -87,10 +87,10 @@ export function LoginPage() {
             required
             autoComplete="current-password"
             style={{
-              background: '#111827',
-              border: '1px solid #1f2937',
-              borderRadius: 6,
-              color: '#e8e6e1',
+              background: 'var(--surface)',
+              border: '1px solid var(--line-2)',
+              borderRadius: 10,
+              color: 'var(--ink)',
               fontSize: '1rem',
               padding: '12px 14px',
               outline: 'none',
@@ -100,22 +100,24 @@ export function LoginPage() {
         </div>
 
         {error && (
-          <p style={{ color: '#fca5a5', fontSize: '0.875rem', margin: 0 }}>{error}</p>
+          <p style={{ color: 'var(--warn-ink)', fontSize: '0.875rem', margin: 0 }}>{error}</p>
         )}
 
         <button
           type="submit"
           disabled={isLoading}
           style={{
-            background: isLoading ? '#1f2937' : '#1e3a5f',
+            background: 'var(--ink)',
+            opacity: isLoading ? 0.4 : 1,
             border: 'none',
-            borderRadius: 6,
-            color: '#e8e6e1',
+            borderRadius: 10,
+            color: 'var(--paper)',
             cursor: isLoading ? 'not-allowed' : 'pointer',
             fontFamily: 'inherit',
+            fontWeight: 500,
             fontSize: '0.9375rem',
             padding: '12px',
-            transition: 'background 150ms',
+            transition: 'opacity 150ms, transform 140ms',
           }}
         >
           {isLoading ? 'Signing in…' : 'Sign in'}
