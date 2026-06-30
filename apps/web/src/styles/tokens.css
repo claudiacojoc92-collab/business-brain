@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Inter:wght@400;450;500;600&display=swap');
 /* ─────────────────────────────────────────────────────────────────────────────
    Editorial Clarity — design tokens
    Source of truth: the approved prototype apps/web/design/act-one-editorial.html
@@ -5,8 +6,10 @@
    the prototype embeds the approved token set verbatim, so values are taken from
    it unchanged. Prototype names are canonical; --bb-* aliases are provided so
    later (Act I) work that references --bb-* resolves to the same values.
+
+   NOTE: the @import MUST stay the first statement (CSS spec; prod minifiers drop
+   a non-first remote @import). Keep it on line 1, above this comment.
    ──────────────────────────────────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Inter:wght@400;450;500;600&display=swap');
 
 :root {
   /* paper / ink / accent — verbatim from prototype */
