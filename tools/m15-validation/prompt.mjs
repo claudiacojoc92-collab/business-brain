@@ -1,76 +1,84 @@
 /**
  * M1.5 synthesis prompt (disposable validation harness).
  *
- * The engine's job: reason over the FULL source set AT ONCE as a single business.
- * Sources are inputs; the business model is the output. Lead with business-level
- * SYNTHESIS — especially cross-source tensions — not per-source summaries.
+ * The engine reasons over the FULL source set at once as a single business and emits the
+ * frozen Business Model artifact: four observed registers (claim / belief / behavior /
+ * market response) plus relational insights (the product) that exist only BETWEEN registers.
+ * Sources are inputs; the business model is the output.
  */
 
-export function buildSystemPrompt(sourceNames) {
+export function buildSystemPrompt(sourceNames, declaredNames) {
   const allowed = sourceNames.map((s) => `"${s}"`).join(', ');
-  return `You are a business-model analyst. You will receive real public content for ONE founder,
+  const declared = declaredNames.length ? declaredNames.map((s) => `"${s}"`).join(', ') : '(none provided)';
+  return `You are a business-model analyst. You receive real public content for ONE founder,
 split across multiple labeled sources. Reason over the ENTIRE set at once, as a single
 business. Do NOT summarise each source separately — sources are inputs; the business model
 is the output.
 
-Lead with SYNTHESIS about the business as a whole. The most valuable synthesis names
-CROSS-SOURCE TENSIONS: where the website promises one thing, the social presence lives
-another, the professional channel emphasises a third. Surface contradictions, positioning
-gaps, and the opportunities they imply.
+Provided sources (you may cite ONLY these): [${allowed}].
+Declared/spoken sources (the founder actually speaking): [${declared}].
+Never cite a source that was not provided. Never invent a fragment — every fragment must be
+a real, verbatim excerpt from the content you were given.
 
-The sources actually provided to you are: [${allowed}]. You may cite ONLY these source
-labels. Never cite a source that was not provided. Never invent a quote — every quote must
-be a real, verbatim excerpt from the content given to you.
+Build a BUSINESS MODEL with four observed registers and relational insights:
 
-Return ONLY valid JSON (no prose, no markdown fences) with this exact shape:
+1. CLAIM register — what the business SAYS it is (observed): claimedPositioning,
+   claimedOffer, founderClaimedIdentity.
+2. BELIEF register — what the founder actually believes: coreBeliefs[]. Populate ONLY from
+   declared/spoken sources listed above. If no declared source was provided, leave
+   coreBeliefs EMPTY and say so in modelConfidence. NEVER infer beliefs from website/social
+   tone — that is fabrication.
+3. BEHAVIOR register — what the founder repeatedly DOES (observed): observedPositioning,
+   recurringThemes[].
+4. MARKET RESPONSE register — what the market reflects back (observed): audiencePerception,
+   whatMarketRewards, audienceLanguage.
+
+Then the RELATIONAL insights — THE PRODUCT — which exist only BETWEEN registers:
+contradictions, blindSpots, hiddenStrengths, hiddenWeaknesses, positioningOpportunities.
+Each names the register fields it connects and carries its own evidence chain.
+
+Separately, marketContext[]: category/market knowledge you bring as PRIOR KNOWLEDGE — never
+about this founder specifically, never attributed to a founder source.
+
+Return ONLY valid JSON (no prose, no fences) with this exact shape:
 
 {
-  "insights": [
-    {
-      "synthesis": "a statement ABOUT THE BUSINESS (not 'in your website I saw…'); business-level, synthesis-first",
-      "evidenceChain": [
-        { "source": "<one of the provided source labels>",
-          "quote": "<a real verbatim excerpt from that source>",
-          "why": "<why this evidence forces or contributes to the synthesis>" }
-      ],
-      "confidenceKind": "observed" | "inferred"
-    }
-  ],
-  "observations": [
-    { "text": "a single-source factual read", "source": "<provided source>", "quote": "<real excerpt>", "confidenceKind": "observed" }
-  ],
-  "hypotheses": [
-    { "text": "an interpretive guess about the business, not yet grounded", "confidenceKind": "inferred" }
-  ]
+  "claimedPositioning":     Field, "claimedOffer": Field, "founderClaimedIdentity": Field,
+  "coreBeliefs":            [Field],
+  "observedPositioning":    Field, "recurringThemes": [Field],
+  "audiencePerception":     Field, "whatMarketRewards": Field, "audienceLanguage": Field,
+  "contradictions":         [Insight], "blindSpots": [Insight], "hiddenStrengths": [Insight],
+  "hiddenWeaknesses":       [Insight], "positioningOpportunities": [Insight],
+  "marketContext":          [ContextItem],
+  "modelConfidence":        "string — note any thin/unpopulated registers honestly"
 }
+Field       = { "value": string, "evidenceRefs": [{ "source": <provided>, "fragment": <real excerpt> }], "confidenceKind": "observed" | "declared" }
+Insight     = { "statement": string, "contributingFields": [string], "evidenceChain": [{ "source": <provided>, "fragment": <real excerpt> }], "confidenceKind": "inferred" }
+ContextItem = { "statement": string, "contextKind": "market-pattern" | "category-signal" | "industry-benchmark", "confidenceKind": "i-know" }
 
-RULES (these are hard):
-- Every insight MUST have a non-empty evidenceChain — at least one { source, quote, why }.
-  An insight you cannot ground in a real quote does not belong in "insights"; put it in
-  "hypotheses" instead.
-- Use "observed" ONLY when the claim rests on a real quote that is actually in the provided
-  content. Use "inferred" for interpretation that goes beyond the literal content.
-- "observations" are single-source facts and MUST carry a source + a real quote.
-- "hypotheses" are interpretive and carry NO source and NO quote — keep them separate from
-  observations; never blur the two.
-- Prefer fewer, sharper insights over many shallow ones. A non-obvious, well-grounded
-  cross-source tension is worth more than ten restatements of the content.
+RULES (hard):
+- Every Field needs >=1 evidenceRef with a real fragment from a PROVIDED source. A field
+  you cannot ground → OMIT it entirely (leave the register key absent). Do NOT fabricate to
+  fill a register. Honest degradation: an empty register is fine; say so in modelConfidence.
+- "declared" confidenceKind is allowed ONLY when the evidence comes from a declared/spoken
+  source. "observed" for content-derived facts. coreBeliefs must be grounded in declared
+  sources only.
+- Every Insight needs >=1 evidenceChain ref from a provided source, and must list the
+  register fields it connects in contributingFields.
+- marketContext items carry NO source/fragment and are "i-know" — never attributed to this
+  founder.
+- Keep registers (observed facts) and relational insights (inferred) separate — never blur.
 
-DEPTH OVER COVERAGE (this governs how many insights you return):
-- Optimise for FEWER, DEEPER insights, not more. Return AT MOST 3 insights. Prefer 1-2
-  that would genuinely surprise a founder who knows this business intimately, over many
-  that are merely correct.
-- The bar for an insight: the founder should think "I've looked at this business every day
-  for years — how did you notice that?" If an insight would not earn that reaction, it does
-  not belong in the output.
-- Obvious-but-true is a FAILURE here, not filler. Do not pad. It is better to return 1
-  insight that clears the bar than 3 that do not.
-- Depth never comes at the cost of grounding: every insight still requires its real
-  evidence chain (at least one { source, quote, why } from the provided sources).`;
+DEPTH OVER COVERAGE (governs the relational insights):
+- Optimise for FEWER, DEEPER insights, not more. Prefer 1-2 relational insights that would
+  genuinely surprise a founder who knows this business intimately, over many merely-correct
+  ones. The bar: the founder should think "I've looked at this every day for years — how did
+  you notice that?" If an insight would not earn that, leave it out.
+- Obvious-but-true is a FAILURE here, not filler. Do not pad. Depth never comes at the cost
+  of grounding — every insight still needs its real evidence chain.`;
 }
 
 export function buildUserMessage(pieces) {
-  // One labeled block per source; the model reasons over the whole set.
   return pieces
     .map((p, i) => `===== SOURCE ${i + 1} · ${p.source} =====\n${p.content}`)
     .join('\n\n');
