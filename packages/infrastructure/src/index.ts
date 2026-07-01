@@ -43,6 +43,7 @@ export { PgFounderAuthRepository } from './database/repositories/pg-founder-auth
 export { PgInternalBriefProjection } from './database/projections/pg-internal-brief.projection';
 export { PgInternalBriefRepository } from './database/repositories/pg-internal-brief.repository';
 export { PgContentPieceRepository } from './database/repositories/pg-content-piece.repository';
+export { PgEvidenceRepository } from './database/repositories/pg-evidence.repository';
 
 // Intake session repository (B1 onboarding)
 export { PgIntakeSessionRepository } from './database/repositories/pg-intake-session.repository';

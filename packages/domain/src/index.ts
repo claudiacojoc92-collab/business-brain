@@ -107,3 +107,17 @@ export type {
 } from './outcome/entities/outcome-report.entity';
 export type { IOutcomeReportRepository } from './outcome/repositories/outcome-report.repository';
 export * from './outcome/events';
+
+// Evidence context (ADR-007 — Connect Your World nucleus)
+export {
+  contentAddress,
+  assertFragmentHonest,
+  makeFragment,
+  EvidenceHonestyError,
+} from './evidence/evidence-fragment';
+export type {
+  EvidenceFragment,
+  ConfidenceKind,
+  Visibility,
+} from './evidence/evidence-fragment';
+export type { IEvidenceRepository } from './evidence/evidence.repository';
