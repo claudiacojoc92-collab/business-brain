@@ -6,6 +6,7 @@ import { OnboardingPage } from './pages/OnboardingPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ReviewPage } from './pages/ReviewPage';
 import { HistoryPage } from './pages/HistoryPage';
+import { ConnectPreviewPage } from './connect/ConnectPreviewPage';
 
 /**
  * Route guard: redirect based on founder status.
@@ -108,6 +109,11 @@ export function App() {
               </ProtectedRoute>
             }
           />
+
+          {/* Dev-only: M2.1 Connect Your World reflection preview (not registered in prod). */}
+          {import.meta.env.DEV && (
+            <Route path="/connect-preview" element={<ConnectPreviewPage />} />
+          )}
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
