@@ -1,0 +1,4 @@
+# Real founder content and generated run artifacts stay out of git.
+input.json
+report.md
+*.local.json
