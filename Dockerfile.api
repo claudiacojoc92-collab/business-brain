@@ -15,6 +15,7 @@ COPY packages/shared/package.json          packages/shared/package.json
 COPY packages/domain/package.json          packages/domain/package.json
 COPY packages/application/package.json      packages/application/package.json
 COPY packages/infrastructure/package.json   packages/infrastructure/package.json
+COPY packages/business-model-engine/package.json packages/business-model-engine/package.json
 COPY apps/api/package.json       apps/api/package.json
 COPY apps/workers/package.json   apps/workers/package.json
 COPY apps/web/package.json       apps/web/package.json
