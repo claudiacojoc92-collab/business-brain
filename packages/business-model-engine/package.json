@@ -1,0 +1,17 @@
+{
+  "name": "@bb/business-model-engine",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.mjs",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./src/index.mjs"
+    }
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  }
+}
