@@ -54,7 +54,19 @@ RULES (these are hard):
 - "hypotheses" are interpretive and carry NO source and NO quote — keep them separate from
   observations; never blur the two.
 - Prefer fewer, sharper insights over many shallow ones. A non-obvious, well-grounded
-  cross-source tension is worth more than ten restatements of the content.`;
+  cross-source tension is worth more than ten restatements of the content.
+
+DEPTH OVER COVERAGE (this governs how many insights you return):
+- Optimise for FEWER, DEEPER insights, not more. Return AT MOST 3 insights. Prefer 1-2
+  that would genuinely surprise a founder who knows this business intimately, over many
+  that are merely correct.
+- The bar for an insight: the founder should think "I've looked at this business every day
+  for years — how did you notice that?" If an insight would not earn that reaction, it does
+  not belong in the output.
+- Obvious-but-true is a FAILURE here, not filler. Do not pad. It is better to return 1
+  insight that clears the bar than 3 that do not.
+- Depth never comes at the cost of grounding: every insight still requires its real
+  evidence chain (at least one { source, quote, why } from the provided sources).`;
 }
 
 export function buildUserMessage(pieces) {
