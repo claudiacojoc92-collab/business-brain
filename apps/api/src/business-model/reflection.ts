@@ -71,19 +71,22 @@ export function buildObservedReflection(args: {
     ({ state: args.state, lead: null, lines: [], handoff: null, message: null, gaps: args.gaps, ...over });
 
   if (args.state === 'failed') return base({ message: COPY.failed });
-  if (args.state === 'empty' || args.observed.length === 0) return base({ state: 'empty', message: COPY.empty });
+  // Beat 1 reads PAGE fragments only; block fragments are resolution-only (Beat 2) and must
+  // not be picked here.
+  const observed = args.observed.filter((f) => f.payload?.['kind'] !== 'block');
+  if (args.state === 'empty' || observed.length === 0) return base({ state: 'empty', message: COPY.empty });
 
   const lines: ReflectionLine[] = [];
-  const home = pick(args.observed, 'home') ?? args.observed[0]!;
+  const home = pick(observed, 'home') ?? observed[0]!;
 
   const positioning = og(home, 'og:description') ?? str(home, 'description') ?? str(home, 'title');
   if (positioning) lines.push({ label: 'Positioning', text: `You position yourself as ${snippet(positioning)}`, kind: 'observed', fragmentIds: [home.id] });
 
-  const offerPage = pick(args.observed, 'services') ?? pick(args.observed, 'pricing');
+  const offerPage = pick(observed, 'services') ?? pick(observed, 'pricing');
   const offer = offerPage ? (str(offerPage, 'description') ?? str(offerPage, 'title') ?? (str(offerPage, 'text') ? snippet(str(offerPage, 'text')!) : null)) : null;
   if (offerPage && offer) lines.push({ label: 'Offer', text: `Your offer looks like ${offer}`, kind: 'observed', fragmentIds: [offerPage.id] });
 
-  const blog = args.observed.filter((f) => String(f.payload?.['pageType']) === 'blog_post');
+  const blog = observed.filter((f) => String(f.payload?.['pageType']) === 'blog_post');
   const titles = blog.map((f) => str(f, 'title')).filter((t): t is string => Boolean(t));
   if (titles.length) lines.push({ label: 'Themes', text: `Lately you've been writing about ${titles.slice(0, 4).join('; ')}`, kind: 'observed', fragmentIds: blog.map((f) => f.id) });
 

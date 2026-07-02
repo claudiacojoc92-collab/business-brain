@@ -44,25 +44,65 @@ function norm(s: string): string {
 function fragmentKey(f: EvidenceFragment): string {
   return f.sourceUrl ?? f.source;
 }
+const isBlock = (f: EvidenceFragment): boolean => f.payload?.['kind'] === 'block';
+const pageText = (f: EvidenceFragment): string => (typeof f.payload?.['text'] === 'string' ? norm(f.payload['text'] as string) : '');
+
+// The floor gates COINCIDENTAL BLOCK CREDIT: a block is credited in derived_from only if it
+// shares a run of the quote at least this long. It NEVER rejects whole refs (that misread tanked
+// hit-rate). A block — LEAF OR GROUP — sharing only a short run must not be credited; the ≤700c
+// group block makes this gate matter MORE, so it applies with equal force. Not fuzzy — the
+// credited run is an exact contiguous word-sequence from the quote, present verbatim in the block.
+const CREDIT_MIN_WORDS = 5;
+const CREDIT_MIN_CHARS = 25;
+
+/** The quote-word indices this block covers via verbatim contiguous runs ≥ the floor. */
+function coveredIndices(blockNorm: string, quoteWords: string[]): Set<number> {
+  const hay = ` ${blockNorm} `;
+  const cov = new Set<number>();
+  for (let i = 0; i < quoteWords.length; i++) {
+    for (let L = quoteWords.length - i; L >= CREDIT_MIN_WORDS; L--) {
+      const run = quoteWords.slice(i, i + L).join(' ');
+      if (run.length >= CREDIT_MIN_CHARS && hay.includes(` ${run} `)) { for (let k = i; k < i + L; k++) cov.add(k); break; }
+    }
+  }
+  return cov;
+}
 
 /**
- * Resolve one evidence ref to the stored observed fragment id(s) it came from — PAGE-SCOPED.
- * The engine is fed one page per source (source = page URL), so a ref names its exact page;
- * the quote must exact-substring-match within THAT page. Smaller space + exact match keeps
- * honesty intact (a ref resolves only to the page it genuinely came from) while raising
- * the hit rate structurally.
+ * Resolve one evidence ref — PAGE-SCOPED. PASS test: the quote must be an EXACT contiguous
+ * (normalized) substring of a PAGE fragment on the cited page (the proven mechanism). If it
+ * passes, map it to the MOST SPECIFIC block fragment(s) covering it: smallest blocks first
+ * (leaf/sentence), a group/section block only for spans no leaf covers. derived_from NEVER
+ * regresses to the page fragment — if the span passes the page but no block covers a substantive
+ * run, it is unmappable → dropped (fail closed). Not fuzzy, not a score.
  */
 export function resolveEvidenceRef(ref: EvidenceRef, stored: EvidenceFragment[]): string[] {
   const wantKey = norm(ref.source);
   const needle = norm(ref.fragment);
   if (!needle) return [];
-  const ids: string[] = [];
-  for (const f of stored) {
-    if (norm(fragmentKey(f)) !== wantKey) continue; // same page only
-    const text = typeof f.payload?.['text'] === 'string' ? norm(f.payload['text'] as string) : '';
-    if (text.includes(needle)) ids.push(f.id);
+  // PASS: exact contiguous substring within a page blob on the cited page.
+  const onPage = stored.some((f) => !isBlock(f) && norm(fragmentKey(f)) === wantKey && pageText(f).includes(needle));
+  if (!onPage) return [];
+  // Candidate blocks on the cited page with the quote-indices each covers (floor-gated).
+  const quoteWords = needle.split(' ').filter(Boolean);
+  const candidates: Array<{ id: string; len: number; covered: Set<number> }> = [];
+  for (const b of stored) {
+    if (!isBlock(b) || norm(fragmentKey(b)) !== wantKey) continue;
+    const text = pageText(b);
+    const covered = coveredIndices(text, quoteWords);
+    if (covered.size > 0) candidates.push({ id: b.id, len: text.length, covered });
   }
-  return [...new Set(ids)];
+  if (candidates.length === 0) return []; // unmappable → drop; NEVER credit the page fragment.
+  // MOST-SPECIFIC-WINS: smallest blocks first; add a block only if it covers a not-yet-covered index.
+  candidates.sort((a, b) => a.len - b.len);
+  const used = new Set<number>();
+  const ids: string[] = [];
+  for (const c of candidates) {
+    let adds = false;
+    for (const idx of c.covered) if (!used.has(idx)) { adds = true; break; }
+    if (adds) { ids.push(c.id); for (const idx of c.covered) used.add(idx); }
+  }
+  return ids;
 }
 
 /**
@@ -176,7 +216,8 @@ export async function recomputeFromWebsite(args: {
 }): Promise<RecomputeResult> {
   const engine = await import('@bb/business-model-engine');
   const observed = await args.repo.findObserved(args.founderId, 'website');
-  const pieces = shapePieces(selectForEngine(observed)); // high-signal, page-scoped
+  const pageFragments = observed.filter((f) => f.payload?.['kind'] !== 'block'); // engine input stays page-scoped (blocks are resolution-only)
+  const pieces = shapePieces(selectForEngine(pageFragments)); // high-signal, page-scoped
   const sourceNames = [...new Set(pieces.map((p) => p.source))];
   const declared = sourceNames.filter((s) => engine.DECLARED_PATTERN.test(s));
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { normalizeUrl, isSameOrigin } from '../../../connectors/website/url';
 import { parseSitemapUrls, extractLinks, discoverKeyPages } from '../../../connectors/website/discovery';
-import { extractPage, classifyPageType, extractReadableText } from '../../../connectors/website/extract';
+import { extractPage, classifyPageType, extractReadableText, extractBlocks } from '../../../connectors/website/extract';
 import { parseRobots, isAllowed } from '../../../connectors/website/fetcher';
 
 describe('URL normalization', () => {
@@ -78,6 +78,14 @@ describe('Extraction', () => {
   it('marks a near-empty page as empty (no hollow fragment)', () => {
     const ex = extractPage('https://acme.co/x', '<html><body><div id="app"></div></body></html>');
     expect(ex.empty).toBe(true);
+  });
+  it('extracts leaf block text from readable content, skipping boilerplate and sub-floor blocks', () => {
+    const blocks = extractBlocks(html);
+    const texts = blocks.map((b) => b.text);
+    expect(texts.some((t) => t.startsWith('We help founders.'))).toBe(true); // the <p> leaf (long enough)
+    expect(texts.some((t) => t.includes('skip me') || t === 'skip')).toBe(false); // nav/footer stripped
+    expect(texts).not.toContain('What we do'); // 10-char heading is below the block floor (never matchable)
+    expect(blocks.every((b) => b.text.length >= 24)).toBe(true); // floor holds
   });
 });
 

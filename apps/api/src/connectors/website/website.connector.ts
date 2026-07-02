@@ -7,7 +7,7 @@ import { makeFragment, type EvidenceFragment, type IEvidenceRepository } from '@
 import { normalizeUrl } from './url';
 import { fetchDocument, fetchRobots, isAllowed } from './fetcher';
 import { discoverKeyPages, DEFAULT_PAGE_BUDGET } from './discovery';
-import { extractPage, type Extracted } from './extract';
+import { extractPage, extractBlocks, type Extracted } from './extract';
 
 export type ConnectionState = 'connecting' | 'reading' | 'synced' | 'partial' | 'empty' | 'failed';
 export interface Capabilities { read: boolean; insights: boolean; publish: boolean }
@@ -61,6 +61,9 @@ export class WebsiteConnector {
     for (const page of pages) {
       const ex = this.normalize(page);
       if (ex.empty) continue; // contributes nothing, rather than a hollow fragment
+      const occurredAt = occurredAtFromJsonLd(ex.jsonld);
+      // PAGE fragment — the engine's input (unchanged) + Beat-1 source. No `kind` marker so
+      // its content-address stays identical to before this slice (engine input byte-stable).
       fragments.push(makeFragment({
         founderId,
         source: 'website',
@@ -68,7 +71,7 @@ export class WebsiteConnector {
         sourceUrl: page.url,
         confidenceKind: 'observed',
         visibility: 'public',
-        occurredAt: occurredAtFromJsonLd(ex.jsonld),
+        occurredAt,
         payload: {
           text: ex.text.length > PAYLOAD_TEXT_CAP ? ex.text.slice(0, PAYLOAD_TEXT_CAP) : ex.text,
           pageType: ex.pageType,
@@ -79,6 +82,26 @@ export class WebsiteConnector {
           lang: ex.lang,
         },
       }));
+      // BLOCK fragments — additional REAL observed evidence (same honesty gate, still
+      // observed + sourceUrl), used ONLY for finer resolution. `kind:'block'` keeps them out
+      // of the engine input (page-scoped) and out of Beat 1.
+      for (const b of extractBlocks(page.html)) {
+        fragments.push(makeFragment({
+          founderId,
+          source: 'website',
+          platform: host,
+          sourceUrl: page.url,
+          confidenceKind: 'observed',
+          visibility: 'public',
+          occurredAt,
+          payload: {
+            kind: 'block',
+            text: b.text.length > PAYLOAD_TEXT_CAP ? b.text.slice(0, PAYLOAD_TEXT_CAP) : b.text,
+            blockType: b.blockType,
+            pageType: ex.pageType,
+          },
+        }));
+      }
     }
     if (fragments.length === 0) return { stored: 0, deduped: 0 };
     return this.repo.appendMany(fragments);
