@@ -27,3 +27,14 @@ Thumbs.db
 
 # Claude Code local tool state (not project source)
 .claude/
+
+# macOS/cloud-sync duplicate artifacts ("foo 2.ts"). Enumerated by extension (NOT a broad
+# "* 2.*") so a legitimately-named "step 2.md" is never silently swallowed.
+* 2.ts
+* 2.tsx
+* 2.js
+* 2.mjs
+* 2.cjs
+* 2.json
+* 2.md
+* 2.sql

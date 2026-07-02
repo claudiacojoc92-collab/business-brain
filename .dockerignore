@@ -13,3 +13,22 @@ dist
 *.log
 coverage
 **/coverage
+
+# macOS/cloud-sync duplicate artifacts ("foo 2.ts") — keep them out of the build context so
+# they never compile into the image as dead duplicates. Enumerated (root + nested), not broad.
+* 2.ts
+**/* 2.ts
+* 2.tsx
+**/* 2.tsx
+* 2.js
+**/* 2.js
+* 2.mjs
+**/* 2.mjs
+* 2.cjs
+**/* 2.cjs
+* 2.json
+**/* 2.json
+* 2.md
+**/* 2.md
+* 2.sql
+**/* 2.sql
