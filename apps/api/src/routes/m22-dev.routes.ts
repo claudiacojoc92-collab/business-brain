@@ -4,6 +4,7 @@ import { createKyselyClient, PgEvidenceRepository } from '@bb/infrastructure';
 import { runUploadMagicMoment } from '../business-model/upload-magic-moment.service';
 import { detectType, MAX_BYTES } from '../connectors/upload/detect';
 import { DEV_FOUNDER_ID } from '../connectors/website/dev-founder';
+import { sseFrame } from './sse';
 
 /**
  * DEV-ONLY streaming endpoint for the M2.2 upload magic moment. Registered ONLY when
@@ -50,7 +51,7 @@ export async function registerM22DevRoutes(server: FastifyInstance): Promise<voi
     reply.raw.writeHead(200, {
       'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive', 'x-accel-buffering': 'no',
     });
-    const send = (event: string, data: unknown) => reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    const send = (event: string, data: unknown) => reply.raw.write(sseFrame(event, data)); // escapes U+2028/U+2029 (defense-in-depth)
     try {
       // Fresh upload each time; website evidence (if any) is PRESERVED for cross-source fusion.
       await repo.deleteBySource(DEV_FOUNDER_ID, 'upload');
