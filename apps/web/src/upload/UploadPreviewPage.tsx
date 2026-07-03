@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { UPLOAD_CASES, type UploadCase, type ULine, type Src } from './fixtures';
+import { createSSEParser } from './sse';
 
 /**
  * M2.2 — Upload Connector, founder-facing surface.
@@ -94,14 +95,10 @@ export function UploadPreviewPage() {
       const fd = new FormData(); fd.append('file', file);
       const res = await fetch('/dev/m22/upload', { method: 'POST', body: fd });
       if (!res.ok || !res.body) { setLiveErr(`upload failed (${res.status})`); setPhase('ended'); patch({ state: 'failed', message: `Upload failed (${res.status}).` }); return; }
-      const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = '';
+      const reader = res.body.getReader(); const dec = new TextDecoder(); const parser = createSSEParser();
       for (;;) {
         const { value, done } = await reader.read(); if (done) break;
-        buf += dec.decode(value, { stream: true });
-        let idx: number;
-        while ((idx = buf.indexOf('\n\n')) >= 0) {
-          const frame = buf.slice(0, idx); buf = buf.slice(idx + 2);
-          const ev = /^event: (.*)$/m.exec(frame)?.[1]; const dt = /^data: (.*)$/m.exec(frame)?.[1];
+        for (const { event: ev, data: dt } of parser.feed(dec.decode(value, { stream: true }))) {
           if (!ev || dt === undefined) continue;
           let data: unknown; try { data = JSON.parse(dt); } catch { continue; }
           if (ev === 'reading') { const m = (data as { message: string }).message; setActive((a) => (a ? { ...a, readingLines: [...a.readingLines, m] } : a)); setReadIdx((n) => n + 1); }
