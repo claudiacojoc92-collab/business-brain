@@ -7,6 +7,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { ReviewPage } from './pages/ReviewPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { ConnectPreviewPage } from './connect/ConnectPreviewPage';
+import { UploadPreviewPage } from './upload/UploadPreviewPage';
 
 /**
  * Route guard: redirect based on founder status.
@@ -113,6 +114,10 @@ export function App() {
           {/* Dev-only: M2.1 Connect Your World reflection preview (not registered in prod). */}
           {import.meta.env.DEV && (
             <Route path="/connect-preview" element={<ConnectPreviewPage />} />
+          )}
+          {/* Dev-only: M2.2 Upload Connector reflection preview (not registered in prod). */}
+          {import.meta.env.DEV && (
+            <Route path="/upload-preview" element={<UploadPreviewPage />} />
           )}
 
           {/* Fallback */}

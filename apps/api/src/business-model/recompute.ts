@@ -235,3 +235,76 @@ export async function recomputeFromWebsite(args: {
   const { stored, deduped } = await args.repo.appendMany(toPersist);
   return { model, persisted: stored, deduped, rejected, observedCount: observed.length, enginePages: sourceNames };
 }
+
+// ── M2.2: recompute ACROSS sources (website + upload), shared path, engine unchanged ─────────
+const ENGINE_MULTI_CAP = 8;
+
+/** Select high-signal engine input across sources. Upload units are fresh founder-specific
+ * evidence → included first, then high-signal website pages. Page-scoped; blocks stay resolution-only. */
+function selectForEngineMulti(pageFragments: EvidenceFragment[], cap = ENGINE_MULTI_CAP): EvidenceFragment[] {
+  const uploads = pageFragments.filter((f) => f.source === 'upload');
+  const web = pageFragments.filter((f) => f.source !== 'upload');
+  const typeOf = (f: EvidenceFragment) => String(f.payload?.['pageType'] ?? 'other');
+  const primaryWeb = web.filter((f) => HIGH_SIGNAL_TYPES.includes(typeOf(f)));
+  const restWeb = web.filter((f) => !HIGH_SIGNAL_TYPES.includes(typeOf(f)));
+  return [...uploads, ...primaryWeb, ...restWeb].slice(0, cap);
+}
+
+export interface CeilingViolation { statement: string; reason: string }
+
+/**
+ * EPISTEMIC CEILING (spec §5.2 / §13.4). External-reality claims are the engine's marketContext
+ * class — prior knowledge (i-know), never founder evidence. Enforce: a marketContext item may
+ * NOT carry an evidence chain (citing an upload or website fragment would launder a founder's
+ * private document into a claim about the outside world). Such items are rejected. Founder-
+ * business insights (the insight categories) may cite upload evidence — that is a legitimate
+ * inference from the founder's own document, not an external-reality claim.
+ */
+export function enforceEpistemicCeiling(model: BusinessModel): CeilingViolation[] {
+  const mc = (model.marketContext ?? []) as Array<{ statement?: string; evidenceChain?: unknown[] }>;
+  const violations: CeilingViolation[] = [];
+  for (const item of mc) {
+    const chain = Array.isArray(item.evidenceChain) ? item.evidenceChain : [];
+    if (chain.length > 0) violations.push({
+      statement: String(item.statement ?? ''),
+      reason: 'marketContext (external reality) must be prior knowledge — may not cite a founder evidence chain (upload or website); rejected (epistemic ceiling)',
+    });
+  }
+  return violations;
+}
+
+export interface MultiSourceResult extends RecomputeResult { ceilingRejected: CeilingViolation[] }
+
+/**
+ * Live recompute across ALL observed sources (website + upload) → frozen engine → fail-closed
+ * resolution spanning sources (per-source by source_url — upload:// vs https:// resolve to their
+ * own fragments) → epistemic-ceiling enforcement → persist inferred. Shared path; engine unchanged.
+ */
+export async function recomputeFromSources(args: {
+  founderId: string; repo: IEvidenceRepository; anthropicApiKey: string; model?: string;
+}): Promise<MultiSourceResult> {
+  const engine = await import('@bb/business-model-engine');
+  const observed = await args.repo.findObserved(args.founderId); // ALL sources
+  const pageFragments = observed.filter((f) => f.payload?.['kind'] !== 'block');
+  const pieces = shapePieces(selectForEngineMulti(pageFragments));
+  const sourceNames = [...new Set(pieces.map((p) => p.source))];
+  const declared = sourceNames.filter((s) => engine.DECLARED_PATTERN.test(s));
+
+  const client = createAnthropicClient(args.anthropicApiKey);
+  const resp = await client.messages.create({
+    model: args.model ?? 'claude-sonnet-4-6',
+    max_tokens: 8000,
+    system: engine.buildSystemPrompt(sourceNames, declared),
+    // Document/website text enters ONLY here, as evidence CONTENT (data) — never the system
+    // (instruction) position. Prompt-injection in a doc is inert-by-position; fail-closed
+    // resolution is defense-in-depth (a fabricated instruction can't produce a traceable claim).
+    messages: [{ role: 'user', content: engine.buildUserMessage(pieces) }],
+  });
+  const text = resp.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('\n');
+  const { model } = engine.validateModel(extractJson(text), sourceNames);
+
+  const ceilingRejected = enforceEpistemicCeiling(model); // drop laundered external-reality claims
+  const { toPersist, rejected } = resolveDerivedFrom(args.founderId, model, observed); // fail-closed, spans sources
+  const { stored, deduped } = await args.repo.appendMany(toPersist);
+  return { model, persisted: stored, deduped, rejected, observedCount: observed.length, enginePages: sourceNames, ceilingRejected };
+}
