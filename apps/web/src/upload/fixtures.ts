@@ -5,7 +5,7 @@
  * Inferred (Beat 2) text is shown as honest excerpts of the real engine output ("…").
  * Other states (redundant/unsupported/empty/partial/failed) are honest-state fixtures.
  */
-export type Src = 'website' | 'upload' | 'both';
+export type Src = 'website' | 'upload' | 'both' | 'model';
 
 export interface ULine {
   label: string;
