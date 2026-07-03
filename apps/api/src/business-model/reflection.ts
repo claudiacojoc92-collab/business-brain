@@ -113,3 +113,23 @@ export function buildInferredLines(inferredPersisted: EvidenceFragment[]): Refle
   }
   return lines;
 }
+
+/**
+ * BEAT 1 (upload) — grounded observed lines from uploaded documents. Each line traces to its
+ * upload unit fragment and names the document + location ("from slide 7 of Pitch-Deck.pdf"),
+ * so provenance is the most trust-building in the product (§8). Reads unit fragments only
+ * (blocks are resolution-only). Traceable by construction; nothing untraceable renders.
+ */
+export function buildUploadObservedLines(uploadObserved: EvidenceFragment[]): ReflectionLine[] {
+  const units = uploadObserved.filter((f) => f.confidenceKind === 'observed' && f.source === 'upload' && f.payload?.['kind'] !== 'block');
+  const lines: ReflectionLine[] = [];
+  for (const f of units.slice(0, 6)) {
+    const text = str(f, 'text');
+    if (!text) continue;
+    const doc = f.payload?.['sourceDocument'] as { filename?: string } | undefined;
+    const anchor = f.payload?.['anchor'] as { label?: string } | undefined;
+    const where = [doc?.filename, anchor?.label].filter(Boolean).join(' · ');
+    lines.push({ label: where || 'From your document', text: `From your document: ${snippet(text)}`, kind: 'observed', fragmentIds: [f.id] });
+  }
+  return lines;
+}
