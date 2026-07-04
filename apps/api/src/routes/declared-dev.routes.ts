@@ -47,6 +47,7 @@ export function registerDeclaredDevRoutes(server: FastifyInstance): void {
         onProgress: (e) => send('reading', e),
         onFirstReflection: (b) => send('observed', b),
         onInferredLines: (l) => send('inferred', l),
+        onWhatMatters: (w) => send('matters', w), // Capability C v1 — ranked grounded tensions
       });
       send('done', { state: result.state, timing: result.timing, resolution: result.resolution, fieldsCaptured: result.fieldsCaptured });
     } catch (e) {

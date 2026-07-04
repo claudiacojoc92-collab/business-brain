@@ -18,6 +18,7 @@ import {
   buildObservedReflection, buildUploadObservedLines, buildGoogleObservedLines,
   buildDeclaredLines, buildInferredLines, type ReflectionLine,
 } from './reflection';
+import { buildWhatMattersNow, type WhatMattersItem } from './what-matters';
 
 const INSIGHT_KEYS: ReadonlyArray<keyof BusinessModel> = [
   'contradictions', 'blindSpots', 'hiddenStrengths', 'hiddenWeaknesses', 'positioningOpportunities',
@@ -39,6 +40,7 @@ export interface DeclaredSliceResult {
   state: DeclaredState;
   beat1: DeclaredBeat1;
   inferredLines: ReflectionLine[];
+  whatMattersNow: WhatMattersItem[]; // Capability C v1 — ranked grounded declared-vs-observed tensions
   timing: { captureMs: number; timeToFirstReflectionMs: number; recomputeMs: number; fullMs: number };
   resolution: { insightsTotal: number; resolved: number; rejected: number; ceilingRejected: number; hitRate: number };
   fieldsCaptured: number;
@@ -58,6 +60,7 @@ export async function runDeclaredMagicMoment(args: {
   onProgress?: (e: DeclaredProgress) => void;
   onFirstReflection?: (b: DeclaredBeat1) => void;
   onInferredLines?: (l: ReflectionLine[]) => void;
+  onWhatMatters?: (w: WhatMattersItem[]) => void; // Capability C v1
 }): Promise<DeclaredSliceResult> {
   const t0 = Date.now();
   args.onProgress?.({ phase: 'reading', message: 'Taking in what you told me…' });
@@ -67,7 +70,7 @@ export async function runDeclaredMagicMoment(args: {
   const captureMs = Date.now() - t0;
 
   const base = (over: Partial<DeclaredSliceResult>): DeclaredSliceResult => ({
-    state: 'empty', beat1: { state: 'empty', declaredLines: [], observedLines: [], handoff: null, message: null }, inferredLines: [],
+    state: 'empty', beat1: { state: 'empty', declaredLines: [], observedLines: [], handoff: null, message: null }, inferredLines: [], whatMattersNow: [],
     timing: { captureMs, timeToFirstReflectionMs: Date.now() - t0, recomputeMs: 0, fullMs: Date.now() - t0 },
     resolution: { insightsTotal: 0, resolved: 0, rejected: 0, ceilingRejected: 0, hitRate: 0 },
     fieldsCaptured: cap.fields, ...over,
@@ -97,13 +100,20 @@ export async function runDeclaredMagicMoment(args: {
   const tR = Date.now();
   const rec = await recomputeFromSources({ founderId: args.founderId, repo: args.repo, anthropicApiKey: args.anthropicApiKey, model: args.model });
   const recomputeMs = Date.now() - tR;
-  const inferred = (await args.repo.findByFounder(args.founderId)).filter((f: EvidenceFragment) => f.confidenceKind === 'inferred');
+  const afterRec = await args.repo.findByFounder(args.founderId);
+  const inferred = afterRec.filter((f: EvidenceFragment) => f.confidenceKind === 'inferred');
   const inferredLines = buildInferredLines(inferred);
   args.onInferredLines?.(inferredLines);
+
+  // Capability C v1 — rank the grounded declared-vs-observed tensions among the inferred claims.
+  // Fail-closed inside buildWhatMattersNow: only tension claims spanning declared + observed rank.
+  const whatMattersNow = buildWhatMattersNow(inferred, afterRec);
+  args.onWhatMatters?.(whatMattersNow);
+
   const insightsTotal = INSIGHT_KEYS.reduce((n, k) => n + ((rec.model[k] as unknown[] | undefined)?.length ?? 0), 0);
 
   return base({
-    state: 'synced', beat1, inferredLines,
+    state: 'synced', beat1, inferredLines, whatMattersNow,
     timing: { captureMs, timeToFirstReflectionMs, recomputeMs, fullMs: Date.now() - t0 },
     resolution: { insightsTotal, resolved: rec.persisted, rejected: rec.rejected.length, ceilingRejected: rec.ceilingRejected.length, hitRate: insightsTotal > 0 ? rec.persisted / insightsTotal : 0 },
   });
