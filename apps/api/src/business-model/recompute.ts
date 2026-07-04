@@ -239,11 +239,11 @@ export async function recomputeFromWebsite(args: {
 // ── M2.2: recompute ACROSS sources (website + upload), shared path, engine unchanged ─────────
 const ENGINE_MULTI_CAP = 8;
 
-/** Select high-signal engine input across sources. Upload AND google units are fresh, founder-
- * specific PRIVATE evidence → included first (both authenticated and unauthenticated sources are
- * first-class, ADR-009 Inv 1), then high-signal website pages. Page-scoped; blocks stay
- * resolution-only. */
-const FRESH_SOURCES = ['upload', 'google'];
+/** Select high-signal engine input across sources. Upload docs, granted Google files, AND declared
+ * answers (source 'founder', Capability B) are all fresh, founder-specific evidence → included
+ * first (authenticated and unauthenticated sources are first-class, ADR-009 Inv 1), then high-signal
+ * website pages. Page-scoped; blocks stay resolution-only. */
+const FRESH_SOURCES = ['upload', 'google', 'founder'];
 function selectForEngineMulti(pageFragments: EvidenceFragment[], cap = ENGINE_MULTI_CAP): EvidenceFragment[] {
   const fresh = pageFragments.filter((f) => FRESH_SOURCES.includes(f.source));
   const web = pageFragments.filter((f) => !FRESH_SOURCES.includes(f.source));
@@ -258,10 +258,11 @@ export interface CeilingViolation { statement: string; reason: string }
 /**
  * EPISTEMIC CEILING (spec §5.2 / §13.4). External-reality claims are the engine's marketContext
  * class — prior knowledge (i-know), never founder evidence. Enforce: a marketContext item may
- * NOT carry an evidence chain (citing an upload or website fragment would launder a founder's
- * private document into a claim about the outside world). Such items are rejected. Founder-
- * business insights (the insight categories) may cite upload evidence — that is a legitimate
- * inference from the founder's own document, not an external-reality claim.
+ * NOT carry an evidence chain (citing a website, upload, OR declared fragment would launder a
+ * founder's private evidence into a claim about the outside world). Such items are rejected.
+ * Founder-business insights (the insight categories) MAY cite upload/declared evidence — that is a
+ * legitimate inference from the founder's own document or stated intent, not an external-reality
+ * claim. (Capability B: "we're the market leader" is declared intent, never a market fact.)
  */
 export function enforceEpistemicCeiling(model: BusinessModel): CeilingViolation[] {
   const mc = (model.marketContext ?? []) as Array<{ statement?: string; evidenceChain?: unknown[] }>;
@@ -270,7 +271,7 @@ export function enforceEpistemicCeiling(model: BusinessModel): CeilingViolation[
     const chain = Array.isArray(item.evidenceChain) ? item.evidenceChain : [];
     if (chain.length > 0) violations.push({
       statement: String(item.statement ?? ''),
-      reason: 'marketContext (external reality) must be prior knowledge — may not cite a founder evidence chain (upload or website); rejected (epistemic ceiling)',
+      reason: 'marketContext (external reality) must be prior knowledge — may not cite a founder evidence chain (website, upload, or declared); rejected (epistemic ceiling)',
     });
   }
   return violations;
@@ -287,8 +288,14 @@ export async function recomputeFromSources(args: {
   founderId: string; repo: IEvidenceRepository; anthropicApiKey: string; model?: string;
 }): Promise<MultiSourceResult> {
   const engine = await import('@bb/business-model-engine');
-  const observed = await args.repo.findObserved(args.founderId); // ALL sources
-  const pageFragments = observed.filter((f) => f.payload?.['kind'] !== 'block');
+  const observed = await args.repo.findObserved(args.founderId); // ALL observed sources
+  // Capability B: declared intent (the founder's answers) fuses on the SAME path — a DISTINCT kind,
+  // never collapsed into observed. Each declared fragment's conversation:// source label matches the
+  // engine's DECLARED_PATTERN (the `declared` line below), so the FROZEN engine attributes it as the
+  // founder speaking and keeps declared vs observed distinct (FieldSchema.confidenceKind).
+  const declaredFrags = (await args.repo.findByFounder(args.founderId)).filter((f) => f.confidenceKind === 'declared');
+  const evidence = [...observed, ...declaredFrags];
+  const pageFragments = evidence.filter((f) => f.payload?.['kind'] !== 'block');
   const pieces = shapePieces(selectForEngineMulti(pageFragments));
   const sourceNames = [...new Set(pieces.map((p) => p.source))];
   const declared = sourceNames.filter((s) => engine.DECLARED_PATTERN.test(s));
@@ -306,8 +313,8 @@ export async function recomputeFromSources(args: {
   const text = resp.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('\n');
   const { model } = engine.validateModel(extractJson(text), sourceNames);
 
-  const ceilingRejected = enforceEpistemicCeiling(model); // drop laundered external-reality claims
-  const { toPersist, rejected } = resolveDerivedFrom(args.founderId, model, observed); // fail-closed, spans sources
+  const ceilingRejected = enforceEpistemicCeiling(model); // drop laundered external-reality claims (declared included)
+  const { toPersist, rejected } = resolveDerivedFrom(args.founderId, model, evidence); // fail-closed, spans observed + declared
   const { stored, deduped } = await args.repo.appendMany(toPersist);
   return { model, persisted: stored, deduped, rejected, observedCount: observed.length, enginePages: sourceNames, ceilingRejected };
 }
