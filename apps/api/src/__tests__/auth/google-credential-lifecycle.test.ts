@@ -200,6 +200,11 @@ describe('Google OAuth credential lifecycle — Phase 1 gate', () => {
     }
     expect(fakeDb.captured.length).toBeGreaterThan(0); // it really did store something
 
+    // (b) the evidence path is unreachable without a wired repository — this OAuth-only connector
+    //     has none, so no fragment (hence no token) can be written. (Phase-2 evidence containment
+    //     is asserted separately in google-read.test.ts against real emitted fragments.)
+    await expect(conn.normalize(FID, [])).rejects.toThrow(/repository/);
+
     // (c) founder-facing outputs contain no token material
     for (const out of founderFacing) {
       expect(out).not.toContain(TOKEN);
