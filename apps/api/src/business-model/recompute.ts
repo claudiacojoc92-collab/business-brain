@@ -243,7 +243,7 @@ const ENGINE_MULTI_CAP = 8;
  * answers (source 'founder', Capability B) are all fresh, founder-specific evidence → included
  * first (authenticated and unauthenticated sources are first-class, ADR-009 Inv 1), then high-signal
  * website pages. Page-scoped; blocks stay resolution-only. */
-const FRESH_SOURCES = ['upload', 'google', 'founder'];
+const FRESH_SOURCES = ['upload', 'google', 'google-calendar', 'founder'];
 function selectForEngineMulti(pageFragments: EvidenceFragment[], cap = ENGINE_MULTI_CAP): EvidenceFragment[] {
   const fresh = pageFragments.filter((f) => FRESH_SOURCES.includes(f.source));
   const web = pageFragments.filter((f) => !FRESH_SOURCES.includes(f.source));
