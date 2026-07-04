@@ -9,6 +9,7 @@ import { HistoryPage } from './pages/HistoryPage';
 import { ConnectPreviewPage } from './connect/ConnectPreviewPage';
 import { UploadPreviewPage } from './upload/UploadPreviewPage';
 import { GooglePreviewPage } from './google/GooglePreviewPage';
+import { DeclaredPreviewPage } from './declared/DeclaredPreviewPage';
 
 /**
  * Route guard: redirect based on founder status.
@@ -123,6 +124,10 @@ export function App() {
           {/* Dev-only: Google Source (authenticated) connect + read preview (not registered in prod). */}
           {import.meta.env.DEV && (
             <Route path="/google-preview" element={<GooglePreviewPage />} />
+          )}
+          {/* Dev-only: Capability B v1 declared-intent capture preview (not registered in prod). */}
+          {import.meta.env.DEV && (
+            <Route path="/declared-preview" element={<DeclaredPreviewPage />} />
           )}
 
           {/* Fallback */}

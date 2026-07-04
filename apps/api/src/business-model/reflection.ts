@@ -18,7 +18,7 @@ import type { ConnectionState } from '../connectors/website/website.connector';
 export interface ReflectionLine {
   label: string;
   text: string;
-  kind: 'observed' | 'inferred';
+  kind: 'observed' | 'inferred' | 'declared'; // declared = the founder told us (Capability B)
   fragmentIds: string[]; // provenance — always non-empty for a rendered line
 }
 
@@ -150,6 +150,24 @@ export function buildGoogleObservedLines(googleObserved: EvidenceFragment[]): Re
     const anchor = f.payload?.['anchor'] as { label?: string } | undefined;
     const where = [doc?.filename, anchor?.label].filter(Boolean).join(' · ');
     lines.push({ label: where || 'From your Google doc', text: `From your Google doc: ${snippet(text)}`, kind: 'observed', fragmentIds: [f.id] });
+  }
+  return lines;
+}
+
+/**
+ * DECLARED (Capability B) — the founder's stated intent, attributed as DECLARED, never observed.
+ * Reads declared unit fragments (source 'founder'); renders "You told me: …" with kind 'declared'
+ * (the chip reads "you said", NOT "your website says" / "your business is"). This is the honesty
+ * line of the moat: declared is what the founder asserted, kept distinct from what we perceived.
+ */
+export function buildDeclaredLines(declared: EvidenceFragment[]): ReflectionLine[] {
+  const units = declared.filter((f) => f.confidenceKind === 'declared' && f.payload?.['kind'] !== 'block');
+  const lines: ReflectionLine[] = [];
+  for (const f of units.slice(0, 6)) {
+    const text = str(f, 'text');
+    if (!text) continue;
+    const label = String(f.payload?.['label'] ?? 'You said');
+    lines.push({ label, text: `You told me: ${snippet(text)}`, kind: 'declared', fragmentIds: [f.id] });
   }
   return lines;
 }
