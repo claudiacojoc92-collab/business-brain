@@ -133,3 +133,23 @@ export function buildUploadObservedLines(uploadObserved: EvidenceFragment[]): Re
   }
   return lines;
 }
+
+/**
+ * BEAT 1 (Google) — grounded observed lines from granted Google files. Mirrors the upload builder;
+ * each line traces to its google unit fragment and names the document + location ("from your
+ * 'Q3 Strategy' doc"). Reads unit fragments only (blocks are resolution-only). Traceable by
+ * construction; the doc identity is the founder's private working document (visibility:private).
+ */
+export function buildGoogleObservedLines(googleObserved: EvidenceFragment[]): ReflectionLine[] {
+  const units = googleObserved.filter((f) => f.confidenceKind === 'observed' && f.source === 'google' && f.payload?.['kind'] !== 'block');
+  const lines: ReflectionLine[] = [];
+  for (const f of units.slice(0, 6)) {
+    const text = str(f, 'text');
+    if (!text) continue;
+    const doc = f.payload?.['sourceDocument'] as { filename?: string } | undefined;
+    const anchor = f.payload?.['anchor'] as { label?: string } | undefined;
+    const where = [doc?.filename, anchor?.label].filter(Boolean).join(' · ');
+    lines.push({ label: where || 'From your Google doc', text: `From your Google doc: ${snippet(text)}`, kind: 'observed', fragmentIds: [f.id] });
+  }
+  return lines;
+}
