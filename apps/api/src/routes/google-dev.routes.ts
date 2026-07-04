@@ -6,6 +6,7 @@ import { GoogleConnector } from '../connectors/google/google.connector';
 import { GoogleDriveClient } from '../connectors/google/drive-client';
 import type { GoogleOAuthConfig } from '../connectors/google/google-oauth';
 import { runGoogleMagicMoment } from '../business-model/google-magic-moment.service';
+import { runCalendarMagicMoment } from '../business-model/calendar-magic-moment.service';
 import { DEV_FOUNDER_ID } from '../connectors/website/dev-founder';
 import { sseFrame } from './sse';
 
@@ -133,6 +134,36 @@ export function registerGoogleDevRoutes(server: FastifyInstance): void {
         onInferredLines: (l) => send('inferred', l),
       });
       send('done', { state: result.state, timing: result.timing, resolution: result.resolution, error: result.error });
+    } catch (e) {
+      send('error', { message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      reply.raw.end();
+    }
+  });
+
+  // Calendar Source (behavior dimension) → temporal observed evidence → recompute → "what matters
+  // now" (the time-vs-intent tension), streamed. Reuses the SAME Google credential (incremental
+  // calendar scope). Preserves website/upload/google/declared evidence for cross-source fusion.
+  server.post('/dev/google/read-calendar', async (_request, reply) => {
+    const c = connector; const r = repo;
+    if (!c || !r) { await reply.code(503).send({ error: 'google oauth not configured' }); return; }
+
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive', 'x-accel-buffering': 'no',
+    });
+    const send = (event: string, data: unknown) => reply.raw.write(sseFrame(event, data));
+    try {
+      await r.deleteBySource(DEV_FOUNDER_ID, 'google-calendar'); // fresh calendar read (temporal evidence re-derived)
+      await r.deleteBySource(DEV_FOUNDER_ID, 'business-model');  // recompute reruns; website/upload/google/declared preserved
+      const result = await runCalendarMagicMoment({
+        founderId: DEV_FOUNDER_ID, conn: c, repo: r, anthropicApiKey: apiKey,
+        onProgress: (e) => send('reading', e),
+        onFirstReflection: (b) => send('observed', b),
+        onInferredLines: (l) => send('inferred', l),
+        onWhatMatters: (w) => send('matters', w), // the time-vs-intent tension
+      });
+      send('done', { state: result.state, timing: result.timing, resolution: result.resolution, eventsRead: result.eventsRead, error: result.error });
     } catch (e) {
       send('error', { message: e instanceof Error ? e.message : String(e) });
     } finally {
