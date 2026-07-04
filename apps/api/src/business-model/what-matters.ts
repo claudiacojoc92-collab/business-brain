@@ -20,7 +20,7 @@ import type { EvidenceFragment } from '@bb/domain';
 const TENSION_RANK: Record<string, number> = { contradictions: 0, blindSpots: 1, hiddenWeaknesses: 2 };
 /** Declared fields whose tension is most central (goal/direction) — higher centrality (reversible default). */
 const CENTRAL_FIELDS = new Set(['direction', 'target']);
-const OBSERVED_SOURCES = new Set(['website', 'upload', 'google']);
+const OBSERVED_SOURCES = new Set(['website', 'upload', 'google', 'google-calendar']);
 
 export interface WhatMattersItem {
   rank: number;                  // 1 = most prominent

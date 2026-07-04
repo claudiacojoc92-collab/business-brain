@@ -23,8 +23,13 @@ import {
 } from './google-oauth';
 import { GoogleDriveClient, type DriveClient } from './drive-client';
 import { extractGoogleFile, type GoogleFileResult, type GoogleFileType } from './google-extract';
+import { GoogleCalendarClient, type CalendarClient } from './calendar-client';
+import { buildCalendarEvidence, CALENDAR_SOURCE } from './calendar-temporal';
 
 export const GOOGLE_PROVIDER = 'google';
+
+/** Default calendar read window (days) — reversible; within the spec's 30–90 range. */
+const CALENDAR_WINDOW_DAYS = 60;
 
 export interface Capabilities { read: boolean; insights: boolean; publish: boolean }
 export type GoogleConnectionState = 'disconnected' | 'connected';
@@ -42,7 +47,10 @@ export type ClassifiedGoogleFile = GoogleFileResult & { classified: ClassifiedUn
 export interface GoogleConnectorOptions {
   repo?: IEvidenceRepository;
   drive?: DriveClient;
+  calendar?: CalendarClient;
 }
+
+export interface CalendarSyncResult { eventsRead: number; fragmentsStored: number; fragmentsDeduped: number; hasPattern: boolean }
 
 export class GoogleConnector {
   constructor(
@@ -60,6 +68,7 @@ export class GoogleConnector {
     return this.opts.repo;
   }
   private driveClient(): DriveClient { return this.opts.drive ?? new GoogleDriveClient(); }
+  private calendarClient(): CalendarClient { return this.opts.calendar ?? new GoogleCalendarClient(); }
 
   // ── OAuth lifecycle (Phase 1, unchanged) ─────────────────────────────────────────────────────
 
@@ -105,7 +114,10 @@ export class GoogleConnector {
     const tok = cred?.refreshToken ?? cred?.accessToken;
     if (tok) { try { await revokeToken(this.oauth, tok); } catch { /* local delete authoritative */ } }
     await this.credentials.delete(founderId, GOOGLE_PROVIDER);
-    if (this.opts.repo) await this.opts.repo.deleteBySource(founderId, GOOGLE_PROVIDER); // ADR-009 Inv 5: disconnect deletes evidence
+    if (this.opts.repo) {
+      await this.opts.repo.deleteBySource(founderId, GOOGLE_PROVIDER);   // ADR-009 Inv 5: disconnect deletes evidence
+      await this.opts.repo.deleteBySource(founderId, CALENDAR_SOURCE);   // …including the Calendar Source (same credential)
+    }
   }
 
   // ── Evidence path (Phase 2) — connector contract; emits evidence only, no engine ─────────────
@@ -125,6 +137,25 @@ export class GoogleConnector {
       }
     }
     return out;
+  }
+
+  // ── Calendar Source (behavior dimension) — same credential, source 'google-calendar' ─────────
+
+  /**
+   * Read the founder's primary-calendar timed events over a recent window and emit TEMPORAL
+   * `observed` evidence as time-allocation patterns (calendar-temporal). Reuses the proven access-
+   * token lifecycle; emits evidence only — NO engine, NO recompute (that is the service). Fail
+   * closed: no events → no fragments. Same honesty gate; source 'google-calendar', calendar:// URI.
+   */
+  async syncCalendar(founderId: string, opts: { windowDays?: number; now?: Date } = {}): Promise<CalendarSyncResult> {
+    const windowDays = opts.windowDays ?? CALENDAR_WINDOW_DAYS;
+    const now = opts.now ?? new Date();
+    const timeMin = new Date(now.getTime() - windowDays * 86_400_000);
+    const token = await this.getAccessToken(founderId);
+    const events = await this.calendarClient().listEvents(token, timeMin.toISOString(), now.toISOString());
+    const fragments = buildCalendarEvidence(founderId, events, { windowDays, occurredAt: now });
+    const { stored, deduped } = fragments.length ? await this.repository().appendMany(fragments) : { stored: 0, deduped: 0 };
+    return { eventsRead: events.length, fragmentsStored: stored, fragmentsDeduped: deduped, hasPattern: fragments.length > 0 };
   }
 
   /** normalize: classify each unit — redundancy vs existing observed reality (reuses M2.2). */

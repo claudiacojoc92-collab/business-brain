@@ -155,6 +155,24 @@ export function buildGoogleObservedLines(googleObserved: EvidenceFragment[]): Re
 }
 
 /**
+ * BEAT 1 (Calendar) — grounded observed line from the temporal allocation evidence (behavior
+ * dimension). Reads the calendar UNIT fragment (source 'google-calendar', kind 'calendar-allocation';
+ * blocks are resolution-only) and renders the measured allocation prose as an OBSERVED line ("Your
+ * calendar shows…"). Traceable by construction; this is observed BEHAVIOR (how time was spent), never
+ * a claim about what the business is.
+ */
+export function buildCalendarObservedLines(calendarObserved: EvidenceFragment[]): ReflectionLine[] {
+  const units = calendarObserved.filter((f) => f.confidenceKind === 'observed' && f.source === 'google-calendar' && f.payload?.['kind'] === 'calendar-allocation');
+  const lines: ReflectionLine[] = [];
+  for (const f of units.slice(0, 1)) { // one allocation summary per window
+    const text = str(f, 'text');
+    if (!text) continue;
+    lines.push({ label: 'How your time is spent', text: `Your calendar shows: ${snippet(text, 400)}`, kind: 'observed', fragmentIds: [f.id] });
+  }
+  return lines;
+}
+
+/**
  * DECLARED (Capability B) — the founder's stated intent, attributed as DECLARED, never observed.
  * Reads declared unit fragments (source 'founder'); renders "You told me: …" with kind 'declared'
  * (the chip reads "you said", NOT "your website says" / "your business is"). This is the honesty
