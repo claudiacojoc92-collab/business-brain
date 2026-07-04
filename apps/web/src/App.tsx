@@ -8,6 +8,7 @@ import { ReviewPage } from './pages/ReviewPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { ConnectPreviewPage } from './connect/ConnectPreviewPage';
 import { UploadPreviewPage } from './upload/UploadPreviewPage';
+import { GooglePreviewPage } from './google/GooglePreviewPage';
 
 /**
  * Route guard: redirect based on founder status.
@@ -118,6 +119,10 @@ export function App() {
           {/* Dev-only: M2.2 Upload Connector reflection preview (not registered in prod). */}
           {import.meta.env.DEV && (
             <Route path="/upload-preview" element={<UploadPreviewPage />} />
+          )}
+          {/* Dev-only: Google Source (authenticated) connect + read preview (not registered in prod). */}
+          {import.meta.env.DEV && (
+            <Route path="/google-preview" element={<GooglePreviewPage />} />
           )}
 
           {/* Fallback */}

@@ -239,15 +239,18 @@ export async function recomputeFromWebsite(args: {
 // ── M2.2: recompute ACROSS sources (website + upload), shared path, engine unchanged ─────────
 const ENGINE_MULTI_CAP = 8;
 
-/** Select high-signal engine input across sources. Upload units are fresh founder-specific
- * evidence → included first, then high-signal website pages. Page-scoped; blocks stay resolution-only. */
+/** Select high-signal engine input across sources. Upload AND google units are fresh, founder-
+ * specific PRIVATE evidence → included first (both authenticated and unauthenticated sources are
+ * first-class, ADR-009 Inv 1), then high-signal website pages. Page-scoped; blocks stay
+ * resolution-only. */
+const FRESH_SOURCES = ['upload', 'google'];
 function selectForEngineMulti(pageFragments: EvidenceFragment[], cap = ENGINE_MULTI_CAP): EvidenceFragment[] {
-  const uploads = pageFragments.filter((f) => f.source === 'upload');
-  const web = pageFragments.filter((f) => f.source !== 'upload');
+  const fresh = pageFragments.filter((f) => FRESH_SOURCES.includes(f.source));
+  const web = pageFragments.filter((f) => !FRESH_SOURCES.includes(f.source));
   const typeOf = (f: EvidenceFragment) => String(f.payload?.['pageType'] ?? 'other');
   const primaryWeb = web.filter((f) => HIGH_SIGNAL_TYPES.includes(typeOf(f)));
   const restWeb = web.filter((f) => !HIGH_SIGNAL_TYPES.includes(typeOf(f)));
-  return [...uploads, ...primaryWeb, ...restWeb].slice(0, cap);
+  return [...fresh, ...primaryWeb, ...restWeb].slice(0, cap);
 }
 
 export interface CeilingViolation { statement: string; reason: string }
