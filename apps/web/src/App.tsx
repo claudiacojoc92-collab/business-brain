@@ -10,6 +10,7 @@ import { ConnectPreviewPage } from './connect/ConnectPreviewPage';
 import { UploadPreviewPage } from './upload/UploadPreviewPage';
 import { GooglePreviewPage } from './google/GooglePreviewPage';
 import { DeclaredPreviewPage } from './declared/DeclaredPreviewPage';
+import { CalendarPreviewPage } from './calendar/CalendarPreviewPage';
 
 /**
  * Route guard: redirect based on founder status.
@@ -128,6 +129,10 @@ export function App() {
           {/* Dev-only: Capability B v1 declared-intent capture preview (not registered in prod). */}
           {import.meta.env.DEV && (
             <Route path="/declared-preview" element={<DeclaredPreviewPage />} />
+          )}
+          {/* Dev-only: Calendar Source (behavior dimension) connect + read preview (not registered in prod). */}
+          {import.meta.env.DEV && (
+            <Route path="/calendar-preview" element={<CalendarPreviewPage />} />
           )}
 
           {/* Fallback */}
