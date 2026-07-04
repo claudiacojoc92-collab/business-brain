@@ -21,6 +21,7 @@ const idChip: React.CSSProperties = { fontFamily: 'var(--sans)', fontSize: '0.66
 
 interface Field { key: string; label: string; question: string }
 interface BLine { label: string; text: string; kind: 'observed' | 'inferred' | 'declared'; fragmentIds: string[] }
+interface WMItem { rank: number; category: string; statement: string; stakes: string; fragmentIds: string[]; declaredFragmentIds: string[]; observedFragmentIds: string[] }
 type Phase = 'idle' | 'reading' | 'beat1' | 'deepening' | 'beat2' | 'ended';
 
 function Badge({ kind }: { kind: BLine['kind'] }) {
@@ -52,6 +53,7 @@ export function DeclaredPreviewPage() {
   const [declaredLines, setDeclaredLines] = useState<BLine[]>([]);
   const [observedLines, setObservedLines] = useState<BLine[]>([]);
   const [inferred, setInferred] = useState<BLine[]>([]);
+  const [whatMatters, setWhatMatters] = useState<WMItem[]>([]);
   const [handoff, setHandoff] = useState<string | null>(null);
   const [emptyMsg, setEmptyMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -64,7 +66,7 @@ export function DeclaredPreviewPage() {
 
   const submit = useCallback(async () => {
     const payload = fields.map((f) => ({ field: f.key, text: (answers[f.key] ?? '').trim() })).filter((a) => a.text);
-    setErr(null); setReading([]); setDeclaredLines([]); setObservedLines([]); setInferred([]); setHandoff(null); setEmptyMsg(null);
+    setErr(null); setReading([]); setDeclaredLines([]); setObservedLines([]); setInferred([]); setWhatMatters([]); setHandoff(null); setEmptyMsg(null);
     setPhase('reading');
     try {
       const res = await fetch('/dev/declared/answer', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ answers: payload }) });
@@ -82,6 +84,7 @@ export function DeclaredPreviewPage() {
             else { setEmptyMsg(b.message); setPhase('ended'); }
           }
           else if (ev === 'inferred') { setInferred(data as BLine[]); setPhase('beat2'); }
+          else if (ev === 'matters') { setWhatMatters(data as WMItem[]); }
           else if (ev === 'done') { setPhase('ended'); }
           else if (ev === 'error') { setErr((data as { message: string }).message); setPhase('ended'); }
         }
@@ -116,6 +119,26 @@ export function DeclaredPreviewPage() {
 
         {(phase === 'beat1' || phase === 'deepening' || phase === 'beat2' || phase === 'ended') && declaredLines.length > 0 && (
           <div>
+            {whatMatters.length > 0 && (
+              <div style={{ marginBottom: 30 }}>
+                <div style={{ ...kicker, color: 'var(--gold)' }}>What matters now</div>
+                {whatMatters.map((w, i) => (
+                  <div key={`wm-${w.rank}`} style={i === 0
+                    ? { background: 'var(--surface)', border: '1px solid var(--gold-soft)', borderRadius: 12, padding: '20px 22px', marginBottom: 14, boxShadow: 'var(--shadow-soft)' }
+                    : { borderLeft: '2px solid var(--line-2)', padding: '4px 0 4px 14px', marginBottom: 12, opacity: 0.92 }}>
+                    <div style={{ ...meta, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--gold-soft)', marginBottom: 6 }}>{w.rank === 1 ? 'Highest-stakes tension' : `Tension #${w.rank}`} · {w.category}</div>
+                    <div style={{ ...say, fontSize: i === 0 ? '1.3rem' : '1.1rem' }}>{w.statement}</div>
+                    <div style={{ ...meta, fontStyle: 'italic', color: 'var(--gold)', marginTop: 6 }}>{w.stakes}</div>
+                    <div style={{ marginTop: 8 }}>
+                      <span style={{ ...idChip, color: 'var(--gold)', borderColor: 'var(--gold-soft)' }}>you said</span>
+                      {w.declaredFragmentIds.map((id) => <span key={id} style={idChip} title={`declared fragment ${id}`}>{id.slice(0, 10)}…</span>)}
+                      <span style={{ ...idChip, color: 'var(--ink-3)', marginLeft: 6 }}>observed</span>
+                      {w.observedFragmentIds.map((id) => <span key={id} style={idChip} title={`observed fragment ${id}`}>{id.slice(0, 10)}…</span>)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             <div style={kicker}>What you told me</div>
             {declaredLines.map((l) => <Line key={`d-${l.label}`} line={l} />)}
             {observedLines.length > 0 && <div style={{ ...kicker, color: 'var(--ink-3)', marginTop: 18 }}>What I&apos;ve already seen</div>}
