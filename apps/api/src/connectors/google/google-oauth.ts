@@ -17,9 +17,15 @@ export const GOOGLE_AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/aut
 export const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 export const GOOGLE_REVOKE_ENDPOINT = 'https://oauth2.googleapis.com/revoke';
 
-/** drive.file = per-file access granted via the Picker; NOT drive.readonly (CASA). */
+/**
+ * drive.file = per-file access granted via the Picker; NOT drive.readonly (CASA).
+ * calendar.events.readonly = the Calendar Source (behavior dimension) — the NARROWEST scope that
+ * reads events (not calendar.readonly, which also exposes calendar lists/settings). Added to the
+ * existing Google connector → founders re-consent once (incremental auth on the proven flow).
+ */
 export const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/drive.file',
+  'https://www.googleapis.com/auth/calendar.events.readonly',
   'openid',
   'email',
   'profile',
