@@ -1,10 +1,13 @@
 import type { FastifyInstance } from 'fastify';
-import { createKyselyClient, FieldEncryptor } from '@bb/infrastructure';
+import { createKyselyClient, FieldEncryptor, PgEvidenceRepository } from '@bb/infrastructure';
 import { PgCredentialStore } from '../auth/pg-credential-store';
 import { PendingAuthStore } from '../auth/oauth';
 import { GoogleConnector } from '../connectors/google/google.connector';
+import { GoogleDriveClient } from '../connectors/google/drive-client';
 import type { GoogleOAuthConfig } from '../connectors/google/google-oauth';
+import { runGoogleMagicMoment } from '../business-model/google-magic-moment.service';
 import { DEV_FOUNDER_ID } from '../connectors/website/dev-founder';
+import { sseFrame } from './sse';
 
 /**
  * DEV-ONLY routes for the Google authenticated Source — Phase 1 (OAuth credential lifecycle).
@@ -12,8 +15,8 @@ import { DEV_FOUNDER_ID } from '../connectors/website/dev-founder';
  * founder id; under /dev/*.
  *
  * These exercise the credential lifecycle only — connect (begin OAuth), callback (exchange +
- * store encrypted), status (boolean), picker-token (short-lived access token), refresh, disconnect
- * (revoke + delete). The evidence read route arrives with the evidence path (next commits).
+ * store encrypted), status (boolean), refresh, disconnect (revoke + delete). NO evidence path,
+ * NO engine, NO reflection (that is Phase 2, past the gate).
  *
  * Secrets: client id/secret + the 32-byte encryption key are read from env (boolean presence
  * only, never echoed). If unconfigured, the routes answer 503 rather than crash boot.
@@ -25,13 +28,16 @@ export function registerGoogleDevRoutes(server: FastifyInstance): void {
   const encKeyHex = process.env['GOOGLE_OAUTH_ENCRYPTION_KEY'] ?? '';
   const configured = Boolean(clientId && clientSecret && encKeyHex);
 
+  const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
   // Built once so the in-memory PendingAuthStore (state→verifier) survives connect→callback.
   let connector: GoogleConnector | null = null;
+  let repo: PgEvidenceRepository | null = null;
   if (configured) {
     const db = createKyselyClient(process.env['DATABASE_URL'] ?? '');
+    repo = new PgEvidenceRepository(db);
     const store = new PgCredentialStore(db, FieldEncryptor.fromHexKey(encKeyHex));
     const oauth: GoogleOAuthConfig = { clientId, clientSecret, redirectUri };
-    connector = new GoogleConnector(store, oauth, new PendingAuthStore());
+    connector = new GoogleConnector(store, oauth, new PendingAuthStore(), { repo, drive: new GoogleDriveClient() });
   }
 
   const requireConfigured = (reply: import('fastify').FastifyReply): GoogleConnector | null => {
@@ -73,8 +79,9 @@ export function registerGoogleDevRoutes(server: FastifyInstance): void {
 
   // Picker token: a SHORT-LIVED access token derived from the server's stored credential (refreshed
   // from the stored refresh token). The browser Picker uses THIS token, so files it grants attach
-  // to the SERVER's authorization. CONTAINMENT: only the short-lived access token is returned; the
-  // refresh token (the durable secret) NEVER leaves the server.
+  // to the SERVER's authorization — which the server read then sees (the fix for the two-
+  // authorization drive.file grant split). CONTAINMENT: only the short-lived access token is
+  // returned; the refresh token (the durable secret) NEVER leaves the server.
   server.get('/dev/google/picker-token', async (_request, reply) => {
     const c = requireConfigured(reply); if (!c) return;
     try {
@@ -96,11 +103,41 @@ export function registerGoogleDevRoutes(server: FastifyInstance): void {
     }
   });
 
-  // Disconnect: revoke at Google (best-effort) + delete local credentials.
+  // Disconnect: revoke at Google (best-effort) + delete local credentials + google evidence.
   server.post('/dev/google/disconnect', async (_request, reply) => {
     const c = requireConfigured(reply); if (!c) return;
     await c.disconnect(DEV_FOUNDER_ID);
     await reply.send({ connected: false });
+  });
+
+  // Read granted files → two-beat reflection, streamed (reuses the U+2028-safe sseFrame).
+  // Body: { fileIds: string[] } (the Picker's selection). Preserves website + upload evidence.
+  server.post('/dev/google/read', async (request, reply) => {
+    const c = connector; const r = repo;
+    if (!c || !r) { await reply.code(503).send({ error: 'google oauth not configured' }); return; }
+    const body = (request.body ?? {}) as { fileIds?: unknown };
+    const fileIds = Array.isArray(body.fileIds) ? body.fileIds.map(String) : [];
+
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive', 'x-accel-buffering': 'no',
+    });
+    const send = (event: string, data: unknown) => reply.raw.write(sseFrame(event, data));
+    try {
+      await r.deleteBySource(DEV_FOUNDER_ID, 'google');          // fresh google read
+      await r.deleteBySource(DEV_FOUNDER_ID, 'business-model');  // recompute reruns; website+upload preserved
+      const result = await runGoogleMagicMoment({
+        founderId: DEV_FOUNDER_ID, fileIds, conn: c, repo: r, anthropicApiKey: apiKey,
+        onProgress: (e) => send('reading', e),
+        onFirstReflection: (b) => send('observed', b),
+        onInferredLines: (l) => send('inferred', l),
+      });
+      send('done', { state: result.state, timing: result.timing, resolution: result.resolution, error: result.error });
+    } catch (e) {
+      send('error', { message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      reply.raw.end();
+    }
   });
 }
 
