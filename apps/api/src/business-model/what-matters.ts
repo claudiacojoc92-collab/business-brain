@@ -24,6 +24,7 @@ const OBSERVED_SOURCES = new Set(['website', 'upload', 'google', 'google-calenda
 
 export interface WhatMattersItem {
   rank: number;                  // 1 = most prominent
+  tensionId: string;             // the inferred tension fragment's id — what a founder RESPONSE grounds to (Memory v1)
   category: string;              // the tension type (contradictions / blindSpots / hiddenWeaknesses)
   statement: string;             // the engine's tension observation — C does NOT rewrite it
   stakes: string;                // C's OBSERVATION about ranking (never a prescription)
@@ -81,6 +82,7 @@ const STAKES = [
 export function buildWhatMattersNow(inferred: EvidenceFragment[], all: EvidenceFragment[], limit = 3): WhatMattersItem[] {
   return rankTensions(inferred, all).slice(0, limit).map((t, i) => ({
     rank: i + 1,
+    tensionId: t.f.id,
     category: String(t.f.payload?.['category'] ?? ''),
     statement: String(t.f.payload?.['statement'] ?? ''), // engine's observation, verbatim — C never rewrites or prescribes
     stakes: STAKES[i] ?? 'Also in tension.',
