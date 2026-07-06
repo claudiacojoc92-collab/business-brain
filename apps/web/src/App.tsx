@@ -11,6 +11,7 @@ import { UploadPreviewPage } from './upload/UploadPreviewPage';
 import { GooglePreviewPage } from './google/GooglePreviewPage';
 import { DeclaredPreviewPage } from './declared/DeclaredPreviewPage';
 import { CalendarPreviewPage } from './calendar/CalendarPreviewPage';
+import { MemoryPreviewPage } from './memory/MemoryPreviewPage';
 
 /**
  * Route guard: redirect based on founder status.
@@ -133,6 +134,10 @@ export function App() {
           {/* Dev-only: Calendar Source (behavior dimension) connect + read preview (not registered in prod). */}
           {import.meta.env.DEV && (
             <Route path="/calendar-preview" element={<CalendarPreviewPage />} />
+          )}
+          {/* Dev-only: Business Memory v1 — the C→B response loop preview (not registered in prod). */}
+          {import.meta.env.DEV && (
+            <Route path="/memory-preview" element={<MemoryPreviewPage />} />
           )}
 
           {/* Fallback */}

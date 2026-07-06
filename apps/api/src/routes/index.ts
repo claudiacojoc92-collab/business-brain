@@ -7,6 +7,7 @@ import { registerM21DevRoutes }        from './m21-dev.routes';
 import { registerM22DevRoutes }        from './m22-dev.routes';
 import { registerGoogleDevRoutes }     from './google-dev.routes';
 import { registerDeclaredDevRoutes }   from './declared-dev.routes';
+import { registerMemoryDevRoutes }     from './memory-dev.routes';
 
 /**
  * Registers all routes. Each route module is self-contained.
@@ -26,5 +27,6 @@ export async function registerRoutes(
     await registerM22DevRoutes(server);
     registerGoogleDevRoutes(server); // Google authenticated Source — Phase 1 (OAuth lifecycle)
     registerDeclaredDevRoutes(server); // Capability B v1 — declared intent capture
+    registerMemoryDevRoutes(server); // Business Memory v1 — the C→B response loop
   }
 }
