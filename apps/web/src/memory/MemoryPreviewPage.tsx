@@ -18,7 +18,20 @@ const idChip: React.CSSProperties = { fontFamily: 'var(--sans)', fontSize: '0.62
 const btn = (active: boolean): React.CSSProperties => ({ fontFamily: 'var(--sans)', fontSize: '0.82rem', fontWeight: 500, padding: '7px 12px', borderRadius: 8, marginRight: 8, marginTop: 8, cursor: 'pointer',
   border: '1px solid ' + (active ? 'var(--gold-soft)' : 'var(--line)'), background: active ? 'var(--surface)' : 'var(--paper-2)', color: active ? 'var(--gold)' : 'var(--ink-2)' });
 
-interface WMItem { rank: number; tensionId: string; category: string; statement: string; stakes: string; declaredFragmentIds: string[]; observedFragmentIds: string[]; response?: { choice: string; text: string } }
+type Mark = 'new' | 'recurring' | 'addressed' | 'resolved';
+interface WMItem { rank: number; tensionId: string; category: string; statement: string; stakes: string; declaredFragmentIds: string[]; observedFragmentIds: string[]; response?: { choice: string; text: string }; mark?: Mark; recurrenceCount?: number }
+interface FollowUp { tensionId: string; category: string; statement: string; recurrenceCount: number; framing: string; ask: string }
+const MARK_STYLE: Record<Mark, React.CSSProperties> = {
+  new:       { color: 'var(--ink-2)', background: 'var(--paper-2)', border: '1px solid var(--line)' },
+  recurring: { color: 'var(--gold)', background: 'var(--gold-bg)', border: '1px solid var(--gold-soft)' },
+  addressed: { color: 'var(--ink-3)', background: 'var(--surface)', border: '1px solid var(--line-2)' },
+  resolved:  { color: 'var(--ink-3)', background: 'var(--surface)', border: '1px solid var(--line-2)' },
+};
+function MarkBadge({ mark, count }: { mark?: Mark; count?: number }) {
+  if (!mark) return null;
+  const label = mark === 'recurring' && count && count > 1 ? `recurring ·${count}×` : mark;
+  return <span style={{ fontFamily: 'var(--sans)', fontSize: '0.6rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', borderRadius: 20, padding: '2px 9px', marginLeft: 10, ...MARK_STYLE[mark] }}>{label}</span>;
+}
 const CHOICES: Array<{ key: string; label: string }> = [
   { key: 'matters', label: 'This matters' }, { key: 'handled', label: 'Already handled' }, { key: 'context', label: "Here's the missing context" },
 ];
@@ -32,8 +45,9 @@ function TensionRow({ item, prominent }: { item: WMItem; prominent?: boolean }) 
     <div style={card}>
       <div style={{ ...meta, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--gold-soft)', marginBottom: 6 }}>
         {item.rank === 1 ? 'Highest-stakes tension' : `Tension #${item.rank}`} · {item.category}
+        <MarkBadge mark={item.mark} count={item.recurrenceCount} />
       </div>
-      <div style={{ ...say, fontSize: prominent ? '1.2rem' : '1.05rem' }}>{item.statement}</div>
+      <div style={{ ...say, fontSize: prominent ? '1.2rem' : '1.05rem', ...(item.mark === 'resolved' ? { color: 'var(--ink-3)', textDecoration: 'line-through' } : {}) }}>{item.statement}</div>
       <div style={{ ...meta, fontStyle: 'italic', color: 'var(--gold)', marginTop: 6 }}>{item.stakes}</div>
       <div style={{ marginTop: 8 }}>
         <span style={{ ...idChip, color: 'var(--gold)', borderColor: 'var(--gold-soft)' }}>you said</span>
@@ -52,6 +66,7 @@ function TensionRow({ item, prominent }: { item: WMItem; prominent?: boolean }) 
 
 export function MemoryPreviewPage() {
   const [state, setState] = useState<WMItem[]>([]);
+  const [followUp, setFollowUp] = useState<FollowUp | null>(null);
   const [before, setBefore] = useState<WMItem[]>([]);
   const [after, setAfter] = useState<WMItem[]>([]);
   const [phase, setPhase] = useState<'idle' | 'responding' | 'done'>('idle');
@@ -60,7 +75,7 @@ export function MemoryPreviewPage() {
   const [err, setErr] = useState<string | null>(null);
 
   const loadState = useCallback(async () => {
-    try { const r = await fetch('/dev/memory/state'); if (r.ok) setState(((await r.json()).whatMattersNow ?? []) as WMItem[]); } catch { /* offline */ }
+    try { const r = await fetch('/dev/memory/state' + window.location.search); if (r.ok) { const j = await r.json(); setState((j.whatMattersNow ?? []) as WMItem[]); setFollowUp((j.followUp ?? null) as FollowUp | null); } } catch { /* offline */ }
   }, []);
   useEffect(() => { void loadState(); }, [loadState]);
 
@@ -104,6 +119,15 @@ export function MemoryPreviewPage() {
         <p style={{ ...meta, fontSize: '0.85rem', color: 'var(--ink-2)', marginBottom: 22 }}>These are the tensions between what you told me and what I&apos;ve seen. Tell me where each stands.</p>
 
         {err && <div style={{ ...meta, color: 'var(--gold)', marginBottom: 14 }}>error: {err}</div>}
+
+        {phase === 'idle' && followUp && (
+          <div style={{ background: 'var(--gold-bg)', border: '1px solid var(--gold-soft)', borderRadius: 12, padding: '16px 18px', marginBottom: 22 }}>
+            <div style={{ ...kicker, color: 'var(--gold)', marginBottom: 8 }}>Picking up where we left off</div>
+            <div style={{ ...serif, fontSize: '1.1rem', lineHeight: 1.5, marginBottom: 8 }}>{followUp.framing}</div>
+            <div style={{ ...say, fontSize: '1.05rem', margin: '0 0 8px' }}>&ldquo;{followUp.statement}&rdquo;</div>
+            <div style={{ ...meta, fontSize: '0.85rem', color: 'var(--ink-2)' }}>{followUp.ask}</div>
+          </div>
+        )}
 
         {phase === 'idle' && (
           state.length === 0

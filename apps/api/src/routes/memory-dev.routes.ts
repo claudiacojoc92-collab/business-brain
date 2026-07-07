@@ -1,36 +1,43 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { createKyselyClient, PgEvidenceRepository } from '@bb/infrastructure';
 import { readMemoryState, runTensionResponse } from '../business-model/memory-response.service';
 import type { ResponseChoice, TensionResponse } from '../business-model/memory';
+import { applyResponseToThreads } from '../business-model/thread';
+import { PgThreadRepository } from '../business-model/pg-thread.repository';
+import { readMemoryThreadState, reconcileThreadsOnRecompute, resolveByDecision } from '../business-model/thread-service';
+import { captureDecision } from '../business-model/decision';
 import { DEV_FOUNDER_ID } from '../connectors/website/dev-founder';
 import { sseFrame } from './sse';
 
 /**
- * DEV-ONLY routes for Business Memory v1 — the C→B response loop. Registered ONLY when
- * NODE_ENV !== 'production'. No auth; dev founder id; under /dev/*.
+ * DEV-ONLY routes for Business Memory v1 — the C→B loop + Open Threads. Registered ONLY when
+ * NODE_ENV !== 'production'. No auth; under /dev/*. `?founder=` overrides the dev founder (used by the
+ * two-session gate). Prior declared/observed evidence is PRESERVED across reruns; only business-model
+ * (inferred) is regenerated. No new confidence_kind, no second pipeline.
  *
- *   GET  /dev/memory/state   → returning-session state: current "what matters now" with prior
- *        responses folded in (no recompute — reads persisted evidence). The "still knows me" half.
- *   POST /dev/memory/respond → capture a structured response to a tension as `declared` evidence,
- *        then RE-RUN recompute (frozen engine re-reads it), streaming BEFORE then AFTER. Uses the
- *        U+2028-safe sseFrame. Beat runs ~110s.
- *
- * Prior declared/observed evidence is PRESERVED across the rerun; only business-model (inferred) is
- * regenerated. No new confidence_kind, no second pipeline.
+ *   GET  /dev/memory/state   → returning-session state: "what matters now" MARKED new/recurring/
+ *        addressed/resolved from thread STATE, plus the proactive FOLLOW-UP (no recompute).
+ *   POST /dev/memory/respond → capture a response as `declared`, mark its thread, RE-RUN recompute
+ *        (frozen engine), reconcile threads, stream BEFORE/AFTER.
+ *   POST /dev/memory/decide  → capture an explicit founder DECISION as `declared`, resolve its thread.
  */
 const CHOICES: ReadonlyArray<ResponseChoice> = ['matters', 'handled', 'context'];
+const founderOf = (request: FastifyRequest): string => String((request.query as Record<string, unknown>)?.['founder'] ?? DEV_FOUNDER_ID);
 
 export function registerMemoryDevRoutes(server: FastifyInstance): void {
   const db = createKyselyClient(process.env['DATABASE_URL'] ?? '');
   const repo = new PgEvidenceRepository(db);
+  const threads = new PgThreadRepository(db);
   const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
 
-  server.get('/dev/memory/state', async (_request, reply) => {
-    await reply.send(await readMemoryState(DEV_FOUNDER_ID, repo));
+  // Returning-session state WITH threads (marks + proactive follow-up).
+  server.get('/dev/memory/state', async (request, reply) => {
+    await reply.send(await readMemoryThreadState(founderOf(request), repo, threads));
   });
 
   server.post('/dev/memory/respond', async (request, reply) => {
     const b = (request.body ?? {}) as Record<string, unknown>;
+    const founderId = String(b['founder'] ?? DEV_FOUNDER_ID);
     const choice = String(b['choice'] ?? '') as ResponseChoice;
     const response: TensionResponse = {
       tensionId: String(b['tensionId'] ?? ''),
@@ -49,11 +56,17 @@ export function registerMemoryDevRoutes(server: FastifyInstance): void {
         send('error', { message: 'a response needs the tension it answers' }); // fail closed
         return;
       }
+      // Mark the thread at RESPONSE time (current tension id, before recompute churns ids): 'handled'
+      // resolves it; 'matters'/'context' is engagement → addressed. A persisting tension then recurs.
+      const now = new Date();
+      await threads.save(founderId, applyResponseToThreads(await threads.load(founderId), response.tensionId, { choice: response.choice, text: response.text ?? '', fragmentId: '' }, now));
+
       const result = await runTensionResponse({
-        founderId: DEV_FOUNDER_ID, response, repo, anthropicApiKey: apiKey,
+        founderId, response, repo, anthropicApiKey: apiKey,
         onBefore: (items) => send('before', items),
         onProgress: (m) => send('reading', { message: m }),
       });
+      await reconcileThreadsOnRecompute(founderId, await repo.findByFounder(founderId), threads, new Date());
       send('after', result.after);
       send('done', { responseStored: result.responseStored, resolution: result.resolution, timing: result.timing });
     } catch (e) {
@@ -61,5 +74,21 @@ export function registerMemoryDevRoutes(server: FastifyInstance): void {
     } finally {
       reply.raw.end();
     }
+  });
+
+  // Capture an explicit founder DECISION (declared, fail-closed) → resolve its thread (grounded).
+  server.post('/dev/memory/decide', async (request, reply) => {
+    const b = (request.body ?? {}) as Record<string, unknown>;
+    const founderId = String(b['founder'] ?? DEV_FOUNDER_ID);
+    const tensionId = String(b['tensionId'] ?? '');
+    const tensionStatement = String(b['tensionStatement'] ?? '');
+    const commitment = String(b['commitment'] ?? '');
+    if (!tensionId || !tensionStatement || !commitment) {
+      await reply.code(400).send({ error: 'a decision needs the tension it answers and an explicit commitment' }); // fail closed
+      return;
+    }
+    await captureDecision(founderId, { tensionId, tensionStatement, commitment }, repo);
+    const thread = await resolveByDecision(founderId, tensionId, threads, new Date());
+    await reply.send({ resolved: Boolean(thread), resolvedReason: thread?.resolvedReason ?? null });
   });
 }
