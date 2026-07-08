@@ -22,7 +22,9 @@ import type { WhatMattersItem } from './what-matters';
 import type { StoredResponse } from './memory';
 
 export type ThreadStatus = 'open' | 'recurring' | 'addressed' | 'resolved';
-export type ThreadEventType = 'opened' | 'recurred' | 'addressed' | 'resolved';
+// 'recommended' (ADR-010): a Recommendation primitive was emitted about this thread's tension. It is a
+// reference in the thread's history — like other founder interactions — and does not change status.
+export type ThreadEventType = 'opened' | 'recurred' | 'addressed' | 'resolved' | 'recommended';
 export type ResolveReason = 'handled' | 'decision' | 'tension_gone';
 
 export interface ThreadEvent {
@@ -159,6 +161,18 @@ export function applyDecisionToThreads(threads: MemoryThread[], tensionId: strin
     const t = cloneThread(t0);
     t.status = 'resolved'; t.resolvedReason = 'decision';
     t.history.push({ event: 'resolved', at: now, tensionId, reason: 'decision' });
+    return t;
+  });
+}
+
+/** Record that a Recommendation primitive (ADR-010) was emitted about this thread's tension. Adds a
+ *  'recommended' event to the thread's history (a reference, like other interactions); does NOT change
+ *  status. `tensionId` = the recommendation's underlying inferred-claim id (= the thread's currentTensionId). */
+export function recordRecommendationOnThread(threads: MemoryThread[], tensionId: string, now: Date): MemoryThread[] {
+  return threads.map((t0) => {
+    if (t0.currentTensionId !== tensionId) return t0;
+    const t = cloneThread(t0);
+    t.history.push({ event: 'recommended', at: now, tensionId });
     return t;
   });
 }
