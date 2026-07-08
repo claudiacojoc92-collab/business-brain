@@ -12,6 +12,7 @@ import { GooglePreviewPage } from './google/GooglePreviewPage';
 import { DeclaredPreviewPage } from './declared/DeclaredPreviewPage';
 import { CalendarPreviewPage } from './calendar/CalendarPreviewPage';
 import { MemoryPreviewPage } from './memory/MemoryPreviewPage';
+import { RecommendationPreviewPage } from './recommendation/RecommendationPreviewPage';
 
 /**
  * Route guard: redirect based on founder status.
@@ -138,6 +139,10 @@ export function App() {
           {/* Dev-only: Business Memory v1 — the C→B response loop preview (not registered in prod). */}
           {import.meta.env.DEV && (
             <Route path="/memory-preview" element={<MemoryPreviewPage />} />
+          )}
+          {/* Dev-only: Recommendation — the first Product Primitive (ADR-010) preview (not registered in prod). */}
+          {import.meta.env.DEV && (
+            <Route path="/recommendation-preview" element={<RecommendationPreviewPage />} />
           )}
 
           {/* Fallback */}
