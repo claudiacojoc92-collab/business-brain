@@ -1,58 +1,57 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { clearToken, getFounderStatus, setToken, type FounderStatus } from '../api/client';
+import { getSession, logoutSession } from '../api/client';
 
+/**
+ * Magic-link SESSION auth (S0-T2). Identity is the HttpOnly `bb_session` cookie — the browser holds
+ * it, JS never reads it. On mount we ask GET /auth/me who (if anyone) the session belongs to; a 401
+ * simply means "signed out". There is no client token to store or clear.
+ */
 interface AuthState {
-  founder: FounderStatus | null;
+  founderId: string | null;
   isLoading: boolean;
-  login: (token: string) => Promise<void>;
-  logout: () => void;
-  refreshStatus: () => Promise<void>;
+  /** Re-read the session after the verify link lands (cookie already set server-side). */
+  refresh: () => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [founder, setFounder] = useState<FounderStatus | null>(null);
+  const [founderId, setFounderId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadFounder = useCallback(async () => {
+  const loadSession = useCallback(async () => {
     try {
-      const status = await getFounderStatus();
-      setFounder(status);
+      const session = await getSession();
+      setFounderId(session.founder_id);
     } catch {
-      setFounder(null);
-      clearToken();
+      setFounderId(null); // 401 (or any error) → no active session
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  // On mount: try to load the founder using any stored token
+  // On mount: resolve whoever the bb_session cookie identifies (if anyone).
   useEffect(() => {
-    const token = localStorage.getItem('bb_access_token');
-    if (token) {
-      void loadFounder();
-    } else {
-      setIsLoading(false);
+    void loadSession();
+  }, [loadSession]);
+
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    await loadSession();
+  }, [loadSession]);
+
+  const logout = useCallback(async () => {
+    try {
+      await logoutSession(); // revoke server-side + clear cookie
+    } catch {
+      // best-effort; local state is cleared regardless
     }
-  }, [loadFounder]);
-
-  const login = useCallback(async (token: string) => {
-    setToken(token);
-    await loadFounder();
-  }, [loadFounder]);
-
-  const logout = useCallback(() => {
-    clearToken();
-    setFounder(null);
+    setFounderId(null);
   }, []);
 
-  const refreshStatus = useCallback(async () => {
-    await loadFounder();
-  }, [loadFounder]);
-
   return (
-    <AuthContext.Provider value={{ founder, isLoading, login, logout, refreshStatus }}>
+    <AuthContext.Provider value={{ founderId, isLoading, refresh, logout }}>
       {children}
     </AuthContext.Provider>
   );

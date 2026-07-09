@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { login as apiLogin, ApiError } from '../api/client';
-import { useAuth } from '../auth/AuthContext';
+import { requestMagicLink, ApiError } from '../api/client';
 
+/**
+ * Magic-link sign-in (S0-T2). Email only — no password. Submitting requests a link; the response is
+ * ALWAYS a neutral "check your email" (the API never reveals whether an address exists). In dev the
+ * API returns the link directly (devLink) so the flow is testable without a real mailbox — clicking it
+ * hits GET /auth/verify, which sets the bb_session cookie and redirects home.
+ */
 export function LoginPage() {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
-  const navigate = useNavigate();
+  const [sent, setSent] = useState(false);
+  const [devLink, setDevLink] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,15 +20,12 @@ export function LoginPage() {
     setIsLoading(true);
 
     try {
-      const res = await apiLogin(email, password);
-      await login(res.access_token);
-      // AuthProvider will set founder; routing in App.tsx redirects appropriately
-      navigate('/', { replace: true });
+      const res = await requestMagicLink(email);
+      setSent(true);
+      setDevLink(res.devLink ?? null); // dev convenience only; undefined in prod
     } catch (err) {
       setError(
-        err instanceof ApiError
-          ? err.message
-          : 'Login failed. Check your credentials.',
+        err instanceof ApiError ? err.message : 'Could not send the link. Try again.',
       );
     } finally {
       setIsLoading(false);
@@ -55,73 +55,85 @@ export function LoginPage() {
           Business Brain
         </h1>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <label htmlFor="email" style={{ color: 'var(--ink-3)', fontSize: '0.875rem' }}>Email</label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-            style={{
-              background: 'var(--surface)',
-              border: '1px solid var(--line-2)',
-              borderRadius: 10,
-              color: 'var(--ink)',
-              fontSize: '1rem',
-              padding: '12px 14px',
-              outline: 'none',
-              fontFamily: 'inherit',
-            }}
-          />
-        </div>
+        {sent ? (
+          <>
+            <p style={{ color: 'var(--ink)', fontSize: '1rem', margin: 0 }}>
+              Check your email
+            </p>
+            <p style={{ color: 'var(--ink-3)', fontSize: '0.875rem', margin: 0 }}>
+              If <strong>{email}</strong> can sign in, a link is on its way. Open it to continue.
+            </p>
+            {devLink && (
+              <p style={{ color: 'var(--ink-3)', fontSize: '0.8125rem', margin: 0, wordBreak: 'break-all' }}>
+                Dev link: <a href={devLink} style={{ color: 'var(--accent, #3b6)' }}>{devLink}</a>
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => { setSent(false); setDevLink(null); }}
+              style={{
+                background: 'transparent',
+                border: '1px solid var(--line-2)',
+                borderRadius: 10,
+                color: 'var(--ink-3)',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontSize: '0.875rem',
+                padding: '10px',
+              }}
+            >
+              Use a different email
+            </button>
+          </>
+        ) : (
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <label htmlFor="email" style={{ color: 'var(--ink-3)', fontSize: '0.875rem' }}>Email</label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+                style={{
+                  background: 'var(--surface)',
+                  border: '1px solid var(--line-2)',
+                  borderRadius: 10,
+                  color: 'var(--ink)',
+                  fontSize: '1rem',
+                  padding: '12px 14px',
+                  outline: 'none',
+                  fontFamily: 'inherit',
+                }}
+              />
+            </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <label htmlFor="password" style={{ color: 'var(--ink-3)', fontSize: '0.875rem' }}>Password</label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            autoComplete="current-password"
-            style={{
-              background: 'var(--surface)',
-              border: '1px solid var(--line-2)',
-              borderRadius: 10,
-              color: 'var(--ink)',
-              fontSize: '1rem',
-              padding: '12px 14px',
-              outline: 'none',
-              fontFamily: 'inherit',
-            }}
-          />
-        </div>
+            {error && (
+              <p style={{ color: 'var(--warn-ink)', fontSize: '0.875rem', margin: 0 }}>{error}</p>
+            )}
 
-        {error && (
-          <p style={{ color: 'var(--warn-ink)', fontSize: '0.875rem', margin: 0 }}>{error}</p>
+            <button
+              type="submit"
+              disabled={isLoading}
+              style={{
+                background: 'var(--ink)',
+                opacity: isLoading ? 0.4 : 1,
+                border: 'none',
+                borderRadius: 10,
+                color: 'var(--paper)',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                fontFamily: 'inherit',
+                fontWeight: 500,
+                fontSize: '0.9375rem',
+                padding: '12px',
+                transition: 'opacity 150ms, transform 140ms',
+              }}
+            >
+              {isLoading ? 'Sending…' : 'Send me a link'}
+            </button>
+          </>
         )}
-
-        <button
-          type="submit"
-          disabled={isLoading}
-          style={{
-            background: 'var(--ink)',
-            opacity: isLoading ? 0.4 : 1,
-            border: 'none',
-            borderRadius: 10,
-            color: 'var(--paper)',
-            cursor: isLoading ? 'not-allowed' : 'pointer',
-            fontFamily: 'inherit',
-            fontWeight: 500,
-            fontSize: '0.9375rem',
-            padding: '12px',
-            transition: 'opacity 150ms, transform 140ms',
-          }}
-        >
-          {isLoading ? 'Signing in…' : 'Sign in'}
-        </button>
       </form>
     </div>
   );

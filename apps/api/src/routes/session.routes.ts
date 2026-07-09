@@ -4,6 +4,7 @@ import { PgIdentityRepository } from '../session/pg-identity.repository';
 import { LogEmailService } from '../session/email.service';
 import { readCookie, serializeSessionCookie, clearSessionCookie, SESSION_COOKIE } from '../session/cookie';
 import { requestMagicLink, verifyMagicLink, logout, SESSION_TTL_SECONDS } from '../session/session.service';
+import { founderIdFromSession } from '../session/session-context';
 
 /**
  * Magic-link self-serve session (S0-T2) — the replacement for the M2 /auth bridge.
@@ -41,6 +42,12 @@ export function registerSessionRoutes(server: FastifyInstance): void {
     if (!result) { await reply.status(401).send({ error: 'invalid or expired link' }); return; }
     reply.header('set-cookie', serializeSessionCookie(result.sessionId, SESSION_TTL_SECONDS));
     await reply.redirect(appHome);
+  });
+
+  server.get('/auth/me', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await founderIdFromSession(request, repo, new Date());
+    if (!founderId) { await reply.status(401).send({ error: 'no session' }); return; }
+    await reply.status(200).send({ founder_id: founderId });
   });
 
   server.post('/auth/logout', async (request: FastifyRequest, reply: FastifyReply) => {
