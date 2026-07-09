@@ -1,11 +1,6 @@
-import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './auth/AuthContext';
+import { AuthProvider } from './auth/AuthContext';
 import { LoginPage } from './pages/LoginPage';
-import { OnboardingPage } from './pages/OnboardingPage';
-import { DashboardPage } from './pages/DashboardPage';
-import { ReviewPage } from './pages/ReviewPage';
-import { HistoryPage } from './pages/HistoryPage';
 import { ConnectPreviewPage } from './connect/ConnectPreviewPage';
 import { UploadPreviewPage } from './upload/UploadPreviewPage';
 import { GooglePreviewPage } from './google/GooglePreviewPage';
@@ -15,49 +10,10 @@ import { MemoryPreviewPage } from './memory/MemoryPreviewPage';
 import { RecommendationPreviewPage } from './recommendation/RecommendationPreviewPage';
 
 /**
- * Route guard: redirect based on founder status.
- *
- * - Not authenticated       → /login
- * - INTAKE_PENDING          → /onboarding
- * - ACTIVE / anything else  → /dashboard
+ * The M2 founder-facing app (dashboard / onboarding / review / history + their status guards) was
+ * removed in S0-T1 (Article VI — manufactured-need machinery). Login + auth are DEFERRED (retire in
+ * S0-T2 when a self-serve session lands). What remains is /login + the ADR-007 nucleus dev previews.
  */
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { founder, isLoading } = useAuth();
-
-  if (isLoading) return <LoadingScreen />;
-  if (!founder) return <Navigate to="/login" replace />;
-
-  return <>{children}</>;
-}
-
-function OnboardingGuard({ children }: { children: React.ReactNode }) {
-  const { founder, isLoading } = useAuth();
-
-  if (isLoading) return <LoadingScreen />;
-  if (!founder) return <Navigate to="/login" replace />;
-  if (founder.status !== 'INTAKE_PENDING') return <Navigate to="/dashboard" replace />;
-
-  return <>{children}</>;
-}
-
-function ActiveGuard({ children }: { children: React.ReactNode }) {
-  const { founder, isLoading } = useAuth();
-
-  if (isLoading) return <LoadingScreen />;
-  if (!founder) return <Navigate to="/login" replace />;
-  if (founder.status === 'INTAKE_PENDING') return <Navigate to="/onboarding" replace />;
-
-  return <>{children}</>;
-}
-
-function LoadingScreen() {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0a0f1a', color: '#6b7280' }}>
-      <span style={{ fontSize: '14px', letterSpacing: '0.05em' }}>Loading…</span>
-    </div>
-  );
-}
-
 export function App() {
   return (
     <BrowserRouter>
@@ -66,96 +22,33 @@ export function App() {
           {/* Public */}
           <Route path="/login" element={<LoginPage />} />
 
-          {/* Onboarding — only for INTAKE_PENDING founders */}
-          <Route
-            path="/onboarding"
-            element={
-              <OnboardingGuard>
-                <OnboardingPage />
-              </OnboardingGuard>
-            }
-          />
-
-          {/* Dashboard — only for ACTIVE founders */}
-          <Route
-            path="/dashboard"
-            element={
-              <ActiveGuard>
-                <DashboardPage />
-              </ActiveGuard>
-            }
-          />
-
-          {/* Review — one screen: brief + pending content (ACTIVE founders) */}
-          <Route
-            path="/review"
-            element={
-              <ActiveGuard>
-                <ReviewPage />
-              </ActiveGuard>
-            }
-          />
-
-          {/* History — read-only past committed cycles (ACTIVE founders) */}
-          <Route
-            path="/history"
-            element={
-              <ActiveGuard>
-                <HistoryPage />
-              </ActiveGuard>
-            }
-          />
-
-          {/* Root: redirect based on status */}
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <RootRedirect />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Dev-only: M2.1 Connect Your World reflection preview (not registered in prod). */}
+          {/* Dev-only: ADR-007 nucleus preview surfaces (not registered in prod). */}
           {import.meta.env.DEV && (
             <Route path="/connect-preview" element={<ConnectPreviewPage />} />
           )}
-          {/* Dev-only: M2.2 Upload Connector reflection preview (not registered in prod). */}
           {import.meta.env.DEV && (
             <Route path="/upload-preview" element={<UploadPreviewPage />} />
           )}
-          {/* Dev-only: Google Source (authenticated) connect + read preview (not registered in prod). */}
           {import.meta.env.DEV && (
             <Route path="/google-preview" element={<GooglePreviewPage />} />
           )}
-          {/* Dev-only: Capability B v1 declared-intent capture preview (not registered in prod). */}
           {import.meta.env.DEV && (
             <Route path="/declared-preview" element={<DeclaredPreviewPage />} />
           )}
-          {/* Dev-only: Calendar Source (behavior dimension) connect + read preview (not registered in prod). */}
           {import.meta.env.DEV && (
             <Route path="/calendar-preview" element={<CalendarPreviewPage />} />
           )}
-          {/* Dev-only: Business Memory v1 — the C→B response loop preview (not registered in prod). */}
           {import.meta.env.DEV && (
             <Route path="/memory-preview" element={<MemoryPreviewPage />} />
           )}
-          {/* Dev-only: Recommendation — the first Product Primitive (ADR-010) preview (not registered in prod). */}
           {import.meta.env.DEV && (
             <Route path="/recommendation-preview" element={<RecommendationPreviewPage />} />
           )}
 
           {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>
   );
-}
-
-function RootRedirect() {
-  const { founder } = useAuth();
-  if (!founder) return <Navigate to="/login" replace />;
-  if (founder.status === 'INTAKE_PENDING') return <Navigate to="/onboarding" replace />;
-  return <Navigate to="/dashboard" replace />;
 }

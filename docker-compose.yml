@@ -74,30 +74,6 @@ services:
     profiles:
       - app
 
-  workers:
-    build:
-      context: .
-      dockerfile: Dockerfile.workers
-    container_name: bb-workers
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment:
-      DATABASE_URL:      postgresql://bbuser:bbpassword@postgres:5432/businessbrain
-      REDIS_URL:         redis://redis:6379
-      NODE_ENV:          development
-      SCHEDULER:         "true"
-      WORKER_HEALTH_PORT: "3001"
-      LOG_LEVEL:         debug
-    env_file:
-      - .env
-    ports:
-      - "3001:3001"
-    profiles:
-      - app
-
   web:
     build:
       context: .
