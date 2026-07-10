@@ -35,13 +35,20 @@ export interface PendingAuth {
   provider: string;
   codeVerifier: string;
   createdAt: number;
+  /** The session that INITIATED this flow (S0-T3 C2). The callback requires the completing browser's
+   *  session to match this — closing login-CSRF (an attacker can't complete their flow in a victim's tab). */
+  sessionId?: string;
 }
 
 /**
  * In-memory pending-authorization store keyed by `state`. Sufficient for the dev flow (single
  * process, short-lived): a flow starts at /connect and completes at /callback within seconds.
  * Entries expire so a stale/replayed state cannot be redeemed. Holds no tokens — only the
- * pre-token verifier binding. (A durable store would be a Phase-2+ concern if multi-instance.)
+ * pre-token verifier binding.
+ *
+ * PHASE-2 PRODUCTION DEPENDENCY: this is IN-MEMORY, single-process. A multi-instance production
+ * deployment MUST replace it with a durable, shared store (same key=state, same single-use + TTL
+ * semantics) so connect and callback can land on different instances. Not made durable here.
  */
 export class PendingAuthStore {
   private readonly map = new Map<string, PendingAuth>();
