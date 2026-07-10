@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { createKyselyClient, PgEvidenceRepository } from '@bb/infrastructure';
 import { readMemoryState, runTensionResponse } from '../business-model/memory-response.service';
 import type { ResponseChoice, TensionResponse } from '../business-model/memory';
@@ -6,20 +6,15 @@ import { applyResponseToThreads } from '../business-model/thread';
 import { PgThreadRepository } from '../business-model/pg-thread.repository';
 import { readMemoryThreadState, reconcileThreadsOnRecompute, resolveByDecision } from '../business-model/thread-service';
 import { captureDecision } from '../business-model/decision';
-import { DEV_FOUNDER_ID } from '../connectors/website/dev-founder';
-import { PgIdentityRepository } from '../session/pg-identity.repository';
-import { resolveFounderId } from '../session/founder-resolver';
-import { founderIdFromSession } from '../session/session-context';
-import type { IIdentityRepository } from '../session/session.service';
 import { sseFrame } from './sse';
 
 /**
  * DEV-ONLY routes for Business Memory v1 — the C→B loop + Open Threads. Registered ONLY when
- * NODE_ENV !== 'production'. No auth; under /dev/*. founderId is resolved from the SESSION when present
- * (production path), else `?founder=`/body `founder`/DEV_FOUNDER_ID (dev; used by the two-session gate).
- * Only the founderId source changed — the nucleus below (evidence, threads, recompute) is untouched.
- * Prior declared/observed evidence is PRESERVED across reruns; only business-model (inferred) is
- * regenerated. No new confidence_kind, no second pipeline.
+ * NODE_ENV !== 'production', inside the requireFounder scope. founderId is resolved ONCE at the boundary
+ * (session-first, fail-closed) and read as request.founderId — the request body can no longer assert a
+ * founder. Only the founderId source is boundary work; the nucleus below (evidence, threads, recompute)
+ * is untouched. Prior declared/observed evidence is PRESERVED across reruns; only business-model
+ * (inferred) is regenerated. No new confidence_kind, no second pipeline.
  *
  *   GET  /dev/memory/state   → returning-session state: "what matters now" MARKED new/recurring/
  *        addressed/resolved from thread STATE, plus the proactive FOLLOW-UP (no recompute).
@@ -29,28 +24,20 @@ import { sseFrame } from './sse';
  */
 const CHOICES: ReadonlyArray<ResponseChoice> = ['matters', 'handled', 'context'];
 
-// POST bodies carry the dev `founder` fallback; the session (when present) always wins over the body,
-// so a client can never assert another founder's id via the request body.
-async function founderOfBody(request: FastifyRequest, identity: IIdentityRepository, body: Record<string, unknown>): Promise<string> {
-  const session = await founderIdFromSession(request, identity, new Date());
-  return session ?? String(body['founder'] ?? DEV_FOUNDER_ID);
-}
-
 export function registerMemoryDevRoutes(server: FastifyInstance): void {
   const db = createKyselyClient(process.env['DATABASE_URL'] ?? '');
   const repo = new PgEvidenceRepository(db);
   const threads = new PgThreadRepository(db);
-  const identity = new PgIdentityRepository(db);
   const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
 
   // Returning-session state WITH threads (marks + proactive follow-up).
   server.get('/dev/memory/state', async (request, reply) => {
-    await reply.send(await readMemoryThreadState(await resolveFounderId(request, identity), repo, threads));
+    await reply.send(await readMemoryThreadState(request.founderId, repo, threads));
   });
 
   server.post('/dev/memory/respond', async (request, reply) => {
     const b = (request.body ?? {}) as Record<string, unknown>;
-    const founderId = await founderOfBody(request, identity, b);
+    const founderId = request.founderId; // resolved at the boundary by requireFounder (session-scoped)
     const choice = String(b['choice'] ?? '') as ResponseChoice;
     const response: TensionResponse = {
       tensionId: String(b['tensionId'] ?? ''),
@@ -92,7 +79,7 @@ export function registerMemoryDevRoutes(server: FastifyInstance): void {
   // Capture an explicit founder DECISION (declared, fail-closed) → resolve its thread (grounded).
   server.post('/dev/memory/decide', async (request, reply) => {
     const b = (request.body ?? {}) as Record<string, unknown>;
-    const founderId = await founderOfBody(request, identity, b);
+    const founderId = request.founderId; // resolved at the boundary by requireFounder (session-scoped)
     const tensionId = String(b['tensionId'] ?? '');
     const tensionStatement = String(b['tensionStatement'] ?? '');
     const commitment = String(b['commitment'] ?? '');

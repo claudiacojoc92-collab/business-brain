@@ -4,7 +4,7 @@ import { createKyselyClient, PgEvidenceRepository } from '@bb/infrastructure';
 import { makeFragment } from '@bb/domain';
 import { registerSessionRoutes } from '../../routes/session.routes';
 import { PgIdentityRepository } from '../../session/pg-identity.repository';
-import { resolveFounderId } from '../../session/founder-resolver';
+import { resolveFounderId } from '../../session/require-founder';
 import { DEV_FOUNDER_ID } from '../../connectors/website/dev-founder';
 
 /**
@@ -37,6 +37,7 @@ let db: any;
 let server: FastifyInstance;
 let dbUp = false;              // set only if the DB is reachable — the DB-less skip guard
 let prevNodeEnv: string | undefined;
+let prevDevFlag: string | undefined; // the dev fallback (?founder=/DEV_FOUNDER_ID) is gated by this flag
 
 // Delete any rows from a prior run so isolation assertions start clean (evidence first, then identity).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -57,6 +58,8 @@ beforeAll(async () => {
   process.env['DATABASE_URL'] = DB_URL;
   prevNodeEnv = process.env['NODE_ENV'];
   process.env['NODE_ENV'] = 'test';
+  prevDevFlag = process.env['NUCLEUS_DEV_FOUNDER'];
+  process.env['NUCLEUS_DEV_FOUNDER'] = '1'; // enable the dev ?founder=/DEV_FOUNDER_ID fallback for this suite
   try {
     db = createKyselyClient(DB_URL);
     await purge(db);            // also probes reachability + that V054 is applied
@@ -71,6 +74,7 @@ beforeAll(async () => {
   const evidence = new PgEvidenceRepository(db);
   server.get('/dev/_probe/evidence', async (request, reply) => {
     const founderId = await resolveFounderId(request, identity);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; } // fail closed
     const frags = await evidence.findByFounder(founderId);
     const blob = JSON.stringify(frags.map((f) => f.payload));
     await reply.send({ founderId, count: frags.length, sawAlpha: blob.includes('ALPHA-SECRET'), sawBeta: blob.includes('BETA-SECRET') });
@@ -83,6 +87,7 @@ afterAll(async () => {
   try { if (dbUp) await purge(db); } catch { /* ignore */ }
   try { await db?.destroy(); } catch { /* ignore */ }
   if (prevNodeEnv === undefined) delete process.env['NODE_ENV']; else process.env['NODE_ENV'] = prevNodeEnv;
+  if (prevDevFlag === undefined) delete process.env['NUCLEUS_DEV_FOUNDER']; else process.env['NUCLEUS_DEV_FOUNDER'] = prevDevFlag;
 });
 
 // Extract "bb_session=<id>" (name=value only) from a verify response's Set-Cookie for replay.

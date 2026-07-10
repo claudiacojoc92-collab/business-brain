@@ -72,18 +72,39 @@ export class GoogleConnector {
 
   // ── OAuth lifecycle (Phase 1, unchanged) ─────────────────────────────────────────────────────
 
-  /** authorize() made real: begins the OAuth flow and returns Google's consent URL. */
-  authorize(founderId: string): { authUrl: string; state: string } {
+  /**
+   * authorize() made real: begins the OAuth flow and returns Google's consent URL. `sessionId` binds the
+   * flow to the initiating session (S0-T3 C2) so the callback can require the same session — the founderId
+   * lives SERVER-SIDE in the pending store keyed by the opaque state, never in the URL.
+   */
+  authorize(founderId: string, sessionId?: string): { authUrl: string; state: string } {
     const state = createState();
     const pkce = createPkce();
-    this.pending.put(state, { founderId, provider: GOOGLE_PROVIDER, codeVerifier: pkce.codeVerifier, createdAt: Date.now() });
+    this.pending.put(state, { founderId, provider: GOOGLE_PROVIDER, codeVerifier: pkce.codeVerifier, createdAt: Date.now(), sessionId });
     return { authUrl: buildAuthUrl(this.oauth, state, pkce), state };
   }
 
-  /** OAuth callback leg: verify state (CSRF), exchange code (+PKCE), persist tokens ENCRYPTED. */
-  async handleCallback(state: string, code: string): Promise<{ founderId: string }> {
+  /**
+   * OAuth callback leg: verify state (CSRF/replay), enforce the login-CSRF defense, exchange code (+PKCE),
+   * persist tokens ENCRYPTED — under the state-bound founderId, validated BEFORE any exchange or save.
+   *
+   * When `caller` is provided (the route always provides it, from the bb_session Lax cookie sent on the
+   * top-level callback GET), the completing browser's session MUST match the session that initiated the
+   * flow — otherwise reject before touching tokens. This closes login-CSRF: an attacker cannot have a
+   * victim's browser complete the attacker's flow, because the victim's session won't match.
+   */
+  async handleCallback(
+    state: string,
+    code: string,
+    caller?: { founderId?: string | null; sessionId?: string | null },
+  ): Promise<{ founderId: string }> {
     const p = this.pending.take(state);
-    if (!p) throw new Error('invalid or expired OAuth state');
+    if (!p) throw new Error('invalid or expired OAuth state'); // unknown / expired / replayed → reject
+    if (caller) {
+      const sessionOk = p.sessionId != null && caller.sessionId === p.sessionId;
+      const founderOk = caller.founderId != null && caller.founderId === p.founderId;
+      if (!sessionOk || !founderOk) throw new Error('oauth session mismatch'); // login-CSRF — fail closed
+    }
     const tokens = await exchangeCode(this.oauth, code, p.codeVerifier);
     if (!tokens.accessToken) throw new Error('no access token in exchange response');
     await this.credentials.save(p.founderId, GOOGLE_PROVIDER, tokens);
