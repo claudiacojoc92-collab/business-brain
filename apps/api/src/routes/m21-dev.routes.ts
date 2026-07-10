@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { createKyselyClient, PgEvidenceRepository } from '@bb/infrastructure';
 import { runWebsiteMagicMoment } from '../business-model/website-magic-moment.service';
-import { DEV_FOUNDER_ID } from '../connectors/website/dev-founder';
+import { PgIdentityRepository } from '../session/pg-identity.repository';
+import { resolveFounderId } from '../session/founder-resolver';
 
 /**
  * DEV-ONLY streaming endpoint for the M2.1 website magic moment. Registered ONLY when
@@ -21,10 +22,13 @@ import { DEV_FOUNDER_ID } from '../connectors/website/dev-founder';
 export function registerM21DevRoutes(server: FastifyInstance): void {
   const db = createKyselyClient(process.env['DATABASE_URL'] ?? '');
   const repo = new PgEvidenceRepository(db);
+  const identity = new PgIdentityRepository(db);
   const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
 
   server.get('/dev/m21/connect', async (request, reply) => {
     const url = String((request.query as Record<string, unknown>)?.['url'] ?? '');
+    // founderId from the SESSION when present (ingest into the founder's own nucleus), else DEV_FOUNDER_ID.
+    const founderId = await resolveFounderId(request, identity);
     reply.hijack();
     reply.raw.writeHead(200, {
       'content-type': 'text/event-stream',
@@ -35,10 +39,10 @@ export function registerM21DevRoutes(server: FastifyInstance): void {
     const send = (event: string, data: unknown) => reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     try {
       // Fresh read each time (append-only store; content-addressed ids dedupe re-runs).
-      await repo.deleteBySource(DEV_FOUNDER_ID, 'website');
-      await repo.deleteBySource(DEV_FOUNDER_ID, 'business-model');
+      await repo.deleteBySource(founderId, 'website');
+      await repo.deleteBySource(founderId, 'business-model');
       const result = await runWebsiteMagicMoment({
-        founderId: DEV_FOUNDER_ID,
+        founderId,
         url,
         repo,
         anthropicApiKey: apiKey,

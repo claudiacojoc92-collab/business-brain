@@ -1,5 +1,4 @@
 import { createServer } from './server';
-import { buildCompositionRoot } from './composition-root';
 import { createKyselyClient } from '@bb/infrastructure';
 import { createRedisClient } from '@bb/infrastructure';
 import { createLogger } from '@bb/infrastructure';
@@ -16,13 +15,9 @@ async function main(): Promise<void> {
   const db    = createKyselyClient(databaseUrl);
   const redis = createRedisClient(redisUrl);
 
-  const { commandBus, queryBus, jwtService, passwordService } =
-    buildCompositionRoot(db);
-
-  const server = await createServer({
-    db, redis, logger,
-    commandBus, queryBus, jwtService, passwordService,
-  });
+  // No composition root: the M2 auth bridge (CQRS buses + Jwt/Password) was retired in S0-T2 C3.
+  // Auth is the self-serve magic-link session; each route module builds its own deps.
+  const server = await createServer({ db, redis, logger });
 
   const port = parseInt(process.env['PORT'] ?? '3000', 10);
   const host = process.env['HOST'] ?? '0.0.0.0';

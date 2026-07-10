@@ -19,6 +19,13 @@ import { sseFrame } from './sse';
  * store encrypted), status (boolean), refresh, disconnect (revoke + delete). NO evidence path,
  * NO engine, NO reflection (that is Phase 2, past the gate).
  *
+ * SESSION WIRING DEFERRED (S0-T2 C2): unlike the other /dev routes, this surface is NOT wired to
+ * resolveFounderId. The founder id is threaded as ONE coupled identity through authorize → OAuth
+ * `state` → callback (credential store) → picker-token/read; splitting the source between authorize
+ * and the later credential lookups would break the two-authorization drive.file grant. Wiring this to
+ * sessions requires embedding the session founder in the signed OAuth `state` and using it
+ * consistently across the whole flow — deferred to a dedicated task. Stays on DEV_FOUNDER_ID for now.
+ *
  * Secrets: client id/secret + the 32-byte encryption key are read from env (boolean presence
  * only, never echoed). If unconfigured, the routes answer 503 rather than crash boot.
  */
