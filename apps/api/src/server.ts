@@ -2,18 +2,17 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import type { KyselyDB } from '@bb/infrastructure';
 import type { RedisClient } from '@bb/infrastructure';
 import type { Logger } from '@bb/infrastructure';
-import type { CommandBus, QueryBus, JwtService, PasswordService } from '@bb/infrastructure';
 import { registerPlugins } from './plugins';
 import { registerRoutes } from './routes';
 
+/**
+ * The API's runtime dependencies. The M2 auth bridge (CQRS buses + Jwt/Password services) was retired
+ * in S0-T2 C3 — auth is now the self-serve magic-link SESSION (session.routes builds its own deps).
+ */
 export interface ServerDeps {
-  db:              KyselyDB;
-  redis:           RedisClient;
-  logger:          Logger;
-  commandBus:      CommandBus;
-  queryBus:        QueryBus;
-  jwtService:      JwtService;
-  passwordService: PasswordService;
+  db:     KyselyDB;
+  redis:  RedisClient;
+  logger: Logger;
 }
 
 /**
@@ -28,7 +27,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
 
   await registerPlugins(server, deps);
-  await registerRoutes(server, deps);
+  await registerRoutes(server);
 
   // Graceful shutdown
   const shutdown = async (): Promise<void> => {

@@ -1,10 +1,5 @@
 // Commands
-export type {
-  RegisterFounderCommand,
-  RegisterFounderResult,
-} from './commands/register-founder.command';
-export { RegisterFounderHandler } from './commands/register-founder.handler';
-
+// (RegisterFounder command/handler retired in S0-T2 C3 with the M2 auth bridge.)
 export type {
   StartIntakeCommand,
   StartIntakeResult,
@@ -87,12 +82,7 @@ export type {
 } from './queries/get-recalibration-status.query';
 export { GetRecalibrationStatusHandler } from './queries/get-recalibration-status.handler';
 
-export type {
-  AuthenticateFounderQuery,
-  AuthenticateFounderResult,
-} from './queries/authenticate-founder.query';
-export { AuthenticateFounderHandler } from './queries/authenticate-founder.handler';
-export type { IFounderAuthRepository } from './repositories/founder-auth.repository';
+// (AuthenticateFounder query/handler + IFounderAuthRepository retired in S0-T2 C3 with the M2 auth bridge.)
 export type {
   IIntakeSessionRepository,
   IntakeSessionRecord,

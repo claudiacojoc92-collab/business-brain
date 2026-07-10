@@ -36,8 +36,7 @@ export { CommandBus } from './cqrs/command-bus';
 export { QueryBus } from './cqrs/query-bus';
 export { InProcessEventBus } from './event-bus/in-process-event-bus';
 
-// Founder auth repository
-export { PgFounderAuthRepository } from './database/repositories/pg-founder-auth.repository';
+// (PgFounderAuthRepository retired in S0-T2 C3 with the M2 auth bridge.)
 
 // Internal brief projection
 export { PgInternalBriefProjection } from './database/projections/pg-internal-brief.projection';
@@ -74,10 +73,7 @@ export type { PromptRecord } from './llm/prompt-registry-client';
 export { LLMRouter } from './llm/llm-router';
 export type { LLMCallOptions, LLMResponse } from './llm/llm-router';
 
-// Auth
-export { JwtService } from './auth/jwt.service';
-export type { JwtPayload, TokenPair } from './auth/jwt.service';
-export { PasswordService } from './auth/password.service';
+// (Auth — JwtService/PasswordService retired in S0-T2 C3, replaced by the magic-link session.)
 
 // Secrets
 export { SecretsManager } from './secrets/secrets-manager';
