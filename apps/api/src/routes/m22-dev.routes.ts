@@ -3,8 +3,6 @@ import multipart from '@fastify/multipart';
 import { createKyselyClient, PgEvidenceRepository } from '@bb/infrastructure';
 import { runUploadMagicMoment } from '../business-model/upload-magic-moment.service';
 import { detectType, MAX_BYTES } from '../connectors/upload/detect';
-import { PgIdentityRepository } from '../session/pg-identity.repository';
-import { resolveFounderId } from '../session/founder-resolver';
 import { sseFrame } from './sse';
 
 /**
@@ -30,12 +28,10 @@ export async function registerM22DevRoutes(server: FastifyInstance): Promise<voi
   await server.register(multipart, { limits: { fileSize: MAX_BYTES, files: 1 } });
   const db = createKyselyClient(process.env['DATABASE_URL'] ?? '');
   const repo = new PgEvidenceRepository(db);
-  const identity = new PgIdentityRepository(db);
   const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
 
   server.post('/dev/m22/upload', async (request, reply) => {
-    // founderId from the SESSION when present (ingest into the founder's own nucleus), else DEV_FOUNDER_ID.
-    const founderId = await resolveFounderId(request, identity);
+    const founderId = request.founderId; // resolved at the boundary by requireFounder (session-scoped)
     let filename = 'upload';
     let bytes: Buffer;
     try {

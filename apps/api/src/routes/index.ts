@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { createKyselyClient } from '@bb/infrastructure';
 import { registerHealthRoutes }        from './health.routes';
 import { registerSessionRoutes }       from './session.routes';
 import { registerM21DevRoutes }        from './m21-dev.routes';
@@ -7,6 +8,8 @@ import { registerGoogleDevRoutes }     from './google-dev.routes';
 import { registerDeclaredDevRoutes }   from './declared-dev.routes';
 import { registerMemoryDevRoutes }     from './memory-dev.routes';
 import { registerRecommendationDevRoutes } from './recommendation-dev.routes';
+import { PgIdentityRepository } from '../session/pg-identity.repository';
+import { registerRequireFounder } from '../session/require-founder';
 
 /**
  * Registers all routes. Each route module is self-contained and builds its own deps.
@@ -19,13 +22,25 @@ export async function registerRoutes(
   registerHealthRoutes(server);
   registerSessionRoutes(server);           // S0-T2 — magic-link self-serve session
 
-  // Dev-only M2.1/M2.2 streaming endpoints (no auth; outside /v1). Never in production.
+  // Dev-only nucleus endpoints (outside /v1). Never registered in production.
   if (process.env['NODE_ENV'] !== 'production') {
-    registerM21DevRoutes(server);
-    await registerM22DevRoutes(server);
-    registerGoogleDevRoutes(server); // Google authenticated Source — Phase 1 (OAuth lifecycle)
-    registerDeclaredDevRoutes(server); // Capability B v1 — declared intent capture
-    registerMemoryDevRoutes(server); // Business Memory v1 — the C→B response loop
-    registerRecommendationDevRoutes(server); // ADR-010 — Recommendation Product Primitive
+    const identity = new PgIdentityRepository(createKyselyClient(process.env['DATABASE_URL'] ?? ''));
+
+    // S0-T3 — the nucleus /dev/* group inside an encapsulated scope guarded by requireFounder:
+    // founderId is resolved ONCE at the boundary (session-first, fail-closed) and every handler reads
+    // request.founderId. A route under this scope is founder-scoped by construction.
+    await server.register(async (nucleus) => {
+      registerRequireFounder(nucleus, identity);
+      registerM21DevRoutes(nucleus);            // M2.1 website magic moment
+      await registerM22DevRoutes(nucleus);      // M2.2 upload magic moment
+      registerDeclaredDevRoutes(nucleus);       // Capability B v1 — declared intent capture
+      registerMemoryDevRoutes(nucleus);         // Business Memory v1 — the C→B response loop
+      registerRecommendationDevRoutes(nucleus); // ADR-010 — Recommendation Product Primitive
+    });
+
+    // Google authenticated Source (OAuth lifecycle): its callback resolves the founder from the signed
+    // OAuth state (not a session cookie), so it is registered OUTSIDE the requireFounder scope and wires
+    // the session itself (S0-T3 C2).
+    registerGoogleDevRoutes(server);
   }
 }

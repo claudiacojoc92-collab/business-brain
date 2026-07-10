@@ -1,7 +1,7 @@
 /**
  * Session-context resolver (S0-T2). Reads the session cookie from the request, looks the session up
  * SERVER-SIDE (never trusts a client-supplied founder id), and returns the founderId (or null). Routes
- * use this to scope to the authenticated founder. Reused by set-rls-context to bind RLS to the session.
+ * use this to scope to the authenticated founder. The guarded resolver in require-founder builds on it.
  */
 import type { FastifyRequest } from 'fastify';
 import { readCookie, SESSION_COOKIE } from './cookie';
