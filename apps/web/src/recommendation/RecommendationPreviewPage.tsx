@@ -35,7 +35,7 @@ export function RecommendationPreviewPage() {
           DEV · Recommendation — the first <b>Product Primitive</b> (ADR-010). A recommendation is <b>inference</b> (Layer 1) under a <b>disclosure contract</b> (Layer 2): it tells you what it rests on, what it assumes, and its confidence — and it is labeled a <b>read</b>, never a fact.
         </div>
         <h1 style={{ ...serif, fontSize: '1.6rem', fontWeight: 500, letterSpacing: '-0.01em', marginBottom: 6 }}>What I&apos;d do — and exactly why.</h1>
-        <p style={{ ...meta, fontSize: '0.85rem', color: 'var(--ink-2)', marginBottom: 20 }}>Advice you can weigh, because it shows its work. Every recommendation stays inference underneath — never asserted as fact.</p>
+        <p style={{ ...meta, fontSize: '0.85rem', color: 'var(--ink-2)', marginBottom: 20 }}>A recommendation you can weigh, because it shows its work. Every recommendation stays inference underneath — never asserted as fact.</p>
 
         {err && <div style={{ ...meta, color: 'var(--gold)', marginBottom: 14 }}>error: {err}</div>}
         {recs.length === 0 && !err && <div style={{ ...serif, fontSize: '1.1rem', color: 'var(--ink-2)' }}>No recommendations yet.</div>}

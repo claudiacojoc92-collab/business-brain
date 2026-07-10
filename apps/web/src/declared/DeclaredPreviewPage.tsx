@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createSSEParser } from '../upload/sse';
+import { founderCategory } from '../copy/vocabulary';
 
 /**
  * Capability B v1 — Be Understood (declared intent capture), founder-facing surface (DEV preview).
@@ -126,7 +127,7 @@ export function DeclaredPreviewPage() {
                   <div key={`wm-${w.rank}`} style={i === 0
                     ? { background: 'var(--surface)', border: '1px solid var(--gold-soft)', borderRadius: 12, padding: '20px 22px', marginBottom: 14, boxShadow: 'var(--shadow-soft)' }
                     : { borderLeft: '2px solid var(--line-2)', padding: '4px 0 4px 14px', marginBottom: 12, opacity: 0.92 }}>
-                    <div style={{ ...meta, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--gold-soft)', marginBottom: 6 }}>{w.rank === 1 ? 'Highest-stakes tension' : `Tension #${w.rank}`} · {w.category}</div>
+                    <div style={{ ...meta, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--gold-soft)', marginBottom: 6 }}>{w.rank === 1 ? 'Highest-stakes gap' : `Gap #${w.rank}`} · {founderCategory(w.category)}</div>
                     <div style={{ ...say, fontSize: i === 0 ? '1.3rem' : '1.1rem' }}>{w.statement}</div>
                     <div style={{ ...meta, fontStyle: 'italic', color: 'var(--gold)', marginTop: 6 }}>{w.stakes}</div>
                     <div style={{ marginTop: 8 }}>

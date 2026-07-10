@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DEMO_CASES, type DemoCase, type Line } from './fixtures';
+import { founderCategory } from '../copy/vocabulary';
 
 /**
  * M2.1 — Connect Your World, website magic moment (DEV preview).
@@ -37,7 +38,9 @@ function Provenance({ ids }: { ids: string[] }) {
 }
 
 function ReflectionLineView({ line }: { line: Line }) {
-  const label = line.label.charAt(0).toUpperCase() + line.label.slice(1);
+  // Inferred lines carry the internal category enum in `label` → map to the founder vocabulary; observed
+  // lines keep their descriptive label (e.g. Positioning / Offer).
+  const label = line.kind === 'inferred' ? founderCategory(line.label) : line.label.charAt(0).toUpperCase() + line.label.slice(1);
   return (
     <div style={{ margin: '0 0 26px', opacity: 0, animation: 'bbIn 0.9s var(--ease, ease) forwards' }}>
       <div style={{ ...meta, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 6, color: line.kind === 'inferred' ? 'var(--gold-soft)' : 'var(--ink-3)' }}>{label}</div>

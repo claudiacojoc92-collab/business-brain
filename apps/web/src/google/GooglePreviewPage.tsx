@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createSSEParser } from '../upload/sse';
+import { founderCategory } from '../copy/vocabulary';
 
 /**
  * M-Google — Connect Your World: Google (Docs/Drive), founder-facing surface (DEV preview).
@@ -89,7 +90,8 @@ function Badge({ source }: { source: Src }) {
 }
 
 function Line({ line, source }: { line: BLine; source: Src }) {
-  const label = line.label.charAt(0).toUpperCase() + line.label.slice(1);
+  // Inferred lines carry the internal category enum in `label` → founder vocabulary; observed keep theirs.
+  const label = line.kind === 'inferred' ? founderCategory(line.label) : line.label.charAt(0).toUpperCase() + line.label.slice(1);
   return (
     <div style={{ margin: '0 0 26px', opacity: 0, animation: 'bbIn 0.9s var(--ease, ease) forwards' }}>
       <div style={{ ...meta, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 6, color: line.kind === 'inferred' ? 'var(--gold-soft)' : 'var(--ink-3)' }}>{label}</div>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createSSEParser } from '../upload/sse';
+import { founderCategory } from '../copy/vocabulary';
 
 /**
  * Calendar Source (behavior dimension) — founder-facing surface (DEV preview). The founder
@@ -96,7 +97,7 @@ export function CalendarPreviewPage() {
     <div style={wrap}>
       <div style={inner}>
         <div style={{ ...meta, border: '1px solid var(--line-2)', borderRadius: 8, padding: '8px 12px', marginBottom: 28, color: 'var(--ink-3)' }}>
-          DEV · Calendar Source — the <b>behavior dimension</b>. Your calendar shows how you spend <b>time</b>; fused with your declared intent it surfaces the <b>time-vs-intent</b> tension. Observed behavior, not a claim about what your business is. Beat 2 runs ~110s.
+          DEV · Calendar Source — the <b>behavior dimension</b>. Your calendar shows how you spend <b>time</b>; fused with your declared intent it surfaces the <b>time-vs-intent</b> gap. Observed behavior, not a claim about what your business is. Beat 2 runs ~110s.
         </div>
         <h1 style={{ ...serif, fontSize: '1.6rem', fontWeight: 500, letterSpacing: '-0.01em', marginBottom: 6 }}>Where does your time actually go?</h1>
         <p style={{ ...meta, fontSize: '0.85rem', color: 'var(--ink-2)', marginBottom: 18 }}>Connect your Google Calendar (one extra consent on your existing Google connection). I read only event titles and times over the last 60 days — patterns, not surveillance.</p>
@@ -122,7 +123,7 @@ export function CalendarPreviewPage() {
                   <div key={`wm-${w.rank}`} style={i === 0
                     ? { background: 'var(--surface)', border: '1px solid var(--gold-soft)', borderRadius: 12, padding: '20px 22px', marginBottom: 14, boxShadow: 'var(--shadow-soft)' }
                     : { borderLeft: '2px solid var(--line-2)', padding: '4px 0 4px 14px', marginBottom: 12, opacity: 0.92 }}>
-                    <div style={{ ...meta, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--gold-soft)', marginBottom: 6 }}>{w.rank === 1 ? 'Highest-stakes tension' : `Tension #${w.rank}`} · {w.category}</div>
+                    <div style={{ ...meta, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--gold-soft)', marginBottom: 6 }}>{w.rank === 1 ? 'Highest-stakes gap' : `Gap #${w.rank}`} · {founderCategory(w.category)}</div>
                     <div style={{ ...say, fontSize: i === 0 ? '1.3rem' : '1.1rem' }}>{w.statement}</div>
                     <div style={{ ...meta, fontStyle: 'italic', color: 'var(--gold)', marginTop: 6 }}>{w.stakes}</div>
                     <div style={{ marginTop: 8 }}>
