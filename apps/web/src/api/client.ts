@@ -86,3 +86,18 @@ export async function getSession(): Promise<Session> {
 export async function logoutSession(): Promise<void> {
   return request<void>('auth/logout', { method: 'POST' });
 }
+
+// ─── Account: export + permanent deletion (S0-T4, Article XIII) ──────────────────
+
+/** GET /account/export — the complete JSON the session founder owns (parsed). */
+export async function getAccountExport(): Promise<unknown> {
+  return request<unknown>('account/export');
+}
+
+/**
+ * POST /account/delete — permanently delete the account. `confirmEmail` must echo the founder's own email;
+ * a mismatch throws ApiError(400). Resolves on 204. Irreversible.
+ */
+export async function deleteAccount(confirmEmail: string): Promise<void> {
+  return request<void>('account/delete', { method: 'POST', body: JSON.stringify({ confirmEmail }) });
+}

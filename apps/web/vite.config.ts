@@ -20,6 +20,11 @@ export default defineConfig({
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
+      // Real product account endpoints (export / delete).
+      '/account': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
       // Dev-only M2.1 streaming endpoint (SSE). Live wiring pending api rebuild.
       '/dev': {
         target: 'http://localhost:3000',
