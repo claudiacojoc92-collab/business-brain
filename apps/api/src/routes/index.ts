@@ -8,6 +8,7 @@ import { registerGoogleDevRoutes }     from './google-dev.routes';
 import { registerDeclaredDevRoutes }   from './declared-dev.routes';
 import { registerMemoryDevRoutes }     from './memory-dev.routes';
 import { registerRecommendationDevRoutes } from './recommendation-dev.routes';
+import { registerAccountRoutes } from './account.routes';
 import { PgIdentityRepository } from '../session/pg-identity.repository';
 import { registerRequireFounder } from '../session/require-founder';
 
@@ -21,6 +22,7 @@ export async function registerRoutes(
 ): Promise<void> {
   registerHealthRoutes(server);
   registerSessionRoutes(server);           // S0-T2 — magic-link self-serve session
+  registerAccountRoutes(server);           // S0-T4 — real product endpoints (export/delete); session-scoped, ALL envs
 
   // Dev-only nucleus endpoints (outside /v1). Never registered in production.
   if (process.env['NODE_ENV'] !== 'production') {
