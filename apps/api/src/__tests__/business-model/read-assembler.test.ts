@@ -89,7 +89,8 @@ describe('assembleRead — Business Read composition', () => {
     expect(c.epistemicKind).toBe('inferred');
     expect(c.disclosure.truthStatus).toBe('inferred');
     expect(c.disclosure.assumptions).toEqual(['SMB buyers value simplicity']);
-    expect(c.disclosure.evidenceBasis[0]!.id).toBe(fixture().obsUp.id);
+    expect(c.receipts!.map((r) => r.fragmentId)).toEqual([fixture().obsUp.id]); // S1-T2: real receipts carry the basis
+    expect(c.receipts![0]!.text).toBe(fixture().obsUp.payload['text']);         // full verbatim, not a sliced quote
     // no recommendation invented: zero stored → empty S5
     expect(section(assembleRead(FID, fragments, [], undefined, NOW), 'my_read').empty).toBe(true);
   });

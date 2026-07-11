@@ -14,6 +14,7 @@ import type { EvidenceFragment } from '@bb/domain';
 import { groundedTensions } from './what-matters';
 import { toRecommendationView, type StoredRecommendation } from './recommendation-service';
 import type { MultiSourceResult } from './recompute';
+import { resolveReceipts, type Receipt } from './receipts';
 
 export type EpistemicKind = 'observed' | 'declared' | 'inferred';
 export type SectionId = 'what_i_read' | 'what_i_observe' | 'gaps' | 'bets' | 'my_read' | 'cannot_see';
@@ -28,10 +29,14 @@ export interface ReadClaim {
   epistemicKind: EpistemicKind;       // observed | declared | inferred — never collapsed
   internalCategory?: string;          // frozen engine enum, carried for traceability — NEVER rendered
   provenance: Provenance;
+  receipts?: Receipt[];               // S1-T2 — real stored evidence for this claim (S2 observed / S5 basis)
+  declaredReceipts?: Receipt[];       // S3 only — the "story" (declared) side, resolved SEPARATELY
+  observedReceipts?: Receipt[];       // S3 only — the "evidence" (observed) side, resolved SEPARATELY
 }
 export interface RecommendationClaim extends ReadClaim {
   disclosure: {
-    evidenceBasis: Array<{ id: string; quote: string }>;
+    // S1-T2: the evidence basis is now carried by `receipts` (real, full-verbatim, fail-closed) — the old
+    // {id,quote} basis with its '(evidence not found)' placeholder is NOT carried into the Read as grounded.
     assumptions: string[];
     confidence: string;
     truthStatus: 'inferred';          // the Layer-1 substrate stays inference (proven by toRecommendationView)
@@ -81,7 +86,7 @@ export function assembleRead(
     assembledAt: now.toISOString(),
     sections: [
       sectionWhatIRead(own),
-      sectionWhatIObserve(own),
+      sectionWhatIObserve(own, byId),
       sectionGaps(own, byId, resolves),
       sectionBets(),
       sectionMyRead(recommendations, byId),
@@ -111,16 +116,19 @@ function sectionWhatIRead(own: EvidenceFragment[]): ReadSection {
 }
 
 // ── S2 · What I Observe — observed grounded content ONLY (no inferred leak) ─────────────────────
-function sectionWhatIObserve(own: EvidenceFragment[]): ReadSection {
+function sectionWhatIObserve(own: EvidenceFragment[], byId: Map<string, EvidenceFragment>): ReadSection {
   const observed = own
     .filter((f) => f.confidenceKind === 'observed' && !isBlock(f) && stmt(f, 'text'))
     .sort((a, b) => a.source.localeCompare(b.source) || a.capturedAt.getTime() - b.capturedAt.getTime() || a.id.localeCompare(b.id))
     .slice(0, S2_MAX_OBSERVATIONS);
-  const claims: ReadClaim[] = observed.map((f) => ({
-    statement: stmt(f, 'text'),
-    epistemicKind: 'observed',
-    provenance: { fragmentIds: [f.id] },
-  }));
+  const claims: ReadClaim[] = [];
+  for (const f of observed) {
+    // S1-T2 fail-closed: an observed claim IS its own evidence — resolve the receipt, drop the claim if it
+    // doesn't (no grounded claim without a real receipt). requireKind 'observed' bars any inferred leak.
+    const receipts = resolveReceipts([f.id], byId, 'observed');
+    if (receipts.length === 0) continue;
+    claims.push({ statement: stmt(f, 'text'), epistemicKind: 'observed', provenance: { fragmentIds: [f.id] }, receipts });
+  }
   return { id: 'what_i_observe', title: 'What I Observe', empty: claims.length === 0, claims };
 }
 
@@ -130,12 +138,23 @@ function sectionGaps(own: EvidenceFragment[], byId: Map<string, EvidenceFragment
   const grounded = groundedTensions(inferred, byId) // spans declared∧observed, tension category — fail-closed
     .filter((g) => resolves(g.f.derivedFrom) && g.declaredIds.length > 0 && g.observedIds.length > 0)
     .sort((a, b) => a.f.id.localeCompare(b.f.id)); // NEUTRAL deterministic order (content-hash) — never TENSION_RANK
-  const claims: ReadClaim[] = grounded.map((g) => ({
-    statement: stmt(g.f, 'statement'),
-    epistemicKind: 'inferred',
-    internalCategory: stmt(g.f, 'category'), // frozen enum, for traceability — never rendered
-    provenance: { fragmentIds: [...(g.f.derivedFrom ?? [])], declaredFragmentIds: g.declaredIds, observedFragmentIds: g.observedIds },
-  }));
+  const claims: ReadClaim[] = [];
+  for (const g of grounded) {
+    // S1-T2 — the two sides resolve SEPARATELY and are never merged: the founder's story (declared) and the
+    // instrument's evidence (observed). A Gap is only fully grounded when BOTH sides carry a real receipt;
+    // if either resolves empty the Gap is dropped (not shown ungrounded).
+    const declaredReceipts = resolveReceipts(g.declaredIds, byId, 'declared');
+    const observedReceipts = resolveReceipts(g.observedIds, byId, 'observed');
+    if (declaredReceipts.length === 0 || observedReceipts.length === 0) continue;
+    claims.push({
+      statement: stmt(g.f, 'statement'),
+      epistemicKind: 'inferred',
+      internalCategory: stmt(g.f, 'category'), // frozen enum, for traceability — never rendered
+      provenance: { fragmentIds: [...(g.f.derivedFrom ?? [])], declaredFragmentIds: g.declaredIds, observedFragmentIds: g.observedIds },
+      declaredReceipts,
+      observedReceipts,
+    });
+  }
   return { id: 'gaps', title: 'Where Story & Evidence Diverge', empty: claims.length === 0, claims };
 }
 
@@ -154,12 +173,19 @@ function sectionMyRead(recommendations: StoredRecommendation[], byId: Map<string
   for (const stored of [...recommendations].sort((a, b) => a.claimFragmentId.localeCompare(b.claimFragmentId))) {
     const view = toRecommendationView(stored, byId); // fail-closed: null when the claim is missing or not 'inferred'
     if (!view) continue;
+    // S1-T2 — re-resolve the basis ids FRESH and strictly: the receipt layer never carries
+    // toRecommendationView's '(evidence not found)' placeholder into the Read as grounded. requireKind is
+    // omitted because a recommendation's basis spans observed AND declared evidence (inferred is barred
+    // structurally by resolveReceipts). A recommendation with ZERO resolved receipts is not grounded → dropped.
+    const receipts = resolveReceipts(view.evidenceBasis.map((b) => b.id), byId);
+    if (receipts.length === 0) continue;
     claims.push({
       statement: view.recommendation, // = the engine's claim statement, framed as a read (recommendation-service)
       epistemicKind: 'inferred',
       internalCategory: stmt(byId.get(view.claimFragmentId), 'category'),
-      provenance: { fragmentIds: view.evidenceBasis.map((b) => b.id) },
-      disclosure: { evidenceBasis: view.evidenceBasis, assumptions: view.assumptions, confidence: view.confidence, truthStatus: 'inferred' },
+      provenance: { fragmentIds: receipts.map((r) => r.fragmentId) }, // RESOLVED basis only — a dangling id never leaks in
+      receipts,
+      disclosure: { assumptions: view.assumptions, confidence: view.confidence, truthStatus: 'inferred' },
     });
   }
   return { id: 'my_read', title: 'My Read', empty: claims.length === 0, claims };
