@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createKyselyClient, PgEvidenceRepository } from '@bb/infrastructure';
 import { PgThreadRepository } from '../business-model/pg-thread.repository';
 import { PgRecommendationRepository } from '../business-model/pg-recommendation.repository';
+import { PgBusinessReadRepository } from '../business-model/pg-business-read.repository';
 import { PgIdentityRepository } from '../session/pg-identity.repository';
 import { resolveFounderId } from '../session/require-founder';
 import { readCookie, SESSION_COOKIE, clearSessionCookie } from '../session/cookie';
@@ -27,11 +28,12 @@ export function registerAccountRoutes(server: FastifyInstance): void {
   const evidence = new PgEvidenceRepository(db);
   const threads = new PgThreadRepository(db);
   const recommendations = new PgRecommendationRepository(db);
+  const reads = new PgBusinessReadRepository(db);
 
   server.get('/account/export', async (request: FastifyRequest, reply: FastifyReply) => {
     const founderId = await resolveFounderId(request, identity);
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; } // fail closed
-    const data = await buildFounderExport({ founderId, db, evidence, threads, recommendations, now: new Date() });
+    const data = await buildFounderExport({ founderId, db, evidence, threads, recommendations, reads, now: new Date() });
     if (!data) { await reply.code(404).send({ error: 'account not found' }); return; }
     reply.header('content-disposition', `attachment; filename="business-brain-export-${founderId}.json"`);
     await reply.send(data);

@@ -6,6 +6,8 @@ import { registerSessionRoutes } from '../../routes/session.routes';
 import { registerAccountRoutes } from '../../routes/account.routes';
 import { PgThreadRepository } from '../../business-model/pg-thread.repository';
 import { PgRecommendationRepository } from '../../business-model/pg-recommendation.repository';
+import { PgBusinessReadRepository } from '../../business-model/pg-business-read.repository';
+import { assembleRead } from '../../business-model/read-assembler';
 import { PgCredentialStore } from '../../auth/pg-credential-store';
 
 /**
@@ -30,7 +32,7 @@ async function purge(database: any): Promise<void> {
   const rows = await database.selectFrom('identity.founders').select('founder_id').where('email', 'in', EMAILS).execute();
   const ids = rows.map((r: { founder_id: string }) => r.founder_id);
   if (ids.length) {
-    for (const t of ['evidence.fragments', 'memory.threads', 'memory.thread_events', 'memory.recommendations', 'app.oauth_credentials', 'identity.sessions']) {
+    for (const t of ['evidence.fragments', 'memory.threads', 'memory.thread_events', 'memory.recommendations', 'business_read.snapshots', 'app.oauth_credentials', 'identity.sessions']) {
       await database.deleteFrom(t).where('founder_id', 'in', ids).execute();
     }
   }
@@ -47,6 +49,7 @@ async function seed(founderId: string, marker: string): Promise<void> {
   const now = new Date();
   await new PgThreadRepository(db).save(founderId, [{ founderId, signature: `${marker}-sig`, category: 'contradictions', declaredFields: ['direction'], observedKeys: [`${marker}-home`], status: 'open', currentTensionId: `${marker}-tension`, resolvedReason: null, recurrenceCount: 1, firstSeenAt: now, lastSeenAt: now, history: [{ event: 'opened', at: now, tensionId: `${marker}-tension` }] }]);
   await new PgRecommendationRepository(db).save(founderId, { claim: inf, contract: { evidenceBasis: [obs.id], assumptions: [`${marker} assumption`], confidence: 'high', recommendation: `${marker} recommendation` } }, `${marker}-sig`);
+  await new PgBusinessReadRepository(db).save(assembleRead(founderId, [obs, dec, inf], [], undefined, now)); // an immutable Read snapshot (marker flows into its receipts)
   await new PgCredentialStore(db, FieldEncryptor.fromHexKey(ENC_KEY)).save(founderId, 'google', { accessToken: `${marker}-ACCESS-TOKEN-SECRET`, refreshToken: `${marker}-REFRESH-TOKEN-SECRET`, expiresAt: new Date(now.getTime() + 3600_000), scopes: 'https://www.googleapis.com/auth/drive.file' });
 }
 
@@ -95,6 +98,13 @@ describe('account export §LIVE — complete, secret-free, founder-scoped', () =
     expect(a.json.integrations).toHaveLength(1);
     expect(a.json.integrations[0].provider).toBe('google');
     expect(a.json.integrations[0].scopes).toContain('drive.file');
+    // ── Business Read snapshots included (S1-T3) ──
+    expect(a.json.reads).toHaveLength(1);
+    expect(a.json.reads[0].read.founderId).toBe(A.founderId);
+    expect(a.json.reads[0].schemaVersion).toBe(1);
+    expect(JSON.stringify(a.json.reads[0].read)).toContain('ALPHA observed'); // the whole Read is exported
+    expect(a.json.meta.note).toContain('Business Read snapshots');            // note is accurate, not the old "not stored" lie
+    expect(a.json.meta.note).not.toContain('Reads) are recomputed');
 
     // ── excludes secrets ──
     expect(a.raw, 'no access token').not.toContain('ALPHA-ACCESS-TOKEN-SECRET');
