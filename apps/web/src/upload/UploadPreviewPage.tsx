@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { UPLOAD_CASES, type UploadCase, type ULine, type Src } from './fixtures';
 import { createSSEParser } from './sse';
+import { founderCategory } from '../copy/vocabulary';
 
 /**
  * M2.2 — Upload Connector, founder-facing surface.
@@ -28,11 +29,12 @@ function SourceBadge({ source, doc, location }: { source: Src; doc?: string; loc
   if (source === 'upload') return <span style={{ ...badge, color: 'var(--gold)', borderColor: 'var(--gold-soft)', background: 'var(--surface)' }}>your document{doc ? ` · ${doc}` : ''}{location ? ` · ${location}` : ''}</span>;
   if (source === 'website') return <span style={{ ...badge, color: 'var(--ink-3)', borderColor: 'var(--line)', background: 'var(--paper-2)' }}>your website</span>;
   if (source === 'model') return <span style={{ ...badge, color: 'var(--gold-soft)', borderColor: 'var(--line)', background: 'var(--surface)' }}>across your connected sources</span>;
-  return <span style={{ ...badge, color: 'var(--gold)', borderColor: 'var(--gold)', background: 'var(--surface)', fontWeight: 600 }}>your website ⋈ your document — a contradiction only you could see</span>;
+  return <span style={{ ...badge, color: 'var(--gold)', borderColor: 'var(--gold)', background: 'var(--surface)', fontWeight: 600 }}>your website ⋈ your document — a gap only you could see</span>;
 }
 
 function LineView({ line }: { line: ULine }) {
-  const label = line.label.charAt(0).toUpperCase() + line.label.slice(1);
+  // Inferred lines carry the internal category enum in `label` → founder vocabulary; observed keep theirs.
+  const label = line.kind === 'inferred' ? founderCategory(line.label) : line.label.charAt(0).toUpperCase() + line.label.slice(1);
   return (
     <div style={{ margin: '0 0 26px', opacity: 0, animation: 'bbIn 0.9s var(--ease, ease) forwards' }}>
       <div style={{ ...meta, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 6, color: line.kind === 'inferred' ? 'var(--gold-soft)' : 'var(--ink-3)' }}>{label}</div>

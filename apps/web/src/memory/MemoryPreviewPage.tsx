@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createSSEParser } from '../upload/sse';
+import { founderCategory } from '../copy/vocabulary';
 
 /**
  * Business Memory v1 (DEV preview) — the C→B response loop. On load it shows the current "what
@@ -44,7 +45,7 @@ function TensionRow({ item, prominent }: { item: WMItem; prominent?: boolean }) 
   return (
     <div style={card}>
       <div style={{ ...meta, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--gold-soft)', marginBottom: 6 }}>
-        {item.rank === 1 ? 'Highest-stakes tension' : `Tension #${item.rank}`} · {item.category}
+        {item.rank === 1 ? 'Highest-stakes gap' : `Gap #${item.rank}`} · {founderCategory(item.category)}
         <MarkBadge mark={item.mark} count={item.recurrenceCount} />
       </div>
       <div style={{ ...say, fontSize: prominent ? '1.2rem' : '1.05rem', ...(item.mark === 'resolved' ? { color: 'var(--ink-3)', textDecoration: 'line-through' } : {}) }}>{item.statement}</div>
@@ -113,10 +114,10 @@ export function MemoryPreviewPage() {
     <div style={wrap}>
       <div style={inner}>
         <div style={{ ...meta, border: '1px solid var(--line-2)', borderRadius: 8, padding: '8px 12px', marginBottom: 24, color: 'var(--ink-3)' }}>
-          DEV · Business Memory v1 — the response loop. Respond to a tension and I <b>re-think</b> it against what you told me. Your response becomes evidence I keep. Re-run takes ~110s.
+          DEV · Business Memory v1 — the response loop. Respond to a gap and I <b>re-think</b> it against what you told me. Your response becomes evidence I keep. Re-run takes ~110s.
         </div>
         <h1 style={{ ...serif, fontSize: '1.6rem', fontWeight: 500, letterSpacing: '-0.01em', marginBottom: 6 }}>What matters now — and what you said about it.</h1>
-        <p style={{ ...meta, fontSize: '0.85rem', color: 'var(--ink-2)', marginBottom: 22 }}>These are the tensions between what you told me and what I&apos;ve seen. Tell me where each stands.</p>
+        <p style={{ ...meta, fontSize: '0.85rem', color: 'var(--ink-2)', marginBottom: 22 }}>These are the gaps between what you told me and what I&apos;ve seen. Tell me where each stands.</p>
 
         {err && <div style={{ ...meta, color: 'var(--gold)', marginBottom: 14 }}>error: {err}</div>}
 
@@ -131,7 +132,7 @@ export function MemoryPreviewPage() {
 
         {phase === 'idle' && (
           state.length === 0
-            ? <div style={{ ...serif, fontSize: '1.15rem', color: 'var(--ink-2)' }}>No grounded tensions yet — capture your intent on the declared page first, then come back.</div>
+            ? <div style={{ ...serif, fontSize: '1.15rem', color: 'var(--ink-2)' }}>No grounded gaps yet — capture your intent on the declared page first, then come back.</div>
             : <div>
                 {state.map((it) => (
                   <div key={it.tensionId}>
@@ -159,7 +160,7 @@ export function MemoryPreviewPage() {
               <div style={{ width: 1, background: 'var(--line)', alignSelf: 'stretch' }} />
               <Column title="After — I re-thought it" items={after} note={phase === 'responding' ? 'thinking…' : 'now reflecting what you told me'} />
             </div>
-            {phase === 'done' && <button style={{ ...btn(false), marginTop: 20 }} onClick={() => { setPhase('idle'); void loadState(); }}>← back to all tensions</button>}
+            {phase === 'done' && <button style={{ ...btn(false), marginTop: 20 }} onClick={() => { setPhase('idle'); void loadState(); }}>← back to all gaps</button>}
           </div>
         )}
       </div>

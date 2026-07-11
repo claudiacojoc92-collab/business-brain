@@ -53,9 +53,9 @@ const SYNCED: UploadCase = {
     { label: 'Offer', text: 'Your offer looks like Start free with Basecamp — one project, 20 users, forever free. Or upgrade to Plus or Pro Unlimited for unlimited projects and premium support.', kind: 'observed', source: 'website', fragmentIds: ['6d5b3a89e0'] },
   ],
   beat2: [
-    { label: 'contradiction', text: "Basecamp's public claim is “calm software for everyone,” but its internal wedge is specifically teams burned by complexity — the public positioning and the private strategy point in different directions…", kind: 'inferred', source: 'both', fragmentIds: ['986b0b6a2b', 'b791ebecee', '40dd4069d8'] },
-    { label: 'blind spot', text: 'The deliberate under-investment in enterprise sales is framed internally as brand protection, but the flat-rate unlimited-user pricing model is built for exactly the large teams the brand pushes away…', kind: 'inferred', source: 'both', fragmentIds: ['7cc31c935d', '2cdc022f64', '6f8ff05652'] },
-    { label: 'hidden weakness', text: "Basecamp's longevity narrative (“profitable for 27 years”, “99.99% uptime”, “built to stay, not exit”) is its most repeated public signal…", kind: 'inferred', source: 'website', fragmentIds: ['d0e5f48e6a', 'ee770bba4e', '4bbdfa97e0'] },
+    { label: 'contradictions', text: "Basecamp's public claim is “calm software for everyone,” but its internal wedge is specifically teams burned by complexity — the public positioning and the private strategy point in different directions…", kind: 'inferred', source: 'both', fragmentIds: ['986b0b6a2b', 'b791ebecee', '40dd4069d8'] },
+    { label: 'blindSpots', text: 'The deliberate under-investment in enterprise sales is framed internally as brand protection, but the flat-rate unlimited-user pricing model is built for exactly the large teams the brand pushes away…', kind: 'inferred', source: 'both', fragmentIds: ['7cc31c935d', '2cdc022f64', '6f8ff05652'] },
+    { label: 'hiddenWeaknesses', text: "Basecamp's longevity narrative (“profitable for 27 years”, “99.99% uptime”, “built to stay, not exit”) is its most repeated public signal…", kind: 'inferred', source: 'website', fragmentIds: ['d0e5f48e6a', 'ee770bba4e', '4bbdfa97e0'] },
   ],
   handoff: "That's what your site says in public and what your doc says in private. Now tell me the part neither one can — what are you actually trying to build?",
   message: null,
