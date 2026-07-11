@@ -1,15 +1,17 @@
 import type { PgEvidenceRepository } from '@bb/infrastructure';
 import type { PgThreadRepository } from '../business-model/pg-thread.repository';
 import type { PgRecommendationRepository } from '../business-model/pg-recommendation.repository';
+import type { PgBusinessReadRepository } from '../business-model/pg-business-read.repository';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDB = any;
 
 /**
  * Complete founder export (S0-T4, Article XIII — "leave as easily as you stay"). Assembles EVERYTHING the
- * session founder owns into one JSON document, reusing the existing founder-scoped repo reads. It is the
- * stored substrate only: derived views ("what matters now" / gaps / Reads) are RECOMPUTED from evidence,
- * never persisted, so they are not a separate section — the evidence they derive from IS exported.
+ * session founder owns into one JSON document, reusing the existing founder-scoped repo reads. Persisted
+ * Business Read snapshots (S1-T3) are founder-owned data and ARE exported (the `reads` section); other
+ * derived views ("what matters now" / gaps) remain recomputed-not-stored, so the evidence they derive from
+ * is what represents them here.
  *
  * SECRETS ARE NEVER EXPORTED: OAuth rows contribute METADATA ONLY (provider / scopes / connectedAt /
  * tokenExpiresAt) — the encrypted access/refresh tokens are never read here. Session ids and magic-link
@@ -22,6 +24,7 @@ export interface FounderExport {
   evidence: unknown[];
   threads: unknown[];
   recommendations: unknown[];
+  reads: Array<{ readId: string; createdAt: string | null; schemaVersion: number; read: unknown }>;
   integrations: Array<{ provider: string; scopes: string | null; connectedAt: string | null; tokenExpiresAt: string | null }>;
   meta: { note: string };
 }
@@ -34,9 +37,10 @@ export async function buildFounderExport(args: {
   evidence: PgEvidenceRepository;
   threads: PgThreadRepository;
   recommendations: PgRecommendationRepository;
+  reads: PgBusinessReadRepository;
   now: Date;
 }): Promise<FounderExport | null> {
-  const { founderId, db, evidence, threads, recommendations, now } = args;
+  const { founderId, db, evidence, threads, recommendations, reads, now } = args;
 
   const founder = await db
     .selectFrom('identity.founders')
@@ -48,6 +52,7 @@ export async function buildFounderExport(args: {
   const fragments = await evidence.findByFounder(founderId);              // observed + declared + inferred
   const threadList = await threads.load(founderId);                       // threads WITH their events (history)
   const recs = await recommendations.load(founderId);                    // Layer-2 contracts (stored)
+  const readList = await reads.listByFounder(founderId);                 // immutable Business Read snapshots (S1-T3)
 
   // OAuth METADATA ONLY — the encrypted token columns are never selected.
   const creds = (await db
@@ -74,12 +79,15 @@ export async function buildFounderExport(args: {
       claimFragmentId: r.claimFragmentId, threadSignature: r.threadSignature, evidenceBasis: r.evidenceBasis,
       assumptions: r.assumptions, confidence: r.confidence, recommendationText: r.recommendationText,
     })),
+    // Immutable Read snapshots, chronological (oldest first). The whole stored Read is included verbatim.
+    reads: [...readList].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.readId.localeCompare(b.readId))
+      .map((s) => ({ readId: s.readId, createdAt: iso(s.createdAt), schemaVersion: s.schemaVersion, read: s.read })),
     integrations: creds.map((c) => ({
       provider: String(c['provider']), scopes: (c['scopes'] as string | null) ?? null,
       connectedAt: iso(c['created_at']), tokenExpiresAt: iso(c['token_expires_at']),
     })),
     meta: {
-      note: 'This is the complete stored data for your account. Derived views ("what matters now", gaps, Reads) are recomputed from your evidence and are not stored, so they are not listed separately. Excluded for security: encrypted access/refresh tokens, session identifiers, and magic-link token hashes. No other founder’s data is included.',
+      note: 'This is the complete stored data for your account, including your saved Business Read snapshots (immutable — each is exactly what you saw when it was generated). Other derived views ("what matters now", gaps) are recomputed from your evidence and are not stored, so they are represented here by the evidence they derive from. Excluded for security: encrypted access/refresh tokens, session identifiers, and magic-link token hashes. No other founder’s data is included.',
     },
   };
 }

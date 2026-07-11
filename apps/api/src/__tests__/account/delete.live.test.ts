@@ -6,6 +6,8 @@ import { registerSessionRoutes } from '../../routes/session.routes';
 import { registerAccountRoutes } from '../../routes/account.routes';
 import { PgThreadRepository } from '../../business-model/pg-thread.repository';
 import { PgRecommendationRepository } from '../../business-model/pg-recommendation.repository';
+import { PgBusinessReadRepository } from '../../business-model/pg-business-read.repository';
+import { assembleRead } from '../../business-model/read-assembler';
 import { PgCredentialStore } from '../../auth/pg-credential-store';
 import { deleteFounderAccount } from '../../account/delete.service';
 
@@ -20,7 +22,7 @@ const DB_URL = process.env['GATE_DB_URL'] ?? 'postgresql://bbuser:bbpassword@loc
 const EMAIL_A = 'delete.a@account.test';
 const EMAIL_B = 'delete.b@account.test';
 const EMAILS = [EMAIL_A, EMAIL_B];
-const FOUNDER_TABLES = ['evidence.fragments', 'app.oauth_credentials', 'memory.thread_events', 'memory.threads', 'memory.recommendations', 'identity.sessions'];
+const FOUNDER_TABLES = ['evidence.fragments', 'app.oauth_credentials', 'memory.thread_events', 'memory.threads', 'memory.recommendations', 'business_read.snapshots', 'identity.sessions'];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let db: any; let app: FastifyInstance; let dbUp = false;
@@ -43,6 +45,7 @@ async function seed(founderId: string, marker: string): Promise<void> {
   const now = new Date();
   await new PgThreadRepository(db).save(founderId, [{ founderId, signature: `${marker}-sig`, category: 'contradictions', declaredFields: ['direction'], observedKeys: [`${marker}-home`], status: 'open', currentTensionId: `${marker}-t`, resolvedReason: null, recurrenceCount: 1, firstSeenAt: now, lastSeenAt: now, history: [{ event: 'opened', at: now, tensionId: `${marker}-t` }] }]);
   await new PgRecommendationRepository(db).save(founderId, { claim: inf, contract: { evidenceBasis: [obs.id], assumptions: ['a'], confidence: 'high', recommendation: `${marker} rec` } }, `${marker}-sig`);
+  await new PgBusinessReadRepository(db).save(assembleRead(founderId, [obs, inf], [], undefined, now)); // an immutable Read snapshot
   await new PgCredentialStore(db, FieldEncryptor.fromHexKey('a'.repeat(64))).save(founderId, 'google', { accessToken: `${marker}-TOK`, refreshToken: `${marker}-REF`, expiresAt: new Date(now.getTime() + 3600_000), scopes: 'drive.file' });
 }
 

@@ -31,6 +31,7 @@ export async function deleteFounderAccount(
     await tx.deleteFrom('memory.thread_events').where('founder_id', '=', founderId).execute();
     await tx.deleteFrom('memory.threads').where('founder_id', '=', founderId).execute();
     await tx.deleteFrom('memory.recommendations').where('founder_id', '=', founderId).execute();
+    await tx.deleteFrom('business_read.snapshots').where('founder_id', '=', founderId).execute(); // S1-T3 immutable Read snapshots
     await tx.deleteFrom('identity.sessions').where('founder_id', '=', founderId).execute();     // revokes all sessions
     await tx.deleteFrom('identity.magic_link_tokens').where('email', '=', email).execute();
 
