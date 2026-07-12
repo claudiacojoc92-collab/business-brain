@@ -9,6 +9,7 @@ import { registerDeclaredDevRoutes }   from './declared-dev.routes';
 import { registerMemoryDevRoutes }     from './memory-dev.routes';
 import { registerRecommendationDevRoutes } from './recommendation-dev.routes';
 import { registerAccountRoutes } from './account.routes';
+import { registerReadRoutes } from './read.routes';
 import { PgIdentityRepository } from '../session/pg-identity.repository';
 import { registerRequireFounder } from '../session/require-founder';
 
@@ -23,6 +24,7 @@ export async function registerRoutes(
   registerHealthRoutes(server);
   registerSessionRoutes(server);           // S0-T2 — magic-link self-serve session
   registerAccountRoutes(server);           // S0-T4 — real product endpoints (export/delete); session-scoped, ALL envs
+  registerReadRoutes(server);              // S1-T4 — Business Read generate/retrieve; strict session, ALL envs
 
   // Dev-only nucleus endpoints (outside /v1). Never registered in production.
   if (process.env['NODE_ENV'] !== 'production') {
