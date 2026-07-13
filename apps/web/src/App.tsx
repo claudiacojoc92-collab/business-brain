@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { LoginPage } from './pages/LoginPage';
 import { AccountPage } from './pages/AccountPage';
+import { ReadsListPage } from './pages/ReadsListPage';
+import { FirstReadPage } from './pages/FirstReadPage';
 import { ConnectPreviewPage } from './connect/ConnectPreviewPage';
 import { UploadPreviewPage } from './upload/UploadPreviewPage';
 import { GooglePreviewPage } from './google/GooglePreviewPage';
@@ -25,6 +27,11 @@ export function App() {
 
           {/* Real product: account (export + delete). Redirects to /login when signed out. */}
           <Route path="/account" element={<AccountPage />} />
+
+          {/* Real product: the Business Read surface (S1-T6). Session-guarded; pure read of persisted
+              snapshots. The list is the "return to" target; :readId renders one immutable Read. */}
+          <Route path="/reads" element={<ReadsListPage />} />
+          <Route path="/reads/:readId" element={<FirstReadPage />} />
 
           {/* Dev-only: ADR-007 nucleus preview surfaces (not registered in prod). */}
           {import.meta.env.DEV && (

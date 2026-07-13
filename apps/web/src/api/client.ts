@@ -101,3 +101,27 @@ export async function getAccountExport(): Promise<unknown> {
 export async function deleteAccount(confirmEmail: string): Promise<void> {
   return request<void>('account/delete', { method: 'POST', body: JSON.stringify({ confirmEmail }) });
 }
+
+// ─── Business Read: retrieve persisted snapshots (S1-T6, pure read) ──────────────
+// These ONLY fetch persisted immutable Reads. The surface never POSTs /reads (never generates on load).
+
+import type { StoredReadResponse, ReadListResponse } from '../reads/types';
+
+/** GET /reads/:readId — one persisted Read. ApiError(404) if not found/owned, (500) if corrupt. */
+export async function getRead(readId: string): Promise<StoredReadResponse> {
+  return request<StoredReadResponse>(`reads/${encodeURIComponent(readId)}`);
+}
+
+/** GET /reads/latest — the founder's most recent Read, or ApiError(404) when none exists. */
+export async function getLatestRead(): Promise<StoredReadResponse> {
+  return request<StoredReadResponse>('reads/latest');
+}
+
+/** GET /reads — the founder's Reads, newest first (metadata only). */
+export async function listReads(opts: { limit?: number; offset?: number } = {}): Promise<ReadListResponse> {
+  const q = new URLSearchParams();
+  if (opts.limit != null) q.set('limit', String(opts.limit));
+  if (opts.offset != null) q.set('offset', String(opts.offset));
+  const qs = q.toString();
+  return request<ReadListResponse>(`reads${qs ? `?${qs}` : ''}`);
+}
