@@ -4,7 +4,7 @@ import { createKyselyClient, PgEvidenceRepository, FieldEncryptor } from '@bb/in
 import { PgIdentityRepository } from '../session/pg-identity.repository';
 import { readCookie, SESSION_COOKIE } from '../session/cookie';
 import { resolveSession } from '../session/session.service';
-import { ingestWebsite, ingestUpload } from '../business-model/connect-ingest.service';
+import { ingestWebsite, ingestUpload, ingestCalendar } from '../business-model/connect-ingest.service';
 import { MAX_BYTES } from '../connectors/upload/detect';
 import { PgCredentialStore } from '../auth/pg-credential-store';
 import { PendingAuthStore } from '../auth/oauth';
@@ -50,6 +50,18 @@ export async function registerConnectRoutes(server: FastifyInstance): Promise<vo
       const sessionId = readCookie(request.headers['cookie'], SESSION_COOKIE);
       return sessionId ? resolveSession(sessionId, identity, new Date()) : null;
     }
+    // The session (id + founder) — the OAuth connect/callback need BOTH to bind the round-trip (S0-T3).
+    async function sessionOf(request: FastifyRequest): Promise<{ sessionId: string; founderId: string } | null> {
+      const sessionId = readCookie(request.headers['cookie'], SESSION_COOKIE);
+      if (!sessionId) return null;
+      const founderId = await resolveSession(sessionId, identity, new Date());
+      return founderId ? { sessionId, founderId } : null;
+    }
+    // 503 (not a crash) when Google OAuth isn't configured — website/upload/status still work without it.
+    const requireConnector = (reply: FastifyReply): GoogleConnector | null => {
+      if (!connector) { void reply.code(503).send({ error: 'google oauth not configured' }); return null; }
+      return connector;
+    };
 
     // POST /connect/website — { url } → ingest-only website read. Factual result, no stream.
     scope.post('/connect/website', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -95,5 +107,64 @@ export async function registerConnectRoutes(server: FastifyInstance): Promise<vo
         calendar: { connected: calendarConnected },
       });
     });
+
+    // ── Calendar (Google OAuth). connect/callback reuse the EXISTING S0-T3 session-bound OAuth verbatim:
+    // authorize binds {founderId, sessionId} into the server-side pending entry (state-CSRF); the callback
+    // requires the completing bb_session to MATCH the state-bound session (A cannot complete B's OAuth).
+
+    // GET /connect/calendar — begin OAuth (requires a real session; the callback must match it).
+    scope.get('/connect/calendar', async (request: FastifyRequest, reply: FastifyReply) => {
+      const c = requireConnector(reply); if (!c) return;
+      const session = await sessionOf(request);
+      if (!session) { await reply.code(401).send({ error: 'authentication required' }); return; }
+      const { authUrl } = c.authorize(session.founderId, session.sessionId);
+      await reply.redirect(authUrl);
+    });
+
+    // GET /connect/calendar/callback — validate state + session-match, exchange code, store encrypted.
+    scope.get('/connect/calendar/callback', async (request: FastifyRequest, reply: FastifyReply) => {
+      const c = requireConnector(reply); if (!c) return;
+      const q = request.query as Record<string, unknown>;
+      if (q['error']) { await reply.code(400).type('text/html').send(page('Connection cancelled', `Google returned: ${String(q['error'])}`)); return; }
+      const state = String(q['state'] ?? '');
+      const code = String(q['code'] ?? '');
+      if (!state || !code) { await reply.code(400).type('text/html').send(page('Missing parameters', 'The callback is missing state or code.')); return; }
+      const session = await sessionOf(request); // bb_session Lax cookie IS sent on this top-level GET
+      try {
+        await c.handleCallback(state, code, { founderId: session?.founderId ?? null, sessionId: session?.sessionId ?? null });
+        await reply.type('text/html').send(page('Calendar connected', 'Your calendar is connected. You can close this tab.'));
+      } catch (e) {
+        await reply.code(400).type('text/html').send(page('Could not connect', e instanceof Error ? e.message : 'unknown error'));
+      }
+    });
+
+    // POST /connect/calendar/read — the INGEST step (OAuth grant alone stores nothing). Ingest-only:
+    // temporal observed evidence in the store, NO recompute, factual result.
+    scope.post('/connect/calendar/read', async (request: FastifyRequest, reply: FastifyReply) => {
+      const c = requireConnector(reply); if (!c) return;
+      const founderId = await sessionFounder(request);
+      if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+      try {
+        const result = await ingestCalendar({ founderId, conn: c, repo: evidence });
+        await reply.send(result);
+      } catch (e) {
+        await reply.code(400).send({ error: e instanceof Error ? e.message : 'calendar read error' });
+      }
+    });
+
+    // POST /connect/calendar/disconnect — revoke at Google + delete local credential + calendar evidence.
+    scope.post('/connect/calendar/disconnect', async (request: FastifyRequest, reply: FastifyReply) => {
+      const c = requireConnector(reply); if (!c) return;
+      const founderId = await sessionFounder(request);
+      if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+      await c.disconnect(founderId);
+      await reply.send({ connected: false });
+    });
   });
+}
+
+function page(title: string, body: string): string {
+  return `<!doctype html><meta charset="utf-8"><title>${title}</title>` +
+    `<div style="font-family:system-ui;max-width:520px;margin:80px auto;padding:0 20px">` +
+    `<h1 style="font-weight:500">${title}</h1><p style="color:#555">${body}</p></div>`;
 }
