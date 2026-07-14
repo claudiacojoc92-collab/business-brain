@@ -12,20 +12,13 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/v1': {
+      // VP-T2: the founder-facing API is under a single /api/* boundary; /reads, /connect, /account,
+      // /auth as BROWSER routes are the SPA. Only /api and the dev preview endpoints proxy to the api.
+      '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
-      '/auth': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
-      // Real product account endpoints (export / delete).
-      '/account': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
-      // Dev-only M2.1 streaming endpoint (SSE). Live wiring pending api rebuild.
+      // Dev-only preview endpoints (SSE + /dev/*). Not founder-facing; not under /api.
       '/dev': {
         target: 'http://localhost:3000',
         changeOrigin: true,

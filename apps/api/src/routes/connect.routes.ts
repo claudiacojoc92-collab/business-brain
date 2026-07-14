@@ -36,7 +36,7 @@ export async function registerConnectRoutes(server: FastifyInstance): Promise<vo
     // Absent when Google isn't configured; calendar presence then reports connected:false.
     const clientId = process.env['GOOGLE_CLIENT_ID'] ?? '';
     const clientSecret = process.env['GOOGLE_CLIENT_SECRET'] ?? '';
-    const redirectUri = process.env['GOOGLE_REDIRECT_URI'] ?? 'http://localhost:3000/connect/calendar/callback';
+    const redirectUri = process.env['GOOGLE_REDIRECT_URI'] ?? 'http://localhost:3000/api/connect/calendar/callback'; // VP-T2: /api boundary (Google Console redirect must match — external)
     const encKeyHex = process.env['GOOGLE_OAUTH_ENCRYPTION_KEY'] ?? '';
     let connector: GoogleConnector | null = null;
     if (clientId && clientSecret && encKeyHex) {

@@ -40,8 +40,8 @@ export function CalendarCard({ calendar, available = true, reading = false, onCh
           <button type="button" onClick={() => void disconnect()} disabled={busy} aria-disabled={busy} style={quietBtn}>{C.disconnect}</button>
         </>
       ) : (
-        // Full-page OAuth — a real link (new tab), NOT a fetch (GET /connect/calendar 302s to Google).
-        <a href="/connect/calendar" target="_blank" rel="noopener noreferrer" style={linkBtn}>{C.action}</a>
+        // Full-page OAuth — a real link (new tab), NOT a fetch (GET /api/connect/calendar 302s to Google).
+        <a href="/api/connect/calendar" target="_blank" rel="noopener noreferrer" style={linkBtn}>{C.action}</a>
       )}
       {error && <p style={errorLine} role="alert">{error}</p>}
     </SourceCard>

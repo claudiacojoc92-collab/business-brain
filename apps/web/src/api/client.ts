@@ -10,7 +10,7 @@
  * with its UI in S0-T1; this client is now just the self-serve session + (future) nucleus reads.
  */
 
-const API_BASE = '/';
+const API_BASE = '/api/'; // VP-T2: the founder-facing API lives under /api/* (browser routes /reads, /connect, … are the SPA)
 
 export class ApiError extends Error {
   constructor(

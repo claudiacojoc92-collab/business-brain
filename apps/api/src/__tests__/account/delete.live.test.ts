@@ -62,7 +62,7 @@ async function tokensFor(email: string): Promise<number> {
 beforeAll(async () => {
   process.env['DATABASE_URL'] = DB_URL; process.env['NODE_ENV'] = 'test'; delete process.env['NUCLEUS_DEV_FOUNDER'];
   try { db = createKyselyClient(DB_URL); await purge(db); dbUp = true; } catch { dbUp = false; }
-  app = Fastify(); registerSessionRoutes(app); registerAccountRoutes(app); await app.ready();
+  app = Fastify(); await app.register(async (s) => { registerSessionRoutes(s); registerAccountRoutes(s); }, { prefix: '/api' }); await app.ready();
 });
 afterAll(async () => {
   try { await app?.close(); } catch { /* ignore */ } try { if (dbUp) await purge(db); } catch { /* ignore */ } try { await db?.destroy(); } catch { /* ignore */ }
@@ -72,16 +72,16 @@ afterAll(async () => {
 });
 
 async function signIn(email: string): Promise<{ cookie: string; founderId: string }> {
-  const link = await app.inject({ method: 'POST', url: '/auth/magic-link', payload: { email } });
+  const link = await app.inject({ method: 'POST', url: '/api/auth/magic-link', payload: { email } });
   const token = new URL(link.json<{ devLink: string }>().devLink).searchParams.get('token')!;
-  const verify = await app.inject({ method: 'GET', url: `/auth/verify?token=${encodeURIComponent(token)}` });
+  const verify = await app.inject({ method: 'GET', url: `/api/auth/verify?token=${encodeURIComponent(token)}` });
   const raw = verify.headers['set-cookie'];
   const cookie = (Array.isArray(raw) ? raw : [raw]).find((s) => typeof s === 'string' && s.startsWith('bb_session='))!.split(';')[0]!;
-  const me = await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie } });
+  const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie } });
   return { cookie, founderId: me.json<{ founder_id: string }>().founder_id };
 }
 const del = (cookie: string | null, confirmEmail?: string, qs = '') =>
-  app.inject({ method: 'POST', url: `/account/delete${qs}`, headers: cookie ? { cookie } : {}, payload: confirmEmail === undefined ? {} : { confirmEmail } });
+  app.inject({ method: 'POST', url: `/api/account/delete${qs}`, headers: cookie ? { cookie } : {}, payload: confirmEmail === undefined ? {} : { confirmEmail } });
 
 describe('account deletion §LIVE — complete, atomic, isolated, secure', () => {
   it('permanently removes the founder, atomically, without touching the other founder', { timeout: 60_000 }, async (ctx) => {
@@ -112,11 +112,11 @@ describe('account deletion §LIVE — complete, atomic, isolated, secure', () =>
     expect(await countFor(A.founderId), 'all A rows gone').toBe(0);
     expect(await tokensFor(EMAIL_A), 'A magic-link tokens gone (by email)').toBe(0);
     // session revocation: A's cookie no longer resolves
-    expect((await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie: A.cookie } })).statusCode, 'A session revoked').toBe(401);
+    expect((await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie: A.cookie } })).statusCode, 'A session revoked').toBe(401);
 
     // ── two-founder integrity: B untouched ──
     expect(await countFor(B.founderId), 'B still whole').toBeGreaterThan(0);
-    expect((await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie: B.cookie } })).statusCode, 'B session still valid').toBe(200);
+    expect((await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie: B.cookie } })).statusCode, 'B session still valid').toBe(200);
 
     // ── idempotency: deleting an already-deleted founder is a safe no-op ──
     expect(await deleteFounderAccount(A.founderId, db)).toEqual({ deleted: false });

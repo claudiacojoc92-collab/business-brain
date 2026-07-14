@@ -77,7 +77,7 @@ beforeAll(async () => {
   } catch { dbUp = false; }
 
   app = Fastify();
-  registerSessionRoutes(app);
+  await app.register(async (s) => { registerSessionRoutes(s); }, { prefix: '/api' }); // VP-T2 — auth under /api; the dev nucleus below stays bare (dev routes are not /api)
   const identity = new PgIdentityRepository(db);
   await app.register(async (nucleus) => {
     registerRequireFounder(nucleus, identity);
@@ -103,11 +103,11 @@ function cookieOf(res: Awaited<ReturnType<FastifyInstance['inject']>>): string {
   return c.split(';')[0]!;
 }
 async function signIn(email: string): Promise<{ cookie: string; founderId: string }> {
-  const link = await app.inject({ method: 'POST', url: '/auth/magic-link', payload: { email } });
+  const link = await app.inject({ method: 'POST', url: '/api/auth/magic-link', payload: { email } });
   const token = new URL(link.json<{ devLink: string }>().devLink).searchParams.get('token')!;
-  const verify = await app.inject({ method: 'GET', url: `/auth/verify?token=${encodeURIComponent(token)}` });
+  const verify = await app.inject({ method: 'GET', url: `/api/auth/verify?token=${encodeURIComponent(token)}` });
   const cookie = cookieOf(verify);
-  const me = await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie } });
+  const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie } });
   return { cookie, founderId: me.json<{ founder_id: string }>().founder_id };
 }
 const body = (res: Awaited<ReturnType<FastifyInstance['inject']>>) => res.body;

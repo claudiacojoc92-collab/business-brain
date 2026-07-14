@@ -67,7 +67,7 @@ beforeAll(async () => {
   } catch { dbUp = false; }     // DB unavailable → skip cleanly
 
   server = Fastify();
-  registerSessionRoutes(server);
+  await server.register(async (s) => { registerSessionRoutes(s); }, { prefix: '/api' }); // VP-T2 — mirror prod /api mount
   // Thin nucleus PROBE — mirrors the exact resolver call in the six /dev routes. Reads ONLY the
   // session-resolved founder's evidence, so isolation is provable over the real HTTP boundary.
   const identity = new PgIdentityRepository(db);
@@ -101,19 +101,19 @@ function sessionCookie(res: Awaited<ReturnType<FastifyInstance['inject']>>): str
 
 // Full flow: email → magic-link → verify → cookie. Returns the replayable cookie header value.
 async function signIn(rawEmail: string): Promise<string> {
-  const link = await server.inject({ method: 'POST', url: '/auth/magic-link', payload: { email: rawEmail } });
+  const link = await server.inject({ method: 'POST', url: '/api/auth/magic-link', payload: { email: rawEmail } });
   expect(link.statusCode).toBe(200);
   const devLink = link.json<{ ok: boolean; devLink?: string }>().devLink;
   expect(devLink, 'dev magic-link returns the verify link').toBeTruthy();
   const token = new URL(devLink!).searchParams.get('token');
   expect(token).toBeTruthy();
-  const verify = await server.inject({ method: 'GET', url: `/auth/verify?token=${encodeURIComponent(token!)}` });
+  const verify = await server.inject({ method: 'GET', url: `/api/auth/verify?token=${encodeURIComponent(token!)}` });
   expect(verify.statusCode, 'verify redirects home').toBe(302);
   return sessionCookie(verify);
 }
 
 async function whoAmI(cookie: string): Promise<{ status: number; founderId?: string }> {
-  const res = await server.inject({ method: 'GET', url: '/auth/me', headers: { cookie } });
+  const res = await server.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie } });
   return { status: res.statusCode, founderId: res.statusCode === 200 ? res.json<{ founder_id: string }>().founder_id : undefined };
 }
 
@@ -172,13 +172,13 @@ describe('magic-link session §LIVE — end-to-end over HTTP + real DB (V054)', 
 
     // ── Single-use token — replaying A's ORIGINAL verify token is rejected ───────────────────────
     // (re-mint a token, consume it, then replay → 401)
-    const link = await server.inject({ method: 'POST', url: '/auth/magic-link', payload: { email: EMAIL_A } });
+    const link = await server.inject({ method: 'POST', url: '/api/auth/magic-link', payload: { email: EMAIL_A } });
     const token = new URL(link.json<{ devLink: string }>().devLink).searchParams.get('token')!;
-    expect((await server.inject({ method: 'GET', url: `/auth/verify?token=${encodeURIComponent(token)}` })).statusCode).toBe(302);
-    expect((await server.inject({ method: 'GET', url: `/auth/verify?token=${encodeURIComponent(token)}` })).statusCode, 'token is single-use').toBe(401);
+    expect((await server.inject({ method: 'GET', url: `/api/auth/verify?token=${encodeURIComponent(token)}` })).statusCode).toBe(302);
+    expect((await server.inject({ method: 'GET', url: `/api/auth/verify?token=${encodeURIComponent(token)}` })).statusCode, 'token is single-use').toBe(401);
 
     // ── Logout revokes the session ───────────────────────────────────────────────────────────────
-    expect((await server.inject({ method: 'POST', url: '/auth/logout', headers: { cookie: cookieA } })).statusCode).toBe(204);
+    expect((await server.inject({ method: 'POST', url: '/api/auth/logout', headers: { cookie: cookieA } })).statusCode).toBe(204);
     expect((await whoAmI(cookieA)).status, 'session revoked after logout').toBe(401);
 
     // eslint-disable-next-line no-console

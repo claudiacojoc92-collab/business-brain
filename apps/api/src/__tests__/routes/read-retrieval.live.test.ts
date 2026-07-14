@@ -58,7 +58,7 @@ const withCookie = (sid: string) => ({ cookie: `bb_session=${sid}` });
 beforeAll(async () => {
   process.env['DATABASE_URL'] = DB_URL;
   try { db = createKyselyClient(DB_URL); await db.selectFrom('business_read.snapshots').select('read_id').limit(1).execute(); repo = new PgBusinessReadRepository(db); await purge(); dbUp = true; } catch { dbUp = false; }
-  app = Fastify(); registerErrorHandler(app, createLogger({ service: 'test' })); registerReadRoutes(app); await app.ready();
+  app = Fastify(); registerErrorHandler(app, createLogger({ service: 'test' })); await app.register(async (s) => { registerReadRoutes(s); }, { prefix: '/api' }); await app.ready();
   // 'A' → FID_A, 'B' → FID_B, anything else → null (unauth)
   vi.mocked(resolveSession).mockImplementation(async (sid: string) => (sid === 'A' ? FID_A : sid === 'B' ? FID_B : null));
 });
@@ -72,7 +72,7 @@ describe('GET /reads retrieval §LIVE — pure read, paginated, founder-scoped, 
     const read = mkRead(FID_A, 'ALPHA');
     const { readId } = await repo.save(read);
     vi.mocked(recomputeFromSources).mockClear(); vi.mocked(assembleRead).mockClear();
-    const res = await app.inject({ method: 'GET', url: `/reads/${readId}`, headers: withCookie('A') });
+    const res = await app.inject({ method: 'GET', url: `/api/reads/${readId}`, headers: withCookie('A') });
     expect(res.statusCode).toBe(200);
     const body = res.json<{ readId: string; read: BusinessRead }>();
     expect(body.readId).toBe(readId);
@@ -86,18 +86,18 @@ describe('GET /reads retrieval §LIVE — pure read, paginated, founder-scoped, 
     await purge();
     const ids: string[] = [];
     for (let i = 0; i < 3; i++) ids.push((await repo.save(mkRead(FID_A, `SEQ${i}`))).readId);
-    const latest = await app.inject({ method: 'GET', url: '/reads/latest', headers: withCookie('A') });
+    const latest = await app.inject({ method: 'GET', url: '/api/reads/latest', headers: withCookie('A') });
     expect(latest.statusCode).toBe(200);
     expect(latest.json<{ readId: string }>().readId).toBe(ids[2]); // newest
-    const list = await app.inject({ method: 'GET', url: '/reads', headers: withCookie('A') });
+    const list = await app.inject({ method: 'GET', url: '/api/reads', headers: withCookie('A') });
     const items = list.json<{ reads: { readId: string }[]; nextOffset?: number }>();
     expect(items.reads).toHaveLength(3);
     expect(items.reads.map((r) => r.readId)).toEqual([ids[2], ids[1], ids[0]]); // newest-first
     expect(items).not.toHaveProperty('read'); // metadata only, not full Reads
     // pagination: limit=2 → 2 items + nextOffset=2; offset=2 → last item, no nextOffset
-    const page1 = (await app.inject({ method: 'GET', url: '/reads?limit=2', headers: withCookie('A') })).json<{ reads: unknown[]; nextOffset?: number }>();
+    const page1 = (await app.inject({ method: 'GET', url: '/api/reads?limit=2', headers: withCookie('A') })).json<{ reads: unknown[]; nextOffset?: number }>();
     expect(page1.reads).toHaveLength(2); expect(page1.nextOffset).toBe(2);
-    const page2 = (await app.inject({ method: 'GET', url: '/reads?limit=2&offset=2', headers: withCookie('A') })).json<{ reads: unknown[]; nextOffset?: number }>();
+    const page2 = (await app.inject({ method: 'GET', url: '/api/reads?limit=2&offset=2', headers: withCookie('A') })).json<{ reads: unknown[]; nextOffset?: number }>();
     expect(page2.reads).toHaveLength(1); expect(page2.nextOffset).toBeUndefined();
     expect(recomputeFromSources).not.toHaveBeenCalled(); expect(assembleRead).not.toHaveBeenCalled();
   });
@@ -108,29 +108,29 @@ describe('GET /reads retrieval §LIVE — pure read, paginated, founder-scoped, 
     const a = await repo.save(mkRead(FID_A, 'AAA'));
     const b = await repo.save(mkRead(FID_B, 'BBB'));
     // A knows B's readId but is not authorized → 404, NOT 403 (existence not leaked)
-    expect((await app.inject({ method: 'GET', url: `/reads/${b.readId}`, headers: withCookie('A') })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: `/api/reads/${b.readId}`, headers: withCookie('A') })).statusCode).toBe(404);
     // A's list + latest never include B
-    const aList = (await app.inject({ method: 'GET', url: '/reads', headers: withCookie('A') })).json<{ reads: { readId: string }[] }>();
+    const aList = (await app.inject({ method: 'GET', url: '/api/reads', headers: withCookie('A') })).json<{ reads: { readId: string }[] }>();
     expect(aList.reads.map((r) => r.readId)).toEqual([a.readId]);
-    expect((await app.inject({ method: 'GET', url: '/reads/latest', headers: withCookie('A') })).json<{ readId: string }>().readId).toBe(a.readId);
+    expect((await app.inject({ method: 'GET', url: '/api/reads/latest', headers: withCookie('A') })).json<{ readId: string }>().readId).toBe(a.readId);
     // and B can fetch its own
-    expect((await app.inject({ method: 'GET', url: `/reads/${b.readId}`, headers: withCookie('B') })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: `/api/reads/${b.readId}`, headers: withCookie('B') })).statusCode).toBe(200);
   });
 
   it('not-found + unauth: unknown id → 404; no cookie → 401; latest with none → 404', async (ctx) => {
     if (!dbUp) { ctx.skip(); return; }
     await purge();
-    expect((await app.inject({ method: 'GET', url: '/reads/no-such-id', headers: withCookie('A') })).statusCode).toBe(404);
-    expect((await app.inject({ method: 'GET', url: '/reads/anything' })).statusCode).toBe(401);            // no cookie
-    expect((await app.inject({ method: 'GET', url: '/reads', headers: withCookie('zzz') })).statusCode).toBe(401); // session → null
-    expect((await app.inject({ method: 'GET', url: '/reads/latest', headers: withCookie('A') })).statusCode).toBe(404); // A has none after purge
+    expect((await app.inject({ method: 'GET', url: '/api/reads/no-such-id', headers: withCookie('A') })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/api/reads/anything' })).statusCode).toBe(401);            // no cookie
+    expect((await app.inject({ method: 'GET', url: '/api/reads', headers: withCookie('zzz') })).statusCode).toBe(401); // session → null
+    expect((await app.inject({ method: 'GET', url: '/api/reads/latest', headers: withCookie('A') })).statusCode).toBe(404); // A has none after purge
   });
 
   it('fail-closed: a stored row with an unknown schema_version → 500 (never a silent reconstruct)', async (ctx) => {
     if (!dbUp) { ctx.skip(); return; }
     await purge();
     await db.insertInto('business_read.snapshots').values({ read_id: 'v999-ra', founder_id: FID_A, schema_version: 999, content_hash: 'x', read_content: JSON.stringify(mkRead(FID_A, 'FUT')) }).execute();
-    const res = await app.inject({ method: 'GET', url: '/reads/v999-ra', headers: withCookie('A') });
+    const res = await app.inject({ method: 'GET', url: '/api/reads/v999-ra', headers: withCookie('A') });
     expect(res.statusCode).toBe(500); // StoredReadError propagates → INTERNAL_ERROR, not a partial Read
   });
 });

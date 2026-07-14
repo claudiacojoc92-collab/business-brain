@@ -36,7 +36,7 @@ const COOKIE = { cookie: 'bb_session=abc' };
 async function makeApp(): Promise<FastifyInstance> {
   const app = Fastify();
   registerErrorHandler(app, createLogger({ service: 'test' }));
-  await registerConnectRoutes(app);
+  await app.register(async (s) => { await registerConnectRoutes(s); }, { prefix: '/api' }); // VP-T2 — mirror prod /api mount
   await app.ready();
   return app;
 }
@@ -55,7 +55,7 @@ beforeEach(() => { vi.clearAllMocks(); vi.mocked(mockConn.authorize).mockReturnV
 describe('calendar OAuth — session-bound, ingest-only', () => {
   it('GET /connect/calendar without a session → 401; authorize never runs', async () => {
     const app = await makeApp();
-    const res = await app.inject({ method: 'GET', url: '/connect/calendar' });
+    const res = await app.inject({ method: 'GET', url: '/api/connect/calendar' });
     expect(res.statusCode).toBe(401);
     expect(mockConn.authorize).not.toHaveBeenCalled();
     await app.close();
@@ -64,7 +64,7 @@ describe('calendar OAuth — session-bound, ingest-only', () => {
   it('GET /connect/calendar with a session → 302 to Google; authorize bound to (founder, session)', async () => {
     vi.mocked(resolveSession).mockResolvedValue('founder-A');
     const app = await makeApp();
-    const res = await app.inject({ method: 'GET', url: '/connect/calendar', headers: COOKIE });
+    const res = await app.inject({ method: 'GET', url: '/api/connect/calendar', headers: COOKIE });
     expect(res.statusCode).toBe(302);
     expect(res.headers['location']).toMatch(/accounts\.google\.com/);
     expect(mockConn.authorize).toHaveBeenCalledWith('founder-A', 'abc'); // founderId + sessionId bound
@@ -75,7 +75,7 @@ describe('calendar OAuth — session-bound, ingest-only', () => {
     vi.mocked(resolveSession).mockResolvedValue('founder-B'); // B tries to complete A's pending OAuth
     vi.mocked(mockConn.handleCallback).mockRejectedValueOnce(new Error('session does not match the initiating session'));
     const app = await makeApp();
-    const res = await app.inject({ method: 'GET', url: '/connect/calendar/callback?state=xyz&code=abc', headers: COOKIE });
+    const res = await app.inject({ method: 'GET', url: '/api/connect/calendar/callback?state=xyz&code=abc', headers: COOKIE });
     expect(res.statusCode).toBe(400);
     expect(res.body).toMatch(/Could not connect/);
     await app.close();
@@ -84,7 +84,7 @@ describe('calendar OAuth — session-bound, ingest-only', () => {
   it('callback success → HTML confirmation', async () => {
     vi.mocked(resolveSession).mockResolvedValue('founder-A');
     const app = await makeApp();
-    const res = await app.inject({ method: 'GET', url: '/connect/calendar/callback?state=xyz&code=abc', headers: COOKIE });
+    const res = await app.inject({ method: 'GET', url: '/api/connect/calendar/callback?state=xyz&code=abc', headers: COOKIE });
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatch(/Calendar connected/);
     await app.close();
@@ -93,7 +93,7 @@ describe('calendar OAuth — session-bound, ingest-only', () => {
   it('POST /connect/calendar/read is INGEST-ONLY: routes to ingestCalendar, factual JSON (no stream)', async () => {
     vi.mocked(resolveSession).mockResolvedValue('founder-A');
     const app = await makeApp();
-    const res = await app.inject({ method: 'POST', url: '/connect/calendar/read', headers: COOKIE });
+    const res = await app.inject({ method: 'POST', url: '/api/connect/calendar/read', headers: COOKIE });
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toMatch(/application\/json/); // factual JSON, not SSE
     expect(res.json()).toMatchObject({ source: 'google-calendar', state: 'synced', stored: 2 });
@@ -103,14 +103,14 @@ describe('calendar OAuth — session-bound, ingest-only', () => {
 
   it('POST /connect/calendar/read without a session → 401', async () => {
     const app = await makeApp();
-    expect((await app.inject({ method: 'POST', url: '/connect/calendar/read' })).statusCode).toBe(401);
+    expect((await app.inject({ method: 'POST', url: '/api/connect/calendar/read' })).statusCode).toBe(401);
     await app.close();
   });
 
   it('POST /connect/calendar/disconnect scoped to the session founder', async () => {
     vi.mocked(resolveSession).mockResolvedValue('founder-A');
     const app = await makeApp();
-    const res = await app.inject({ method: 'POST', url: '/connect/calendar/disconnect', headers: COOKIE });
+    const res = await app.inject({ method: 'POST', url: '/api/connect/calendar/disconnect', headers: COOKIE });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ connected: false });
     expect(mockConn.disconnect).toHaveBeenCalledWith('founder-A');
@@ -125,7 +125,7 @@ describe('calendar — 503 when Google unconfigured', () => {
     try {
       vi.mocked(resolveSession).mockResolvedValue('founder-A');
       const app = await makeApp();
-      const res = await app.inject({ method: 'GET', url: '/connect/calendar', headers: COOKIE });
+      const res = await app.inject({ method: 'GET', url: '/api/connect/calendar', headers: COOKIE });
       expect(res.statusCode).toBe(503);
       await app.close();
     } finally { process.env['GOOGLE_CLIENT_ID'] = saved; }
