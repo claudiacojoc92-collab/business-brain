@@ -125,3 +125,54 @@ export async function listReads(opts: { limit?: number; offset?: number } = {}):
   const qs = q.toString();
   return request<ReadListResponse>(`reads${qs ? `?${qs}` : ''}`);
 }
+
+// ─── Connect: source-adaptive connect + generate (S1-T5b, over the S1-T5a production API) ─────────
+// These consume ONLY the production connect endpoints. Calendar OAuth is a full-page navigation to
+// GET /connect/calendar (an anchor, not a fetch) — not represented here.
+
+import type { ConnectStatus, IngestResult, GenerateResult } from '../connect/types';
+
+/** GET /connect/status — factual presence per source. */
+export async function getConnectStatus(): Promise<ConnectStatus> {
+  return request<ConnectStatus>('connect/status');
+}
+
+/** POST /connect/website — ingest a website by URL (ingest-only; the engine runs later, at generate). */
+export async function connectWebsite(url: string): Promise<IngestResult> {
+  return request<IngestResult>('connect/website', { method: 'POST', body: JSON.stringify({ url }) });
+}
+
+/**
+ * POST /connect/upload — multipart. Uses a RAW fetch (not request<T>): the browser must set the multipart
+ * Content-Type + boundary itself, so we send FormData with NO Content-Type header. ApiError on non-2xx
+ * (incl. 413 too-large / 400 unsupported), mirroring request<T>.
+ */
+export async function connectUpload(file: File): Promise<IngestResult> {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${API_BASE}connect/upload`, { method: 'POST', body: form, credentials: 'include' });
+  if (!res.ok) {
+    let code = 'UNKNOWN_ERROR'; let message = res.statusText;
+    try { const b = await res.json(); code = b?.error?.code ?? code; message = b?.error ?? b?.error?.message ?? message; } catch { /* non-JSON */ }
+    throw new ApiError(res.status, code, typeof message === 'string' ? message : res.statusText);
+  }
+  return res.json() as Promise<IngestResult>;
+}
+
+/** POST /connect/calendar/read — the calendar INGEST step (OAuth grant alone stores nothing). */
+export async function readCalendar(): Promise<IngestResult> {
+  return request<IngestResult>('connect/calendar/read', { method: 'POST' });
+}
+
+/** POST /connect/calendar/disconnect — revoke + delete the calendar connection. */
+export async function disconnectCalendar(): Promise<{ connected: boolean }> {
+  return request<{ connected: boolean }>('connect/calendar/disconnect', { method: 'POST' });
+}
+
+/**
+ * POST /reads — generate a Read from present evidence (the ONE engine call). 201 generated | 200
+ * insufficient_evidence both resolve to the discriminated union; 500 throws ApiError.
+ */
+export async function generateRead(): Promise<GenerateResult> {
+  return request<GenerateResult>('reads', { method: 'POST' });
+}
