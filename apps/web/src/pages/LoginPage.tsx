@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { requestMagicLink, ApiError } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 
 /**
  * Magic-link sign-in (S0-T2). Email only — no password. Submitting requests a link; the response is
@@ -8,11 +10,15 @@ import { requestMagicLink, ApiError } from '../api/client';
  * hits GET /auth/verify, which sets the bb_session cookie and redirects home.
  */
 export function LoginPage() {
+  const { founderId, isLoading: authLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [devLink, setDevLink] = useState<string | null>(null);
+
+  // Already signed in → the connect surface is the authenticated landing (S1-T5b).
+  if (!authLoading && founderId) return <Navigate to="/connect" replace />;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

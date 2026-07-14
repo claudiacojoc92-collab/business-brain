@@ -4,6 +4,7 @@ import { LoginPage } from './pages/LoginPage';
 import { AccountPage } from './pages/AccountPage';
 import { ReadsListPage } from './pages/ReadsListPage';
 import { FirstReadPage } from './pages/FirstReadPage';
+import { ConnectPage } from './pages/ConnectPage';
 import { ConnectPreviewPage } from './connect/ConnectPreviewPage';
 import { UploadPreviewPage } from './upload/UploadPreviewPage';
 import { GooglePreviewPage } from './google/GooglePreviewPage';
@@ -24,6 +25,10 @@ export function App() {
         <Routes>
           {/* Public */}
           <Route path="/login" element={<LoginPage />} />
+
+          {/* Real product: the connect surface (S1-T5b) — the authenticated landing. Magic Link → Connect
+              → Generate → Read. Session-guarded; consumes only the production connect + generate endpoints. */}
+          <Route path="/connect" element={<ConnectPage />} />
 
           {/* Real product: account (export + delete). Redirects to /login when signed out. */}
           <Route path="/account" element={<AccountPage />} />
