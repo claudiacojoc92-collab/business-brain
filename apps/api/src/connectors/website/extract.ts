@@ -20,7 +20,56 @@ export interface Extracted {
 }
 
 const MIN_MEANINGFUL_CHARS = 200;
-const BOILERPLATE = 'script,style,noscript,template,svg,nav,footer,header,aside,form,iframe';
+
+// STRUCTURAL_NOISE — author-declared chrome + non-content artifacts removed BEFORE text extraction.
+// This strips CHROME, never business content: we do not judge which content matters (that is the
+// engine's job). Three conservative bands:
+//   - non-content tags: script/style/… carry no readable prose.
+//   - landmark chrome by tag AND by ARIA role: a <div role="navigation"> is navigation just as much
+//     as a <nav>, so the role equivalents ride alongside the tags they mirror.
+//   - cookie/consent banners by class-substring + the known widget ids that use a fixed container.
+// NOTE: node-html-parser's class-substring match is CASE-SENSITIVE and its id-substring ([id*=…]) is
+// UNSUPPORTED (both verified) — so these selectors are the fast common-case net and manualStripBanners
+// below is the case-insensitive id+class backstop. Every selector here removes a real lowercase target.
+const STRUCTURAL_NOISE = [
+  'script', 'style', 'noscript', 'template', 'svg', 'iframe',
+  'nav', 'footer', 'header', 'aside', 'form',
+  '[role=navigation]', '[role=banner]', '[role=contentinfo]',
+  '[class*=cookie]', '[class*=consent]', '[class*=gdpr]', '#onetrust-banner-sdk', '#CybotCookiebotDialog',
+].join(',');
+
+// Cookie/consent-banner backstop. [id*=…] is unsupported and [class*=…] is case-sensitive in
+// node-html-parser, so a manual walk removes any element whose id OR class contains a consent token,
+// case-insensitively — the same conservative targets, robust to casing. Anchored to consent/widget
+// tokens ("cookie" needs the full word, so a class like "cook-book" is kept).
+const BANNER_TOKENS = /cookie|consent|gdpr|onetrust|cybot/i;
+function manualStripBanners(root: HTMLElement): void {
+  for (const el of root.querySelectorAll('*')) {
+    if (!el.parentNode) continue; // already detached with a removed ancestor
+    const id = el.getAttribute('id');
+    const cls = el.getAttribute('class');
+    if ((id && BANNER_TOKENS.test(id)) || (cls && BANNER_TOKENS.test(cls))) el.remove();
+  }
+}
+
+// A leading <!doctype …> parses as a TEXT node whose text is the raw declaration; on the no-<body>
+// fallback (SPA shell / HTML fragment) it would otherwise leak into root.text. Remove it at source.
+function stripDoctype(root: HTMLElement): HTMLElement {
+  for (const c of [...root.childNodes]) {
+    if (c.parentNode && /^\s*<!doctype/i.test(c.toString())) c.remove();
+  }
+  return root;
+}
+
+// The ONE place the strip set is applied: parse → remove structural noise → return the readable
+// region (the <body>, or the doctype-stripped root when a page has no parseable <body>). All three
+// public extractors read text from here, so the strip set is defined exactly once.
+function readableRoot(html: string): HTMLElement {
+  const root = parse(html, { comment: false });
+  root.querySelectorAll(STRUCTURAL_NOISE).forEach((el) => el.remove());
+  manualStripBanners(root);
+  return root.querySelector('body') ?? stripDoctype(root);
+}
 
 function decodeEntities(s: string): string {
   return s
@@ -30,14 +79,13 @@ function decodeEntities(s: string): string {
 }
 
 function clean(s: string): string {
-  return decodeEntities(s).replace(/\s+/g, ' ').trim();
+  // Belt-and-suspenders: strip a stray leading doctype so a declaration never reaches a fragment,
+  // even if the node-level stripDoctype path is ever bypassed.
+  return decodeEntities(s).replace(/\s+/g, ' ').replace(/^<!doctype[^>]*>\s*/i, '').trim();
 }
 
 export function extractReadableText(html: string): string {
-  const root = parse(html, { comment: false });
-  root.querySelectorAll(BOILERPLATE).forEach((el) => el.remove());
-  const body = root.querySelector('body') ?? root;
-  return clean(body.text);
+  return clean(readableRoot(html).text);
 }
 
 export interface Block { text: string; blockType: string }
@@ -73,9 +121,7 @@ function hasDirectBlockChild(el: HTMLElement): boolean {
  *     no leaf covers the span.
  */
 export function extractBlocks(html: string): Block[] {
-  const root = parse(html, { comment: false });
-  root.querySelectorAll(BOILERPLATE).forEach((el) => el.remove());
-  const body = root.querySelector('body') ?? root;
+  const body = readableRoot(html);
   const out: Block[] = [];
   const seen = new Set<string>();
   const push = (text: string, blockType: string) => {
@@ -135,12 +181,12 @@ export function classifyPageType(url: string, title: string | null): PageType {
 }
 
 export function extractPage(url: string, html: string): Extracted {
+  // meta + JSON-LD live in <head>/<script>, which the strip set removes — so read them from a full,
+  // unstripped parse first, then take the readable text from the structurally-cleaned region.
   const root = parse(html, { comment: false });
   const { title, description, og, lang } = extractMeta(root);
   const jsonld = extractJsonLd(root);
-  root.querySelectorAll(BOILERPLATE).forEach((el) => el.remove());
-  const body = root.querySelector('body') ?? root;
-  const text = clean(body.text);
+  const text = clean(readableRoot(html).text);
   const empty = text.length < MIN_MEANINGFUL_CHARS && !description && Object.keys(og).length === 0;
   return { title, description, og, jsonld, text, lang, pageType: classifyPageType(url, title), empty };
 }
