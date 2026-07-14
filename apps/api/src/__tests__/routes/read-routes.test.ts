@@ -27,7 +27,7 @@ const storedFixture = () => ({ readId: 'rid-1', founderId: 'founder-A', schemaVe
 function makeApp(): FastifyInstance {
   const app = Fastify();
   registerErrorHandler(app, createLogger({ service: 'test' }));
-  registerReadRoutes(app);
+  app.register(async (s) => { registerReadRoutes(s); }, { prefix: '/api' }); // VP-T2 — mirror prod /api mount
   return app;
 }
 
@@ -38,7 +38,7 @@ beforeEach(() => { vi.mocked(generateBusinessRead).mockReset(); vi.mocked(resolv
 describe('POST /reads — strict session, status mapping, in-flight guard', () => {
   it('no session cookie → 401 fail-closed (generation never runs)', async () => {
     const app = makeApp(); await app.ready();
-    const res = await app.inject({ method: 'POST', url: '/reads' });
+    const res = await app.inject({ method: 'POST', url: '/api/reads' });
     expect(res.statusCode).toBe(401);
     expect(generateBusinessRead).not.toHaveBeenCalled();
     await app.close();
@@ -48,7 +48,7 @@ describe('POST /reads — strict session, status mapping, in-flight guard', () =
     vi.mocked(resolveSession).mockResolvedValue('founder-A');
     vi.mocked(generateBusinessRead).mockResolvedValue({ status: 'generated', stored: storedFixture() } as never);
     const app = makeApp(); await app.ready();
-    const res = await app.inject({ method: 'POST', url: '/reads', headers: COOKIE });
+    const res = await app.inject({ method: 'POST', url: '/api/reads', headers: COOKIE });
     expect(res.statusCode).toBe(201);
     const body = res.json<{ status: string; readId: string; schemaVersion: number }>();
     expect(body.status).toBe('generated'); expect(body.readId).toBe('rid-1'); expect(body.schemaVersion).toBe(1);
@@ -59,7 +59,7 @@ describe('POST /reads — strict session, status mapping, in-flight guard', () =
     vi.mocked(resolveSession).mockResolvedValue('founder-A');
     vi.mocked(generateBusinessRead).mockResolvedValue({ status: 'insufficient_evidence', reason: 'r', whatToDo: 'w' } as never);
     const app = makeApp(); await app.ready();
-    const res = await app.inject({ method: 'POST', url: '/reads', headers: COOKIE });
+    const res = await app.inject({ method: 'POST', url: '/api/reads', headers: COOKIE });
     expect(res.statusCode).toBe(200);
     expect(res.json<{ status: string }>().status).toBe('insufficient_evidence');
     await app.close();
@@ -71,9 +71,9 @@ describe('POST /reads — strict session, status mapping, in-flight guard', () =
     const pending = new Promise<void>((r) => { release = r; });
     vi.mocked(generateBusinessRead).mockImplementation(async () => { await pending; return { status: 'generated', stored: storedFixture() } as never; });
     const app = makeApp(); await app.ready();
-    const first = app.inject({ method: 'POST', url: '/reads', headers: COOKIE });
+    const first = app.inject({ method: 'POST', url: '/api/reads', headers: COOKIE });
     await new Promise((r) => setTimeout(r, 20)); // let the first acquire the in-flight slot
-    const second = await app.inject({ method: 'POST', url: '/reads', headers: COOKIE });
+    const second = await app.inject({ method: 'POST', url: '/api/reads', headers: COOKIE });
     expect(second.statusCode).toBe(409); // ConflictError → 409 via the error handler
     release();
     expect((await first).statusCode).toBe(201);
@@ -89,7 +89,7 @@ describe('registration — OUTSIDE the dev gate', () => {
       const app = Fastify();
       await registerRoutes(app);
       await app.ready();
-      const res = await app.inject({ method: 'POST', url: '/reads' }); // no cookie
+      const res = await app.inject({ method: 'POST', url: '/api/reads' }); // no cookie
       expect(res.statusCode).toBe(401); // registered + reachable in production (404 would mean gated out)
       await app.close();
     } finally {

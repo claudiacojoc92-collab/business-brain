@@ -27,7 +27,7 @@ const COOKIE = { cookie: 'bb_session=abc' };
 async function makeApp(): Promise<FastifyInstance> {
   const app = Fastify();
   registerErrorHandler(app, createLogger({ service: 'test' }));
-  await registerConnectRoutes(app);
+  await app.register(async (s) => { await registerConnectRoutes(s); }, { prefix: '/api' }); // VP-T2 — mirror prod /api mount
   await app.ready();
   return app;
 }
@@ -39,7 +39,7 @@ beforeEach(() => { vi.mocked(ingestWebsite).mockReset(); vi.mocked(resolveSessio
 describe('connect routes — strict session, factual JSON, no stream', () => {
   it('POST /connect/website without a session → 401; ingest never runs', async () => {
     const app = await makeApp();
-    const res = await app.inject({ method: 'POST', url: '/connect/website', payload: { url: 'https://a.example' } });
+    const res = await app.inject({ method: 'POST', url: '/api/connect/website', payload: { url: 'https://a.example' } });
     expect(res.statusCode).toBe(401);
     expect(ingestWebsite).not.toHaveBeenCalled();
     await app.close();
@@ -49,7 +49,7 @@ describe('connect routes — strict session, factual JSON, no stream', () => {
     vi.mocked(resolveSession).mockResolvedValue('founder-A');
     vi.mocked(ingestWebsite).mockResolvedValue({ source: 'website', state: 'synced', stored: 5, detail: { pagesRead: 3 } } as never);
     const app = await makeApp();
-    const res = await app.inject({ method: 'POST', url: '/connect/website', headers: COOKIE, payload: { url: 'https://a.example' } });
+    const res = await app.inject({ method: 'POST', url: '/api/connect/website', headers: COOKIE, payload: { url: 'https://a.example' } });
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toMatch(/application\/json/); // factual JSON, NOT text/event-stream
     expect(res.json()).toEqual({ source: 'website', state: 'synced', stored: 5, detail: { pagesRead: 3 } });
@@ -62,21 +62,21 @@ describe('connect routes — strict session, factual JSON, no stream', () => {
   it('POST /connect/website with a session but no url → 400', async () => {
     vi.mocked(resolveSession).mockResolvedValue('founder-A');
     const app = await makeApp();
-    const res = await app.inject({ method: 'POST', url: '/connect/website', headers: COOKIE, payload: {} });
+    const res = await app.inject({ method: 'POST', url: '/api/connect/website', headers: COOKIE, payload: {} });
     expect(res.statusCode).toBe(400);
     await app.close();
   });
 
   it('POST /connect/upload without a session → 401 (before any multipart parse)', async () => {
     const app = await makeApp();
-    const res = await app.inject({ method: 'POST', url: '/connect/upload' });
+    const res = await app.inject({ method: 'POST', url: '/api/connect/upload' });
     expect(res.statusCode).toBe(401);
     await app.close();
   });
 
   it('GET /connect/status without a session → 401', async () => {
     const app = await makeApp();
-    const res = await app.inject({ method: 'GET', url: '/connect/status' });
+    const res = await app.inject({ method: 'GET', url: '/api/connect/status' });
     expect(res.statusCode).toBe(401);
     await app.close();
   });
@@ -91,7 +91,7 @@ describe('connect routes — registered OUTSIDE the dev gate', () => {
       registerErrorHandler(app, createLogger({ service: 'test' }));
       await registerRoutes(app);
       await app.ready();
-      const res = await app.inject({ method: 'POST', url: '/connect/website', payload: { url: 'x' } }); // no cookie
+      const res = await app.inject({ method: 'POST', url: '/api/connect/website', payload: { url: 'x' } }); // no cookie
       expect(res.statusCode).toBe(401); // present + reachable in production (404 would mean gated out)
       await app.close();
     } finally {

@@ -78,10 +78,10 @@ describe('UploadCard', () => {
 });
 
 describe('CalendarCard', () => {
-  it('not connected: an ANCHOR to /connect/calendar (new tab, rel=noopener), not a fetch; no disconnect', () => {
+  it('not connected: an ANCHOR to /api/connect/calendar (new tab, rel=noopener), not a fetch; no disconnect', () => {
     render(<CalendarCard calendar={{ connected: false }} onChanged={vi.fn()} />);
     const link = screen.getByRole('link', { name: /connect calendar/i });
-    expect(link).toHaveAttribute('href', '/connect/calendar');
+    expect(link).toHaveAttribute('href', '/api/connect/calendar');
     expect(link).toHaveAttribute('target', '_blank');
     expect(link.getAttribute('rel')).toMatch(/noopener/);
     expect(screen.queryByRole('button', { name: /disconnect/i })).not.toBeInTheDocument();

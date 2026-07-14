@@ -31,7 +31,7 @@ const purge = async () => { for (const t of ['evidence.fragments']) await db.del
 beforeAll(async () => {
   process.env['DATABASE_URL'] = DB_URL;
   try { db = createKyselyClient(DB_URL); await db.selectFrom('evidence.fragments').select('id').limit(1).execute(); repo = new PgEvidenceRepository(db); await purge(); dbUp = true; } catch { dbUp = false; }
-  app = Fastify(); registerErrorHandler(app, createLogger({ service: 'test' })); await registerConnectRoutes(app); await app.ready();
+  app = Fastify(); registerErrorHandler(app, createLogger({ service: 'test' })); await app.register(async (s) => { await registerConnectRoutes(s); }, { prefix: '/api' }); await app.ready();
   vi.mocked(resolveSession).mockImplementation(async (sid: string) => (sid === 'A' ? FID_A : sid === 'B' ? FID_B : null));
 });
 afterAll(async () => { try { await app?.close(); } catch { /* ignore */ } try { if (dbUp) await purge(); } catch { /* ignore */ } try { await db?.destroy(); } catch { /* ignore */ } if (prevDb === undefined) delete process.env['DATABASE_URL']; else process.env['DATABASE_URL'] = prevDb; });
@@ -62,13 +62,13 @@ describe('connect ingest §LIVE — honesty-gated, zero-recompute, founder-scope
     if (!dbUp) { ctx.skip(); return; }
     await purge();
     await ingestUpload({ founderId: FID_A, input: { founderId: FID_A, filename: 'a.txt', bytes: DOC }, repo });
-    const a = await app.inject({ method: 'GET', url: '/connect/status', headers: { cookie: 'bb_session=A' } });
+    const a = await app.inject({ method: 'GET', url: '/api/connect/status', headers: { cookie: 'bb_session=A' } });
     expect(a.statusCode).toBe(200);
     const body = a.json<{ website: { connected: boolean }; upload: { connected: boolean; count: number }; calendar: { connected: boolean } }>();
     expect(body.upload.connected).toBe(true); expect(body.upload.count).toBeGreaterThan(0);
     expect(body.website.connected).toBe(false); // A connected no website
     // B (no evidence) sees empty presence
-    const b = await app.inject({ method: 'GET', url: '/connect/status', headers: { cookie: 'bb_session=B' } });
+    const b = await app.inject({ method: 'GET', url: '/api/connect/status', headers: { cookie: 'bb_session=B' } });
     expect(b.json<{ upload: { connected: boolean } }>().upload.connected).toBe(false);
   });
 });

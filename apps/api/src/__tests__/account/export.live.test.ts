@@ -56,7 +56,7 @@ async function seed(founderId: string, marker: string): Promise<void> {
 beforeAll(async () => {
   process.env['DATABASE_URL'] = DB_URL; process.env['NODE_ENV'] = 'test'; delete process.env['NUCLEUS_DEV_FOUNDER'];
   try { db = createKyselyClient(DB_URL); await purge(db); dbUp = true; } catch { dbUp = false; }
-  app = Fastify(); registerSessionRoutes(app); registerAccountRoutes(app); await app.ready();
+  app = Fastify(); await app.register(async (s) => { registerSessionRoutes(s); registerAccountRoutes(s); }, { prefix: '/api' }); await app.ready();
 });
 afterAll(async () => {
   try { await app?.close(); } catch { /* ignore */ } try { if (dbUp) await purge(db); } catch { /* ignore */ } try { await db?.destroy(); } catch { /* ignore */ }
@@ -66,16 +66,16 @@ afterAll(async () => {
 });
 
 async function signIn(email: string): Promise<{ cookie: string; founderId: string }> {
-  const link = await app.inject({ method: 'POST', url: '/auth/magic-link', payload: { email } });
+  const link = await app.inject({ method: 'POST', url: '/api/auth/magic-link', payload: { email } });
   const token = new URL(link.json<{ devLink: string }>().devLink).searchParams.get('token')!;
-  const verify = await app.inject({ method: 'GET', url: `/auth/verify?token=${encodeURIComponent(token)}` });
+  const verify = await app.inject({ method: 'GET', url: `/api/auth/verify?token=${encodeURIComponent(token)}` });
   const raw = verify.headers['set-cookie'];
   const cookie = (Array.isArray(raw) ? raw : [raw]).find((s) => typeof s === 'string' && s.startsWith('bb_session='))!.split(';')[0]!;
-  const me = await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie } });
+  const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie } });
   return { cookie, founderId: me.json<{ founder_id: string }>().founder_id };
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const exportOf = async (cookie: string) => { const r = await app.inject({ method: 'GET', url: '/account/export', headers: { cookie } }); return { status: r.statusCode, raw: r.body, json: r.statusCode === 200 ? r.json<any>() : null }; };
+const exportOf = async (cookie: string) => { const r = await app.inject({ method: 'GET', url: '/api/account/export', headers: { cookie } }); return { status: r.statusCode, raw: r.body, json: r.statusCode === 200 ? r.json<any>() : null }; };
 
 describe('account export §LIVE — complete, secret-free, founder-scoped', () => {
   it('exports every object type, excludes secrets, and never leaks the other founder', { timeout: 60_000 }, async (ctx) => {
@@ -123,7 +123,7 @@ describe('account export §LIVE — complete, secret-free, founder-scoped', () =
     expect(b.raw, 'B never sees A').not.toContain('ALPHA');
 
     // ── security: no session ⇒ 401 (dev fallback off) ──
-    expect((await app.inject({ method: 'GET', url: '/account/export' })).statusCode).toBe(401);
+    expect((await app.inject({ method: 'GET', url: '/api/account/export' })).statusCode).toBe(401);
 
     // eslint-disable-next-line no-console
     console.log(`[export-live] A=${A.founderId.slice(0, 8)} complete(evidence=${a.json.evidence.length} threads=1 recs=1 integrations=1) · secret-free ✓ · isolation ✓`);

@@ -28,7 +28,7 @@ export function registerSessionRoutes(server: FastifyInstance): void {
     // Validate shape but ALWAYS return 200 — never reveal whether an email exists (no enumeration).
     if (raw.includes('@') && raw.trim().length >= 3) {
       const { token } = await requestMagicLink(raw, repo, new Date());
-      const link = `${apiBase}/auth/verify?token=${encodeURIComponent(token)}`;
+      const link = `${apiBase}/api/auth/verify?token=${encodeURIComponent(token)}`; // VP-T2: /api boundary — this manual string is NOT rewritten by the scope prefix
       await email.sendMagicLink(raw.trim().toLowerCase(), link);
       // Dev convenience only: surface the link so the flow is testable without a real mailbox.
       if (isDev) { await reply.status(200).send({ ok: true, devLink: link }); return; }

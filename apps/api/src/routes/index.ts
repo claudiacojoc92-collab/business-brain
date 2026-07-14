@@ -22,11 +22,17 @@ import { registerRequireFounder } from '../session/require-founder';
 export async function registerRoutes(
   server: FastifyInstance,
 ): Promise<void> {
-  registerHealthRoutes(server);
-  registerSessionRoutes(server);           // S0-T2 — magic-link self-serve session
-  registerAccountRoutes(server);           // S0-T4 — real product endpoints (export/delete); session-scoped, ALL envs
-  registerReadRoutes(server);              // S1-T4 — Business Read generate/retrieve; strict session, ALL envs
-  await registerConnectRoutes(server);     // S1-T5a — production connect (ingest-only); strict session, ALL envs
+  registerHealthRoutes(server);            // UNPREFIXED — ops/monitoring (prometheus scrapes /health/metrics)
+
+  // VP-T2 — the founder-facing API lives under an explicit /api/* boundary, so the browser routes
+  // (/reads, /reads/:readId, /connect, /login, /account) are deterministically the SPA and /api/* is the
+  // API. One scope, not per-path edits; handlers are byte-identical, only their mount path moves.
+  await server.register(async (api) => {
+    registerSessionRoutes(api);            // S0-T2 — magic-link self-serve session → /api/auth/*
+    registerAccountRoutes(api);            // S0-T4 — export/delete → /api/account/*; session-scoped, ALL envs
+    registerReadRoutes(api);               // S1-T4 — Business Read generate/retrieve → /api/reads*; strict session
+    await registerConnectRoutes(api);      // S1-T5a — production connect (ingest-only) → /api/connect/*; strict session
+  }, { prefix: '/api' });
 
   // Dev-only nucleus endpoints (outside /v1). Never registered in production.
   if (process.env['NODE_ENV'] !== 'production') {
