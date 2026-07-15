@@ -4,6 +4,7 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from '../auth/AuthContext';
 import { ConnectPage } from './ConnectPage';
 import type { ConnectStatus } from '../connect/types';
+import { AUTH_COPY } from '../copy/auth';
 
 /**
  * S1-T5b C2 — the connect journey. api client mocked. Proves: mount does GET /connect/status ONLY (no POST);
@@ -124,5 +125,13 @@ describe('ConnectPage — journey', () => {
       </MemoryRouter>,
     );
     await waitFor(() => expect(screen.getByText('LOGIN PAGE')).toBeInTheDocument());
+  });
+
+  // RIGHTS-1 — the rights (account/export/delete/logout) are reachable from the authenticated landing.
+  it('renders a quiet Account link to /account (a real <a href>), reachable from /connect', async () => {
+    vi.mocked(getConnectStatus).mockResolvedValue(ST());
+    await mount();
+    const link = screen.getByRole('link', { name: AUTH_COPY.account });
+    expect(link).toHaveAttribute('href', '/account');
   });
 });

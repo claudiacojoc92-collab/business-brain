@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { getAccountExport, deleteAccount, ApiError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { AUTH_COPY } from '../copy/auth';
 
 /**
  * Account page (S0-T4, Article XIII — "leave as easily as you stay"). Two actions, both neutral:
@@ -38,6 +39,11 @@ export function AccountPage() {
     } finally {
       setExporting(false);
     }
+  };
+
+  const handleLogout = async () => {
+    await logout();                        // GW-FIX logoutSession → 204, session ends + client state cleared
+    navigate('/login', { replace: true });
   };
 
   const handleDelete = async (e: React.FormEvent) => {
@@ -79,6 +85,15 @@ export function AccountPage() {
           {exported && <p style={{ color: 'var(--ok-ink)', fontSize: '0.875rem', margin: 0 }}>Your download has started.</p>}
           {exportError && <p style={{ color: 'var(--warn-ink)', fontSize: '0.875rem', margin: 0 }}>{exportError}</p>}
         </section>
+
+        {/* Log out — a quiet action (the foot-link idiom), between the data section and the destructive
+            delete. No confirmation: logout is reversible by signing in again (GW-FIX). */}
+        <button
+          type="button" onClick={() => void handleLogout()}
+          style={{ alignSelf: 'flex-start', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'var(--sans)', fontSize: '0.78rem', color: 'var(--ink-3)', textDecoration: 'none' }}
+        >
+          {AUTH_COPY.logout}
+        </button>
 
         <hr style={{ border: 0, borderTop: '1px solid var(--line)', margin: 0 }} />
 

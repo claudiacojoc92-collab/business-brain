@@ -3,6 +3,7 @@ import { Navigate, Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { listReads, ApiError } from '../api/client';
 import { STATE_COPY } from '../reads/copy';
+import { AUTH_COPY } from '../copy/auth';
 import type { ReadListItem } from '../reads/types';
 
 /**
@@ -53,7 +54,7 @@ export function ReadsListPage() {
             ? <p style={quiet}>No Reads to show.</p>
             : <nav>{state.reads.map((r) => <Link key={r.readId} to={`/reads/${r.readId}`} style={rowLink}>{fmt(r.createdAt)}</Link>)}</nav>
         )}
-        <div style={{ marginTop: 40 }}><Link to="/account" style={footLink}>Account</Link></div>
+        <div style={{ marginTop: 40 }}><Link to="/account" style={footLink}>{AUTH_COPY.account}</Link></div>
       </div>
     </div>
   );
