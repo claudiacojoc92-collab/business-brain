@@ -23,12 +23,18 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(
+// Exported for its own contract tests (client-contract.test.ts) — the low-level request builder is the
+// unit whose header/body handling the tests pin down; not intended for callers outside this module.
+export async function request<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
+  // Only declare a JSON body when we actually send one: a body-less POST that claims
+  // application/json trips Fastify's empty-body guard (→ 500). Caller-supplied headers win,
+  // so a caller may still set its own Content-Type. request() never serializes the body — the
+  // caller passes an already-serialized `body` (e.g. JSON.stringify) — so an absent body stays absent.
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(options.body != null ? { 'Content-Type': 'application/json' } : {}),
     ...(options.headers as Record<string, string>),
   };
 
