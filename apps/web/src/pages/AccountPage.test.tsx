@@ -60,4 +60,21 @@ describe('AccountPage', () => {
     // states the genuine irreversibility fact, neutrally
     expect(text).toMatch(/can’t be undone|cannot be undone/i);
   });
+
+  // RIGHTS-1 — logout is now reachable (was only inside the delete flow).
+  it('log out: the control is a real <button> (a11y) placed before Delete account', () => {
+    render(<AccountPage />);
+    const buttons = screen.getAllByRole('button').map((b) => b.textContent);
+    expect(buttons).toContain('Log out');                       // a real, focusable button (not a link)
+    expect(buttons.indexOf('Log out')).toBeLessThan(buttons.indexOf('Delete account')); // above delete
+  });
+
+  it('log out: clicking Log out calls logout EXACTLY once and redirects to /login (no confirmation)', async () => {
+    h.logout.mockResolvedValue(undefined);
+    render(<AccountPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Log out' }));
+    await waitFor(() => expect(h.logout).toHaveBeenCalledTimes(1)); // exactly once → logoutSession (204)
+    expect(h.navigate).toHaveBeenCalledWith('/login', { replace: true });
+    expect(h.del).not.toHaveBeenCalled();                         // logout does NOT delete
+  });
 });

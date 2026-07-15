@@ -15,4 +15,7 @@ export const AUTH_COPY = {
   useDifferentEmail: 'Use a different email',
   // On a delivery failure (503): generic, no provider detail, no "sent" claim.
   sendFailed: "I couldn't send the access link. Try again.",
+  // Session/account navigation — the quiet foot-link idiom (RIGHTS-1). One source of truth.
+  account: 'Account',
+  logout: 'Log out',
 } as const;

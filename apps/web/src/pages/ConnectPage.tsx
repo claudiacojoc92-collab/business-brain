@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext';
 import { getConnectStatus, readCalendar, generateRead, ApiError } from '../api/client';
 import type { ConnectStatus } from '../connect/types';
 import { CONNECT_COPY } from '../connect/copy';
+import { AUTH_COPY } from '../copy/auth';
 import { WebsiteCard } from '../connect/WebsiteCard';
 import { UploadCard } from '../connect/UploadCard';
 import { CalendarCard } from '../connect/CalendarCard';
@@ -112,7 +113,10 @@ export function ConnectPage() {
               {genError && <p style={{ ...guidance, color: 'var(--warn-ink)' }} role="alert">{genError}</p>}
             </div>
 
-            <div style={{ marginTop: 40 }}><Link to="/reads" style={link}>{CONNECT_COPY.yourReads}</Link></div>
+            <div style={{ marginTop: 40, display: 'flex', gap: 20 }}>
+              <Link to="/reads" style={link}>{CONNECT_COPY.yourReads}</Link>
+              <Link to="/account" style={link}>{AUTH_COPY.account}</Link>
+            </div>
           </>
         )}
       </div>
