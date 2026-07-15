@@ -25,7 +25,10 @@ async function main(): Promise<void> {
   const server = await createServer({ db, redis, logger, email });
 
   const port = parseInt(process.env['PORT'] ?? '3000', 10);
-  const host = process.env['HOST'] ?? '0.0.0.0';
+  // T5 (PROD-1): Railway's private network is IPv6-only, so a service bound to 0.0.0.0 is unreachable at
+  // <svc>.railway.internal. In production bind '::' (dual-stack — verified to also accept IPv4-mapped), so
+  // a missing HOST var can't silently make the api unreachable. Dev/local keeps 0.0.0.0 (compose unchanged).
+  const host = process.env['HOST'] ?? (process.env['NODE_ENV'] === 'production' ? '::' : '0.0.0.0');
 
   await server.listen({ port, host });
   logger.info({ port, host }, 'API server started');

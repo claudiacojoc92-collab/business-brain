@@ -1,0 +1,11 @@
+# Dockerfile.migrate — PROD-1 (T2). Flyway with V050..V055 BAKED IN (no host mount), for Railway builds.
+#
+# Local docker-compose keeps its own `migrate` service (host-mount of ./database/migrations) UNCHANGED;
+# this image exists so Railway (which has no host mounts) can run the exact same migrations from a build.
+# Connection + schema config come from env (FLYWAY_URL / FLYWAY_USER / FLYWAY_PASSWORD / FLYWAY_SCHEMAS),
+# supplied by Railway variables pointing at the managed Postgres. Migrations are idempotent, so re-running
+# on redeploy is a safe no-op; run it as a one-shot service with restart policy ON_FAILURE (a clean exit 0
+# does not restart → no crash-loop).
+FROM flyway/flyway:10-alpine
+COPY database/migrations /flyway/sql
+CMD ["migrate"]

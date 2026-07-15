@@ -26,7 +26,14 @@ RUN npm run build --workspace @business-brain/web
 
 # ── run stage: nginx serves the static build ─────────────────────────────────────
 FROM nginx:1.27-alpine AS run
-COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+# PROD-1 (T1): the conf is a TEMPLATE rendered at container start (envsubst on /etc/nginx/templates/*.template)
+# so listen/upstream/resolver come from env — one image works local (compose) and on Railway (private, IPv6).
+# 15-railway-env.sh supplies defaults + brackets an IPv6 resolver before the image's 20-envsubst step.
+COPY apps/web/nginx.conf.template  /etc/nginx/templates/default.conf.template
+# *.envsh so the nginx entrypoint SOURCES it (exports must reach the 20-envsubst step); it must also be
+# executable or the entrypoint skips it ("Ignoring … not executable").
+COPY apps/web/16-railway-env.envsh /docker-entrypoint.d/16-railway-env.envsh
+RUN chmod +x /docker-entrypoint.d/16-railway-env.envsh
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
-EXPOSE 80
+# No fixed EXPOSE — the public listen port is ${PORT} (80 locally, $PORT on Railway).
 CMD ["nginx", "-g", "daemon off;"]
