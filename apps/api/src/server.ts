@@ -4,15 +4,18 @@ import type { RedisClient } from '@bb/infrastructure';
 import type { Logger } from '@bb/infrastructure';
 import { registerPlugins } from './plugins';
 import { registerRoutes } from './routes';
+import type { IEmailService } from './session/email.service';
 
 /**
  * The API's runtime dependencies. The M2 auth bridge (CQRS buses + Jwt/Password services) was retired
  * in S0-T2 C3 — auth is now the self-serve magic-link SESSION (session.routes builds its own deps).
+ * `email` is the magic-link adapter chosen at composition (main.ts); omitting it defaults to LogEmailService.
  */
 export interface ServerDeps {
   db:     KyselyDB;
   redis:  RedisClient;
   logger: Logger;
+  email?: IEmailService;
 }
 
 /**
@@ -27,7 +30,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
 
   await registerPlugins(server, deps);
-  await registerRoutes(server);
+  await registerRoutes(server, { email: deps.email });
 
   // Graceful shutdown
   const shutdown = async (): Promise<void> => {

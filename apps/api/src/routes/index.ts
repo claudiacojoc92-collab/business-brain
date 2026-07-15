@@ -13,6 +13,14 @@ import { registerReadRoutes } from './read.routes';
 import { registerConnectRoutes } from './connect.routes';
 import { PgIdentityRepository } from '../session/pg-identity.repository';
 import { registerRequireFounder } from '../session/require-founder';
+import type { IEmailService } from '../session/email.service';
+
+/** Optional composition inputs. `email` is the selected magic-link adapter (main.ts picks it, fail-fast
+ *  in production); when omitted, registerSessionRoutes defaults to LogEmailService — so callers that
+ *  register routes directly (e.g. the prod route-registration tests) are unaffected (the C2 regression). */
+export interface RegisterRoutesOptions {
+  email?: IEmailService;
+}
 
 /**
  * Registers all routes. Each route module is self-contained and builds its own deps.
@@ -21,6 +29,7 @@ import { registerRequireFounder } from '../session/require-founder';
  */
 export async function registerRoutes(
   server: FastifyInstance,
+  opts: RegisterRoutesOptions = {},
 ): Promise<void> {
   registerHealthRoutes(server);            // UNPREFIXED — ops/monitoring (prometheus scrapes /health/metrics)
 
@@ -28,7 +37,7 @@ export async function registerRoutes(
   // (/reads, /reads/:readId, /connect, /login, /account) are deterministically the SPA and /api/* is the
   // API. One scope, not per-path edits; handlers are byte-identical, only their mount path moves.
   await server.register(async (api) => {
-    registerSessionRoutes(api);            // S0-T2 — magic-link self-serve session → /api/auth/*
+    registerSessionRoutes(api, opts.email); // S0-T2 — magic-link self-serve session → /api/auth/* (email adapter injected by main.ts; defaults to LogEmailService)
     registerAccountRoutes(api);            // S0-T4 — export/delete → /api/account/*; session-scoped, ALL envs
     registerReadRoutes(api);               // S1-T4 — Business Read generate/retrieve → /api/reads*; strict session
     await registerConnectRoutes(api);      // S1-T5a — production connect (ingest-only) → /api/connect/*; strict session

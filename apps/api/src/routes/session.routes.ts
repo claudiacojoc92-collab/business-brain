@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createKyselyClient } from '@bb/infrastructure';
 import { PgIdentityRepository } from '../session/pg-identity.repository';
-import { LogEmailService } from '../session/email.service';
+import { LogEmailService, type IEmailService } from '../session/email.service';
 import { readCookie, serializeSessionCookie, clearSessionCookie, SESSION_COOKIE } from '../session/cookie';
 import { requestMagicLink, verifyMagicLink, logout, SESSION_TTL_SECONDS } from '../session/session.service';
 import { founderIdFromSession } from '../session/session-context';
@@ -14,10 +14,9 @@ import { founderIdFromSession } from '../session/session-context';
  *                                            server-side session → Set-Cookie(bb_session) → redirect.
  *   POST /auth/logout                     → revoke session + clear cookie.
  */
-export function registerSessionRoutes(server: FastifyInstance): void {
+export function registerSessionRoutes(server: FastifyInstance, email: IEmailService = new LogEmailService()): void {
   const db = createKyselyClient(process.env['DATABASE_URL'] ?? '');
   const repo = new PgIdentityRepository(db);
-  const email = new LogEmailService();
   const isDev = process.env['NODE_ENV'] !== 'production';
   const apiBase = process.env['APP_BASE_URL'] ?? 'http://localhost:3000';
   const appHome = process.env['WEB_BASE_URL'] ?? '/';
@@ -29,7 +28,16 @@ export function registerSessionRoutes(server: FastifyInstance): void {
     if (raw.includes('@') && raw.trim().length >= 3) {
       const { token } = await requestMagicLink(raw, repo, new Date());
       const link = `${apiBase}/api/auth/verify?token=${encodeURIComponent(token)}`; // VP-T2: /api boundary — this manual string is NOT rewritten by the scope prefix
-      await email.sendMagicLink(raw.trim().toLowerCase(), link);
+      try {
+        await email.sendMagicLink(raw.trim().toLowerCase(), link);
+      } catch {
+        // Delivery failed. Generic 503 — NO provider name/status/message, NO config detail, NO existence
+        // signal (this fires the same for every well-formed address — send success is the only branch,
+        // never anything email-specific), and NO false "sent" claim. The minted token expires unused;
+        // no re-mint, no retry.
+        await reply.status(503).send({ ok: false });
+        return;
+      }
       // Dev convenience only: surface the link so the flow is testable without a real mailbox.
       if (isDev) { await reply.status(200).send({ ok: true, devLink: link }); return; }
     }

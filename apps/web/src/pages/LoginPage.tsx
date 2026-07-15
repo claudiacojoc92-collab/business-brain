@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { requestMagicLink, ApiError } from '../api/client';
+import { requestMagicLink } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { AUTH_COPY } from '../copy/auth';
 
 /**
  * Magic-link sign-in (S0-T2). Email only — no password. Submitting requests a link; the response is
@@ -29,10 +30,10 @@ export function LoginPage() {
       const res = await requestMagicLink(email);
       setSent(true);
       setDevLink(res.devLink ?? null); // dev convenience only; undefined in prod
-    } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : 'Could not send the link. Try again.',
-      );
+    } catch {
+      // Any non-2xx (incl. a 503 delivery failure) → one generic message. Never echo the server's
+      // error (no provider detail), never claim the email was sent, stay on the form to retry.
+      setError(AUTH_COPY.sendFailed);
     } finally {
       setIsLoading(false);
     }
@@ -58,20 +59,20 @@ export function LoginPage() {
         }}
       >
         <h1 style={{ fontFamily: 'var(--serif)', color: 'var(--ink)', fontSize: '1.75rem', fontWeight: 500, letterSpacing: '0.01em', marginBottom: 8 }}>
-          Business Brain
+          {AUTH_COPY.title}
         </h1>
 
         {sent ? (
           <>
             <p style={{ color: 'var(--ink)', fontSize: '1rem', margin: 0 }}>
-              Check your email
+              {AUTH_COPY.sentHeading}
             </p>
             <p style={{ color: 'var(--ink-3)', fontSize: '0.875rem', margin: 0 }}>
-              If <strong>{email}</strong> can sign in, a link is on its way. Open it to continue.
+              {AUTH_COPY.sentDetail(email)}
             </p>
             {devLink && (
               <p style={{ color: 'var(--ink-3)', fontSize: '0.8125rem', margin: 0, wordBreak: 'break-all' }}>
-                Dev link: <a href={devLink} style={{ color: 'var(--accent, #3b6)' }}>{devLink}</a>
+                {AUTH_COPY.devLinkLabel} <a href={devLink} style={{ color: 'var(--accent, #3b6)' }}>{devLink}</a>
               </p>
             )}
             <button
@@ -88,13 +89,13 @@ export function LoginPage() {
                 padding: '10px',
               }}
             >
-              Use a different email
+              {AUTH_COPY.useDifferentEmail}
             </button>
           </>
         ) : (
           <>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <label htmlFor="email" style={{ color: 'var(--ink-3)', fontSize: '0.875rem' }}>Email</label>
+              <label htmlFor="email" style={{ color: 'var(--ink-3)', fontSize: '0.875rem' }}>{AUTH_COPY.emailLabel}</label>
               <input
                 id="email"
                 type="email"
@@ -136,7 +137,7 @@ export function LoginPage() {
                 transition: 'opacity 150ms, transform 140ms',
               }}
             >
-              {isLoading ? 'Sending…' : 'Send me a link'}
+              {isLoading ? AUTH_COPY.submitting : AUTH_COPY.submit}
             </button>
           </>
         )}
