@@ -1,0 +1,28 @@
+# PROD-1 (T1) — supply the nginx template vars for the official image's envsubst step.
+# MUST be *.envsh (the nginx entrypoint SOURCES these so exports reach 20-envsubst-on-templates.sh;
+# plain *.sh files are launched as subprocesses and their exports would be lost). No `set -e` — a sourced
+# script must not abort the entrypoint. Numbered 16 so it runs after the base *.envsh, before 20-envsubst.
+#
+#   PORT           local default 80; Railway injects $PORT (public listen port).
+#   API_UPSTREAM   local default http://api:3000 (compose name); Railway = http://<api>.railway.internal:3000.
+#   NGINX_RESOLVER derived from the container's resolv.conf when unset. Docker gives an IPv4 nameserver
+#                  (127.0.0.11 — used bare). Railway's internal DNS is IPv6, and nginx REQUIRES an IPv6
+#                  resolver address BRACKETED (resolver [fd12::10];) or it fails to parse — so bracket any
+#                  IPv6 (contains ':') and leave IPv4 bare. This is the Railway-only case the local
+#                  walk-gate cannot exercise (Docker's resolver is IPv4).
+
+: "${PORT:=80}"
+: "${API_UPSTREAM:=http://api:3000}"
+
+if [ -z "${NGINX_RESOLVER:-}" ]; then
+  NGINX_RESOLVER="$(awk '/^nameserver/ { print $2; exit }' /etc/resolv.conf)"
+fi
+
+# Bracket an IPv6 resolver (has a ':'), unless it's already bracketed.
+case "$NGINX_RESOLVER" in
+  \[*\]) : ;;                               # already bracketed
+  *:*)   NGINX_RESOLVER="[$NGINX_RESOLVER]" ;;
+  *)     : ;;                               # IPv4 — leave bare
+esac
+
+export PORT API_UPSTREAM NGINX_RESOLVER

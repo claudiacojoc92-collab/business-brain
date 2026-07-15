@@ -2,17 +2,23 @@
 # VP-T2: the founder-facing API is under a single /api/* boundary → the api service. Everything else
 # (/login, /connect, /reads, /reads/:id, /account, /) is the SPA (so a browser refresh renders the page,
 # not JSON). Health is NOT proxied here — prometheus scrapes the api directly.
+#
+# PROD-1 (T1): this is a TEMPLATE. The official nginx image runs envsubst on /etc/nginx/templates/*.template
+# → /etc/nginx/conf.d/ at container start, substituting ONLY defined env vars — so ${PORT}, ${API_UPSTREAM},
+# ${NGINX_RESOLVER} are filled while nginx runtime vars ($host/$scheme/$request_uri/$api_upstream/$uri) are
+# left intact. 15-railway-env.sh supplies the defaults (local = :80 / http://api:3000 / 127.0.0.11) so the
+# rendered conf is byte-equivalent to the pre-PROD-1 static conf locally; Railway supplies its own values.
 server {
-  listen 80;
+  listen ${PORT};
   server_name _;
   root /usr/share/nginx/html;
   index index.html;
 
-  # --- API (same-origin) → api service on the compose network ---
+  # --- API (same-origin) → api service (compose network locally, *.railway.internal on Railway) ---
   # `resolver` + variable defers DNS to request time, so nginx starts even if api is down.
   location /api/ {
-    resolver 127.0.0.11 valid=10s;
-    set $api_upstream http://api:3000;
+    resolver ${NGINX_RESOLVER} valid=10s;
+    set $api_upstream ${API_UPSTREAM};
     proxy_pass $api_upstream$request_uri;
     proxy_set_header Host              $host;
     proxy_set_header X-Real-IP         $remote_addr;
