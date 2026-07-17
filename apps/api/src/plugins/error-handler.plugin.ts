@@ -16,7 +16,16 @@ export function registerErrorHandler(
       const traceId   = (request.headers['x-trace-id'] as string | undefined) ?? 'unknown';
       const timestamp = new Date().toISOString();
 
-      logger.warn({ error, traceId, url: request.url }, 'Request error');
+      // RJ-1 C1: log under `err`, NOT `error` — pino's std serializer only recognises `err`, so
+      // `{ error }` serialised to `error={}` and hid every production failure's class/message/stack
+      // (this cost a full diagnosis cycle on the invalid-model-output P0). `stage` is set by throwers
+      // that know where they failed (StagedError); absent for anything else. The founder-facing
+      // response is unchanged — production still masks the message below.
+      const stage = (error as { stage?: unknown }).stage;
+      logger.warn(
+        { err: error, traceId, url: request.url, ...(typeof stage === 'string' ? { stage } : {}) },
+        'Request error',
+      );
 
       const isProd  = process.env['NODE_ENV'] === 'production';
       const message = isProd ? 'An error occurred.' : error.message;
