@@ -58,6 +58,22 @@ describe('envelope gate — transport shape, not epistemics', () => {
     expect(envelopeGate({ foo: 1, bar: 2 }).ok).toBe(false);          // unknown-only → rejected
     expect(envelopeGate({ foo: 1, modelConfidence: 'c' }).ok).toBe(true); // ignored alongside a recognized key
   });
+
+  // REGRESSION (caught live against real evidence): the gate MUST NOT be stricter than the frozen
+  // validator. Frozen uses `raw[key] == null` — loose — so null ≡ absent ≡ honest degradation, and
+  // coerces a non-array to []. Rejecting `founderClaimedIdentity: null` produced a FALSE 502.
+  it('null ≡ absent for a single field (frozen `== null` semantics) — must NOT reject', () => {
+    expect(envelopeGate({ founderClaimedIdentity: null, claimedPositioning: FIELD }).ok).toBe(true);
+  });
+  it('null ≡ empty for an array field — must NOT reject', () => {
+    expect(envelopeGate({ coreBeliefs: null, modelConfidence: 'thin' }).ok).toBe(true);
+  });
+  it('null modelConfidence ≡ absent — must NOT reject', () => {
+    expect(envelopeGate({ claimedPositioning: FIELD, modelConfidence: null }).ok).toBe(true);
+  });
+  it('an all-null artifact still fails closed (it would persist an empty Read)', () => {
+    expect(envelopeGate({ claimedPositioning: null, coreBeliefs: null }).ok).toBe(false);
+  });
 });
 
 describe('artifactFromToolCall — exactly one expected tool call, else fail closed', () => {

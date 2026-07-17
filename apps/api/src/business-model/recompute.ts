@@ -245,21 +245,26 @@ export function envelopeGate(raw: unknown): { ok: true } | { ok: false; reason: 
     if (Object.prototype.hasOwnProperty.call(obj, k)) return { ok: false, reason: `dangerous key present: ${k}` };
   }
   let recognized = 0;
+  // NULL ≡ ABSENT, deliberately: the frozen validator uses loose `raw[key] == null` (matching BOTH
+  // undefined and null) to mean "register unpopulated — honest degradation", and coerces a non-array
+  // to []. The gate MUST NOT be stricter than the frozen contract: a model that emits `null` for an
+  // ungroundable register is obeying the prompt, not malforming transport. (Verified live: rejecting
+  // `founderClaimedIdentity: null` produced a false 502 against real evidence.)
   for (const k of TOOL_SINGLE_KEYS) {
     const v = obj[k];
-    if (v === undefined) continue;                       // absent → constitutional (honest degradation)
-    if (v === null || typeof v !== 'object' || Array.isArray(v)) return { ok: false, reason: `${k}: expected object` };
+    if (v === undefined || v === null) continue;          // ≡ frozen `== null` → unpopulated
+    if (typeof v !== 'object' || Array.isArray(v)) return { ok: false, reason: `${k}: expected object` };
     recognized += 1;
   }
   for (const k of TOOL_ARRAY_KEYS) {
     const v = obj[k];
-    if (v === undefined) continue;
+    if (v === undefined || v === null) continue;          // ≡ frozen `Array.isArray(x) ? x : []`
     if (!Array.isArray(v)) return { ok: false, reason: `${k}: expected array` };
     if (v.length > MAX_ARRAY_ITEMS) return { ok: false, reason: `${k}: exceeds ${MAX_ARRAY_ITEMS} items` };
     recognized += 1;
   }
   const mc = obj['modelConfidence'];
-  if (mc !== undefined) {
+  if (mc !== undefined && mc !== null) {
     if (typeof mc !== 'string') return { ok: false, reason: 'modelConfidence: expected string' };
     if (mc.length > MAX_STRING_CHARS) return { ok: false, reason: 'modelConfidence: exceeds size cap' };
     recognized += 1;
