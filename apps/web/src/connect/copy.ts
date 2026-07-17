@@ -43,5 +43,9 @@ export const CONNECT_COPY = {
     loading: 'Generating your Read…',
     insufficient: "Based on what you've connected, there isn't enough grounded material yet.",
     error: 'Something went wrong. Please try again.',
+    // RJ-1 — generation failed on OUR side (the engine returned an unusable result). Distinct from
+    // `insufficient` on purpose: the founder's sources are fine, so we must not imply otherwise, must
+    // not ask them to connect more, and must not claim a Read exists. Nothing was saved.
+    failed: "I couldn't complete your Read. That's a problem on my side, not with your sources. Nothing was saved — you can try again.",
   },
 } as const;

@@ -83,7 +83,12 @@ export function ConnectPage() {
       const r = await generateRead();
       if (r.status === 'generated') navigate(`/reads/${r.readId}`);
       else setInsufficient({ reason: r.reason, whatToDo: r.whatToDo });
-    } catch (e) { if (!on401(e)) setGenError(CONNECT_COPY.generate.error); }
+    } catch (e) {
+      // RJ-1: 502 = the engine returned an unusable result (our fault, nothing saved). It must NOT be
+      // shown as the generic error, and never as "insufficient evidence" — the founder's sources are fine.
+      if (on401(e)) return;
+      setGenError(e instanceof ApiError && e.status === 502 ? CONNECT_COPY.generate.failed : CONNECT_COPY.generate.error);
+    }
     finally { setGenerating(false); }
   };
 
