@@ -15,6 +15,7 @@
 import type { BusinessModel, Insight, EvidenceRef } from '@bb/business-model-engine';
 import { makeFragment, type EvidenceFragment, type IEvidenceRepository } from '@bb/domain';
 import { createAnthropicClient } from '@bb/infrastructure';
+import { GenerationError } from './generation-errors';
 
 const INSIGHT_CATEGORIES: ReadonlyArray<keyof BusinessModel> = [
   'contradictions', 'blindSpots', 'hiddenStrengths', 'hiddenWeaknesses', 'positioningOpportunities',
@@ -186,13 +187,109 @@ function shapePieces(selected: EvidenceFragment[]): Array<{ source: string; cont
     .map((f) => ({ source: fragmentKey(f), content: f.payload['text'] as string }));
 }
 
-function extractJson(text: string): unknown {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const body = fenced && fenced[1] ? fenced[1] : text;
-  const start = body.indexOf('{');
-  const end = body.lastIndexOf('}');
-  if (start === -1 || end === -1) throw new Error('No JSON object in engine response.');
-  return JSON.parse(body.slice(start, end + 1));
+// ── RJ-1: schema-constrained TRANSPORT (replaces free-text JSON.parse entirely) ──────────────
+// The engine's artifact now arrives as tool input — already a parsed object from the SDK — so a
+// malformed-JSON response can no longer reach us (the P0: `SyntaxError … position 3673`). The FROZEN
+// prompt is unchanged and still specifies the artifact; this tool is a congruent transport for the
+// same shape, not a second instruction. There is deliberately NO free-text fallback: a model that
+// does not use the tool fails closed. The frozen validateModel remains the ONLY epistemic validator.
+export const BUSINESS_MODEL_TOOL_NAME = 'business_model';
+
+const TOOL_SINGLE_KEYS = [
+  'claimedPositioning', 'claimedOffer', 'founderClaimedIdentity',
+  'observedPositioning', 'audiencePerception', 'whatMarketRewards', 'audienceLanguage',
+] as const;
+const TOOL_ARRAY_KEYS = [
+  'coreBeliefs', 'recurringThemes',
+  'contradictions', 'blindSpots', 'hiddenStrengths', 'hiddenWeaknesses', 'positioningOpportunities',
+  'marketContext',
+] as const;
+
+/** Top-level transport shape ONLY — permissive inside, so no epistemic rule is duplicated here. */
+export function buildBusinessModelTool(): {
+  name: string;
+  description: string;
+  input_schema: { type: 'object'; properties: Record<string, { type: string }> };
+} {
+  const properties: Record<string, { type: string }> = {};
+  for (const k of TOOL_SINGLE_KEYS) properties[k] = { type: 'object' };
+  for (const k of TOOL_ARRAY_KEYS) properties[k] = { type: 'array' };
+  properties['modelConfidence'] = { type: 'string' };
+  // No `required`: EVERY key is optional by the frozen contract — "a field you cannot ground → OMIT
+  // it entirely… an empty register is fine". Absence is constitutionally meaningful, never malformed.
+  return {
+    name: BUSINESS_MODEL_TOOL_NAME,
+    description: 'Return the business model artifact in the exact shape specified in the system prompt.',
+    input_schema: { type: 'object', properties },
+  };
+}
+
+const DANGEROUS_KEYS = ['__proto__', 'constructor', 'prototype'];
+const MAX_ARRAY_ITEMS = 200;
+const MAX_STRING_CHARS = 20_000;
+
+/**
+ * Layer-2 ENVELOPE GATE — transport shape only; it must NOT restate the frozen engine's epistemic
+ * rules (grounding, declared-only, ceiling — all remain validateModel's job). It exists to stop
+ * syntactically-valid nonsense from degrading into an EMPTY persisted Read, because validateModel
+ * degrades rather than throws (`if (raw[key] == null) continue`).
+ *
+ * Unknown keys: IGNORED, not rejected — the frozen schema `.strip()`s them anyway — but they do NOT
+ * count toward the recognized-key requirement. Net effect is fail-closed: a payload carrying only
+ * unknown keys has zero recognized keys and is rejected.
+ */
+export function envelopeGate(raw: unknown): { ok: true } | { ok: false; reason: string } {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return { ok: false, reason: 'artifact is not a plain object' };
+  const obj = raw as Record<string, unknown>;
+  for (const k of DANGEROUS_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(obj, k)) return { ok: false, reason: `dangerous key present: ${k}` };
+  }
+  let recognized = 0;
+  for (const k of TOOL_SINGLE_KEYS) {
+    const v = obj[k];
+    if (v === undefined) continue;                       // absent → constitutional (honest degradation)
+    if (v === null || typeof v !== 'object' || Array.isArray(v)) return { ok: false, reason: `${k}: expected object` };
+    recognized += 1;
+  }
+  for (const k of TOOL_ARRAY_KEYS) {
+    const v = obj[k];
+    if (v === undefined) continue;
+    if (!Array.isArray(v)) return { ok: false, reason: `${k}: expected array` };
+    if (v.length > MAX_ARRAY_ITEMS) return { ok: false, reason: `${k}: exceeds ${MAX_ARRAY_ITEMS} items` };
+    recognized += 1;
+  }
+  const mc = obj['modelConfidence'];
+  if (mc !== undefined) {
+    if (typeof mc !== 'string') return { ok: false, reason: 'modelConfidence: expected string' };
+    if (mc.length > MAX_STRING_CHARS) return { ok: false, reason: 'modelConfidence: exceeds size cap' };
+    recognized += 1;
+  }
+  if (recognized === 0) return { ok: false, reason: 'no recognized top-level key (unknown keys do not count)' };
+  return { ok: true };
+}
+
+/** Content blocks we care about — narrowed locally to avoid coupling to SDK block unions. */
+type MaybeToolBlock = { type?: string; name?: string; input?: unknown; text?: string };
+
+/**
+ * Take the artifact from EXACTLY ONE expected tool call, then gate it. Every other shape fails
+ * closed with `invalid_model_output` — no tool call, prose instead of the tool, multiple calls,
+ * non-object input. No free-text recovery path exists by design.
+ */
+export function artifactFromToolCall(content: readonly MaybeToolBlock[]): unknown {
+  const calls = content.filter((b) => b.type === 'tool_use' && b.name === BUSINESS_MODEL_TOOL_NAME);
+  if (calls.length === 0) {
+    throw new GenerationError('invalid_model_output', 'tool_input', 'engine returned no business_model tool call');
+  }
+  if (calls.length > 1) {
+    throw new GenerationError('invalid_model_output', 'tool_input', `engine returned ${calls.length} business_model tool calls; expected exactly 1`);
+  }
+  const input = calls[0]?.input;
+  const gate = envelopeGate(input);
+  if (!gate.ok) {
+    throw new GenerationError('invalid_model_output', 'envelope_gate', `tool input rejected: ${gate.reason}`);
+  }
+  return input;
 }
 
 export interface RecomputeResult {
@@ -227,9 +324,10 @@ export async function recomputeFromWebsite(args: {
     max_tokens: 8000, // must clear the engine's verbose artifact to avoid truncation; makes timing worse — the core tension (see M2.1 tuning findings).
     system: engine.buildSystemPrompt(sourceNames, declared),
     messages: [{ role: 'user', content: engine.buildUserMessage(pieces) }],
+    tools: [buildBusinessModelTool()],                                    // RJ-1: schema-constrained transport
+    tool_choice: { type: 'tool', name: BUSINESS_MODEL_TOOL_NAME },        // exactly one expected call
   });
-  const text = resp.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('\n');
-  const { model } = engine.validateModel(extractJson(text), sourceNames);
+  const { model } = engine.validateModel(artifactFromToolCall(resp.content), sourceNames);
 
   const { toPersist, rejected } = resolveDerivedFrom(args.founderId, model, observed);
   const { stored, deduped } = await args.repo.appendMany(toPersist);
@@ -309,9 +407,10 @@ export async function recomputeFromSources(args: {
     // (instruction) position. Prompt-injection in a doc is inert-by-position; fail-closed
     // resolution is defense-in-depth (a fabricated instruction can't produce a traceable claim).
     messages: [{ role: 'user', content: engine.buildUserMessage(pieces) }],
+    tools: [buildBusinessModelTool()],                                    // RJ-1: schema-constrained transport
+    tool_choice: { type: 'tool', name: BUSINESS_MODEL_TOOL_NAME },        // exactly one expected call
   });
-  const text = resp.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('\n');
-  const { model } = engine.validateModel(extractJson(text), sourceNames);
+  const { model } = engine.validateModel(artifactFromToolCall(resp.content), sourceNames);
 
   const ceilingRejected = enforceEpistemicCeiling(model); // drop laundered external-reality claims (declared included)
   const { toPersist, rejected } = resolveDerivedFrom(args.founderId, model, evidence); // fail-closed, spans observed + declared
