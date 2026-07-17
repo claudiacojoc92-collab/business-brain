@@ -7,6 +7,7 @@ import { PgIdentityRepository } from '../session/pg-identity.repository';
 import { readCookie, SESSION_COOKIE } from '../session/cookie';
 import { resolveSession } from '../session/session.service';
 import { generateBusinessRead, sectionCounts } from '../business-model/read-generation.service';
+import { isInvalidModelOutput } from '../business-model/generation-errors';
 
 /**
  * Business Read PRODUCTION endpoints (S1-T4) — NOT /dev/*. Registered OUTSIDE the NODE_ENV!=='production'
@@ -59,6 +60,21 @@ export function registerReadRoutes(server: FastifyInstance): void {
       }
       logger.info({ founderId, readId: outcome.stored.readId, durationMs: Date.now() - startedAt, sectionCounts: sectionCounts(outcome.stored.read), status: outcome.status }, 'read.generate');
       await reply.code(201).send({ status: 'generated', readId: outcome.stored.readId, createdAt: outcome.stored.createdAt.toISOString(), schemaVersion: outcome.stored.schemaVersion, read: outcome.stored.read });
+    } catch (e) {
+      // RJ-1: the upstream engine returned an unusable artifact (no/multiple/malformed tool input, or
+      // the envelope gate rejected it). That is an UPSTREAM fault — 502, never a 500 (not our unhandled
+      // crash), never 200/insufficient_evidence (the founder's evidence is fine). NOTHING was persisted:
+      // the throw happens before the snapshot save. Distinct reason codes keep provider outages,
+      // timeouts and persistence faults from being mislabelled as malformed output.
+      if (isInvalidModelOutput(e)) {
+        logger.warn(
+          { err: e, founderId, stage: e.stage, reason: e.reason, durationMs: Date.now() - startedAt },
+          'read.generate.failed',
+        );
+        await reply.code(502).send({ status: 'generation_failed', reason: 'invalid_model_output', retryable: true });
+        return;
+      }
+      throw e; // anything else keeps its existing handling
     } finally {
       inFlight.delete(founderId); // ALWAYS released — a failure never wedges the founder out of future generation
     }
