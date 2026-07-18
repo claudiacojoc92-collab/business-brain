@@ -244,30 +244,24 @@ export function envelopeGate(raw: unknown): { ok: true } | { ok: false; reason: 
   for (const k of DANGEROUS_KEYS) {
     if (Object.prototype.hasOwnProperty.call(obj, k)) return { ok: false, reason: `dangerous key present: ${k}` };
   }
+  // PER-FIELD SHAPE IS NOT THIS GATE'S JOB — it is the FROZEN validator's, and it is already better
+  // at it: checkField/FieldSchema EXCLUDES a malformed field and RECORDS it in `excluded[]` (honest
+  // degradation, nothing silently dropped) while keeping the rest of the artifact. Type-checking
+  // fields here duplicated that rule and diverged from it, turning ONE off-type field into a total
+  // generation failure. Proven live: the model's field types vary run-to-run — one run emitted a
+  // non-object `founderClaimedIdentity` (false 502), the next emitted a valid object that the frozen
+  // validator accepted with 0 exclusions. Likewise `null` ≡ absent (frozen uses loose `== null`).
+  //
+  // This gate therefore validates the ENVELOPE only: a plain-object root, no prototype pollution, a
+  // bounded size, and at least one recognized key actually present — which is exactly what stops
+  // syntactically-valid nonsense (`{}`, `"str"`, `{foo:1}`) from degrading into an EMPTY persisted Read.
   let recognized = 0;
-  // NULL ≡ ABSENT, deliberately: the frozen validator uses loose `raw[key] == null` (matching BOTH
-  // undefined and null) to mean "register unpopulated — honest degradation", and coerces a non-array
-  // to []. The gate MUST NOT be stricter than the frozen contract: a model that emits `null` for an
-  // ungroundable register is obeying the prompt, not malforming transport. (Verified live: rejecting
-  // `founderClaimedIdentity: null` produced a false 502 against real evidence.)
-  for (const k of TOOL_SINGLE_KEYS) {
+  for (const k of [...TOOL_SINGLE_KEYS, ...TOOL_ARRAY_KEYS, 'modelConfidence'] as const) {
     const v = obj[k];
-    if (v === undefined || v === null) continue;          // ≡ frozen `== null` → unpopulated
-    if (typeof v !== 'object' || Array.isArray(v)) return { ok: false, reason: `${k}: expected object` };
-    recognized += 1;
-  }
-  for (const k of TOOL_ARRAY_KEYS) {
-    const v = obj[k];
-    if (v === undefined || v === null) continue;          // ≡ frozen `Array.isArray(x) ? x : []`
-    if (!Array.isArray(v)) return { ok: false, reason: `${k}: expected array` };
-    if (v.length > MAX_ARRAY_ITEMS) return { ok: false, reason: `${k}: exceeds ${MAX_ARRAY_ITEMS} items` };
-    recognized += 1;
-  }
-  const mc = obj['modelConfidence'];
-  if (mc !== undefined && mc !== null) {
-    if (typeof mc !== 'string') return { ok: false, reason: 'modelConfidence: expected string' };
-    if (mc.length > MAX_STRING_CHARS) return { ok: false, reason: 'modelConfidence: exceeds size cap' };
-    recognized += 1;
+    if (v === undefined || v === null) continue;          // ≡ frozen `== null` → unpopulated/empty
+    if (Array.isArray(v) && v.length > MAX_ARRAY_ITEMS) return { ok: false, reason: `${k}: exceeds ${MAX_ARRAY_ITEMS} items` };
+    if (typeof v === 'string' && v.length > MAX_STRING_CHARS) return { ok: false, reason: `${k}: exceeds size cap` };
+    recognized += 1;                                       // present → recognized; SHAPE is frozen's call
   }
   if (recognized === 0) return { ok: false, reason: 'no recognized top-level key (unknown keys do not count)' };
   return { ok: true };

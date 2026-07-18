@@ -36,15 +36,22 @@ describe('envelope gate — transport shape, not epistemics', () => {
   });
 
   for (const [label, bad] of [
-    ['string', 'nope'], ['array', [1]], ['null', null], ['number', 7],
+    ['string root', 'nope'], ['array root', [1]], ['null root', null], ['number root', 7],
     ['empty object', {}],
     ['unknown keys only', { foo: 1 }],
-    ['wrong container (array→object)', { coreBeliefs: {} }],
-    ['wrong container (object→array)', { claimedPositioning: [] }],
-    ['modelConfidence not a string', { modelConfidence: 5 }],
   ] as Array<[string, unknown]>) {
     it(`rejects: ${label}`, () => expect(envelopeGate(bad).ok).toBe(false));
   }
+
+  // BOUNDARY (regression, proven live): per-field SHAPE belongs to the FROZEN validator, which
+  // excludes a malformed field and records it in excluded[] while keeping the rest. The gate must
+  // NOT reject the whole artifact for one off-type field — the model's field types vary run-to-run,
+  // and doing so produced a false 502 on real evidence.
+  it('does NOT reject an off-type field — frozen validateModel excludes it per-field', () => {
+    expect(envelopeGate({ founderClaimedIdentity: 'a bare string', claimedPositioning: FIELD }).ok).toBe(true);
+    expect(envelopeGate({ coreBeliefs: {}, modelConfidence: 'thin' }).ok).toBe(true);
+    expect(envelopeGate({ modelConfidence: 5, claimedPositioning: FIELD }).ok).toBe(true);
+  });
 
   it('rejects prototype-polluting keys', () => {
     expect(envelopeGate(JSON.parse('{"__proto__":{"x":1},"modelConfidence":"c"}')).ok).toBe(false);
@@ -102,8 +109,8 @@ describe('artifactFromToolCall — exactly one expected tool call, else fail clo
     expect(() => artifactFromToolCall([toolBlock(VALID, 'something_else')])).toThrow(GenerationError);
   });
 
-  it('schema-invalid tool input → invalid_model_output at the gate', () => {
-    try { artifactFromToolCall([toolBlock({ coreBeliefs: 'not-an-array' })]); expect.unreachable(); } catch (e) {
+  it('envelope-invalid tool input (nonsense root) → invalid_model_output at the gate', () => {
+    try { artifactFromToolCall([toolBlock({ foo: 1 })]); expect.unreachable(); } catch (e) {
       expect((e as GenerationError).stage).toBe('envelope_gate');
       expect((e as GenerationError).reason).toBe('invalid_model_output');
     }
