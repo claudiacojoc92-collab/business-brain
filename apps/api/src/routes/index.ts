@@ -11,6 +11,7 @@ import { registerRecommendationDevRoutes } from './recommendation-dev.routes';
 import { registerAccountRoutes } from './account.routes';
 import { registerReadRoutes } from './read.routes';
 import { registerConnectRoutes } from './connect.routes';
+import { registerDeclareRoutes } from './declare.routes';
 import { PgIdentityRepository } from '../session/pg-identity.repository';
 import { registerRequireFounder } from '../session/require-founder';
 import type { IEmailService } from '../session/email.service';
@@ -41,6 +42,7 @@ export async function registerRoutes(
     registerAccountRoutes(api);            // S0-T4 — export/delete → /api/account/*; session-scoped, ALL envs
     registerReadRoutes(api);               // S1-T4 — Business Read generate/retrieve → /api/reads*; strict session
     await registerConnectRoutes(api);      // S1-T5a — production connect (ingest-only) → /api/connect/*; strict session
+    registerDeclareRoutes(api);            // P1·S1 — production declaration capture (persist-only) → /api/declare*; strict session
   }, { prefix: '/api' });
 
   // Dev-only nucleus endpoints (outside /v1). Never registered in production.
