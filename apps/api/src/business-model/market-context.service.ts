@@ -34,7 +34,7 @@ export async function reviewEntity(args: {
       sourceTitle: p.title, sourceType: p.sourceType, retrievedAt: nowIso, retrievalAdapter: args.adapter.name,
       extractionVersion: args.adapter.extractionVersion, observedText: p.text.slice(0, 4000), evidenceFragmentId: null,
       inferenceText: null, epistemicStatus: 'OBSERVED', relevanceToFounder: null, founderResponse: 'unreviewed',
-      founderQualification: null, supersedesId: null,
+      founderQualification: null, modelVersion: null, promptVersion: null, supersedesId: null,
     }, args.now));
   }
   // INFERENCE — one bounded reading, SEPARATE from observation; capped so it never asserts market fact.
@@ -42,9 +42,10 @@ export async function reviewEntity(args: {
   out.push(await args.findings.append({
     founderId: args.founderId, marketEntityId: args.entityId, reviewId: null, sourceUrl: entity.websiteUrl, canonicalUrl: null,
     sourceTitle: entity.name, sourceType: 'inference', retrievedAt: nowIso, retrievalAdapter: args.adapter.name,
-    extractionVersion: args.inferenceModel.version, observedText: `(reading across ${retrieval.pages.length} public page(s))`,
+    extractionVersion: args.adapter.extractionVersion, observedText: `(reading across ${retrieval.pages.length} public page(s))`,
     evidenceFragmentId: null, inferenceText: inf.inferenceText, epistemicStatus: capMarketEpistemics(inf.epistemicStatus, inf.inferenceText),
-    relevanceToFounder: inf.relevanceToFounder, founderResponse: 'unreviewed', founderQualification: null, supersedesId: null,
+    relevanceToFounder: inf.relevanceToFounder, founderResponse: 'unreviewed', founderQualification: null,
+    modelVersion: args.inferenceModel.modelId ?? args.inferenceModel.version, promptVersion: args.inferenceModel.promptVersion ?? null, supersedesId: null,
   }, args.now));
   return { status: 'ok', retrieval, findings: out };
 }

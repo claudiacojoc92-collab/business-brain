@@ -75,6 +75,14 @@ export function registerMarketRoutes(server: FastifyInstance): void {
     if (b['relevanceNote'] !== undefined) patch.relevanceNote = String(b['relevanceNote']);
     if (status === 'confirmed') { patch.relevanceStatus = 'confirmed'; patch.dismissedAt = null; }
     if (status === 'dismissed') { patch.relevanceStatus = 'dismissed'; patch.dismissedAt = new Date(); }
+    // Restore a dismissed entity to its origin-correct state (founder_added → confirmed; bb_suggested →
+    // proposed, i.e. back to unverified, never silently promoted). Its reviews + findings are preserved.
+    if (status === 'restored') {
+      const cur = await entities.get(founderId, id);
+      if (!cur) { await reply.code(404).send({ error: 'not found' }); return; }
+      patch.relevanceStatus = cur.origin === 'bb_suggested' ? 'proposed' : 'confirmed';
+      patch.dismissedAt = null;
+    }
     const entity = await entities.patch(founderId, id, patch, new Date());
     if (!entity) { await reply.code(404).send({ error: 'not found' }); return; }
     await reply.send({ entity });

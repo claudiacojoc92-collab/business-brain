@@ -68,6 +68,13 @@ export class PgMarketReviewRepository {
     return r ? this.toDomain(r) : null;
   }
 
+  /** Record provenance (adapter/extraction/model/prompt) for the findings this review produced. Called inside
+   *  the finalize transaction, just before markReady, so provenance + READY commit atomically. */
+  async recordProvenance(id: string, prov: { retrievalAdapter: string; extractionVersion: string; inferenceModel: string; inferencePromptVersion: string | null }, tx?: unknown): Promise<void> {
+    const db = (tx ?? this.db) as AnyDB;
+    await db.updateTable('business.market_review').set({ retrieval_adapter: prov.retrievalAdapter, extraction_version: prov.extractionVersion, inference_model: prov.inferenceModel, inference_prompt_version: prov.inferencePromptVersion }).where('id', '=', id).execute();
+  }
+
   async markReady(id: string, now: Date, tx?: unknown): Promise<MarketReview | null> {
     const db = (tx ?? this.db) as AnyDB;
     const r = await db.updateTable('business.market_review').set({ status: 'READY', finished_at: now.toISOString(), lease_expires_at: null, updated_at: now.toISOString() }).where('id', '=', id).where('status', '=', 'INFERRING').returningAll().executeTakeFirst();
@@ -94,6 +101,6 @@ export class PgMarketReviewRepository {
 
   private toDomain(r: AnyDB): MarketReview {
     const iso = (v: unknown) => (v == null ? null : new Date(v as string).toISOString());
-    return { id: r.id, founderId: r.founder_id, marketEntityId: r.market_entity_id, status: r.status as ReviewStatus, attemptCount: Number(r.attempt_count), maxAttempts: Number(r.max_attempts), claimedAt: iso(r.claimed_at), leaseExpiresAt: iso(r.lease_expires_at), startedAt: iso(r.started_at), finishedAt: iso(r.finished_at), failureCategory: (r.failure_category as FailureCategory) ?? null, founderSafeError: r.founder_safe_error ?? null, priorSuccessfulReviewId: r.prior_successful_review_id ?? null, createdAt: new Date(r.created_at).toISOString(), updatedAt: new Date(r.updated_at).toISOString() };
+    return { id: r.id, founderId: r.founder_id, marketEntityId: r.market_entity_id, status: r.status as ReviewStatus, attemptCount: Number(r.attempt_count), maxAttempts: Number(r.max_attempts), claimedAt: iso(r.claimed_at), leaseExpiresAt: iso(r.lease_expires_at), startedAt: iso(r.started_at), finishedAt: iso(r.finished_at), failureCategory: (r.failure_category as FailureCategory) ?? null, founderSafeError: r.founder_safe_error ?? null, priorSuccessfulReviewId: r.prior_successful_review_id ?? null, retrievalAdapter: r.retrieval_adapter ?? null, extractionVersion: r.extraction_version ?? null, inferenceModel: r.inference_model ?? null, inferencePromptVersion: r.inference_prompt_version ?? null, createdAt: new Date(r.created_at).toISOString(), updatedAt: new Date(r.updated_at).toISOString() };
   }
 }

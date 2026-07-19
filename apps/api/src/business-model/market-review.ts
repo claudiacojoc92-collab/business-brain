@@ -37,14 +37,21 @@ export interface MarketReview {
   id: string; founderId: string; marketEntityId: string; status: ReviewStatus; attemptCount: number; maxAttempts: number;
   claimedAt: string | null; leaseExpiresAt: string | null; startedAt: string | null; finishedAt: string | null;
   failureCategory: FailureCategory | null; founderSafeError: string | null; priorSuccessfulReviewId: string | null;
+  // Provenance — what produced this review's findings (set at finalize; null until READY).
+  retrievalAdapter: string | null; extractionVersion: string | null; inferenceModel: string | null; inferencePromptVersion: string | null;
   createdAt: string; updatedAt: string;
 }
 
-/** Founder-safe view — no internal_error_detail, no lease internals. */
+/** Founder-safe view — no internal_error_detail, no lease internals. Surfaces lineage (the prior successful
+ *  review this one follows) and, once READY, the provenance of what produced the findings. */
 export function toReviewView(r: MarketReview) {
   return {
     reviewId: r.id, entityId: r.marketEntityId, status: r.status, attempt: r.attemptCount, maxAttempts: r.maxAttempts,
     failureCategory: r.status === 'FAILED' ? r.failureCategory : null,
-    message: r.founderSafeError, createdAt: r.createdAt, updatedAt: r.updatedAt,
+    message: r.founderSafeError, priorSuccessfulReviewId: r.priorSuccessfulReviewId,
+    provenance: r.status === 'READY'
+      ? { retrievalAdapter: r.retrievalAdapter, extractionVersion: r.extractionVersion, inferenceModel: r.inferenceModel, inferencePromptVersion: r.inferencePromptVersion }
+      : null,
+    createdAt: r.createdAt, updatedAt: r.updatedAt,
   };
 }

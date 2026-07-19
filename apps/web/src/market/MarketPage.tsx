@@ -100,7 +100,9 @@ export function MarketPage() {
               <div style={{ display: 'flex', gap: 8 }}>
                 {e.websiteUrl && e.relevanceStatus !== 'dismissed' && !stalled && <Button variant="secondary" loading={active} onClick={() => void review(e.id)}>Read public site</Button>}
                 {stalled && <Button variant="secondary" onClick={() => void retry(e.id, rs!.reviewId)}>Try again</Button>}
-                {e.relevanceStatus !== 'dismissed' && <button type="button" onClick={() => void patchMarketEntity(e.id, { status: 'dismissed' }).then(refresh)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)' }}>dismiss</button>}
+                {e.relevanceStatus !== 'dismissed'
+                  ? <button type="button" onClick={() => void patchMarketEntity(e.id, { status: 'dismissed' }).then(refresh)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)' }}>dismiss</button>
+                  : <button type="button" onClick={() => void patchMarketEntity(e.id, { status: 'restored' }).then(refresh)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)' }}>restore</button>}
               </div>
             </div>
             {active && <div style={{ marginTop: 'var(--sp-4)' }}><Thinking message={STAGE[rs.status]} /></div>}
@@ -118,6 +120,9 @@ export function MarketPage() {
                     <p style={{ margin: '6px 0 var(--sp-3)', fontFamily: 'var(--serif)', fontSize: 'var(--fs-4)', color: 'var(--ink)' }}>{f.inferenceText}</p>
                   </>
                 )}
+                <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ink-3)', margin: '6px 0 0' }}>
+                  {f.inferenceText === null ? `Read via ${f.retrievalAdapter} (${f.extractionVersion})` : `My reading · model ${f.modelVersion ?? 'n/a'}${f.promptVersion ? ` · prompt ${f.promptVersion}` : ''}`}
+                </p>
                 <FindingReview finding={f} onSave={(input) => respond(e.id, f.id, input)} />
               </div>
             ))}

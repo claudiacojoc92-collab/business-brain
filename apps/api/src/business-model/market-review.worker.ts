@@ -46,12 +46,16 @@ export async function processReview(review: MarketReview, deps: MarketWorkerDeps
 
     // ATOMIC — all findings + READY in ONE transaction. Rollback (nothing published) if the READY race is lost.
     const nowIso = now().toISOString();
+    const modelId = inferenceModel.modelId ?? inferenceModel.version; // provenance — the inference model id
+    const promptVersion = inferenceModel.promptVersion ?? null;
     try {
       await db.transaction().execute(async (tx: unknown) => {
         for (const p of retrieval!.pages) {
-          await findings.append({ founderId: review.founderId, marketEntityId: review.marketEntityId, reviewId: review.id, sourceUrl: p.url, canonicalUrl: p.canonicalUrl, sourceTitle: p.title, sourceType: p.sourceType, retrievedAt: nowIso, retrievalAdapter: adapter.name, extractionVersion: adapter.extractionVersion, observedText: p.text.slice(0, 4000), evidenceFragmentId: null, inferenceText: null, epistemicStatus: 'OBSERVED', relevanceToFounder: null, founderResponse: 'unreviewed', founderQualification: null, supersedesId: null }, now(), tx);
+          await findings.append({ founderId: review.founderId, marketEntityId: review.marketEntityId, reviewId: review.id, sourceUrl: p.url, canonicalUrl: p.canonicalUrl, sourceTitle: p.title, sourceType: p.sourceType, retrievedAt: nowIso, retrievalAdapter: adapter.name, extractionVersion: adapter.extractionVersion, observedText: p.text.slice(0, 4000), evidenceFragmentId: null, inferenceText: null, epistemicStatus: 'OBSERVED', relevanceToFounder: null, founderResponse: 'unreviewed', founderQualification: null, modelVersion: null, promptVersion: null, supersedesId: null }, now(), tx);
         }
-        await findings.append({ founderId: review.founderId, marketEntityId: review.marketEntityId, reviewId: review.id, sourceUrl: entity.websiteUrl!, canonicalUrl: null, sourceTitle: entity.name, sourceType: 'inference', retrievedAt: nowIso, retrievalAdapter: adapter.name, extractionVersion: inferenceModel.version, observedText: `(reading across ${retrieval!.pages.length} public page(s))`, evidenceFragmentId: null, inferenceText: inf.inferenceText, epistemicStatus: infStatus, relevanceToFounder: inf.relevanceToFounder, founderResponse: 'unreviewed', founderQualification: null, supersedesId: null }, now(), tx);
+        await findings.append({ founderId: review.founderId, marketEntityId: review.marketEntityId, reviewId: review.id, sourceUrl: entity.websiteUrl!, canonicalUrl: null, sourceTitle: entity.name, sourceType: 'inference', retrievedAt: nowIso, retrievalAdapter: adapter.name, extractionVersion: adapter.extractionVersion, observedText: `(reading across ${retrieval!.pages.length} public page(s))`, evidenceFragmentId: null, inferenceText: inf.inferenceText, epistemicStatus: infStatus, relevanceToFounder: inf.relevanceToFounder, founderResponse: 'unreviewed', founderQualification: null, modelVersion: modelId, promptVersion, supersedesId: null }, now(), tx);
+        // Review-level provenance — what produced this review's findings (surfaced in the review view).
+        await reviewRepo.recordProvenance(review.id, { retrievalAdapter: adapter.name, extractionVersion: adapter.extractionVersion, inferenceModel: modelId, inferencePromptVersion: promptVersion }, tx);
         const ready = await reviewRepo.markReady(review.id, now(), tx);
         if (!ready) throw new Error('review left INFERRING (lost race) — roll back');
       });

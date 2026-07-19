@@ -61,6 +61,8 @@ export interface MarketFinding {
   sourceTitle: string | null; sourceType: string; retrievedAt: string; retrievalAdapter: string; extractionVersion: string;
   observedText: string; evidenceFragmentId: string | null; inferenceText: string | null; epistemicStatus: EpistemicStatus;
   relevanceToFounder: string | null; founderResponse: FindingResponse; founderQualification: string | null;
+  // Provenance for INFERENCE findings — the model + prompt that produced the reading (null for pure observations).
+  modelVersion: string | null; promptVersion: string | null;
   supersedesId: string | null; createdAt: string;
 }
 
@@ -97,7 +99,12 @@ export interface ResearchAdapter {
 // ── Inference layer (separate from retrieval; bounded, never asserts market fact) ──────────────────────
 export interface MarketInferenceInput { entityName: string; entityType: EntityType; observed: RetrievedPage[]; founderBusiness: string }
 export interface MarketInferenceResult { inferenceText: string; epistemicStatus: EpistemicStatus; relevanceToFounder: string }
-export interface MarketInferenceModel { readonly version: string; infer(input: MarketInferenceInput): Promise<MarketInferenceResult> }
+export interface MarketInferenceModel {
+  readonly version: string;
+  readonly modelId?: string;        // provenance: the model id (e.g. 'claude-sonnet-5'); falls back to version
+  readonly promptVersion?: string;  // provenance: the system-prompt version (e.g. 'market-infer-sys-1')
+  infer(input: MarketInferenceInput): Promise<MarketInferenceResult>;
+}
 
 /** Forbidden market claims — BB must not assert these from a company's own site. Guard is belt-and-suspenders
  *  over the prompt: a market-level inference is capped at HYPOTHESIS (never OBSERVED/SYNTHESIZED as fact). */

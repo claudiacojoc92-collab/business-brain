@@ -23,6 +23,8 @@ function safeJson(s: string): Record<string, unknown> | null { try { const m = s
 
 export class AnthropicMarketInference implements MarketInferenceModel {
   readonly version = `market-infer-1:${MODEL}`;
+  readonly modelId = MODEL;                    // provenance — the model that produced the reading
+  readonly promptVersion = 'market-infer-sys-1'; // provenance — the system-prompt version above
   constructor(private readonly apiKey: string) {}
   async infer(input: MarketInferenceInput): Promise<MarketInferenceResult> {
     const client = createAnthropicClient(this.apiKey);

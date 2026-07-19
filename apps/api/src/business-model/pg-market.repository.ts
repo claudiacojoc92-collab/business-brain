@@ -63,6 +63,7 @@ export class PgMarketFindingRepository {
       source_title: f.sourceTitle, source_type: f.sourceType, retrieved_at: f.retrievedAt, retrieval_adapter: f.retrievalAdapter,
       extraction_version: f.extractionVersion, observed_text: f.observedText, evidence_fragment_id: f.evidenceFragmentId,
       inference_text: f.inferenceText, epistemic_status: f.epistemicStatus, relevance_to_founder: f.relevanceToFounder,
+      model_version: f.modelVersion, prompt_version: f.promptVersion,
       founder_response: f.founderResponse, founder_qualification: f.founderQualification, supersedes_id: f.supersedesId, created_at: now.toISOString(),
     }).execute();
     return { ...f, id, createdAt: now.toISOString() };
@@ -81,6 +82,6 @@ export class PgMarketFindingRepository {
     return r ? this.toDomain(r) : null;
   }
   private toDomain(r: AnyDB): MarketFinding {
-    return { id: r.id, founderId: r.founder_id, marketEntityId: r.market_entity_id, reviewId: r.review_id ?? null, sourceUrl: r.source_url, canonicalUrl: r.canonical_url ?? null, sourceTitle: r.source_title ?? null, sourceType: r.source_type, retrievedAt: new Date(r.retrieved_at).toISOString(), retrievalAdapter: r.retrieval_adapter, extractionVersion: r.extraction_version, observedText: r.observed_text, evidenceFragmentId: r.evidence_fragment_id ?? null, inferenceText: r.inference_text ?? null, epistemicStatus: r.epistemic_status, relevanceToFounder: r.relevance_to_founder ?? null, founderResponse: r.founder_response, founderQualification: r.founder_qualification ?? null, supersedesId: r.supersedes_id ?? null, createdAt: new Date(r.created_at).toISOString() };
+    return { id: r.id, founderId: r.founder_id, marketEntityId: r.market_entity_id, reviewId: r.review_id ?? null, sourceUrl: r.source_url, canonicalUrl: r.canonical_url ?? null, sourceTitle: r.source_title ?? null, sourceType: r.source_type, retrievedAt: new Date(r.retrieved_at).toISOString(), retrievalAdapter: r.retrieval_adapter, extractionVersion: r.extraction_version, observedText: r.observed_text, evidenceFragmentId: r.evidence_fragment_id ?? null, inferenceText: r.inference_text ?? null, epistemicStatus: r.epistemic_status, relevanceToFounder: r.relevance_to_founder ?? null, founderResponse: r.founder_response, founderQualification: r.founder_qualification ?? null, modelVersion: r.model_version ?? null, promptVersion: r.prompt_version ?? null, supersedesId: r.supersedes_id ?? null, createdAt: new Date(r.created_at).toISOString() };
   }
 }
