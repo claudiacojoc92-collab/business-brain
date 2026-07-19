@@ -137,6 +137,21 @@ describe('durable run lifecycle (real DB, fake deps)', () => {
     expect(await runRepo.retry(A.founderId, claimed2!.id, new Date())).toBeNull(); // it's INGESTING now
   });
 
+  it('a too-thin source fails as insufficient_evidence BEFORE the engine (never a raw engine error)', async (ctx) => {
+    if (!dbUp) { ctx.skip(); return; }
+    const C = await signIn(E.c); // no seeded evidence for a fresh source key
+    const runRepo = new PgUnderstandingRunRepository(db);
+    await runRepo.create(C.founderId, 'existing-evidence-none', new Date());
+    const claimed = await runRepo.claimQueued(new Date(), 60_000);
+    let engineCalled = false;
+    // wipe any observed evidence so the guard trips; engine MUST NOT be called
+    await db.deleteFrom('evidence.fragments').where('founder_id', '=', C.founderId).where('confidence_kind', '=', 'observed').execute();
+    const failed = await processRun(claimed!, deps({ runEngine: async () => { engineCalled = true; return { modelConfidence: 'x', inferred: [] }; } }));
+    expect(failed.status).toBe('FAILED');
+    expect(failed.errorCode).toBe('insufficient_evidence');
+    expect(engineCalled).toBe(false); // guarded before the frozen engine (no empty-content 400)
+  });
+
   it('failure at ingestion is categorized unreachable_website', async (ctx) => {
     if (!dbUp) { ctx.skip(); return; }
     const A = await signIn(E.a);

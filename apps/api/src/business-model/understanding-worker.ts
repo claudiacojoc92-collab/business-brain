@@ -37,6 +37,12 @@ export async function processRun(run: UnderstandingRun, deps: WorkerDeps): Promi
       try { await ingest(run.founderId, run.sourceKey); }
       catch (e) { return await fail('unreachable_website', String((e as Error)?.message ?? e)); }
     }
+    // Guard BEFORE the engine: a too-thin/empty source must fail as insufficient_evidence, never feed the
+    // FROZEN engine empty content (which 400s). Keeps the engine byte-identical and the failure founder-legible.
+    const observed = await evidence.findObserved(run.founderId);
+    const hasReadable = observed.some((f) => f.payload?.['kind'] !== 'block' && typeof f.payload?.['text'] === 'string' && String(f.payload['text']).trim().length > 0);
+    if (!hasReadable) return await fail('insufficient_evidence', 'no readable observed evidence after ingestion');
+
     if (!(await runRepo.advance(run.id, 'INGESTING', 'ANALYZING', now(), leaseMs))) return (await runRepo.getById(run.founderId, run.id))!;
 
     // ANALYZING — the FROZEN engine.
