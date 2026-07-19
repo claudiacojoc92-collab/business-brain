@@ -4,7 +4,7 @@
  * in separate columns. No FK cascade (delete coverage explicit in delete.service).
  */
 import { generateId } from '@bb/shared';
-import { normalizeName, type EntityOrigin, type EntityType, type FindingResponse, type MarketEntity, type MarketFinding, type RelevanceStatus } from './market-context';
+import { normalizeName, type EntityOrigin, type EntityType, type MarketEntity, type MarketFinding, type RelevanceStatus } from './market-context';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDB = any;
@@ -75,8 +75,9 @@ export class PgMarketFindingRepository {
     const rows = await this.db.selectFrom('business.market_finding').selectAll().where('founder_id', '=', founderId).orderBy('created_at', 'asc').execute();
     return (rows as AnyDB[]).map((r) => this.toDomain(r));
   }
-  async respond(founderId: string, id: string, response: FindingResponse, qualification: string | null, now: Date): Promise<MarketFinding | null> {
-    const r = await this.db.updateTable('business.market_finding').set({ founder_response: response, founder_qualification: qualification }).where('founder_id', '=', founderId).where('id', '=', id).returningAll().executeTakeFirst();
+  /** One finding, founder-scoped — used to prove ownership before recording a response (isolation). */
+  async getById(founderId: string, id: string): Promise<MarketFinding | null> {
+    const r = await this.db.selectFrom('business.market_finding').selectAll().where('founder_id', '=', founderId).where('id', '=', id).executeTakeFirst();
     return r ? this.toDomain(r) : null;
   }
   private toDomain(r: AnyDB): MarketFinding {

@@ -6,6 +6,8 @@ import { registerAuthCredentialRoutes } from '../../routes/auth-credentials.rout
 import { registerAccountRoutes } from '../../routes/account.routes';
 import { registerMarketRoutes } from '../../routes/market.routes';
 import { PgMarketEntityRepository, PgMarketFindingRepository } from '../../business-model/pg-market.repository';
+import { PgMarketFindingResponseRepository } from '../../business-model/pg-market-finding-response.repository';
+import { PgMarketReviewRepository } from '../../business-model/pg-market-review.repository';
 import { reviewEntity, effectiveMarketContext } from '../../business-model/market-context.service';
 import { WebsiteResearchAdapter, FakeResearchAdapter } from '../../business-model/website-research.adapter';
 import { capMarketEpistemics, normalizeName, type MarketInferenceModel, type RetrievalResult } from '../../business-model/market-context';
@@ -41,7 +43,7 @@ const prev = { node: process.env['NODE_ENV'], db: process.env['DATABASE_URL'] };
 async function purge(database: any): Promise<void> {
   const rows = await database.selectFrom('identity.founders').select('founder_id').where('email', 'in', EMAILS).execute();
   const ids = rows.map((r: { founder_id: string }) => r.founder_id);
-  if (ids.length) for (const t of ['business.market_finding', 'business.market_entity', 'business.understanding', 'identity.sessions']) await database.deleteFrom(t).where('founder_id', 'in', ids).execute();
+  if (ids.length) for (const t of ['business.market_finding_response', 'business.market_review', 'business.market_finding', 'business.market_entity', 'business.understanding', 'identity.sessions']) await database.deleteFrom(t).where('founder_id', 'in', ids).execute();
   await database.deleteFrom('identity.magic_link_tokens').where('email', 'in', EMAILS).execute();
   await database.deleteFrom('identity.founders').where('email', 'in', EMAILS).execute();
 }
@@ -123,12 +125,13 @@ describe('market context (real DB)', () => {
     const entities = new PgMarketEntityRepository(db); const findings = new PgMarketFindingRepository(db);
     const sug = await entities.upsert(A.founderId, { name: 'Suggested Co', origin: 'bb_suggested' }, new Date());
     expect(sug.relevanceStatus).toBe('proposed'); // unverified
-    const ctxBefore = await effectiveMarketContext(A.founderId, entities, findings);
+    const responses = new PgMarketFindingResponseRepository(db); const reviews = new PgMarketReviewRepository(db);
+    const ctxBefore = await effectiveMarketContext(A.founderId, entities, findings, responses, reviews);
     expect(ctxBefore.suggestedUnconfirmed.some((e) => e.id === sug.id)).toBe(true);
     expect(ctxBefore.confirmedEntities.some((e) => e.id === sug.id)).toBe(false); // not treated as confirmed
   });
 
-  it('dismissed finding excluded from effective context; qualified preserved', async (ctx) => {
+  it('not-relevant finding excluded from usable context; partly-relevant qualification preserved', async (ctx) => {
     if (!dbUp) { ctx.skip(); return; }
     const A = await signIn(E.a);
     const entities = new PgMarketEntityRepository(db); const findings = new PgMarketFindingRepository(db);
@@ -137,12 +140,12 @@ describe('market context (real DB)', () => {
     const res = await reviewEntity({ founderId: A.founderId, entityId: ent.id, entities, findings, adapter: new FakeResearchAdapter(okPages), inferenceModel: okInfer, founderBusiness: '', now: new Date() });
     if (res.status !== 'ok') { expect.unreachable(); return; }
     const obs = res.findings.filter((f) => f.inferenceText === null);
-    // dismiss one observed, qualify another
-    await app.inject({ method: 'POST', url: `/api/market/findings/${obs[0]!.id}/respond`, headers: { cookie: A.cookie }, payload: { response: 'dismissed' } });
-    await app.inject({ method: 'POST', url: `/api/market/findings/${obs[1]!.id}/respond`, headers: { cookie: A.cookie }, payload: { response: 'qualified', qualification: 'only their EU pricing' } });
-    const eff = (await app.inject({ method: 'GET', url: '/api/market/context', headers: { cookie: A.cookie } })).json<{ context: { observed: Array<{ id: string; qualification: string | null }> } }>().context;
-    expect(eff.observed.some((o) => o.id === obs[0]!.id)).toBe(false); // dismissed finding excluded (by id)
-    expect(eff.observed.find((o) => o.id === obs[1]!.id)?.qualification).toContain('EU pricing'); // qualified preserved
+    // one not_relevant (excluded), one accurate + partly_relevant with a qualification (usable, preserved)
+    await app.inject({ method: 'POST', url: `/api/market/findings/${obs[0]!.id}/responses`, headers: { cookie: A.cookie }, payload: { accuratelyReflectsSource: 'yes', relevanceStatus: 'not_relevant' } });
+    await app.inject({ method: 'POST', url: `/api/market/findings/${obs[1]!.id}/responses`, headers: { cookie: A.cookie }, payload: { accuratelyReflectsSource: 'yes', relevanceStatus: 'partly_relevant', relevanceQualification: 'only their EU pricing' } });
+    const eff = (await app.inject({ method: 'GET', url: '/api/market/context', headers: { cookie: A.cookie } })).json<{ context: { observed: Array<{ id: string; relevanceQualification: string | null }> } }>().context;
+    expect(eff.observed.some((o) => o.id === obs[0]!.id)).toBe(false); // not_relevant excluded (by id)
+    expect(eff.observed.find((o) => o.id === obs[1]!.id)?.relevanceQualification).toContain('EU pricing'); // qualification preserved
   });
 
   it('isolation: B cannot read or review A’s entities; export/delete cover market data', async (ctx) => {

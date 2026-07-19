@@ -32,6 +32,7 @@ export interface FounderExport {
   marketEntities: unknown[];
   marketReviews: unknown[];
   marketFindings: unknown[];
+  marketFindingResponses: unknown[];
   understandingRuns: unknown[];
   meta: { note: string };
 }
@@ -102,6 +103,13 @@ export async function buildFounderExport(args: {
     .select(['id', 'market_entity_id', 'status', 'attempt_count', 'failure_category', 'prior_successful_review_id', 'created_at', 'finished_at'])
     .where('founder_id', '=', founderId).orderBy('created_at', 'asc').execute()) as Array<Record<string, unknown>>;
 
+  // Founder responses to findings — full history (both dimensions, qualifications, supersession lineage).
+  const marketFindingResponses = (await db.selectFrom('business.market_finding_response')
+    .select(['id', 'market_finding_id', 'accurately_reflects_source', 'relevance_status', 'accuracy_qualification', 'relevance_qualification', 'supersedes_id', 'superseded_at', 'created_at'])
+    .where('founder_id', '=', founderId).orderBy('created_at', 'asc').execute()) as Array<Record<string, unknown>>;
+  const effectiveResponseByFinding = new Map<string, Record<string, unknown>>();
+  for (const r of marketFindingResponses) if (r['superseded_at'] == null) effectiveResponseByFinding.set(String(r['market_finding_id']), r);
+
   // Run history — founder-safe (error CATEGORY only; never the internal error_detail).
   const runs = (await db
     .selectFrom('business.understanding_run')
@@ -154,7 +162,13 @@ export async function buildFounderExport(args: {
     })),
     marketEntities: marketEntities.map((e) => ({ id: String(e['id']), name: String(e['name']), entityType: String(e['entity_type']), origin: String(e['origin']), relevanceStatus: String(e['relevance_status']), websiteUrl: (e['website_url'] as string | null) ?? null, relevanceNote: (e['relevance_note'] as string | null) ?? null, createdAt: iso(e['created_at']) })),
     marketReviews: marketReviews.map((r) => ({ id: String(r['id']), marketEntityId: String(r['market_entity_id']), status: String(r['status']), attempts: Number(r['attempt_count']), failureCategory: (r['failure_category'] as string | null) ?? null, priorSuccessfulReviewId: (r['prior_successful_review_id'] as string | null) ?? null, createdAt: iso(r['created_at']), finishedAt: iso(r['finished_at']) })),
-    marketFindings: marketFindings.map((f) => ({ id: String(f['id']), marketEntityId: String(f['market_entity_id']), sourceUrl: String(f['source_url']), sourceTitle: (f['source_title'] as string | null) ?? null, sourceType: String(f['source_type']), retrievedAt: iso(f['retrieved_at']), retrievalAdapter: String(f['retrieval_adapter']), observedText: (f['observed_text'] as string | null) ?? null, inferenceText: (f['inference_text'] as string | null) ?? null, epistemicStatus: String(f['epistemic_status']), founderResponse: String(f['founder_response']), founderQualification: (f['founder_qualification'] as string | null) ?? null, createdAt: iso(f['created_at']) })),
+    marketFindings: marketFindings.map((f) => {
+      const eff = effectiveResponseByFinding.get(String(f['id']));
+      return { id: String(f['id']), marketEntityId: String(f['market_entity_id']), sourceUrl: String(f['source_url']), sourceTitle: (f['source_title'] as string | null) ?? null, sourceType: String(f['source_type']), retrievedAt: iso(f['retrieved_at']), retrievalAdapter: String(f['retrieval_adapter']), observedText: (f['observed_text'] as string | null) ?? null, inferenceText: (f['inference_text'] as string | null) ?? null, epistemicStatus: String(f['epistemic_status']), createdAt: iso(f['created_at']),
+        effectiveResponse: eff ? { accuratelyReflectsSource: String(eff['accurately_reflects_source']), relevanceStatus: String(eff['relevance_status']), accuracyQualification: (eff['accuracy_qualification'] as string | null) ?? null, relevanceQualification: (eff['relevance_qualification'] as string | null) ?? null, at: iso(eff['created_at']) } : null };
+    }),
+    // Append-only response history — both dimensions, qualifications, supersession lineage (effective = supersededAt null).
+    marketFindingResponses: marketFindingResponses.map((r) => ({ id: String(r['id']), marketFindingId: String(r['market_finding_id']), accuratelyReflectsSource: String(r['accurately_reflects_source']), relevanceStatus: String(r['relevance_status']), accuracyQualification: (r['accuracy_qualification'] as string | null) ?? null, relevanceQualification: (r['relevance_qualification'] as string | null) ?? null, supersedesId: (r['supersedes_id'] as string | null) ?? null, supersededAt: iso(r['superseded_at']), at: iso(r['created_at']) })),
     understandingRuns: runs.map((r) => ({
       id: String(r['id']), sourceKey: String(r['source_key']), status: String(r['status']), attempts: Number(r['attempt_count']),
       errorCode: (r['error_code'] as string | null) ?? null, understandingVersion: r['understanding_version'] == null ? null : Number(r['understanding_version']),

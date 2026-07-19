@@ -40,6 +40,16 @@ export class PgMarketReviewRepository {
     return (rows as AnyDB[]).map((r) => this.toDomain(r));
   }
 
+  /** The latest READY review id per entity (orchestration: only findings from the latest successful review
+   *  are current). Keyed by market_entity_id. */
+  async latestReadyByEntity(founderId: string): Promise<Map<string, string>> {
+    const rows = await this.db.selectFrom('business.market_review').select(['id', 'market_entity_id'])
+      .where('founder_id', '=', founderId).where('status', '=', 'READY').orderBy('created_at', 'asc').execute();
+    const m = new Map<string, string>();
+    for (const r of rows as AnyDB[]) m.set(r.market_entity_id, r.id); // asc → last wins = latest READY
+    return m;
+  }
+
   async claimQueued(now: Date, leaseMs: number): Promise<MarketReview | null> {
     const nowIso = now.toISOString(); const leaseIso = new Date(now.getTime() + leaseMs).toISOString();
     return this.db.transaction().execute(async (tx: AnyDB) => {

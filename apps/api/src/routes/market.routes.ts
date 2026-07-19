@@ -5,26 +5,26 @@ import { readCookie, SESSION_COOKIE } from '../session/cookie';
 import { resolveSession } from '../session/session.service';
 import { PgMarketEntityRepository, PgMarketFindingRepository } from '../business-model/pg-market.repository';
 import { PgMarketReviewRepository } from '../business-model/pg-market-review.repository';
+import { PgMarketFindingResponseRepository } from '../business-model/pg-market-finding-response.repository';
 import { PgUnderstandingRepository } from '../business-model/pg-understanding.repository';
 import { WebsiteResearchAdapter } from '../business-model/website-research.adapter';
 import { AnthropicMarketInference } from '../business-model/anthropic-market-inference';
 import { startMarketReviewWorker } from '../business-model/market-review.worker';
 import { toReviewView } from '../business-model/market-review';
-import { respondToFinding, effectiveMarketContext } from '../business-model/market-context.service';
-import { ENTITY_TYPES, type EntityType, type FindingResponse } from '../business-model/market-context';
+import { recordFindingResponse, findingViewsForEntity, effectiveMarketContext } from '../business-model/market-context.service';
+import { ENTITY_TYPES, ACCURACY_STATUSES, RELEVANCE_RESPONSE_STATUSES, type EntityType, type AccuracyStatus, type RelevanceResponseStatus } from '../business-model/market-context';
 
 /**
  * PRODUCTION market-CONTEXT API (Wave 3 slice 1) — known-entity, source-backed public evidence (NOT market
  * discovery). Cookie-only session. Retrieval reuses the robots-respecting website connector; observation and
  * inference are stored separately. Frozen engine untouched.
  */
-const RESPONSES: ReadonlySet<string> = new Set(['confirmed', 'dismissed', 'qualified', 'unreviewed']);
-
 export function registerMarketRoutes(server: FastifyInstance): void {
   const db = createKyselyClient(process.env['DATABASE_URL'] ?? '');
   const identity = new PgIdentityRepository(db);
   const entities = new PgMarketEntityRepository(db);
   const findings = new PgMarketFindingRepository(db);
+  const responses = new PgMarketFindingResponseRepository(db);
   const reviewRepo = new PgMarketReviewRepository(db);
   const understanding = new PgUnderstandingRepository(db);
   const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
@@ -117,27 +117,50 @@ export function registerMarketRoutes(server: FastifyInstance): void {
     await reply.send({ reviews: (await reviewRepo.listByEntity(founderId, (request.params as { id: string }).id)).map(toReviewView) });
   });
 
+  // Each finding view carries the finding (observation OR inference, kept separate) + its latest EFFECTIVE
+  // response + whether a prior response exists (i.e. it was reviewed / revised).
   server.get('/market/entities/:id/findings', async (request: FastifyRequest, reply: FastifyReply) => {
     const founderId = await sessionFounder(request);
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
-    await reply.send({ findings: await findings.listByEntity(founderId, (request.params as { id: string }).id) });
+    await reply.send({ findings: await findingViewsForEntity(founderId, (request.params as { id: string }).id, findings, responses) });
   });
 
-  server.post('/market/findings/:id/respond', async (request: FastifyRequest, reply: FastifyReply) => {
+  // Record a founder response — TWO independent judgments (source accuracy + business relevance), never one
+  // enum. Append-only with supersession; the finding text is never rewritten. 'partly' expects a qualification.
+  server.post('/market/findings/:id/responses', async (request: FastifyRequest, reply: FastifyReply) => {
     const founderId = await sessionFounder(request);
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
     const b = (request.body ?? {}) as Record<string, unknown>;
-    const response = String(b['response'] ?? '');
-    if (!RESPONSES.has(response)) { await reply.code(400).send({ error: 'valid response required' }); return; }
-    if (response === 'qualified' && !String(b['qualification'] ?? '').trim()) { await reply.code(400).send({ error: 'a qualification needs your words' }); return; }
-    const f = await respondToFinding({ founderId, findingId: (request.params as { id: string }).id, response: response as FindingResponse, qualification: b['qualification'] ? String(b['qualification']).slice(0, 2000) : null, findings, now: new Date() });
-    if (!f) { await reply.code(404).send({ error: 'not found' }); return; }
-    await reply.send({ finding: f });
+    const accuracy = String(b['accuratelyReflectsSource'] ?? '');
+    const relevance = String(b['relevanceStatus'] ?? '');
+    if (!ACCURACY_STATUSES.has(accuracy)) { await reply.code(400).send({ error: 'a source-accuracy answer is required' }); return; }
+    if (!RELEVANCE_RESPONSE_STATUSES.has(relevance)) { await reply.code(400).send({ error: 'a relevance answer is required' }); return; }
+    const accuracyQualification = b['accuracyQualification'] ? String(b['accuracyQualification']).slice(0, 2000) : null;
+    const relevanceQualification = b['relevanceQualification'] ? String(b['relevanceQualification']).slice(0, 2000) : null;
+    if (accuracy === 'partly' && !accuracyQualification?.trim()) { await reply.code(400).send({ error: 'tell me what BB got partly wrong about the source' }); return; }
+    if (relevance === 'partly_relevant' && !relevanceQualification?.trim()) { await reply.code(400).send({ error: 'tell me how it is only partly relevant' }); return; }
+    const rec = await recordFindingResponse({
+      founderId, findingId: (request.params as { id: string }).id,
+      accuratelyReflectsSource: accuracy as AccuracyStatus, relevanceStatus: relevance as RelevanceResponseStatus,
+      accuracyQualification, relevanceQualification, findings, responses, now: new Date(),
+    });
+    if (!rec) { await reply.code(404).send({ error: 'not found' }); return; }
+    await reply.send({ response: rec });
+  });
+
+  // Full response history for one finding (oldest first) — the effective one has supersededAt === null.
+  server.get('/market/findings/:id/responses', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const id = (request.params as { id: string }).id;
+    const owned = await findings.getById(founderId, id);
+    if (!owned) { await reply.code(404).send({ error: 'not found' }); return; }
+    await reply.send({ responses: await responses.listByFinding(founderId, id) });
   });
 
   server.get('/market/context', async (request: FastifyRequest, reply: FastifyReply) => {
     const founderId = await sessionFounder(request);
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
-    await reply.send({ context: await effectiveMarketContext(founderId, entities, findings) });
+    await reply.send({ context: await effectiveMarketContext(founderId, entities, findings, responses, reviewRepo) });
   });
 }

@@ -171,7 +171,12 @@ export async function getUnderstandingEvidence(fragmentId: string): Promise<{ te
 // ─── Public positioning context (A–E Wave 3) — known entities, source-backed public evidence ───────
 export type EntityType = 'direct' | 'indirect' | 'alternative' | 'reference';
 export interface MarketEntity { id: string; name: string; websiteUrl: string | null; entityType: EntityType; origin: string; relevanceStatus: string; relevanceNote: string | null }
-export interface MarketFinding { id: string; marketEntityId: string; sourceUrl: string; sourceTitle: string | null; observedText: string; inferenceText: string | null; epistemicStatus: string; founderResponse: string; founderQualification: string | null; relevanceToFounder: string | null }
+// Two INDEPENDENT founder judgments per finding — accuracy (BB's reading of the source) and relevance
+// (strategic usefulness) — never collapsed into one status.
+export type AccuracyStatus = 'unreviewed' | 'yes' | 'partly' | 'no';
+export type RelevanceResponseStatus = 'unreviewed' | 'relevant' | 'partly_relevant' | 'not_relevant';
+export interface FindingResponseRecord { id: string; marketFindingId: string; accuratelyReflectsSource: AccuracyStatus; relevanceStatus: RelevanceResponseStatus; accuracyQualification: string | null; relevanceQualification: string | null; supersedesId: string | null; supersededAt: string | null; createdAt: string }
+export interface MarketFinding { id: string; marketEntityId: string; sourceUrl: string; sourceTitle: string | null; observedText: string; inferenceText: string | null; epistemicStatus: string; relevanceToFounder: string | null; effectiveResponse: FindingResponseRecord | null; hasPriorResponses: boolean }
 
 export async function getMarketEntities(): Promise<MarketEntity[]> { return (await request<{ entities: MarketEntity[] }>('market/entities')).entities; }
 export async function addMarketEntity(body: { name: string; websiteUrl?: string; entityType?: EntityType; relevanceNote?: string }): Promise<MarketEntity> { return (await request<{ entity: MarketEntity }>('market/entities', { method: 'POST', body: JSON.stringify(body) })).entity; }
@@ -182,7 +187,8 @@ export async function createMarketReview(entityId: string): Promise<MarketReview
 export async function getMarketReview(reviewId: string): Promise<MarketReview> { return request(`market/reviews/${reviewId}`); }
 export async function retryMarketReview(reviewId: string): Promise<MarketReview> { return request(`market/reviews/${reviewId}/retry`, { method: 'POST' }); }
 export async function getEntityFindings(id: string): Promise<MarketFinding[]> { return (await request<{ findings: MarketFinding[] }>(`market/entities/${id}/findings`)).findings; }
-export async function respondToFinding(id: string, response: 'confirmed' | 'dismissed' | 'qualified', qualification?: string): Promise<MarketFinding> { return (await request<{ finding: MarketFinding }>(`market/findings/${id}/respond`, { method: 'POST', body: JSON.stringify({ response, qualification }) })).finding; }
+export interface FindingResponseInput { accuratelyReflectsSource: AccuracyStatus; relevanceStatus: RelevanceResponseStatus; accuracyQualification?: string; relevanceQualification?: string }
+export async function respondToFinding(id: string, input: FindingResponseInput): Promise<FindingResponseRecord> { return (await request<{ response: FindingResponseRecord }>(`market/findings/${id}/responses`, { method: 'POST', body: JSON.stringify(input) })).response; }
 
 // ─── Account: export + permanent deletion (S0-T4, Article XIII) ──────────────────
 

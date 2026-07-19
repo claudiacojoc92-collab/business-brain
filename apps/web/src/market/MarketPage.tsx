@@ -3,7 +3,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import {
   getMarketEntities, addMarketEntity, createMarketReview, getMarketReview, retryMarketReview, getEntityFindings, respondToFinding, patchMarketEntity, ApiError,
-  type MarketEntity, type MarketFinding, type ReviewStatus,
+  type MarketEntity, type MarketFinding, type ReviewStatus, type FindingResponseInput, type AccuracyStatus, type RelevanceResponseStatus,
 } from '../api/client';
 import { AppShell, Button, Field, Thinking } from '../system/ui';
 
@@ -62,8 +62,11 @@ export function MarketPage() {
       void poll(entityId, r.reviewId);
     } catch (e) { on401(e); }
   };
-  const respond = async (entityId: string, findingId: string, response: 'confirmed' | 'dismissed' | 'qualified', q?: string) => {
-    try { await respondToFinding(findingId, response, q); setFindings((s) => ({ ...s, [entityId]: s[entityId]!.map((f) => f.id === findingId ? { ...f, founderResponse: response, founderQualification: q ?? null } : f) })); } catch (e) { on401(e); }
+  const respond = async (entityId: string, findingId: string, input: FindingResponseInput) => {
+    try {
+      const rec = await respondToFinding(findingId, input);
+      setFindings((s) => ({ ...s, [entityId]: s[entityId]!.map((f) => f.id === findingId ? { ...f, effectiveResponse: rec, hasPriorResponses: true } : f) }));
+    } catch (e) { on401(e); }
   };
 
   return (
@@ -113,14 +116,9 @@ export function MarketPage() {
                   <>
                     <span style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--gold)' }}>My reading (not a market fact)</span>
                     <p style={{ margin: '6px 0 var(--sp-3)', fontFamily: 'var(--serif)', fontSize: 'var(--fs-4)', color: 'var(--ink)' }}>{f.inferenceText}</p>
-                    {f.founderResponse === 'unreviewed' ? (
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <Button variant="secondary" onClick={() => void respond(e.id, f.id, 'confirmed')}>Relevant</Button>
-                        <Button variant="ghost" onClick={() => void respond(e.id, f.id, 'dismissed')}>Not relevant</Button>
-                      </div>
-                    ) : <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-3)' }}>You marked this {f.founderResponse}.</p>}
                   </>
                 )}
+                <FindingReview finding={f} onSave={(input) => respond(e.id, f.id, input)} />
               </div>
             ))}
           </div>
@@ -128,5 +126,66 @@ export function MarketPage() {
         })}
       </div>
     </AppShell>
+  );
+}
+
+const ACC_OPTIONS: Array<{ v: AccuracyStatus; label: string }> = [{ v: 'yes', label: 'Yes' }, { v: 'partly', label: 'Partly' }, { v: 'no', label: 'No' }];
+const REL_OPTIONS: Array<{ v: RelevanceResponseStatus; label: string }> = [{ v: 'relevant', label: 'Relevant' }, { v: 'partly_relevant', label: 'Partly relevant' }, { v: 'not_relevant', label: 'Not relevant' }];
+
+function Segmented<T extends string>({ options, value, onChange }: { options: Array<{ v: T; label: string }>; value: string; onChange: (v: T) => void }) {
+  return (
+    <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+      {options.map((o) => {
+        const on = value === o.v;
+        return <button key={o.v} type="button" onClick={() => onChange(o.v)} style={{ cursor: 'pointer', fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', padding: '4px 12px', borderRadius: 'var(--r-1)', border: `1px solid ${on ? 'var(--ink)' : 'var(--line-2)'}`, background: on ? 'var(--ink)' : 'transparent', color: on ? 'var(--surface)' : 'var(--ink-2)' }}>{o.label}</button>;
+      })}
+    </div>
+  );
+}
+
+/**
+ * Two SEPARATE founder judgments per finding — accuracy (BB's reading of the source) and relevance (strategic
+ * usefulness), never one control. Shows the current effective answer, allows revision, and indicates a prior
+ * response was revised. Applies to observation AND inference findings alike.
+ */
+function FindingReview({ finding, onSave }: { finding: MarketFinding; onSave: (input: FindingResponseInput) => Promise<void> }) {
+  const eff = finding.effectiveResponse;
+  const [acc, setAcc] = useState<AccuracyStatus>(eff?.accuratelyReflectsSource ?? 'unreviewed');
+  const [rel, setRel] = useState<RelevanceResponseStatus>(eff?.relevanceStatus ?? 'unreviewed');
+  const [accQ, setAccQ] = useState(eff?.accuracyQualification ?? '');
+  const [relQ, setRelQ] = useState(eff?.relevanceQualification ?? '');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const canSave = (acc !== 'unreviewed' || rel !== 'unreviewed') && !(acc === 'partly' && !accQ.trim()) && !(rel === 'partly_relevant' && !relQ.trim());
+  const save = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    try { await onSave({ accuratelyReflectsSource: acc, relevanceStatus: rel, accuracyQualification: accQ.trim() || undefined, relevanceQualification: relQ.trim() || undefined }); setSaved(true); }
+    finally { setSaving(false); }
+  };
+  const label = { fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: 'var(--sp-3) 0 0' } as const;
+  const hint = { fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ink-3)', margin: '2px 0 0' } as const;
+  const qual = { width: '100%', marginTop: 6, fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', boxSizing: 'border-box' as const };
+
+  return (
+    <div style={{ marginTop: 'var(--sp-3)' }}>
+      <p style={label}>Does this reflect the source?</p>
+      <p style={hint}>Whether BB read the public page correctly — not whether the claim is true in the market.</p>
+      <Segmented options={ACC_OPTIONS} value={acc} onChange={(v) => { setAcc(v); setSaved(false); }} />
+      {acc === 'partly' && <textarea value={accQ} onChange={(ev) => { setAccQ(ev.target.value); setSaved(false); }} placeholder="What did BB get partly wrong about the source?" rows={2} style={qual} />}
+
+      <p style={label}>Is this relevant to your business?</p>
+      <p style={hint}>Whether it matters strategically — separate from whether it’s accurate.</p>
+      <Segmented options={REL_OPTIONS} value={rel} onChange={(v) => { setRel(v); setSaved(false); }} />
+      {rel === 'partly_relevant' && <textarea value={relQ} onChange={(ev) => { setRelQ(ev.target.value); setSaved(false); }} placeholder="How is it only partly relevant?" rows={2} style={qual} />}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 'var(--sp-3)' }}>
+        <Button variant={canSave ? 'secondary' : 'ghost'} loading={saving} onClick={() => void save()}>{eff ? 'Update' : 'Save'}</Button>
+        {saved
+          ? <span style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ok-ink)' }}>Saved{finding.hasPriorResponses ? ' — revised' : ''}. You can revise anytime.</span>
+          : eff && <span style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ink-3)' }}>Your current answer is shown{finding.hasPriorResponses ? ' (revised)' : ''}. You can change it.</span>}
+      </div>
+    </div>
   );
 }
