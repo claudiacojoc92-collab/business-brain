@@ -93,6 +93,35 @@ export async function logoutSession(): Promise<void> {
   return request<void>('auth/logout', { method: 'POST' });
 }
 
+// ─── Email/password + Google login (A–E Wave 1) ──────────────────────────────────
+// Sign-up/sign-in set the bb_session cookie via Set-Cookie (credentials:'include'); no client token.
+// Sign-in failures are a generic ApiError(401) — the server never reveals whether an email exists.
+
+export interface AuthResponse { founder_id: string }
+
+/** POST /auth/signup — create an account (409 if the email is already registered). */
+export async function signUp(email: string, password: string): Promise<AuthResponse> {
+  return request<AuthResponse>('auth/signup', { method: 'POST', body: JSON.stringify({ email, password }) });
+}
+
+/** POST /auth/signin — sign in with email + password (generic 401 on any failure). */
+export async function signIn(email: string, password: string): Promise<AuthResponse> {
+  return request<AuthResponse>('auth/signin', { method: 'POST', body: JSON.stringify({ email, password }) });
+}
+
+/** POST /auth/forgot — always resolves (no enumeration); dev also returns devLink. */
+export async function requestPasswordReset(email: string): Promise<{ ok: boolean; devLink?: string }> {
+  return request<{ ok: boolean; devLink?: string }>('auth/forgot', { method: 'POST', body: JSON.stringify({ email }) });
+}
+
+/** POST /auth/reset — set a new password with a reset token; sets the session on success. */
+export async function resetPassword(token: string, password: string): Promise<AuthResponse> {
+  return request<AuthResponse>('auth/reset', { method: 'POST', body: JSON.stringify({ token, password }) });
+}
+
+/** The full-page Google login entry (config-gated server-side). */
+export const GOOGLE_LOGIN_URL = '/api/auth/google/start';
+
 // ─── Account: export + permanent deletion (S0-T4, Article XIII) ──────────────────
 
 /** GET /account/export — the complete JSON the session founder owns (parsed). */

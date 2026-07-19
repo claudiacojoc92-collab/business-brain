@@ -6,6 +6,12 @@ import { ReadsListPage } from './pages/ReadsListPage';
 import { FirstReadPage } from './pages/FirstReadPage';
 import { ConnectPage } from './pages/ConnectPage';
 import { DeclarePage } from './declare/DeclarePage';
+import { LandingPage } from './arrival/LandingPage';
+import { SignUpPage } from './arrival/SignUpPage';
+import { SignInPage } from './arrival/SignInPage';
+import { RecoverPage } from './arrival/RecoverPage';
+import { ResetPage } from './arrival/ResetPage';
+import { WelcomePage } from './arrival/WelcomePage';
 import { ConnectPreviewPage } from './connect/ConnectPreviewPage';
 import { UploadPreviewPage } from './upload/UploadPreviewPage';
 import { GooglePreviewPage } from './google/GooglePreviewPage';
@@ -26,6 +32,15 @@ export function App() {
         <Routes>
           {/* Public */}
           <Route path="/login" element={<LoginPage />} />
+
+          {/* A–E Wave 1 — Trust & Arrival (new premium flow, additive; the current /login flow is untouched
+              and remains the default until the coherent A–E flow is complete and cut over). */}
+          <Route path="/start" element={<LandingPage />} />
+          <Route path="/signup" element={<SignUpPage />} />
+          <Route path="/signin" element={<SignInPage />} />
+          <Route path="/recover" element={<RecoverPage />} />
+          <Route path="/reset" element={<ResetPage />} />
+          <Route path="/welcome" element={<WelcomePage />} />
 
           {/* Real product: the connect surface (S1-T5b) — the authenticated landing. Magic Link → Connect
               → Generate → Read. Session-guarded; consumes only the production connect + generate endpoints. */}
