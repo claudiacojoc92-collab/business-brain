@@ -13,6 +13,7 @@ import { RecoverPage } from './arrival/RecoverPage';
 import { ResetPage } from './arrival/ResetPage';
 import { WelcomePage } from './arrival/WelcomePage';
 import { UnderstandPage } from './understand/UnderstandPage';
+import { MarketPage } from './market/MarketPage';
 import { ConnectPreviewPage } from './connect/ConnectPreviewPage';
 import { UploadPreviewPage } from './upload/UploadPreviewPage';
 import { GooglePreviewPage } from './google/GooglePreviewPage';
@@ -45,6 +46,9 @@ export function App() {
 
           {/* A–E Wave 2 — Business Understanding (guided website → synthesized "I understand your business"). */}
           <Route path="/understand" element={<UnderstandPage />} />
+
+          {/* A–E Wave 3 — Public positioning context (known-entity, source-backed public evidence). */}
+          <Route path="/market" element={<MarketPage />} />
 
           {/* Real product: the connect surface (S1-T5b) — the authenticated landing. Magic Link → Connect
               → Generate → Read. Session-guarded; consumes only the production connect + generate endpoints. */}
