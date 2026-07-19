@@ -64,8 +64,9 @@ export class PgUnderstandingRunRepository {
     return r ? this.toDomain(r) : null;
   }
 
-  async markReady(id: string, understandingId: string, version: number, now: Date): Promise<UnderstandingRun | null> {
-    const r = await this.db.updateTable('business.understanding_run')
+  async markReady(id: string, understandingId: string, version: number, now: Date, tx?: unknown): Promise<UnderstandingRun | null> {
+    const db = (tx ?? this.db) as AnyDB;
+    const r = await db.updateTable('business.understanding_run')
       .set({ status: 'READY', understanding_id: understandingId, understanding_version: version, completed_at: now.toISOString(), lease_expires_at: null, updated_at: now.toISOString() })
       .where('id', '=', id).where('status', '=', 'SYNTHESIZING').returningAll().executeTakeFirst();
     return r ? this.toDomain(r) : null;

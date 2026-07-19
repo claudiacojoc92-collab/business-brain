@@ -73,7 +73,7 @@ export function registerUnderstandingRoutes(server: FastifyInstance): void {
   // so tests drive processRun deterministically; on elsewhere so the live flow processes runs.
   if (process.env['NODE_ENV'] !== 'test') {
     startUnderstandingWorker({
-      runRepo, understanding, evidence,
+      runRepo, understanding, evidence, db,
       ingest: async (founderId, url) => { await ingestWebsite({ founderId, url, repo: evidence }); },
       runEngine, synthesisModel: new AnthropicSynthesisModel(apiKey), leaseMs: LEASE_MS, now: () => new Date(),
     });

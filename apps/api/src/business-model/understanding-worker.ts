@@ -9,8 +9,9 @@ import type { IEvidenceRepository } from '@bb/domain';
 import type { PgUnderstandingRunRepository } from './pg-understanding-run.repository';
 import type { PgUnderstandingRepository } from './pg-understanding.repository';
 import type { UnderstandingRun } from './understanding-run';
-import { synthesizeUnderstanding, type EngineOutcome } from './business-understanding.service';
-import type { SynthesisModel } from './understanding';
+import { generateId } from '@bb/shared';
+import { composeUnderstanding, type EngineOutcome } from './business-understanding.service';
+import type { SynthesisModel, Understanding } from './understanding';
 
 export interface WorkerDeps {
   runRepo: PgUnderstandingRunRepository;
@@ -19,13 +20,15 @@ export interface WorkerDeps {
   ingest: (founderId: string, url: string) => Promise<void>;     // wraps ingestWebsite
   runEngine: (founderId: string) => Promise<EngineOutcome>;      // wraps the FROZEN engine
   synthesisModel: SynthesisModel;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any;                                                        // for the atomic finalize (save + READY)
   leaseMs: number;
   now: () => Date;
 }
 
 /** Process one claimed run (already INGESTING). Returns the terminal run row (READY or FAILED). */
 export async function processRun(run: UnderstandingRun, deps: WorkerDeps): Promise<UnderstandingRun> {
-  const { runRepo, understanding, evidence, ingest, runEngine, synthesisModel, leaseMs, now } = deps;
+  const { runRepo, understanding, evidence, ingest, runEngine, synthesisModel, db, leaseMs, now } = deps;
   const fail = async (code: Parameters<PgUnderstandingRunRepository['markFailed']>[1], detail: string) =>
     (await runRepo.markFailed(run.id, code, detail, now())) ?? (await runRepo.getById(run.founderId, run.id))!;
   try {
@@ -42,14 +45,25 @@ export async function processRun(run: UnderstandingRun, deps: WorkerDeps): Promi
     catch (e) { return await fail('analysis_failed', String((e as Error)?.message ?? e)); }
     if (!(await runRepo.advance(run.id, 'ANALYZING', 'SYNTHESIZING', now(), leaseMs))) return (await runRepo.getById(run.founderId, run.id))!;
 
-    // SYNTHESIZING — Layer-2 synthesis + validated persist. Publish only on success.
-    let synth: Awaited<ReturnType<typeof synthesizeUnderstanding>>;
-    try { synth = await synthesizeUnderstanding({ founderId: run.founderId, evidence, engine, synthesisModel, understanding, now: now() }); }
+    // SYNTHESIZING — the LLM call OUTSIDE any transaction (never hold a tx across a multi-second call).
+    let composed: Awaited<ReturnType<typeof composeUnderstanding>>;
+    try { composed = await composeUnderstanding({ founderId: run.founderId, evidence, engine, synthesisModel }); }
     catch (e) { return await fail('synthesis_failed', String((e as Error)?.message ?? e)); }
-    if (synth.status === 'insufficient_evidence') return await fail('insufficient_evidence', 'no observed evidence');
+    if (composed.status === 'insufficient_evidence') return await fail('insufficient_evidence', 'no observed evidence');
 
-    return (await runRepo.markReady(run.id, synth.understanding.id, synth.understanding.version, now()))
-      ?? (await runRepo.getById(run.founderId, run.id))!;
+    // ATOMIC finalize — version + save + READY in ONE commit. A crash before commit persists nothing (clean
+    // retry); after commit, both the version and READY exist (idempotent — no orphan/duplicate version).
+    const understandingId = generateId();
+    try {
+      await db.transaction().execute(async (tx: unknown) => {
+        const version = await understanding.nextVersion(run.founderId, tx);
+        const u: Understanding = { id: understandingId, founderId: run.founderId, version, supersedesId: null, modelVersion: composed.modelVersion, sourceFragmentIds: composed.sourceFragmentIds, conclusions: composed.conclusions, createdAt: now().toISOString() };
+        await understanding.save(u, tx);
+        const ready = await runRepo.markReady(run.id, understandingId, version, now(), tx);
+        if (!ready) throw new Error('run left SYNTHESIZING (lost race) — roll back the version'); // keeps version↔run 1:1
+      });
+    } catch (e) { return await fail('synthesis_failed', String((e as Error)?.message ?? e)); }
+    return (await runRepo.getById(run.founderId, run.id))!;
   } catch (e) {
     return await fail('unknown', String((e as Error)?.message ?? e));
   }

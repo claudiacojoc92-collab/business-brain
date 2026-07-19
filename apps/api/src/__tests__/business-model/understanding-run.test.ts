@@ -41,7 +41,7 @@ describe('run state machine (pure)', () => {
 });
 
 const DB_URL = process.env['GATE_DB_URL'] ?? 'postgresql://bbuser:bbpassword@localhost:5432/businessbrain';
-const E = { a: 'run.a@understand.test', b: 'run.b@understand.test' };
+const E = { a: 'run.a@understand.test', b: 'run.b@understand.test', c: 'run.c@understand.test' };
 const EMAILS = Object.values(E);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let db: any; let app: FastifyInstance; let dbUp = false;
@@ -52,7 +52,7 @@ const throwModel: SynthesisModel = { version: 'fake-x', synthesize: async () => 
 const engine = async () => ({ modelConfidence: 'thin', inferred: [] });
 function deps(over: Partial<WorkerDeps>): WorkerDeps {
   return {
-    runRepo: new PgUnderstandingRunRepository(db), understanding: new PgUnderstandingRepository(db), evidence: new PgEvidenceRepository(db),
+    runRepo: new PgUnderstandingRunRepository(db), understanding: new PgUnderstandingRepository(db), evidence: new PgEvidenceRepository(db), db,
     ingest: async () => { /* no-op default */ }, runEngine: engine, synthesisModel: okModel(['x']), leaseMs: 60_000, now: () => new Date(), ...over,
   };
 }
@@ -145,6 +145,33 @@ describe('durable run lifecycle (real DB, fake deps)', () => {
     const claimed = await runRepo.claimQueued(new Date(), 60_000);
     const failed = await processRun(claimed!, deps({ ingest: async () => { throw new Error('ENOTFOUND'); } }));
     expect(failed.status).toBe('FAILED'); expect(failed.errorCode).toBe('unreachable_website');
+  });
+
+  it('finalization is idempotent: a second worker pass on a READY run creates NO second version', async (ctx) => {
+    if (!dbUp) { ctx.skip(); return; }
+    const C = await signIn(E.c);
+    const fragIds = await seed(C.founderId);
+    const runRepo = new PgUnderstandingRunRepository(db);
+    await runRepo.create(C.founderId, 'https://x.example/atomic', new Date());
+    const claimed = await runRepo.claimQueued(new Date(), 60_000);
+    const done = await processRun(claimed!, deps({ synthesisModel: okModel(fragIds) }));
+    expect(done.status).toBe('READY');
+    const n1 = (await new PgUnderstandingRepository(db).listByFounder(C.founderId)).length;
+    const again = await processRun(claimed!, deps({ synthesisModel: okModel(fragIds) })); // duplicate/late pass on the READY run
+    expect(again.status).toBe('READY');
+    const n2 = (await new PgUnderstandingRepository(db).listByFounder(C.founderId)).length;
+    expect(n2).toBe(n1); // no duplicate version for the same completed attempt
+  });
+
+  it('a run within its lease is NOT falsely recovered as stale (engine ~110s < lease)', async (ctx) => {
+    if (!dbUp) { ctx.skip(); return; }
+    const C = await signIn(E.c);
+    const runRepo = new PgUnderstandingRunRepository(db);
+    await runRepo.create(C.founderId, 'https://x.example/live-lease', new Date());
+    const claimed = await runRepo.claimQueued(new Date(), 5 * 60_000); // 5-min lease
+    await runRepo.recoverStale(new Date());                            // now < lease → must not touch it
+    const still = await runRepo.getById(C.founderId, claimed!.id);
+    expect(still!.status).not.toBe('FAILED');                          // legitimate in-progress run survives
   });
 
   it('recoverStale fails an active run past its lease (crash recovery)', async (ctx) => {
