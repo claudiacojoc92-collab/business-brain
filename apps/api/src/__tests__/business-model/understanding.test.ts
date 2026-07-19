@@ -7,7 +7,7 @@ import { registerAccountRoutes } from '../../routes/account.routes';
 import { registerAuthCredentialRoutes } from '../../routes/auth-credentials.routes';
 import { registerUnderstandingRoutes } from '../../routes/understanding.routes';
 import { PgUnderstandingRepository } from '../../business-model/pg-understanding.repository';
-import { generateUnderstanding, respondToConclusion, type EngineOutcome } from '../../business-model/business-understanding.service';
+import { generateUnderstanding, type EngineOutcome } from '../../business-model/business-understanding.service';
 import { normalizeConclusions, applyFounderResponse, assertUnderstandingWellFormed, type SynthesisModel, type RawConclusion, type Understanding } from '../../business-model/understanding';
 
 /** Wave 2 — Business Understanding. Deterministic unit tests + live-DB service/route tests with a FAKE
@@ -148,23 +148,18 @@ describe('Wave 2 understanding — service + routes (real DB, fake engine + mode
     expect(u.conclusions.every((c) => !c.statement.startsWith('ACME '))).toBe(true);
   });
 
-  it('correction: creates v2 with the founder response, persists declared input, preserves v1 (lineage)', async (ctx) => {
+  it('a Correct response persists declared input WITHOUT bumping the synthesis version (see conclusion-response.test for full semantics)', async (ctx) => {
     if (!dbUp) { ctx.skip(); return; }
-    const A = await signIn(E.a); // fresh founder for this test (E.a reused → new signup makes a new founder? no: same email → same founder)
+    const A = await signIn(E.a);
     const evidence = new PgEvidenceRepository(db);
     const rep = new PgUnderstandingRepository(db);
     const latest = await rep.latest(A.founderId);
     if (!latest) { ctx.skip(); return; }
     const target = latest.conclusions[0]!;
-    const res = await respondToConclusion({ founderId: A.founderId, conclusionId: target.id, response: 'corrected', correction: 'Actually a fractional CMO service', evidence, understanding: rep, db, now: new Date() });
-    expect(res.status).toBe('ok');
-    if (res.status !== 'ok') return;
-    expect(res.understanding.version).toBe(latest.version + 1);
-    expect(res.understanding.supersedesId).toBe(latest.id);          // lineage
-    expect(res.understanding.conclusions.find((c) => c.id === target.id)!.founderCorrection).toContain('fractional CMO');
-    // v1 preserved (append-only)
-    const all = await rep.listByFounder(A.founderId);
-    expect(all.find((u) => u.id === latest.id)).toBeTruthy();
+    const res = await app.inject({ method: 'POST', url: '/api/understanding/respond', headers: { cookie: A.cookie }, payload: { conclusionId: target.id, response: 'corrected', correctionText: 'Actually a fractional CMO service' } });
+    expect(res.statusCode).toBe(200);
+    // synthesis version is UNCHANGED (no inflation); the response overlays it
+    expect((await rep.latest(A.founderId))!.version).toBe(latest.version);
     // declared correction persisted as founder/declared evidence
     const declared = (await evidence.findByFounder(A.founderId)).filter((f) => f.source === 'founder' && f.confidenceKind === 'declared');
     expect(JSON.stringify(declared)).toContain('fractional CMO');

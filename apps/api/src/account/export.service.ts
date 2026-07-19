@@ -28,6 +28,7 @@ export interface FounderExport {
   integrations: Array<{ provider: string; scopes: string | null; connectedAt: string | null; tokenExpiresAt: string | null }>;
   login: { hasPassword: boolean; passwordSetAt: string | null; federatedLogins: Array<{ provider: string; email: string | null; connectedAt: string | null }> };
   understanding: unknown[];
+  conclusionResponses: unknown[];
   understandingRuns: unknown[];
   meta: { note: string };
 }
@@ -80,6 +81,14 @@ export async function buildFounderExport(args: {
     .orderBy('version', 'asc')
     .execute()) as Array<Record<string, unknown>>;
 
+  // Founder response history — full lineage (all responses, oldest first), with the fields kept separate.
+  const conclusionResponses = (await db
+    .selectFrom('business.conclusion_response')
+    .select(['id', 'understanding_id', 'conclusion_id', 'response_type', 'accepted_text', 'qualification_text', 'correction_text', 'superseded_by', 'created_at'])
+    .where('founder_id', '=', founderId)
+    .orderBy('created_at', 'asc')
+    .execute()) as Array<Record<string, unknown>>;
+
   // Run history — founder-safe (error CATEGORY only; never the internal error_detail).
   const runs = (await db
     .selectFrom('business.understanding_run')
@@ -123,6 +132,12 @@ export async function buildFounderExport(args: {
       modelVersion: String(u['model_version']),
       conclusions: typeof u['conclusions'] === 'string' ? JSON.parse(u['conclusions'] as string) : u['conclusions'],
       createdAt: iso(u['created_at']),
+    })),
+    conclusionResponses: conclusionResponses.map((r) => ({
+      id: String(r['id']), understandingId: String(r['understanding_id']), conclusionId: String(r['conclusion_id']),
+      responseType: String(r['response_type']), acceptedText: (r['accepted_text'] as string | null) ?? null,
+      qualificationText: (r['qualification_text'] as string | null) ?? null, correctionText: (r['correction_text'] as string | null) ?? null,
+      supersededBy: (r['superseded_by'] as string | null) ?? null, at: iso(r['created_at']),
     })),
     understandingRuns: runs.map((r) => ({
       id: String(r['id']), sourceKey: String(r['source_key']), status: String(r['status']), attempts: Number(r['attempt_count']),

@@ -5,13 +5,14 @@ import { readCookie, SESSION_COOKIE } from '../session/cookie';
 import { resolveSession } from '../session/session.service';
 import { PgUnderstandingRepository } from '../business-model/pg-understanding.repository';
 import { PgUnderstandingRunRepository } from '../business-model/pg-understanding-run.repository';
-import { respondToConclusion, type EngineOutcome } from '../business-model/business-understanding.service';
+import { PgConclusionResponseRepository } from '../business-model/pg-conclusion-response.repository';
+import { recordConclusionResponse, type EngineOutcome } from '../business-model/business-understanding.service';
 import { AnthropicSynthesisModel } from '../business-model/anthropic-synthesis.model';
 import { startUnderstandingWorker } from '../business-model/understanding-worker';
 import { toRunView } from '../business-model/understanding-run';
 import { recomputeFromSources } from '../business-model/recompute';
 import { ingestWebsite } from '../business-model/connect-ingest.service';
-import type { Conclusion, ConfirmationState, Understanding } from '../business-model/understanding';
+import type { Conclusion, ConclusionResponse, ResponseType, Understanding } from '../business-model/understanding';
 
 /**
  * PRODUCTION Business Understanding API (Wave 2). Session-scoped (cookie-only). Generation runs the FROZEN
@@ -25,15 +26,19 @@ import type { Conclusion, ConfirmationState, Understanding } from '../business-m
  */
 const RESPONSES: ReadonlySet<string> = new Set(['confirmed', 'partly', 'corrected', 'rejected']);
 
-// Founder-facing projection — conclusions only; evidence is referenced by count + ids, never dumped as text.
-function toView(u: Understanding) {
+// Founder-facing projection — conclusions only; evidence referenced by count/ids, never dumped. The effective
+// founder response is OVERLAID per conclusion (the original synthesis + epistemic status are never rewritten).
+function toView(u: Understanding, responses: Map<string, ConclusionResponse>) {
   return {
     id: u.id, version: u.version, createdAt: u.createdAt,
-    conclusions: u.conclusions.map((c: Conclusion) => ({
-      id: c.id, type: c.type, statement: c.statement, epistemicStatus: c.epistemicStatus,
-      confidence: c.confidence, confirmationState: c.confirmationState, founderCorrection: c.founderCorrection,
-      evidenceCount: c.evidenceRefs.length, evidenceRefs: c.evidenceRefs,
-    })),
+    conclusions: u.conclusions.map((c: Conclusion) => {
+      const r = responses.get(c.id) ?? null;
+      return {
+        id: c.id, type: c.type, statement: c.statement, epistemicStatus: c.epistemicStatus, confidence: c.confidence,
+        evidenceCount: c.evidenceRefs.length, evidenceRefs: c.evidenceRefs,
+        response: r ? { type: r.type, acceptedText: r.acceptedText, qualificationText: r.qualificationText, correctionText: r.correctionText, at: r.at, revisedEarlier: false } : null,
+      };
+    }),
   };
 }
 
@@ -43,6 +48,7 @@ export function registerUnderstandingRoutes(server: FastifyInstance): void {
   const evidence = new PgEvidenceRepository(db);
   const understanding = new PgUnderstandingRepository(db);
   const runRepo = new PgUnderstandingRunRepository(db);
+  const responses = new PgConclusionResponseRepository(db);
   const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
   const LEASE_MS = 5 * 60 * 1000; // a run stage must renew within 5 min or it's reclaimable (crash recovery)
 
@@ -113,21 +119,29 @@ export function registerUnderstandingRoutes(server: FastifyInstance): void {
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
     const latest = await understanding.latest(founderId);
     if (!latest) { await reply.code(404).send({ status: 'none' }); return; }
-    await reply.send({ status: 'ok', understanding: toView(latest) });
+    const effective = await responses.effectiveByConclusion(founderId);
+    await reply.send({ status: 'ok', understanding: toView(latest, effective) });
   });
 
   server.post('/understanding/respond', async (request: FastifyRequest, reply: FastifyReply) => {
     const founderId = await sessionFounder(request);
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
-    const b = (request.body ?? {}) as { conclusionId?: unknown; response?: unknown; text?: unknown };
+    const b = (request.body ?? {}) as { conclusionId?: unknown; response?: unknown; acceptedText?: unknown; qualificationText?: unknown; correctionText?: unknown };
     const conclusionId = String(b.conclusionId ?? '');
-    const response = String(b.response ?? '');
-    if (!conclusionId || !RESPONSES.has(response)) { await reply.code(400).send({ error: 'conclusionId and a valid response are required' }); return; }
-    const text = typeof b.text === 'string' ? b.text.slice(0, 4000) : null;
-    if (response !== 'confirmed' && !text?.trim()) { await reply.code(400).send({ error: 'a correction needs your words' }); return; }
-    const result = await respondToConclusion({ founderId, conclusionId, response: response as ConfirmationState, correction: text, evidence, understanding, db, now: new Date() });
+    const type = String(b.response ?? '') as ResponseType;
+    if (!conclusionId || !RESPONSES.has(type)) { await reply.code(400).send({ error: 'conclusionId and a valid response are required' }); return; }
+    const cap = (v: unknown) => (typeof v === 'string' ? v.slice(0, 4000) : null);
+    const acceptedText = cap(b.acceptedText);
+    const qualificationText = cap(b.qualificationText);
+    const correctionText = cap(b.correctionText);
+    // Per-type validation: Correct requires text; Partly needs the qualification; Confirm/Reject need no text.
+    if (type === 'corrected' && !correctionText?.trim()) { await reply.code(400).send({ error: 'a correction needs your words' }); return; }
+    if (type === 'partly' && !qualificationText?.trim()) { await reply.code(400).send({ error: 'tell me what part is off' }); return; }
+    const result = await recordConclusionResponse({ founderId, conclusionId, type, acceptedText, qualificationText, correctionText, evidence, understanding, responses, db, now: new Date() });
     if (result.status === 'not_found') { await reply.code(404).send({ error: 'no such conclusion in your current understanding' }); return; }
-    await reply.send({ status: 'ok', understanding: toView(result.understanding) });
+    const latest = await understanding.latest(founderId);
+    const effective = await responses.effectiveByConclusion(founderId);
+    await reply.send({ status: 'ok', understanding: latest ? toView(latest, effective) : null });
   });
 
   // On-demand supporting evidence — one founder-owned fragment's verbatim text (collapsed by default in the UI).

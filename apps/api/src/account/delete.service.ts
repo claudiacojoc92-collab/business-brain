@@ -34,6 +34,7 @@ export async function deleteFounderAccount(
     await tx.deleteFrom('business_read.snapshots').where('founder_id', '=', founderId).execute(); // S1-T3 immutable Read snapshots
     await tx.deleteFrom('business.understanding').where('founder_id', '=', founderId).execute();   // Wave 2 (V058) — versioned understanding
     await tx.deleteFrom('business.understanding_run').where('founder_id', '=', founderId).execute(); // Wave 2 (V059) — generation runs
+    await tx.deleteFrom('business.conclusion_response').where('founder_id', '=', founderId).execute(); // Wave 2 (V060) — founder response history
     await tx.deleteFrom('identity.sessions').where('founder_id', '=', founderId).execute();     // revokes all sessions
     await tx.deleteFrom('identity.founder_credentials').where('founder_id', '=', founderId).execute(); // Wave 1 (V056) — password credential
     await tx.deleteFrom('identity.oauth_identities').where('founder_id', '=', founderId).execute();    // Wave 1 (V057) — federated login identities

@@ -85,8 +85,8 @@ export function UnderstandPage() {
     catch (e) { if (!on401(e)) setPhase('intro'); }
   };
 
-  const respond = async (c: UnderstandingConclusion, response: 'confirmed' | 'partly' | 'corrected' | 'rejected', text?: string) => {
-    try { setView(await respondToConclusion(c.id, response, text)); } catch (e) { if (!on401(e)) setNotice('Could not save that just now.'); }
+  const respond = async (c: UnderstandingConclusion, response: 'confirmed' | 'partly' | 'corrected' | 'rejected', fields?: { acceptedText?: string; qualificationText?: string; correctionText?: string }) => {
+    try { setView(await respondToConclusion(c.id, response, fields)); } catch (e) { if (!on401(e)) setNotice('Could not save that just now.'); }
   };
 
   return (
@@ -142,17 +142,28 @@ export function UnderstandPage() {
   );
 }
 
-function ConclusionCard({ c, index, onRespond }: { c: UnderstandingConclusion; index: number; onRespond: (c: UnderstandingConclusion, r: 'confirmed' | 'partly' | 'corrected' | 'rejected', t?: string) => void }) {
-  const [mode, setMode] = useState<null | 'partly' | 'corrected' | 'rejected'>(null);
-  const [text, setText] = useState('');
+const RESPONSE_LABEL: Record<string, string> = {
+  confirmed: 'You confirmed this reflects your business.',
+  partly: 'You said some of this is right.',
+  corrected: 'You corrected this.',
+  rejected: 'You said this doesn’t reflect your business.',
+};
+const field: React.CSSProperties = { width: '100%', minHeight: 56, fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', border: '1px solid var(--line-2)', borderRadius: 'var(--r-1)', padding: '10px 12px', boxSizing: 'border-box' };
+
+function ConclusionCard({ c, index, onRespond }: { c: UnderstandingConclusion; index: number; onRespond: (c: UnderstandingConclusion, r: 'confirmed' | 'partly' | 'corrected' | 'rejected', fields?: { acceptedText?: string; qualificationText?: string; correctionText?: string }) => void }) {
+  const [mode, setMode] = useState<null | 'partly' | 'corrected'>(null);
+  const [accepted, setAccepted] = useState('');
+  const [qualification, setQualification] = useState('');
+  const [correction, setCorrection] = useState('');
   const [evidence, setEvidence] = useState<string | null>(null);
   const band = BAND[c.epistemicStatus];
-  const done = c.confirmationState !== 'pending';
+  const r = c.response;
 
   const openEvidence = async () => {
     if (evidence !== null || c.evidenceRefs.length === 0) return;
     try { const e = await getUnderstandingEvidence(c.evidenceRefs[0]!); setEvidence(e.text); } catch { setEvidence(''); }
   };
+  const reset = () => { setMode(null); setAccepted(''); setQualification(''); setCorrection(''); };
 
   return (
     <RevealBlock index={index}>
@@ -167,24 +178,45 @@ function ConclusionCard({ c, index, onRespond }: { c: UnderstandingConclusion; i
           </details>
         )}
 
-        {done ? (
-          <p style={{ margin: 0, fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-3)' }}>
-            {c.confirmationState === 'confirmed' ? 'Confirmed ✓' : `You said: ${c.confirmationState}${c.founderCorrection ? ` — "${c.founderCorrection}"` : ''}`}
-          </p>
-        ) : mode ? (
+        {r ? (
+          <div style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-3)' }}>
+            <span>{RESPONSE_LABEL[r.type]}{r.revisedEarlier ? ' (revised)' : ''}</span>
+            {(r.correctionText || r.qualificationText || r.acceptedText) && (
+              <p style={{ margin: '6px 0 0', color: 'var(--ink-2)', fontFamily: 'var(--serif)' }}>
+                {r.acceptedText && <>Kept: “{r.acceptedText}”. </>}{(r.qualificationText || r.correctionText) && <>In your words: “{r.qualificationText || r.correctionText}”.</>}
+              </p>
+            )}
+            <div style={{ marginTop: 8, display: 'flex', gap: 12 }}>
+              <button type="button" onClick={() => onRespond(c, 'confirmed')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', textDecoration: 'underline' }}>confirm instead</button>
+              <button type="button" onClick={() => setMode('corrected')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', textDecoration: 'underline' }}>revise my response</button>
+            </div>
+          </div>
+        ) : mode === 'partly' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
-            <textarea autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder="In your words…" style={{ width: '100%', minHeight: 64, fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', border: '1px solid var(--line-2)', borderRadius: 'var(--r-1)', padding: '10px 12px', boxSizing: 'border-box' }} />
+            <label style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)' }}>What’s right about this? <span style={{ color: 'var(--ink-3)' }}>(optional)</span>
+              <textarea value={accepted} onChange={(e) => setAccepted(e.target.value)} style={{ ...field, marginTop: 4 }} /></label>
+            <label style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)' }}>What would you change?
+              <textarea autoFocus value={qualification} onChange={(e) => setQualification(e.target.value)} style={{ ...field, marginTop: 4 }} /></label>
             <div style={{ display: 'flex', gap: 8 }}>
-              <Button variant="primary" onClick={() => { if (text.trim()) onRespond(c, mode, text.trim()); }}>Save</Button>
-              <Button variant="ghost" onClick={() => { setMode(null); setText(''); }}>Cancel</Button>
+              <Button variant="primary" onClick={() => { if (qualification.trim()) { onRespond(c, 'partly', { acceptedText: accepted.trim() || undefined, qualificationText: qualification.trim() }); reset(); } }}>Save</Button>
+              <Button variant="ghost" onClick={reset}>Cancel</Button>
+            </div>
+          </div>
+        ) : mode === 'corrected' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
+            <label style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)' }}>What’s the correction?
+              <textarea autoFocus value={correction} onChange={(e) => setCorrection(e.target.value)} placeholder="In your words…" style={{ ...field, marginTop: 4 }} /></label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button variant="primary" disabled={!correction.trim()} onClick={() => { if (correction.trim()) { onRespond(c, 'corrected', { correctionText: correction.trim() }); reset(); } }}>Save correction</Button>
+              <Button variant="ghost" onClick={reset}>Cancel</Button>
             </div>
           </div>
         ) : (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Button variant="secondary" onClick={() => onRespond(c, 'confirmed')}>Confirm</Button>
+            <Button variant="secondary" onClick={() => onRespond(c, 'confirmed')}>Yes, this is right</Button>
             <Button variant="ghost" onClick={() => setMode('partly')}>Partly</Button>
-            <Button variant="ghost" onClick={() => setMode('corrected')}>Correct</Button>
-            <Button variant="ghost" onClick={() => setMode('rejected')}>Reject</Button>
+            <Button variant="ghost" onClick={() => setMode('corrected')}>Correct it</Button>
+            <Button variant="ghost" onClick={() => onRespond(c, 'rejected')}>Not my business</Button>
           </div>
         )}
       </div>

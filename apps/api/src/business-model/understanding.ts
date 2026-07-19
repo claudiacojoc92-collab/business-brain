@@ -32,6 +32,21 @@ const CONFIDENCE: ReadonlySet<string> = new Set(['low', 'medium', 'high']);
 export type Confidence = 'low' | 'medium' | 'high';
 export type ConfirmationState = 'pending' | 'confirmed' | 'partly' | 'corrected' | 'rejected';
 
+/** A founder response type. Distinct from the conclusion's epistemic status (that never changes). */
+export type ResponseType = 'confirmed' | 'partly' | 'corrected' | 'rejected';
+
+/** A single founder response (from the append-only log). Fields are kept SEPARATE by meaning — never one note. */
+export interface ConclusionResponse {
+  id: string;
+  conclusionId: string;
+  type: ResponseType;
+  acceptedText: string | null;       // Partly — what the founder accepts
+  qualificationText: string | null;  // Partly — what they qualify/correct
+  correctionText: string | null;     // Correct — the founder's replacement statement (declared)
+  at: string;
+  supersededBy: string | null;       // set when a later response replaces this one (history preserved)
+}
+
 /** A single founder-legible conclusion. */
 export interface Conclusion {
   id: string;

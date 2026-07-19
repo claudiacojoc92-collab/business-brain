@@ -11,9 +11,7 @@
 import { generateId } from '@bb/shared';
 import { makeFragment, type IEvidenceRepository } from '@bb/domain';
 import type { PgUnderstandingRepository } from './pg-understanding.repository';
-import {
-  normalizeConclusions, applyFounderResponse, type Understanding, type SynthesisModel, type ConfirmationState,
-} from './understanding';
+import { normalizeConclusions, type Understanding, type SynthesisModel } from './understanding';
 
 /** The frozen engine's contribution to synthesis (produced by the caller's recompute run). */
 export interface EngineOutcome { modelConfidence: string; inferred: Array<{ category: string; statement: string }> }
@@ -71,40 +69,49 @@ export async function generateUnderstanding(args: {
   return synthesizeUnderstanding({ founderId: args.founderId, evidence: args.evidence, engine, synthesisModel: args.synthesisModel, understanding: args.understanding, now: args.now });
 }
 
-export async function respondToConclusion(args: {
+/**
+ * Record a founder response to a conclusion (Wave 2 item 4). This does NOT re-synthesize or bump the
+ * understanding version (no inflation from Confirm/Reject) — the original synthesis + evidence are immutable.
+ * It appends to the response log (superseding the prior effective response) and, ONLY for genuine founder
+ * input (Correct's text; Partly's qualification), persists that text as founder-DECLARED evidence for future
+ * orchestration. Confirm records acceptance; Reject records rejection and creates no inverse/declared fact.
+ */
+export async function recordConclusionResponse(args: {
   founderId: string;
   conclusionId: string;
-  response: ConfirmationState;
-  correction: string | null;
+  type: import('./understanding').ResponseType;
+  acceptedText: string | null;
+  qualificationText: string | null;
+  correctionText: string | null;
   evidence: IEvidenceRepository;
   understanding: PgUnderstandingRepository;
+  responses: import('./pg-conclusion-response.repository').PgConclusionResponseRepository;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   db: any;
   now: Date;
-}): Promise<{ status: 'ok'; understanding: Understanding } | { status: 'not_found' }> {
+}): Promise<{ status: 'ok'; responseId: string } | { status: 'not_found' }> {
   const latest = await args.understanding.latest(args.founderId);
   if (!latest) return { status: 'not_found' };
   const target = latest.conclusions.find((c) => c.id === args.conclusionId);
   if (!target) return { status: 'not_found' };
 
-  const nextConclusions = applyFounderResponse(latest.conclusions, args.conclusionId, args.response, args.correction);
-  const next: Understanding = {
-    id: generateId(), founderId: args.founderId, version: latest.version + 1, supersedesId: latest.id,
-    modelVersion: latest.modelVersion, sourceFragmentIds: latest.sourceFragmentIds, conclusions: nextConclusions,
-    createdAt: args.now.toISOString(),
-  };
+  // The founder's NEW words become declared evidence: Correct → correctionText; Partly → qualificationText.
+  const declaredText = (args.type === 'corrected' ? args.correctionText : args.type === 'partly' ? args.qualificationText : null)?.trim() || null;
 
-  // Atomic: persist the founder's DECLARED correction (unless a bare confirm) + the new version together.
+  let responseId = '';
   await args.db.transaction().execute(async (tx: unknown) => {
-    const text = args.correction?.trim();
-    if (args.response !== 'confirmed' && text) {
+    if (declaredText) {
       const common = { founderId: args.founderId, source: 'founder', platform: null, sourceUrl: `conversation://correction/${args.conclusionId}`, confidenceKind: 'declared' as const, visibility: 'private' as const, occurredAt: null as Date | null };
       await args.evidence.appendMany([
-        makeFragment({ ...common, payload: { text, correctsConclusion: args.conclusionId, conclusionType: target.type, response: args.response } }),
-        makeFragment({ ...common, payload: { kind: 'block', text, blockType: 'correction', correctsConclusion: args.conclusionId } }),
+        makeFragment({ ...common, payload: { text: declaredText, correctsConclusion: args.conclusionId, conclusionType: target.type, response: args.type } }),
+        makeFragment({ ...common, payload: { kind: 'block', text: declaredText, blockType: 'correction', correctsConclusion: args.conclusionId } }),
       ], tx);
     }
-    await args.understanding.save(next, tx);
+    const rec = await args.responses.record({
+      founderId: args.founderId, understandingId: latest.id, conclusionId: args.conclusionId, type: args.type,
+      acceptedText: args.acceptedText, qualificationText: args.qualificationText, correctionText: args.correctionText, now: args.now,
+    }, tx);
+    responseId = rec.id;
   });
-  return { status: 'ok', understanding: next };
+  return { status: 'ok', responseId };
 }

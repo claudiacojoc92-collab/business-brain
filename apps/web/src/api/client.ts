@@ -129,10 +129,12 @@ export async function getAuthCapabilities(): Promise<{ googleLogin: boolean }> {
 
 // ─── Business Understanding (A–E Wave 2) ─────────────────────────────────────────
 export type EpistemicStatus = 'OBSERVED' | 'SYNTHESIZED_FROM_OBSERVED' | 'HYPOTHESIS' | 'NEEDS_MORE_EVIDENCE';
+export type ResponseType = 'confirmed' | 'partly' | 'corrected' | 'rejected';
+export interface ConclusionResponse { type: ResponseType; acceptedText: string | null; qualificationText: string | null; correctionText: string | null; at: string; revisedEarlier: boolean }
 export interface UnderstandingConclusion {
   id: string; type: string; statement: string; epistemicStatus: EpistemicStatus;
-  confidence: 'low' | 'medium' | 'high'; confirmationState: string; founderCorrection: string | null;
-  evidenceCount: number; evidenceRefs: string[];
+  confidence: 'low' | 'medium' | 'high'; evidenceCount: number; evidenceRefs: string[];
+  response: ConclusionResponse | null;
 }
 export interface UnderstandingView { id: string; version: number; createdAt: string; conclusions: UnderstandingConclusion[] }
 // Durable generation lifecycle — the founder-facing path. POST creates/returns a run; poll for state.
@@ -156,9 +158,9 @@ export async function getUnderstanding(): Promise<UnderstandingView | null> {
   try { return (await request<{ understanding: UnderstandingView }>('understanding')).understanding; }
   catch (e) { if (e instanceof ApiError && e.status === 404) return null; throw e; }
 }
-/** POST /understanding/respond — confirm/partly/correct/reject a conclusion → new version. */
-export async function respondToConclusion(conclusionId: string, response: 'confirmed' | 'partly' | 'corrected' | 'rejected', text?: string): Promise<UnderstandingView> {
-  return (await request<{ understanding: UnderstandingView }>('understanding/respond', { method: 'POST', body: JSON.stringify({ conclusionId, response, text }) })).understanding;
+/** POST /understanding/respond — Confirm/Partly/Correct/Reject a conclusion (distinct fields per type). */
+export async function respondToConclusion(conclusionId: string, response: ResponseType, fields: { acceptedText?: string; qualificationText?: string; correctionText?: string } = {}): Promise<UnderstandingView> {
+  return (await request<{ understanding: UnderstandingView }>('understanding/respond', { method: 'POST', body: JSON.stringify({ conclusionId, response, ...fields }) })).understanding;
 }
 /** GET /understanding/evidence/:id — one supporting receipt, fetched on demand. */
 export async function getUnderstandingEvidence(fragmentId: string): Promise<{ text: string; sourceUrl: string | null }> {
