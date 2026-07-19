@@ -8,7 +8,7 @@ import { registerAuthCredentialRoutes } from '../../routes/auth-credentials.rout
 import { registerUnderstandingRoutes } from '../../routes/understanding.routes';
 import { PgUnderstandingRepository } from '../../business-model/pg-understanding.repository';
 import { generateUnderstanding, type EngineOutcome } from '../../business-model/business-understanding.service';
-import { normalizeConclusions, applyFounderResponse, assertUnderstandingWellFormed, type SynthesisModel, type RawConclusion, type Understanding } from '../../business-model/understanding';
+import { normalizeConclusions, applyFounderResponse, assertUnderstandingWellFormed, prioritizeConclusions, groupOf, GROUP_ORDER, type SynthesisModel, type RawConclusion, type Understanding, type Conclusion } from '../../business-model/understanding';
 
 /** Wave 2 — Business Understanding. Deterministic unit tests + live-DB service/route tests with a FAKE
  *  engine + FAKE synthesis model (no live LLM). Skip-guarded on DB. Frozen engine untouched. */
@@ -48,6 +48,47 @@ describe('normalizeConclusions — grounding + banding, fail closed', () => {
   it('caps at 9', () => {
     const many = Array.from({ length: 15 }, () => ({ type: 'strategic_question', statement: 'q', epistemicStatus: 'HYPOTHESIS' }));
     expect(normalizeConclusions(many as RawConclusion[], src, id)).toHaveLength(9);
+  });
+});
+
+describe('presentation prioritization (item 5)', () => {
+  const mk = (type: string, status: string): Conclusion => ({ id: type + status, type: type as Conclusion['type'], statement: 's', epistemicStatus: status as Conclusion['epistemicStatus'], evidenceRefs: [], confidence: 'low', confirmationState: 'pending', founderCorrection: null });
+  it('groups: clear vs getting-in-way vs questions vs not-yet', () => {
+    expect(groupOf('what_it_is', 'OBSERVED')).toBe('primary');
+    expect(groupOf('what_it_is', 'HYPOTHESIS')).toBe('questions');        // a guess isn't "clear"
+    expect(groupOf('inconsistency', 'SYNTHESIZED_FROM_OBSERVED')).toBe('getting_in_way');
+    expect(groupOf('strategic_question', 'HYPOTHESIS')).toBe('questions');
+    expect(groupOf('market_position', 'HYPOTHESIS')).toBe('questions');
+    expect(groupOf('missing_information', 'NEEDS_MORE_EVIDENCE')).toBe('not_yet');
+    expect(groupOf('what_it_is', 'NEEDS_MORE_EVIDENCE')).toBe('not_yet'); // status wins
+  });
+  it('prioritizes: primary first, higher-grounding first; missing-evidence never crowds primary; stable order', () => {
+    const input = [
+      mk('missing_information', 'NEEDS_MORE_EVIDENCE'),
+      mk('strategic_question', 'HYPOTHESIS'),
+      mk('who_it_addresses', 'OBSERVED'),
+      mk('what_it_is', 'OBSERVED'),
+      mk('positioning_clarity', 'SYNTHESIZED_FROM_OBSERVED'),
+    ];
+    const out = prioritizeConclusions(input);
+    expect(out.map((c) => c.group)).toEqual(['primary', 'primary', 'primary', 'questions', 'not_yet']); // not_yet last
+    expect(out[0]!.type).toBe('what_it_is');                             // highest priority in primary first
+    expect(out.map((c) => c.displayOrder)).toEqual([0, 1, 2, 3, 4]);     // stable, contiguous
+    // determinism
+    expect(prioritizeConclusions(input).map((c) => c.id)).toEqual(out.map((c) => c.id));
+  });
+  it('normalizeConclusions output is grouped + ordered (persisted prioritized, not UI-truncated)', () => {
+    const out = normalizeConclusions([
+      { type: 'missing_information', statement: 'gap', epistemicStatus: 'NEEDS_MORE_EVIDENCE' },
+      { type: 'what_it_is', statement: 'core', epistemicStatus: 'OBSERVED', evidenceRefs: ['f1'] },
+    ] as RawConclusion[], ['f1'], (i) => `c${i}`);
+    expect(out[0]!.group).toBe('primary');            // primary sorted first
+    expect(out[out.length - 1]!.group).toBe('not_yet');
+    expect(GROUP_ORDER.indexOf(out[0]!.group!)).toBeLessThan(GROUP_ORDER.indexOf(out[1]!.group!));
+  });
+  it('sparse input yields fewer conclusions (no padding)', () => {
+    const out = normalizeConclusions([{ type: 'missing_information', statement: 'thin', epistemicStatus: 'NEEDS_MORE_EVIDENCE' }] as RawConclusion[], ['f1'], (i) => `c${i}`);
+    expect(out).toHaveLength(1);
   });
 });
 

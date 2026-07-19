@@ -131,7 +131,12 @@ export function UnderstandPage() {
           <p className="bb-rise" style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--gold)', margin: '0 0 var(--sp-3)' }}>What I understand</p>
           <h1 className="bb-rise" style={{ ['--i' as string]: 1, fontFamily: 'var(--serif)', fontSize: 'var(--fs-1)', fontWeight: 500, color: 'var(--ink)', margin: '0 0 var(--sp-6)' }}>Here’s your business, as I read it.</h1>
           {notice && <p role="status" style={{ color: 'var(--warn-ink)', fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)' }}>{notice}</p>}
-          {view.conclusions.map((c, i) => <ConclusionCard key={c.id} c={c} index={i} onRespond={respond} />)}
+          {view.groups.map((g) => (
+            <section key={g.key} style={{ marginBottom: 'var(--sp-6)' }}>
+              <h2 style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--ink-3)', margin: '0 0 var(--sp-4)' }}>{g.label}</h2>
+              {view.conclusions.filter((c) => c.group === g.key).map((c, i) => <ConclusionCard key={c.id} c={c} index={i} onRespond={respond} />)}
+            </section>
+          ))}
           <div style={{ marginTop: 'var(--sp-6)' }}>
             <Button variant="secondary" onClick={() => setPhase('intro')}>Read another source</Button>
           </div>

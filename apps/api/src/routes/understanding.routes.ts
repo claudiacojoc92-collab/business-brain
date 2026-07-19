@@ -12,6 +12,7 @@ import { startUnderstandingWorker } from '../business-model/understanding-worker
 import { toRunView } from '../business-model/understanding-run';
 import { recomputeFromSources } from '../business-model/recompute';
 import { ingestWebsite } from '../business-model/connect-ingest.service';
+import { groupOf, priorityOf, GROUP_ORDER, GROUP_LABEL } from '../business-model/understanding';
 import type { Conclusion, ConclusionResponse, ResponseType, Understanding } from '../business-model/understanding';
 
 /**
@@ -29,17 +30,20 @@ const RESPONSES: ReadonlySet<string> = new Set(['confirmed', 'partly', 'correcte
 // Founder-facing projection — conclusions only; evidence referenced by count/ids, never dumped. The effective
 // founder response is OVERLAID per conclusion (the original synthesis + epistemic status are never rewritten).
 function toView(u: Understanding, responses: Map<string, ConclusionResponse>) {
-  return {
-    id: u.id, version: u.version, createdAt: u.createdAt,
-    conclusions: u.conclusions.map((c: Conclusion) => {
+  const conclusions = u.conclusions
+    .map((c: Conclusion) => ({ c, group: groupOf(c.type, c.epistemicStatus), priority: priorityOf(c.type, c.epistemicStatus) }))
+    .sort((a, b) => (GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group)) || (b.priority - a.priority))
+    .map(({ c, group }, order) => {
       const r = responses.get(c.id) ?? null;
       return {
         id: c.id, type: c.type, statement: c.statement, epistemicStatus: c.epistemicStatus, confidence: c.confidence,
-        evidenceCount: c.evidenceRefs.length, evidenceRefs: c.evidenceRefs,
+        group, displayOrder: order, evidenceCount: c.evidenceRefs.length, evidenceRefs: c.evidenceRefs,
         response: r ? { type: r.type, acceptedText: r.acceptedText, qualificationText: r.qualificationText, correctionText: r.correctionText, at: r.at, revisedEarlier: false } : null,
       };
-    }),
-  };
+    });
+  // Groups present, in canonical order, with founder-legible labels (for the UI to section by).
+  const groups = GROUP_ORDER.filter((g) => conclusions.some((c) => c.group === g)).map((g) => ({ key: g, label: GROUP_LABEL[g] }));
+  return { id: u.id, version: u.version, createdAt: u.createdAt, conclusions, groups };
 }
 
 export function registerUnderstandingRoutes(server: FastifyInstance): void {

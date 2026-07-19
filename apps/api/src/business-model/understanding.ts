@@ -47,6 +47,35 @@ export interface ConclusionResponse {
   supersededBy: string | null;       // set when a later response replaces this one (history preserved)
 }
 
+/** Founder-facing groups — a deliberate presentation policy so the founder sees prioritized understanding,
+ *  not a flat nine-card dump. Rendered in this order. */
+export type ConclusionGroup = 'primary' | 'getting_in_way' | 'questions' | 'not_yet';
+export const GROUP_ORDER: readonly ConclusionGroup[] = ['primary', 'getting_in_way', 'questions', 'not_yet'];
+export const GROUP_LABEL: Record<ConclusionGroup, string> = {
+  primary: 'What seems clear', getting_in_way: 'What may be getting in your way',
+  questions: 'Questions worth resolving', not_yet: 'What I still can’t responsibly conclude',
+};
+const GROUP_BY_TYPE: Record<ConclusionType, ConclusionGroup> = {
+  what_it_is: 'primary', what_it_offers: 'primary', who_it_addresses: 'primary', promise: 'primary', positioning_clarity: 'primary', underused_strength: 'primary',
+  inconsistency: 'getting_in_way',
+  strategic_question: 'questions', market_position: 'questions', market_opportunity: 'questions', audience_response: 'questions',
+  missing_information: 'not_yet',
+};
+
+/** Deterministic group for a conclusion — a NEEDS_MORE_EVIDENCE never sits in "clear"; a hypothesis is a question. */
+export function groupOf(type: ConclusionType, status: EpistemicStatus): ConclusionGroup {
+  if (status === 'NEEDS_MORE_EVIDENCE') return 'not_yet';
+  const base = GROUP_BY_TYPE[type] ?? 'questions';
+  if (status === 'HYPOTHESIS' && base === 'primary') return 'questions';
+  return base;
+}
+/** Priority within a group — stronger grounding + more foundational type ranks higher. */
+export function priorityOf(type: ConclusionType, status: EpistemicStatus): number {
+  const s = status === 'OBSERVED' ? 3 : status === 'SYNTHESIZED_FROM_OBSERVED' ? 2 : status === 'HYPOTHESIS' ? 1 : 0;
+  const t = type === 'what_it_is' ? 2 : (type === 'what_it_offers' || type === 'who_it_addresses') ? 1 : 0;
+  return s * 10 + t;
+}
+
 /** A single founder-legible conclusion. */
 export interface Conclusion {
   id: string;
@@ -57,6 +86,16 @@ export interface Conclusion {
   confidence: Confidence;
   confirmationState: ConfirmationState;
   founderCorrection: string | null;  // the founder's own words, when they correct/partly/reject
+  group?: ConclusionGroup;           // presentation group (assigned deterministically)
+  priority?: number;                 // rank within the group
+  displayOrder?: number;             // stable global order
+}
+
+/** Assign group/priority/stable displayOrder — prioritize (not truncate): group, then priority, then input order. */
+export function prioritizeConclusions(conclusions: Conclusion[]): Conclusion[] {
+  const withMeta = conclusions.map((c, i) => ({ c, i, group: groupOf(c.type, c.epistemicStatus), priority: priorityOf(c.type, c.epistemicStatus) }));
+  withMeta.sort((a, b) => (GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group)) || (b.priority - a.priority) || (a.i - b.i));
+  return withMeta.map((m, order) => ({ ...m.c, group: m.group, priority: m.priority, displayOrder: order }));
 }
 
 /** A versioned, persisted understanding. Append-only: a correction creates a new version. */
@@ -131,7 +170,7 @@ export function normalizeConclusions(raw: RawConclusion[], sourceFragmentIds: st
     });
     if (out.length >= MAX_CONCLUSIONS) break;
   }
-  return out;
+  return prioritizeConclusions(out); // group + rank + stable order (prioritize, never arbitrary truncation)
 }
 
 /** Structural well-formedness guard for a persisted/loaded understanding (fail closed on corruption). */

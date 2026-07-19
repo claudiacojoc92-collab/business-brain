@@ -131,12 +131,13 @@ export async function getAuthCapabilities(): Promise<{ googleLogin: boolean }> {
 export type EpistemicStatus = 'OBSERVED' | 'SYNTHESIZED_FROM_OBSERVED' | 'HYPOTHESIS' | 'NEEDS_MORE_EVIDENCE';
 export type ResponseType = 'confirmed' | 'partly' | 'corrected' | 'rejected';
 export interface ConclusionResponse { type: ResponseType; acceptedText: string | null; qualificationText: string | null; correctionText: string | null; at: string; revisedEarlier: boolean }
+export type ConclusionGroup = 'primary' | 'getting_in_way' | 'questions' | 'not_yet';
 export interface UnderstandingConclusion {
   id: string; type: string; statement: string; epistemicStatus: EpistemicStatus;
-  confidence: 'low' | 'medium' | 'high'; evidenceCount: number; evidenceRefs: string[];
-  response: ConclusionResponse | null;
+  confidence: 'low' | 'medium' | 'high'; group: ConclusionGroup; displayOrder: number;
+  evidenceCount: number; evidenceRefs: string[]; response: ConclusionResponse | null;
 }
-export interface UnderstandingView { id: string; version: number; createdAt: string; conclusions: UnderstandingConclusion[] }
+export interface UnderstandingView { id: string; version: number; createdAt: string; conclusions: UnderstandingConclusion[]; groups: Array<{ key: ConclusionGroup; label: string }> }
 // Durable generation lifecycle — the founder-facing path. POST creates/returns a run; poll for state.
 export type RunStatus = 'QUEUED' | 'INGESTING' | 'ANALYZING' | 'SYNTHESIZING' | 'READY' | 'FAILED';
 export interface RunView { runId: string; status: RunStatus; attempt: number; errorCode: string | null; understandingVersion: number | null; createdAt: string; updatedAt: string }
