@@ -182,3 +182,21 @@ export async function disconnectCalendar(): Promise<{ connected: boolean }> {
 export async function generateRead(): Promise<GenerateResult> {
   return request<GenerateResult>('reads', { method: 'POST' });
 }
+
+// ─── Declaration: direct founder input (P1 · Slice 1) ────────────────────────────
+// The founder tells Business Brain what it cannot observe. Persist-only: writes `declared` evidence;
+// nothing is generated on submit (the engine runs later, at generate). Session-scoped, cookie-only.
+
+export interface DeclareQuestion { key: string; label: string; question: string }
+export interface DeclareResult { status: 'declared'; fieldsCaptured: number; stored: number }
+
+/** GET /declare/questions — the six structured questions (session-guarded; static metadata). */
+export async function getDeclareQuestions(): Promise<DeclareQuestion[]> {
+  const { fields } = await request<{ fields: DeclareQuestion[] }>('declare/questions');
+  return fields;
+}
+
+/** POST /declare — persist the founder's declaration as `declared` evidence (atomic replace). */
+export async function submitDeclaration(answers: { field: string; text: string }[]): Promise<DeclareResult> {
+  return request<DeclareResult>('declare', { method: 'POST', body: JSON.stringify({ answers }) });
+}
