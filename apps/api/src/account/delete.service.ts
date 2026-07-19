@@ -33,6 +33,8 @@ export async function deleteFounderAccount(
     await tx.deleteFrom('memory.recommendations').where('founder_id', '=', founderId).execute();
     await tx.deleteFrom('business_read.snapshots').where('founder_id', '=', founderId).execute(); // S1-T3 immutable Read snapshots
     await tx.deleteFrom('identity.sessions').where('founder_id', '=', founderId).execute();     // revokes all sessions
+    await tx.deleteFrom('identity.founder_credentials').where('founder_id', '=', founderId).execute(); // Wave 1 (V056) — password credential
+    await tx.deleteFrom('identity.oauth_identities').where('founder_id', '=', founderId).execute();    // Wave 1 (V057) — federated login identities
     await tx.deleteFrom('identity.magic_link_tokens').where('email', '=', email).execute();
 
     if (opts.failBeforeRootDelete) await opts.failBeforeRootDelete(); // atomicity test: throw here ⇒ full rollback

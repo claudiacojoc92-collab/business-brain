@@ -26,6 +26,7 @@ export interface FounderExport {
   recommendations: unknown[];
   reads: Array<{ readId: string; createdAt: string | null; schemaVersion: number; read: unknown }>;
   integrations: Array<{ provider: string; scopes: string | null; connectedAt: string | null; tokenExpiresAt: string | null }>;
+  login: { hasPassword: boolean; passwordSetAt: string | null; federatedLogins: Array<{ provider: string; email: string | null; connectedAt: string | null }> };
   meta: { note: string };
 }
 
@@ -61,6 +62,14 @@ export async function buildFounderExport(args: {
     .where('founder_id', '=', founderId)
     .execute()) as Array<Record<string, unknown>>;
 
+  // Wave 1 LOGIN identity — metadata only. The password HASH is NEVER selected/exported; only its existence.
+  const credential = await db.selectFrom('identity.founder_credentials').select(['created_at']).where('founder_id', '=', founderId).executeTakeFirst();
+  const logins = (await db
+    .selectFrom('identity.oauth_identities')
+    .select(['provider', 'email', 'created_at'])
+    .where('founder_id', '=', founderId)
+    .execute()) as Array<Record<string, unknown>>;
+
   return {
     exportedAt: now.toISOString(),
     founder: { founderId: founder.founder_id as string, email: founder.email as string, createdAt: iso(founder.created_at) },
@@ -86,6 +95,11 @@ export async function buildFounderExport(args: {
       provider: String(c['provider']), scopes: (c['scopes'] as string | null) ?? null,
       connectedAt: iso(c['created_at']), tokenExpiresAt: iso(c['token_expires_at']),
     })),
+    login: {
+      hasPassword: Boolean(credential),                                    // existence only — never the hash
+      passwordSetAt: credential ? iso((credential as Record<string, unknown>)['created_at']) : null,
+      federatedLogins: logins.map((l) => ({ provider: String(l['provider']), email: (l['email'] as string | null) ?? null, connectedAt: iso(l['created_at']) })),
+    },
     meta: {
       note: 'This is the complete stored data for your account, including your saved Business Read snapshots (immutable — each is exactly what you saw when it was generated). Other derived views ("what matters now", gaps) are recomputed from your evidence and are not stored, so they are represented here by the evidence they derive from. Excluded for security: encrypted access/refresh tokens, session identifiers, and magic-link token hashes. No other founder’s data is included.',
     },
