@@ -37,7 +37,7 @@ export function WelcomePage() {
             everything at any time.
           </p>
           <div className="bb-rise" style={{ ['--i' as string]: 5 }}>
-            <Button variant="primary" onClick={() => navigate('/connect')}>Start with my business →</Button>
+            <Button variant="primary" onClick={() => navigate('/understand')}>Start with my business →</Button>
           </div>
         </div>
       </div>

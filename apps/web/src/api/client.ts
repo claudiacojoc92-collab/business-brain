@@ -127,6 +127,37 @@ export async function getAuthCapabilities(): Promise<{ googleLogin: boolean }> {
   return request<{ googleLogin: boolean }>('auth/capabilities');
 }
 
+// ─── Business Understanding (A–E Wave 2) ─────────────────────────────────────────
+export type EpistemicStatus = 'OBSERVED' | 'SYNTHESIZED_FROM_OBSERVED' | 'HYPOTHESIS' | 'NEEDS_MORE_EVIDENCE';
+export interface UnderstandingConclusion {
+  id: string; type: string; statement: string; epistemicStatus: EpistemicStatus;
+  confidence: 'low' | 'medium' | 'high'; confirmationState: string; founderCorrection: string | null;
+  evidenceCount: number; evidenceRefs: string[];
+}
+export interface UnderstandingView { id: string; version: number; createdAt: string; conclusions: UnderstandingConclusion[] }
+export type GenerateUnderstanding =
+  | { status: 'ok'; understanding: UnderstandingView }
+  | { status: 'insufficient_evidence'; message: string }
+  | { status: 'unreachable_website'; message: string };
+
+/** POST /understanding — ingest a website (if given), run the engine + synthesis, persist a version. */
+export async function generateUnderstanding(url?: string): Promise<GenerateUnderstanding> {
+  return request<GenerateUnderstanding>('understanding', { method: 'POST', body: JSON.stringify(url ? { url } : {}) });
+}
+/** GET /understanding — the latest understanding, or null when none exists (404). */
+export async function getUnderstanding(): Promise<UnderstandingView | null> {
+  try { return (await request<{ understanding: UnderstandingView }>('understanding')).understanding; }
+  catch (e) { if (e instanceof ApiError && e.status === 404) return null; throw e; }
+}
+/** POST /understanding/respond — confirm/partly/correct/reject a conclusion → new version. */
+export async function respondToConclusion(conclusionId: string, response: 'confirmed' | 'partly' | 'corrected' | 'rejected', text?: string): Promise<UnderstandingView> {
+  return (await request<{ understanding: UnderstandingView }>('understanding/respond', { method: 'POST', body: JSON.stringify({ conclusionId, response, text }) })).understanding;
+}
+/** GET /understanding/evidence/:id — one supporting receipt, fetched on demand. */
+export async function getUnderstandingEvidence(fragmentId: string): Promise<{ text: string; sourceUrl: string | null }> {
+  return request<{ text: string; sourceUrl: string | null }>(`understanding/evidence/${encodeURIComponent(fragmentId)}`);
+}
+
 // ─── Account: export + permanent deletion (S0-T4, Article XIII) ──────────────────
 
 /** GET /account/export — the complete JSON the session founder owns (parsed). */

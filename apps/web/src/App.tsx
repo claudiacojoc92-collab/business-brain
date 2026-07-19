@@ -12,6 +12,7 @@ import { SignInPage } from './arrival/SignInPage';
 import { RecoverPage } from './arrival/RecoverPage';
 import { ResetPage } from './arrival/ResetPage';
 import { WelcomePage } from './arrival/WelcomePage';
+import { UnderstandPage } from './understand/UnderstandPage';
 import { ConnectPreviewPage } from './connect/ConnectPreviewPage';
 import { UploadPreviewPage } from './upload/UploadPreviewPage';
 import { GooglePreviewPage } from './google/GooglePreviewPage';
@@ -41,6 +42,9 @@ export function App() {
           <Route path="/recover" element={<RecoverPage />} />
           <Route path="/reset" element={<ResetPage />} />
           <Route path="/welcome" element={<WelcomePage />} />
+
+          {/* A–E Wave 2 — Business Understanding (guided website → synthesized "I understand your business"). */}
+          <Route path="/understand" element={<UnderstandPage />} />
 
           {/* Real product: the connect surface (S1-T5b) — the authenticated landing. Magic Link → Connect
               → Generate → Read. Session-guarded; consumes only the production connect + generate endpoints. */}
