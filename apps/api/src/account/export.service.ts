@@ -28,6 +28,7 @@ export interface FounderExport {
   integrations: Array<{ provider: string; scopes: string | null; connectedAt: string | null; tokenExpiresAt: string | null }>;
   login: { hasPassword: boolean; passwordSetAt: string | null; federatedLogins: Array<{ provider: string; email: string | null; connectedAt: string | null }> };
   understanding: unknown[];
+  understandingRuns: unknown[];
   meta: { note: string };
 }
 
@@ -79,6 +80,14 @@ export async function buildFounderExport(args: {
     .orderBy('version', 'asc')
     .execute()) as Array<Record<string, unknown>>;
 
+  // Run history — founder-safe (error CATEGORY only; never the internal error_detail).
+  const runs = (await db
+    .selectFrom('business.understanding_run')
+    .select(['id', 'source_key', 'status', 'attempt_count', 'error_code', 'understanding_version', 'created_at', 'completed_at', 'failed_at'])
+    .where('founder_id', '=', founderId)
+    .orderBy('created_at', 'asc')
+    .execute()) as Array<Record<string, unknown>>;
+
   return {
     exportedAt: now.toISOString(),
     founder: { founderId: founder.founder_id as string, email: founder.email as string, createdAt: iso(founder.created_at) },
@@ -114,6 +123,11 @@ export async function buildFounderExport(args: {
       modelVersion: String(u['model_version']),
       conclusions: typeof u['conclusions'] === 'string' ? JSON.parse(u['conclusions'] as string) : u['conclusions'],
       createdAt: iso(u['created_at']),
+    })),
+    understandingRuns: runs.map((r) => ({
+      id: String(r['id']), sourceKey: String(r['source_key']), status: String(r['status']), attempts: Number(r['attempt_count']),
+      errorCode: (r['error_code'] as string | null) ?? null, understandingVersion: r['understanding_version'] == null ? null : Number(r['understanding_version']),
+      createdAt: iso(r['created_at']), completedAt: iso(r['completed_at']), failedAt: iso(r['failed_at']),
     })),
     meta: {
       note: 'This is the complete stored data for your account, including your saved Business Read snapshots (immutable — each is exactly what you saw when it was generated). Other derived views ("what matters now", gaps) are recomputed from your evidence and are not stored, so they are represented here by the evidence they derive from. Excluded for security: encrypted access/refresh tokens, session identifiers, and magic-link token hashes. No other founder’s data is included.',

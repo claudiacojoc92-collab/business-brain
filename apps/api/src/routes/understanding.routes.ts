@@ -4,8 +4,11 @@ import { PgIdentityRepository } from '../session/pg-identity.repository';
 import { readCookie, SESSION_COOKIE } from '../session/cookie';
 import { resolveSession } from '../session/session.service';
 import { PgUnderstandingRepository } from '../business-model/pg-understanding.repository';
-import { generateUnderstanding, respondToConclusion, type EngineOutcome } from '../business-model/business-understanding.service';
+import { PgUnderstandingRunRepository } from '../business-model/pg-understanding-run.repository';
+import { respondToConclusion, type EngineOutcome } from '../business-model/business-understanding.service';
 import { AnthropicSynthesisModel } from '../business-model/anthropic-synthesis.model';
+import { startUnderstandingWorker } from '../business-model/understanding-worker';
+import { toRunView } from '../business-model/understanding-run';
 import { recomputeFromSources } from '../business-model/recompute';
 import { ingestWebsite } from '../business-model/connect-ingest.service';
 import type { Conclusion, ConfirmationState, Understanding } from '../business-model/understanding';
@@ -39,13 +42,21 @@ export function registerUnderstandingRoutes(server: FastifyInstance): void {
   const identity = new PgIdentityRepository(db);
   const evidence = new PgEvidenceRepository(db);
   const understanding = new PgUnderstandingRepository(db);
+  const runRepo = new PgUnderstandingRunRepository(db);
   const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
-  const inFlight = new Set<string>(); // per-founder generation guard (engine call is expensive)
+  const LEASE_MS = 5 * 60 * 1000; // a run stage must renew within 5 min or it's reclaimable (crash recovery)
 
   async function sessionFounder(request: FastifyRequest): Promise<string | null> {
     const sessionId = readCookie(request.headers['cookie'], SESSION_COOKIE);
     return sessionId ? resolveSession(sessionId, identity, new Date()) : null;
   }
+
+  // Normalize a website into a stable source key (idempotency dimension). Non-http → 'existing-evidence'.
+  const sourceKey = (url: string): string => {
+    const u = url.trim();
+    if (!/^https?:\/\//i.test(u)) return 'existing-evidence';
+    try { const p = new URL(u); return `${p.protocol}//${p.host}${p.pathname}`.replace(/\/$/, '').toLowerCase(); } catch { return 'existing-evidence'; }
+  };
 
   // Wraps the FROZEN engine (recompute; byte-identical) and reads back its inferred categories for synthesis.
   const runEngine = async (founderId: string): Promise<EngineOutcome> => {
@@ -58,23 +69,43 @@ export function registerUnderstandingRoutes(server: FastifyInstance): void {
     return { modelConfidence, inferred };
   };
 
-  server.post('/understanding', async (request: FastifyRequest, reply: FastifyReply) => {
+  // The in-process worker is the FIRST execution mechanism (durable state is authoritative). Off under test
+  // so tests drive processRun deterministically; on elsewhere so the live flow processes runs.
+  if (process.env['NODE_ENV'] !== 'test') {
+    startUnderstandingWorker({
+      runRepo, understanding, evidence,
+      ingest: async (founderId, url) => { await ingestWebsite({ founderId, url, repo: evidence }); },
+      runEngine, synthesisModel: new AnthropicSynthesisModel(apiKey), leaseMs: LEASE_MS, now: () => new Date(),
+    });
+  }
+
+  // POST /understanding/runs — create OR return the existing active run (idempotent). Returns immediately.
+  const createRun = async (request: FastifyRequest, reply: FastifyReply) => {
     const founderId = await sessionFounder(request);
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
-    if (inFlight.has(founderId)) { await reply.code(409).send({ error: 'already working on your understanding' }); return; }
-    inFlight.add(founderId);
-    try {
-      const url = String((request.body as Record<string, unknown> | undefined)?.['url'] ?? '').trim();
-      if (url) {
-        try { await ingestWebsite({ founderId, url, repo: evidence }); }
-        catch { await reply.code(422).send({ status: 'unreachable_website', message: "I couldn't reach that website. Check the address and try again." }); return; }
-      }
-      const outcome = await generateUnderstanding({ founderId, evidence, runEngine, synthesisModel: new AnthropicSynthesisModel(apiKey), understanding, now: new Date() });
-      if (outcome.status === 'insufficient_evidence') { await reply.code(200).send({ status: 'insufficient_evidence', message: 'Add your website so I have something to read.' }); return; }
-      await reply.code(201).send({ status: 'ok', understanding: toView(outcome.understanding) });
-    } catch {
-      await reply.code(502).send({ status: 'synthesis_failed', message: 'Something went wrong on my side. Nothing was lost — try again.' });
-    } finally { inFlight.delete(founderId); }
+    const url = String((request.body as Record<string, unknown> | undefined)?.['url'] ?? '');
+    const run = await runRepo.create(founderId, sourceKey(url), new Date());
+    await reply.code(202).send(toRunView(run));
+  };
+  server.post('/understanding/runs', createRun);
+  server.post('/understanding', createRun); // compatibility alias — the SAME single generation path (no competing path)
+
+  // GET /understanding/runs/:id — founder-safe run state (never internal diagnostics).
+  server.get('/understanding/runs/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const run = await runRepo.getById(founderId, (request.params as { id: string }).id);
+    if (!run) { await reply.code(404).send({ error: 'not found' }); return; }
+    await reply.send(toRunView(run));
+  });
+
+  // POST /understanding/runs/:id/retry — only an eligible FAILED run of THIS founder.
+  server.post('/understanding/runs/:id/retry', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const run = await runRepo.retry(founderId, (request.params as { id: string }).id, new Date());
+    if (!run) { await reply.code(409).send({ error: 'run is not retryable' }); return; }
+    await reply.code(202).send(toRunView(run));
   });
 
   server.get('/understanding', async (request: FastifyRequest, reply: FastifyReply) => {

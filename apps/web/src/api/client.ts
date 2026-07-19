@@ -135,14 +135,21 @@ export interface UnderstandingConclusion {
   evidenceCount: number; evidenceRefs: string[];
 }
 export interface UnderstandingView { id: string; version: number; createdAt: string; conclusions: UnderstandingConclusion[] }
-export type GenerateUnderstanding =
-  | { status: 'ok'; understanding: UnderstandingView }
-  | { status: 'insufficient_evidence'; message: string }
-  | { status: 'unreachable_website'; message: string };
+// Durable generation lifecycle — the founder-facing path. POST creates/returns a run; poll for state.
+export type RunStatus = 'QUEUED' | 'INGESTING' | 'ANALYZING' | 'SYNTHESIZING' | 'READY' | 'FAILED';
+export interface RunView { runId: string; status: RunStatus; attempt: number; errorCode: string | null; understandingVersion: number | null; createdAt: string; updatedAt: string }
 
-/** POST /understanding — ingest a website (if given), run the engine + synthesis, persist a version. */
-export async function generateUnderstanding(url?: string): Promise<GenerateUnderstanding> {
-  return request<GenerateUnderstanding>('understanding', { method: 'POST', body: JSON.stringify(url ? { url } : {}) });
+/** POST /understanding/runs — create or return the active run (idempotent); returns immediately. */
+export async function createUnderstandingRun(url?: string): Promise<RunView> {
+  return request<RunView>('understanding/runs', { method: 'POST', body: JSON.stringify(url ? { url } : {}) });
+}
+/** GET /understanding/runs/:id — founder-safe run state for polling. */
+export async function getUnderstandingRun(runId: string): Promise<RunView> {
+  return request<RunView>(`understanding/runs/${encodeURIComponent(runId)}`);
+}
+/** POST /understanding/runs/:id/retry — re-queue an eligible failed run. */
+export async function retryUnderstandingRun(runId: string): Promise<RunView> {
+  return request<RunView>(`understanding/runs/${encodeURIComponent(runId)}/retry`, { method: 'POST' });
 }
 /** GET /understanding — the latest understanding, or null when none exists (404). */
 export async function getUnderstanding(): Promise<UnderstandingView | null> {

@@ -2,10 +2,26 @@ import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import {
-  generateUnderstanding, getUnderstanding, respondToConclusion, getUnderstandingEvidence, ApiError,
-  type UnderstandingView, type UnderstandingConclusion, type EpistemicStatus,
+  createUnderstandingRun, getUnderstandingRun, retryUnderstandingRun, getUnderstanding, respondToConclusion, getUnderstandingEvidence, ApiError,
+  type UnderstandingView, type UnderstandingConclusion, type EpistemicStatus, type RunStatus,
 } from '../api/client';
 import { AppShell, Button, Field, Thinking, RevealBlock } from '../system/ui';
+
+const STAGE: Record<RunStatus, string> = {
+  QUEUED: 'Getting ready…',
+  INGESTING: 'Reading your website…',
+  ANALYZING: 'Cross-referencing what I found…',
+  SYNTHESIZING: 'Writing what I understand…',
+  READY: 'Done.',
+  FAILED: '',
+};
+const FAIL_COPY: Record<string, string> = {
+  unreachable_website: "I couldn't reach that website. Check the address and try again.",
+  insufficient_evidence: "I don't have enough to read yet — add your website so I have something to work from.",
+  analysis_failed: 'Something went wrong on my side. Nothing was lost — try again.',
+  synthesis_failed: 'Something went wrong on my side. Nothing was lost — try again.',
+  unknown: 'Something went wrong on my side. Nothing was lost — try again.',
+};
 
 /**
  * Wave 2 — Business Understanding (/understand). Guided website entry → honest processing → a small set of
@@ -22,10 +38,13 @@ const BAND: Record<EpistemicStatus, { label: string; color: string }> = {
 export function UnderstandPage() {
   const { founderId, isLoading } = useAuth();
   const navigate = useNavigate();
-  const [phase, setPhase] = useState<'loading' | 'intro' | 'processing' | 'reveal' | 'error'>('loading');
+  const [phase, setPhase] = useState<'loading' | 'intro' | 'processing' | 'reveal' | 'failed'>('loading');
   const [url, setUrl] = useState('');
   const [view, setView] = useState<UnderstandingView | null>(null);
   const [notice, setNotice] = useState('');
+  const [runId, setRunId] = useState<string | null>(null);
+  const [stage, setStage] = useState<RunStatus>('QUEUED');
+  const [failCode, setFailCode] = useState<string>('unknown');
 
   const on401 = useCallback((e: unknown): boolean => { if (e instanceof ApiError && e.status === 401) { navigate('/signin', { replace: true }); return true; } return false; }, [navigate]);
 
@@ -34,16 +53,36 @@ export function UnderstandPage() {
     getUnderstanding().then((u) => { if (u) { setView(u); setPhase('reveal'); } else setPhase('intro'); }).catch((e) => { if (!on401(e)) setPhase('intro'); });
   }, [founderId, on401]);
 
+  // Poll the active run until it reaches a terminal state; survives page refresh (runId re-created idempotently).
+  useEffect(() => {
+    if (phase !== 'processing' || !runId) return;
+    let live = true;
+    const poll = async () => {
+      if (!live) return;
+      try {
+        const r = await getUnderstandingRun(runId);
+        setStage(r.status);
+        if (r.status === 'READY') { const u = await getUnderstanding(); if (u) { setView(u); setPhase('reveal'); } return; }
+        if (r.status === 'FAILED') { setFailCode(r.errorCode ?? 'unknown'); setPhase('failed'); return; }
+        setTimeout(() => void poll(), 1500);
+      } catch (e) { if (!on401(e)) setTimeout(() => void poll(), 2500); }
+    };
+    void poll();
+    return () => { live = false; };
+  }, [phase, runId, on401]);
+
   if (isLoading) return null;
   if (!founderId) return <Navigate to="/signin" replace />;
 
   const run = async () => {
-    setNotice(''); setPhase('processing');
-    try {
-      const r = await generateUnderstanding(url.trim() || undefined);
-      if (r.status === 'ok') { setView(r.understanding); setPhase('reveal'); }
-      else { setNotice(r.message); setPhase('intro'); }
-    } catch (e) { if (on401(e)) return; setNotice('Something went wrong on my side. Nothing was lost — try again.'); setPhase('intro'); }
+    setNotice('');
+    try { const r = await createUnderstandingRun(url.trim() || undefined); setRunId(r.runId); setStage(r.status); setPhase('processing'); }
+    catch (e) { if (on401(e)) return; setNotice('Something went wrong on my side. Nothing was lost — try again.'); }
+  };
+  const retry = async () => {
+    if (!runId) { setPhase('intro'); return; }
+    try { const r = await retryUnderstandingRun(runId); setStage(r.status); setPhase('processing'); }
+    catch (e) { if (!on401(e)) setPhase('intro'); }
   };
 
   const respond = async (c: UnderstandingConclusion, response: 'confirmed' | 'partly' | 'corrected' | 'rejected', text?: string) => {
@@ -72,7 +111,18 @@ export function UnderstandPage() {
 
       {phase === 'processing' && (
         <div style={{ maxWidth: 520, padding: '8vh 0' }}>
-          <Thinking message="Reading your business — this takes a minute. I’m taking it in, not lagging." />
+          <Thinking message={STAGE[stage] || 'Reading your business…'} />
+          <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-3)', marginTop: 'var(--sp-4)' }}>This takes a minute. You can leave this page and come back — I’ll keep working.</p>
+        </div>
+      )}
+
+      {phase === 'failed' && (
+        <div className="bb-rise" style={{ maxWidth: 520, padding: '6vh 0' }}>
+          <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-3)', color: 'var(--ink)', margin: '0 0 var(--sp-5)' }}>{FAIL_COPY[failCode] ?? FAIL_COPY['unknown']}</p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Button variant="primary" onClick={() => void retry()}>Try again</Button>
+            <Button variant="secondary" onClick={() => setPhase('intro')}>Change website</Button>
+          </div>
         </div>
       )}
 
@@ -88,7 +138,6 @@ export function UnderstandPage() {
         </div>
       )}
 
-      {phase === 'error' && <p style={{ fontFamily: 'var(--serif)', color: 'var(--ink-3)' }}>Something went wrong. Try again.</p>}
     </AppShell>
   );
 }

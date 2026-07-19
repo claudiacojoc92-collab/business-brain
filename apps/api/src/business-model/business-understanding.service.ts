@@ -18,6 +18,31 @@ import {
 /** The frozen engine's contribution to synthesis (produced by the caller's recompute run). */
 export interface EngineOutcome { modelConfidence: string; inferred: Array<{ category: string; statement: string }> }
 
+/** Synthesis + persist, given an ALREADY-COMPUTED frozen-engine outcome. The durable worker calls this
+ *  between its ANALYZING and READY stages; generateUnderstanding wraps it with the engine run. */
+export async function synthesizeUnderstanding(args: {
+  founderId: string;
+  evidence: IEvidenceRepository;
+  engine: EngineOutcome;
+  synthesisModel: SynthesisModel;
+  understanding: PgUnderstandingRepository;
+  now: Date;
+}): Promise<{ status: 'ok'; understanding: Understanding } | { status: 'insufficient_evidence' }> {
+  const observedAll = await args.evidence.findObserved(args.founderId);
+  const nonBlock = observedAll.filter((f) => f.payload?.['kind'] !== 'block' && typeof f.payload?.['text'] === 'string' && String(f.payload['text']).trim().length > 0);
+  if (nonBlock.length === 0) return { status: 'insufficient_evidence' };
+  const observed = nonBlock.map((f) => ({ id: f.id, text: String(f.payload!['text']), source: f.source }));
+  const raw = await args.synthesisModel.synthesize({ founderId: args.founderId, observed, engineModelConfidence: args.engine.modelConfidence, inferred: args.engine.inferred });
+  const sourceIds = observed.map((o) => o.id);
+  const conclusions = normalizeConclusions(raw, sourceIds, () => generateId());
+  const u: Understanding = {
+    id: generateId(), founderId: args.founderId, version: await args.understanding.nextVersion(args.founderId), supersedesId: null,
+    modelVersion: args.synthesisModel.version, sourceFragmentIds: sourceIds, conclusions, createdAt: args.now.toISOString(),
+  };
+  await args.understanding.save(u); // committed only after normalization/validation succeeds
+  return { status: 'ok', understanding: u };
+}
+
 export async function generateUnderstanding(args: {
   founderId: string;
   evidence: IEvidenceRepository;
@@ -26,25 +51,8 @@ export async function generateUnderstanding(args: {
   understanding: PgUnderstandingRepository;
   now: Date;
 }): Promise<{ status: 'ok'; understanding: Understanding } | { status: 'insufficient_evidence' }> {
-  const observedAll = await args.evidence.findObserved(args.founderId);
-  const nonBlock = observedAll.filter((f) => f.payload?.['kind'] !== 'block' && typeof f.payload?.['text'] === 'string' && String(f.payload['text']).trim().length > 0);
-  if (nonBlock.length === 0) return { status: 'insufficient_evidence' }; // honest "not yet" — never a fabricated read
-  const observed = nonBlock.map((f) => ({ id: f.id, text: String(f.payload!['text']), source: f.source }));
-
   const engine = await args.runEngine(args.founderId); // FROZEN engine
-  const raw = await args.synthesisModel.synthesize({
-    founderId: args.founderId, observed, engineModelConfidence: engine.modelConfidence, inferred: engine.inferred,
-  });
-  const sourceIds = observed.map((o) => o.id);
-  const conclusions = normalizeConclusions(raw, sourceIds, () => generateId()); // validate/ground/band, fail closed
-
-  const u: Understanding = {
-    id: generateId(), founderId: args.founderId, version: await args.understanding.nextVersion(args.founderId),
-    supersedesId: null, modelVersion: args.synthesisModel.version, sourceFragmentIds: sourceIds, conclusions,
-    createdAt: args.now.toISOString(),
-  };
-  await args.understanding.save(u);
-  return { status: 'ok', understanding: u };
+  return synthesizeUnderstanding({ founderId: args.founderId, evidence: args.evidence, engine, synthesisModel: args.synthesisModel, understanding: args.understanding, now: args.now });
 }
 
 export async function respondToConclusion(args: {
