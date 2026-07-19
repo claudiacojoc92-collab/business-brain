@@ -13,6 +13,7 @@ import { registerReadRoutes } from './read.routes';
 import { registerConnectRoutes } from './connect.routes';
 import { registerDeclareRoutes } from './declare.routes';
 import { registerAuthCredentialRoutes } from './auth-credentials.routes';
+import { registerUnderstandingRoutes } from './understanding.routes';
 import { PgIdentityRepository } from '../session/pg-identity.repository';
 import { registerRequireFounder } from '../session/require-founder';
 import type { IEmailService } from '../session/email.service';
@@ -45,6 +46,7 @@ export async function registerRoutes(
     registerReadRoutes(api);               // S1-T4 — Business Read generate/retrieve → /api/reads*; strict session
     await registerConnectRoutes(api);      // S1-T5a — production connect (ingest-only) → /api/connect/*; strict session
     registerDeclareRoutes(api);            // P1·S1 — production declaration capture (persist-only) → /api/declare*; strict session
+    registerUnderstandingRoutes(api);      // A–E Wave 2 — business understanding synthesis → /api/understanding*; strict session
   }, { prefix: '/api' });
 
   // Dev-only nucleus endpoints (outside /v1). Never registered in production.

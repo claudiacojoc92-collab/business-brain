@@ -27,6 +27,7 @@ export interface FounderExport {
   reads: Array<{ readId: string; createdAt: string | null; schemaVersion: number; read: unknown }>;
   integrations: Array<{ provider: string; scopes: string | null; connectedAt: string | null; tokenExpiresAt: string | null }>;
   login: { hasPassword: boolean; passwordSetAt: string | null; federatedLogins: Array<{ provider: string; email: string | null; connectedAt: string | null }> };
+  understanding: unknown[];
   meta: { note: string };
 }
 
@@ -70,6 +71,14 @@ export async function buildFounderExport(args: {
     .where('founder_id', '=', founderId)
     .execute()) as Array<Record<string, unknown>>;
 
+  // Wave 2 — versioned business understanding (all versions, oldest first; full lineage).
+  const understandings = (await db
+    .selectFrom('business.understanding')
+    .select(['id', 'version', 'supersedes_id', 'model_version', 'conclusions', 'created_at'])
+    .where('founder_id', '=', founderId)
+    .orderBy('version', 'asc')
+    .execute()) as Array<Record<string, unknown>>;
+
   return {
     exportedAt: now.toISOString(),
     founder: { founderId: founder.founder_id as string, email: founder.email as string, createdAt: iso(founder.created_at) },
@@ -100,6 +109,12 @@ export async function buildFounderExport(args: {
       passwordSetAt: credential ? iso((credential as Record<string, unknown>)['created_at']) : null,
       federatedLogins: logins.map((l) => ({ provider: String(l['provider']), email: (l['email'] as string | null) ?? null, connectedAt: iso(l['created_at']) })),
     },
+    understanding: understandings.map((u) => ({
+      id: String(u['id']), version: Number(u['version']), supersedesId: (u['supersedes_id'] as string | null) ?? null,
+      modelVersion: String(u['model_version']),
+      conclusions: typeof u['conclusions'] === 'string' ? JSON.parse(u['conclusions'] as string) : u['conclusions'],
+      createdAt: iso(u['created_at']),
+    })),
     meta: {
       note: 'This is the complete stored data for your account, including your saved Business Read snapshots (immutable — each is exactly what you saw when it was generated). Other derived views ("what matters now", gaps) are recomputed from your evidence and are not stored, so they are represented here by the evidence they derive from. Excluded for security: encrypted access/refresh tokens, session identifiers, and magic-link token hashes. No other founder’s data is included.',
     },
