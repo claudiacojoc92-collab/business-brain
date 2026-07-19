@@ -27,7 +27,7 @@ describe('adapter contract + guards (pure)', () => {
   it('normalizeName dedupes case/space', () => { expect(normalizeName('  Acme  Co ')).toBe('acme co'); });
 });
 
-const okPages: RetrievalResult = { pages: [{ url: 'https://c.example/', canonicalUrl: 'https://c.example/', title: 'Home', text: 'We build brand identities for founders.', sourceType: 'homepage' }, { url: 'https://c.example/pricing', canonicalUrl: 'https://c.example/pricing', title: 'Pricing', text: 'Plans from $99/mo.', sourceType: 'pricing' }], attempted: ['https://c.example/', 'https://c.example/pricing'], retrieved: ['https://c.example/', 'https://c.example/pricing'], skipped: [], blocked: [] };
+const okPages: RetrievalResult = { pages: [{ url: 'https://c.example/', canonicalUrl: 'https://c.example/', title: 'Home', text: 'We build brand identities for founders.', sourceType: 'homepage' }, { url: 'https://c.example/pricing', canonicalUrl: 'https://c.example/pricing', title: 'Pricing', text: 'Plans from $99/mo.', sourceType: 'pricing' }], attempted: ['https://c.example/', 'https://c.example/pricing'], retrieved: ['https://c.example/', 'https://c.example/pricing'], skipped: [], blocked: [], outcomes: [{ url: 'https://c.example/', outcome: 'retrieved' }, { url: 'https://c.example/pricing', outcome: 'retrieved' }] };
 const okInfer: MarketInferenceModel = { version: 'fake-infer', infer: async () => ({ inferenceText: 'The site presents a premium studio positioning. This does not establish demand.', epistemicStatus: 'SYNTHESIZED_FROM_OBSERVED', relevanceToFounder: 'overlapping audience' }) };
 const forbiddenInfer: MarketInferenceModel = { version: 'fake-infer', infer: async () => ({ inferenceText: 'They are the clear market leader.', epistemicStatus: 'SYNTHESIZED_FROM_OBSERVED', relevanceToFounder: 'x' }) };
 
@@ -111,7 +111,7 @@ describe('market context (real DB)', () => {
     const A = await signIn(E.a);
     const entities = new PgMarketEntityRepository(db); const findings = new PgMarketFindingRepository(db);
     const ent = await entities.upsert(A.founderId, { name: 'Blocked Co', websiteUrl: 'https://b.example', origin: 'founder_added' }, new Date());
-    const blocked: RetrievalResult = { pages: [], attempted: [], retrieved: [], skipped: [], blocked: ['https://b.example'] };
+    const blocked: RetrievalResult = { pages: [], attempted: [], retrieved: [], skipped: [], blocked: ['https://b.example'], outcomes: [{ url: 'https://b.example', outcome: 'blocked' }] };
     const res = await reviewEntity({ founderId: A.founderId, entityId: ent.id, entities, findings, adapter: new FakeResearchAdapter(blocked), inferenceModel: okInfer, founderBusiness: '', now: new Date() });
     expect(res.status).toBe('insufficient');
     expect(await findings.listByEntity(A.founderId, ent.id)).toHaveLength(0); // nothing fabricated

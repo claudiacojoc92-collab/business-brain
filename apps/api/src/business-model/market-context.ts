@@ -22,18 +22,34 @@ export interface MarketEntity {
   createdAt: string; updatedAt: string; dismissedAt: string | null;
 }
 export interface MarketFinding {
-  id: string; founderId: string; marketEntityId: string; sourceUrl: string; canonicalUrl: string | null;
+  id: string; founderId: string; marketEntityId: string; reviewId: string | null; sourceUrl: string; canonicalUrl: string | null;
   sourceTitle: string | null; sourceType: string; retrievedAt: string; retrievalAdapter: string; extractionVersion: string;
   observedText: string; evidenceFragmentId: string | null; inferenceText: string | null; epistemicStatus: EpistemicStatus;
   relevanceToFounder: string | null; founderResponse: FindingResponse; founderQualification: string | null;
   supersedesId: string | null; createdAt: string;
 }
 
+/** Precise retrieval failure taxonomy — never collapse all empty-source cases into one generic failure. */
+export type FailureCategory = 'ROBOTS_BLOCKED' | 'UNREACHABLE' | 'UNSUPPORTED_CONTENT' | 'INSUFFICIENT_READABLE_EVIDENCE' | 'RETRIEVAL_FAILED' | 'INFERENCE_FAILED';
+export type PageOutcome = 'retrieved' | 'blocked' | 'unreachable' | 'unsupported' | 'empty';
+
 export function normalizeName(name: string): string { return name.trim().toLowerCase().replace(/\s+/g, ' '); }
 
 // ── Provider-neutral adapter contract ─────────────────────────────────────────────────────────────────
 export interface RetrievedPage { url: string; canonicalUrl: string | null; title: string | null; text: string; sourceType: string }
-export interface RetrievalResult { pages: RetrievedPage[]; attempted: string[]; retrieved: string[]; skipped: string[]; blocked: string[] }
+export interface RetrievalResult { pages: RetrievedPage[]; attempted: string[]; retrieved: string[]; skipped: string[]; blocked: string[]; outcomes: Array<{ url: string; outcome: PageOutcome }> }
+
+/** Classify an empty retrieval into a precise category, or null when there ARE readable pages. */
+export function classifyRetrieval(r: RetrievalResult): FailureCategory | null {
+  if (r.pages.length > 0) return null;
+  const kinds = new Set(r.outcomes.map((o) => o.outcome));
+  if (r.outcomes.length > 0 && r.outcomes.every((o) => o.outcome === 'blocked')) return 'ROBOTS_BLOCKED';
+  if (kinds.has('unsupported') && !kinds.has('empty')) return 'UNSUPPORTED_CONTENT';
+  if (kinds.has('unreachable') && !kinds.has('empty')) return 'UNREACHABLE';
+  if (kinds.has('empty')) return 'INSUFFICIENT_READABLE_EVIDENCE';   // fetched but nothing readable
+  if (kinds.has('blocked')) return 'ROBOTS_BLOCKED';
+  return 'UNREACHABLE';                                              // nothing reached at all
+}
 
 export interface ResearchAdapter {
   readonly name: string;                 // e.g. 'website-connector'

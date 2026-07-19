@@ -7,7 +7,7 @@
 import { fetchDocument, fetchRobots, isAllowed } from '../connectors/website/fetcher';
 import { extractPage } from '../connectors/website/extract';
 import { normalizeUrl } from '../connectors/website/url';
-import type { ResearchAdapter, RetrievalResult, RetrievedPage } from './market-context';
+import type { PageOutcome, ResearchAdapter, RetrievalResult, RetrievedPage } from './market-context';
 
 const PAGE_TIMEOUT_MS = 6000;
 const PATHS = ['', '/about', '/about-us', '/services', '/products', '/pricing', '/how-it-works'];
@@ -21,9 +21,10 @@ export class WebsiteResearchAdapter implements ResearchAdapter {
   async retrieve(url: string): Promise<RetrievalResult> {
     const pages: RetrievedPage[] = [];
     const attempted: string[] = []; const retrieved: string[] = []; const skipped: string[] = []; const blocked: string[] = [];
+    const outcomes: Array<{ url: string; outcome: PageOutcome }> = [];
     let norm: { url: string; origin: string };
     try { const n = normalizeUrl(url) as { url: string; origin: string }; norm = { url: n.url, origin: n.origin }; }
-    catch { return { pages, attempted, retrieved, skipped, blocked: [url] }; }
+    catch { return { pages, attempted, retrieved, skipped, blocked: [url], outcomes: [{ url, outcome: 'unreachable' }] }; }
 
     const robots = await fetchRobots(norm.origin).catch(() => null);
     const candidates = Array.from(new Set([norm.url, ...PATHS.map((p) => `${norm.origin}${p}`)])).slice(0, MAX_PAGES + PATHS.length);
@@ -31,16 +32,19 @@ export class WebsiteResearchAdapter implements ResearchAdapter {
       if (retrieved.length >= MAX_PAGES) break;
       let path = '/';
       try { path = new URL(cand).pathname; } catch { continue; }
-      if (robots && !isAllowed(robots, path)) { blocked.push(cand); continue; }
+      if (robots && !isAllowed(robots, path)) { blocked.push(cand); outcomes.push({ url: cand, outcome: 'blocked' }); continue; }
       attempted.push(cand);
       const res = await fetchDocument(cand, { timeoutMs: PAGE_TIMEOUT_MS });
-      if (!res.ok || !res.body) { skipped.push(cand); continue; }
+      if (!res.ok || !res.body) {
+        const unsupported = /unsupported content-type/i.test(res.error ?? '');
+        skipped.push(cand); outcomes.push({ url: cand, outcome: unsupported ? 'unsupported' : 'unreachable' }); continue;
+      }
       const ex = extractPage(res.finalUrl || cand, res.body);
-      if (ex.empty || !ex.text) { skipped.push(cand); continue; }
-      retrieved.push(cand);
+      if (ex.empty || !ex.text) { skipped.push(cand); outcomes.push({ url: cand, outcome: 'empty' }); continue; }
+      retrieved.push(cand); outcomes.push({ url: cand, outcome: 'retrieved' });
       pages.push({ url: cand, canonicalUrl: res.finalUrl || cand, title: ex.title ?? null, text: ex.text, sourceType: ex.pageType || 'website' });
     }
-    return { pages, attempted, retrieved, skipped, blocked };
+    return { pages, attempted, retrieved, skipped, blocked, outcomes };
   }
 }
 

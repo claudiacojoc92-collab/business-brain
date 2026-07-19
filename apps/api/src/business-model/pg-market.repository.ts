@@ -55,10 +55,11 @@ export class PgMarketEntityRepository {
 
 export class PgMarketFindingRepository {
   constructor(private readonly db: AnyDB) {}
-  async append(f: Omit<MarketFinding, 'id' | 'createdAt'>, now: Date): Promise<MarketFinding> {
+  async append(f: Omit<MarketFinding, 'id' | 'createdAt'>, now: Date, tx?: unknown): Promise<MarketFinding> {
     const id = generateId();
-    await this.db.insertInto('business.market_finding').values({
-      id, founder_id: f.founderId, market_entity_id: f.marketEntityId, source_url: f.sourceUrl, canonical_url: f.canonicalUrl,
+    const db = (tx ?? this.db) as AnyDB;
+    await db.insertInto('business.market_finding').values({
+      id, founder_id: f.founderId, market_entity_id: f.marketEntityId, review_id: f.reviewId, source_url: f.sourceUrl, canonical_url: f.canonicalUrl,
       source_title: f.sourceTitle, source_type: f.sourceType, retrieved_at: f.retrievedAt, retrieval_adapter: f.retrievalAdapter,
       extraction_version: f.extractionVersion, observed_text: f.observedText, evidence_fragment_id: f.evidenceFragmentId,
       inference_text: f.inferenceText, epistemic_status: f.epistemicStatus, relevance_to_founder: f.relevanceToFounder,
@@ -79,6 +80,6 @@ export class PgMarketFindingRepository {
     return r ? this.toDomain(r) : null;
   }
   private toDomain(r: AnyDB): MarketFinding {
-    return { id: r.id, founderId: r.founder_id, marketEntityId: r.market_entity_id, sourceUrl: r.source_url, canonicalUrl: r.canonical_url ?? null, sourceTitle: r.source_title ?? null, sourceType: r.source_type, retrievedAt: new Date(r.retrieved_at).toISOString(), retrievalAdapter: r.retrieval_adapter, extractionVersion: r.extraction_version, observedText: r.observed_text, evidenceFragmentId: r.evidence_fragment_id ?? null, inferenceText: r.inference_text ?? null, epistemicStatus: r.epistemic_status, relevanceToFounder: r.relevance_to_founder ?? null, founderResponse: r.founder_response, founderQualification: r.founder_qualification ?? null, supersedesId: r.supersedes_id ?? null, createdAt: new Date(r.created_at).toISOString() };
+    return { id: r.id, founderId: r.founder_id, marketEntityId: r.market_entity_id, reviewId: r.review_id ?? null, sourceUrl: r.source_url, canonicalUrl: r.canonical_url ?? null, sourceTitle: r.source_title ?? null, sourceType: r.source_type, retrievedAt: new Date(r.retrieved_at).toISOString(), retrievalAdapter: r.retrieval_adapter, extractionVersion: r.extraction_version, observedText: r.observed_text, evidenceFragmentId: r.evidence_fragment_id ?? null, inferenceText: r.inference_text ?? null, epistemicStatus: r.epistemic_status, relevanceToFounder: r.relevance_to_founder ?? null, founderResponse: r.founder_response, founderQualification: r.founder_qualification ?? null, supersedesId: r.supersedes_id ?? null, createdAt: new Date(r.created_at).toISOString() };
   }
 }

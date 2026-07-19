@@ -2,10 +2,15 @@ import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import {
-  getMarketEntities, addMarketEntity, reviewMarketEntity, getEntityFindings, respondToFinding, patchMarketEntity, ApiError,
-  type MarketEntity, type MarketFinding,
+  getMarketEntities, addMarketEntity, createMarketReview, getMarketReview, retryMarketReview, getEntityFindings, respondToFinding, patchMarketEntity, ApiError,
+  type MarketEntity, type MarketFinding, type ReviewStatus,
 } from '../api/client';
 import { AppShell, Button, Field, Thinking } from '../system/ui';
+
+const STAGE: Record<ReviewStatus, string> = {
+  QUEUED: 'Getting ready…', RETRIEVING: 'Reading their public site…', EXTRACTING: 'Taking in what it says…',
+  INFERRING: 'Forming a careful reading…', READY: 'Done.', INSUFFICIENT_EVIDENCE: '', FAILED: '',
+};
 
 /**
  * Wave 3 — Public positioning context (/market). Known-entity, source-backed public evidence — NOT market
@@ -18,9 +23,8 @@ export function MarketPage() {
   const [entities, setEntities] = useState<MarketEntity[]>([]);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
-  const [busy, setBusy] = useState<string | null>(null);
   const [findings, setFindings] = useState<Record<string, MarketFinding[]>>({});
-  const [note, setNote] = useState('');
+  const [reviewState, setReviewState] = useState<Record<string, { reviewId: string; status: ReviewStatus; message: string | null }>>({});
 
   const on401 = useCallback((e: unknown) => { if (e instanceof ApiError && e.status === 401) navigate('/signin', { replace: true }); }, [navigate]);
   const refresh = useCallback(() => { getMarketEntities().then(setEntities).catch(on401); }, [on401]);
@@ -33,10 +37,30 @@ export function MarketPage() {
     if (!name.trim()) return;
     try { await addMarketEntity({ name: name.trim(), websiteUrl: url.trim() || undefined }); setName(''); setUrl(''); refresh(); } catch (e) { on401(e); }
   };
-  const review = async (id: string) => {
-    setBusy(id); setNote('');
-    try { const r = await reviewMarketEntity(id); if (r.status !== 'ok') setNote(r.message ?? 'Not enough to read yet.'); const f = await getEntityFindings(id); setFindings((s) => ({ ...s, [id]: f })); }
-    catch (e) { on401(e); setNote('Something went wrong reading that site.'); } finally { setBusy(null); }
+  const poll = async (entityId: string, reviewId: string) => {
+    for (let i = 0; i < 60; i++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      let r;
+      try { r = await getMarketReview(reviewId); } catch (e) { on401(e); return; }
+      setReviewState((s) => ({ ...s, [entityId]: { reviewId, status: r.status, message: r.message } }));
+      if (r.status === 'READY') { try { const f = await getEntityFindings(entityId); setFindings((s) => ({ ...s, [entityId]: f })); } catch (e) { on401(e); } return; }
+      if (r.status === 'INSUFFICIENT_EVIDENCE' || r.status === 'FAILED') return;
+    }
+  };
+  const review = async (entityId: string) => {
+    setFindings((s) => { const n = { ...s }; delete n[entityId]; return n; });
+    try {
+      const r = await createMarketReview(entityId);
+      setReviewState((s) => ({ ...s, [entityId]: { reviewId: r.reviewId, status: r.status, message: r.message } }));
+      void poll(entityId, r.reviewId);
+    } catch (e) { on401(e); }
+  };
+  const retry = async (entityId: string, reviewId: string) => {
+    try {
+      const r = await retryMarketReview(reviewId);
+      setReviewState((s) => ({ ...s, [entityId]: { reviewId: r.reviewId, status: r.status, message: r.message } }));
+      void poll(entityId, r.reviewId);
+    } catch (e) { on401(e); }
   };
   const respond = async (entityId: string, findingId: string, response: 'confirmed' | 'dismissed' | 'qualified', q?: string) => {
     try { await respondToFinding(findingId, response, q); setFindings((s) => ({ ...s, [entityId]: s[entityId]!.map((f) => f.id === findingId ? { ...f, founderResponse: response, founderQualification: q ?? null } : f) })); } catch (e) { on401(e); }
@@ -59,7 +83,11 @@ export function MarketPage() {
         </div>
 
         {entities.length === 0 && <p style={{ fontFamily: 'var(--serif)', color: 'var(--ink-3)' }}>No companies added yet.</p>}
-        {entities.map((e) => (
+        {entities.map((e) => {
+          const rs = reviewState[e.id];
+          const active = rs != null && (rs.status === 'QUEUED' || rs.status === 'RETRIEVING' || rs.status === 'EXTRACTING' || rs.status === 'INFERRING');
+          const stalled = rs != null && (rs.status === 'INSUFFICIENT_EVIDENCE' || rs.status === 'FAILED');
+          return (
           <div key={e.id} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'var(--r-2)', padding: 'var(--sp-5)', boxShadow: 'var(--elev-1)', marginBottom: 'var(--sp-4)', opacity: e.relevanceStatus === 'dismissed' ? 0.5 : 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
               <div>
@@ -67,12 +95,13 @@ export function MarketPage() {
                 <span style={{ marginLeft: 8, fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{e.entityType}{e.origin === 'bb_suggested' && e.relevanceStatus !== 'confirmed' ? ' · suggested' : ''}</span>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                {e.websiteUrl && e.relevanceStatus !== 'dismissed' && <Button variant="secondary" loading={busy === e.id} onClick={() => void review(e.id)}>Read public site</Button>}
+                {e.websiteUrl && e.relevanceStatus !== 'dismissed' && !stalled && <Button variant="secondary" loading={active} onClick={() => void review(e.id)}>Read public site</Button>}
+                {stalled && <Button variant="secondary" onClick={() => void retry(e.id, rs!.reviewId)}>Try again</Button>}
                 {e.relevanceStatus !== 'dismissed' && <button type="button" onClick={() => void patchMarketEntity(e.id, { status: 'dismissed' }).then(refresh)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)' }}>dismiss</button>}
               </div>
             </div>
-            {busy === e.id && <div style={{ marginTop: 'var(--sp-4)' }}><Thinking message="Reading the public site…" /></div>}
-            {note && busy !== e.id && findings[e.id] === undefined && <p style={{ marginTop: 8, fontFamily: 'var(--serif)', color: 'var(--ink-3)' }}>{note}</p>}
+            {active && <div style={{ marginTop: 'var(--sp-4)' }}><Thinking message={STAGE[rs.status]} /></div>}
+            {stalled && <p style={{ marginTop: 8, fontFamily: 'var(--serif)', color: 'var(--ink-3)' }}>{rs.message ?? 'Not enough public evidence to read yet.'}</p>}
             {(findings[e.id] ?? []).map((f) => (
               <div key={f.id} style={{ marginTop: 'var(--sp-4)', paddingTop: 'var(--sp-4)', borderTop: '1px solid var(--line)' }}>
                 {f.inferenceText === null ? (
@@ -95,7 +124,8 @@ export function MarketPage() {
               </div>
             ))}
           </div>
-        ))}
+          );
+        })}
       </div>
     </AppShell>
   );

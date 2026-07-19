@@ -27,7 +27,7 @@ export async function reviewEntity(args: {
   // OBSERVED — one finding per public page (what the source presents), full provenance, inference separate.
   for (const p of retrieval.pages) {
     out.push(await args.findings.append({
-      founderId: args.founderId, marketEntityId: args.entityId, sourceUrl: p.url, canonicalUrl: p.canonicalUrl,
+      founderId: args.founderId, marketEntityId: args.entityId, reviewId: null, sourceUrl: p.url, canonicalUrl: p.canonicalUrl,
       sourceTitle: p.title, sourceType: p.sourceType, retrievedAt: nowIso, retrievalAdapter: args.adapter.name,
       extractionVersion: args.adapter.extractionVersion, observedText: p.text.slice(0, 4000), evidenceFragmentId: null,
       inferenceText: null, epistemicStatus: 'OBSERVED', relevanceToFounder: null, founderResponse: 'unreviewed',
@@ -37,7 +37,7 @@ export async function reviewEntity(args: {
   // INFERENCE — one bounded reading, SEPARATE from observation; capped so it never asserts market fact.
   const inf = await args.inferenceModel.infer({ entityName: entity.name, entityType: entity.entityType, observed: retrieval.pages, founderBusiness: args.founderBusiness });
   out.push(await args.findings.append({
-    founderId: args.founderId, marketEntityId: args.entityId, sourceUrl: entity.websiteUrl, canonicalUrl: null,
+    founderId: args.founderId, marketEntityId: args.entityId, reviewId: null, sourceUrl: entity.websiteUrl, canonicalUrl: null,
     sourceTitle: entity.name, sourceType: 'inference', retrievedAt: nowIso, retrievalAdapter: args.adapter.name,
     extractionVersion: args.inferenceModel.version, observedText: `(reading across ${retrieval.pages.length} public page(s))`,
     evidenceFragmentId: null, inferenceText: inf.inferenceText, epistemicStatus: capMarketEpistemics(inf.epistemicStatus, inf.inferenceText),

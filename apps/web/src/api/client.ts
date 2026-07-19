@@ -176,7 +176,11 @@ export interface MarketFinding { id: string; marketEntityId: string; sourceUrl: 
 export async function getMarketEntities(): Promise<MarketEntity[]> { return (await request<{ entities: MarketEntity[] }>('market/entities')).entities; }
 export async function addMarketEntity(body: { name: string; websiteUrl?: string; entityType?: EntityType; relevanceNote?: string }): Promise<MarketEntity> { return (await request<{ entity: MarketEntity }>('market/entities', { method: 'POST', body: JSON.stringify(body) })).entity; }
 export async function patchMarketEntity(id: string, body: { entityType?: EntityType; websiteUrl?: string; relevanceNote?: string; status?: 'confirmed' | 'dismissed' }): Promise<MarketEntity> { return (await request<{ entity: MarketEntity }>(`market/entities/${id}`, { method: 'PATCH', body: JSON.stringify(body) })).entity; }
-export async function reviewMarketEntity(id: string): Promise<{ status: string; message?: string; findings?: MarketFinding[] }> { return request(`market/entities/${id}/review`, { method: 'POST' }); }
+export type ReviewStatus = 'QUEUED' | 'RETRIEVING' | 'EXTRACTING' | 'INFERRING' | 'READY' | 'INSUFFICIENT_EVIDENCE' | 'FAILED';
+export interface MarketReview { reviewId: string; entityId: string; status: ReviewStatus; attempt: number; maxAttempts: number; failureCategory: string | null; message: string | null }
+export async function createMarketReview(entityId: string): Promise<MarketReview> { return request(`market/entities/${entityId}/reviews`, { method: 'POST' }); }
+export async function getMarketReview(reviewId: string): Promise<MarketReview> { return request(`market/reviews/${reviewId}`); }
+export async function retryMarketReview(reviewId: string): Promise<MarketReview> { return request(`market/reviews/${reviewId}/retry`, { method: 'POST' }); }
 export async function getEntityFindings(id: string): Promise<MarketFinding[]> { return (await request<{ findings: MarketFinding[] }>(`market/entities/${id}/findings`)).findings; }
 export async function respondToFinding(id: string, response: 'confirmed' | 'dismissed' | 'qualified', qualification?: string): Promise<MarketFinding> { return (await request<{ finding: MarketFinding }>(`market/findings/${id}/respond`, { method: 'POST', body: JSON.stringify({ response, qualification }) })).finding; }
 

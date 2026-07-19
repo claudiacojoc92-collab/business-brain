@@ -30,6 +30,7 @@ export interface FounderExport {
   understanding: unknown[];
   conclusionResponses: unknown[];
   marketEntities: unknown[];
+  marketReviews: unknown[];
   marketFindings: unknown[];
   understandingRuns: unknown[];
   meta: { note: string };
@@ -97,6 +98,10 @@ export async function buildFounderExport(args: {
     .select(['id', 'market_entity_id', 'source_url', 'source_title', 'source_type', 'retrieved_at', 'retrieval_adapter', 'observed_text', 'inference_text', 'epistemic_status', 'founder_response', 'founder_qualification', 'created_at'])
     .where('founder_id', '=', founderId).orderBy('created_at', 'asc').execute()) as Array<Record<string, unknown>>;
 
+  const marketReviews = (await db.selectFrom('business.market_review')
+    .select(['id', 'market_entity_id', 'status', 'attempt_count', 'failure_category', 'prior_successful_review_id', 'created_at', 'finished_at'])
+    .where('founder_id', '=', founderId).orderBy('created_at', 'asc').execute()) as Array<Record<string, unknown>>;
+
   // Run history — founder-safe (error CATEGORY only; never the internal error_detail).
   const runs = (await db
     .selectFrom('business.understanding_run')
@@ -148,6 +153,7 @@ export async function buildFounderExport(args: {
       supersededBy: (r['superseded_by'] as string | null) ?? null, at: iso(r['created_at']),
     })),
     marketEntities: marketEntities.map((e) => ({ id: String(e['id']), name: String(e['name']), entityType: String(e['entity_type']), origin: String(e['origin']), relevanceStatus: String(e['relevance_status']), websiteUrl: (e['website_url'] as string | null) ?? null, relevanceNote: (e['relevance_note'] as string | null) ?? null, createdAt: iso(e['created_at']) })),
+    marketReviews: marketReviews.map((r) => ({ id: String(r['id']), marketEntityId: String(r['market_entity_id']), status: String(r['status']), attempts: Number(r['attempt_count']), failureCategory: (r['failure_category'] as string | null) ?? null, priorSuccessfulReviewId: (r['prior_successful_review_id'] as string | null) ?? null, createdAt: iso(r['created_at']), finishedAt: iso(r['finished_at']) })),
     marketFindings: marketFindings.map((f) => ({ id: String(f['id']), marketEntityId: String(f['market_entity_id']), sourceUrl: String(f['source_url']), sourceTitle: (f['source_title'] as string | null) ?? null, sourceType: String(f['source_type']), retrievedAt: iso(f['retrieved_at']), retrievalAdapter: String(f['retrieval_adapter']), observedText: (f['observed_text'] as string | null) ?? null, inferenceText: (f['inference_text'] as string | null) ?? null, epistemicStatus: String(f['epistemic_status']), founderResponse: String(f['founder_response']), founderQualification: (f['founder_qualification'] as string | null) ?? null, createdAt: iso(f['created_at']) })),
     understandingRuns: runs.map((r) => ({
       id: String(r['id']), sourceKey: String(r['source_key']), status: String(r['status']), attempts: Number(r['attempt_count']),

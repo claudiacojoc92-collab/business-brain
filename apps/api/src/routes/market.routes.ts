@@ -4,10 +4,13 @@ import { PgIdentityRepository } from '../session/pg-identity.repository';
 import { readCookie, SESSION_COOKIE } from '../session/cookie';
 import { resolveSession } from '../session/session.service';
 import { PgMarketEntityRepository, PgMarketFindingRepository } from '../business-model/pg-market.repository';
+import { PgMarketReviewRepository } from '../business-model/pg-market-review.repository';
 import { PgUnderstandingRepository } from '../business-model/pg-understanding.repository';
 import { WebsiteResearchAdapter } from '../business-model/website-research.adapter';
 import { AnthropicMarketInference } from '../business-model/anthropic-market-inference';
-import { reviewEntity, respondToFinding, effectiveMarketContext } from '../business-model/market-context.service';
+import { startMarketReviewWorker } from '../business-model/market-review.worker';
+import { toReviewView } from '../business-model/market-review';
+import { respondToFinding, effectiveMarketContext } from '../business-model/market-context.service';
 import { ENTITY_TYPES, type EntityType, type FindingResponse } from '../business-model/market-context';
 
 /**
@@ -22,9 +25,10 @@ export function registerMarketRoutes(server: FastifyInstance): void {
   const identity = new PgIdentityRepository(db);
   const entities = new PgMarketEntityRepository(db);
   const findings = new PgMarketFindingRepository(db);
+  const reviewRepo = new PgMarketReviewRepository(db);
   const understanding = new PgUnderstandingRepository(db);
   const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
-  const inFlight = new Set<string>();
+  const LEASE_MS = 5 * 60 * 1000;
 
   async function sessionFounder(request: FastifyRequest): Promise<string | null> {
     const sessionId = readCookie(request.headers['cookie'], SESSION_COOKIE);
@@ -35,6 +39,11 @@ export function registerMarketRoutes(server: FastifyInstance): void {
     const u = await understanding.latest(founderId);
     const primary = u?.conclusions.find((c) => c.type === 'what_it_is') ?? u?.conclusions[0];
     return primary?.statement ?? '';
+  }
+
+  // Durable review worker (off under test; tests drive processReview). DB is authoritative — no in-memory guard.
+  if (process.env['NODE_ENV'] !== 'test') {
+    startMarketReviewWorker({ reviewRepo, entities, findings, adapter: new WebsiteResearchAdapter(), inferenceModel: new AnthropicMarketInference(apiKey), founderBusiness, db, leaseMs: LEASE_MS, now: () => new Date() });
   }
 
   server.post('/market/entities', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -71,21 +80,41 @@ export function registerMarketRoutes(server: FastifyInstance): void {
     await reply.send({ entity });
   });
 
-  server.post('/market/entities/:id/review', async (request: FastifyRequest, reply: FastifyReply) => {
+  // POST /market/entities/:id/reviews — create OR return the active review (idempotent); returns immediately.
+  server.post('/market/entities/:id/reviews', async (request: FastifyRequest, reply: FastifyReply) => {
     const founderId = await sessionFounder(request);
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
     const id = (request.params as { id: string }).id;
-    const key = `${founderId}:${id}`;
-    if (inFlight.has(key)) { await reply.code(409).send({ error: 'already reviewing this entity' }); return; }
-    inFlight.add(key);
-    try {
-      const result = await reviewEntity({ founderId, entityId: id, entities, findings, adapter: new WebsiteResearchAdapter(), inferenceModel: new AnthropicMarketInference(apiKey), founderBusiness: await founderBusiness(founderId), now: new Date() });
-      if (result.status === 'not_found') { await reply.code(404).send({ error: 'not found' }); return; }
-      if (result.status === 'no_website') { await reply.code(400).send({ status: 'no_website', message: 'Add this company’s website first.' }); return; }
-      if (result.status === 'insufficient') { await reply.code(200).send({ status: 'insufficient', message: 'I couldn’t read enough from that site.', retrieval: { attempted: result.retrieval.attempted.length, retrieved: 0, skipped: result.retrieval.skipped.length, blocked: result.retrieval.blocked.length } }); return; }
-      await reply.code(200).send({ status: 'ok', retrieval: { attempted: result.retrieval.attempted.length, retrieved: result.retrieval.retrieved.length, skipped: result.retrieval.skipped.length, blocked: result.retrieval.blocked.length }, findings: result.findings });
-    } catch { await reply.code(502).send({ status: 'error', message: 'Something went wrong reading that site. Nothing was lost — try again.' }); }
-    finally { inFlight.delete(key); }
+    const entity = await entities.get(founderId, id);
+    if (!entity) { await reply.code(404).send({ error: 'not found' }); return; }
+    if (!entity.websiteUrl) { await reply.code(400).send({ error: 'add this company’s website first' }); return; }
+    const review = await reviewRepo.create(founderId, id, new Date());
+    await reply.code(202).send(toReviewView(review));
+  });
+
+  // GET /market/reviews/:reviewId — founder-safe status (never internal detail).
+  server.get('/market/reviews/:reviewId', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const review = await reviewRepo.getById(founderId, (request.params as { reviewId: string }).reviewId);
+    if (!review) { await reply.code(404).send({ error: 'not found' }); return; }
+    await reply.send(toReviewView(review));
+  });
+
+  // POST /market/reviews/:reviewId/retry — requeue an eligible failed/insufficient review (bounded).
+  server.post('/market/reviews/:reviewId/retry', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const review = await reviewRepo.retry(founderId, (request.params as { reviewId: string }).reviewId, new Date());
+    if (!review) { await reply.code(409).send({ error: 'review is not retryable' }); return; }
+    await reply.code(202).send(toReviewView(review));
+  });
+
+  // GET /market/entities/:id/reviews — review history (newest first).
+  server.get('/market/entities/:id/reviews', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    await reply.send({ reviews: (await reviewRepo.listByEntity(founderId, (request.params as { id: string }).id)).map(toReviewView) });
   });
 
   server.get('/market/entities/:id/findings', async (request: FastifyRequest, reply: FastifyReply) => {
