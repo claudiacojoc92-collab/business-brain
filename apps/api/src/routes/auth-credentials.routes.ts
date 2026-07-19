@@ -50,6 +50,12 @@ export function registerAuthCredentialRoutes(server: FastifyInstance, opts: { em
   const gRedirect = `${apiBase}/api/auth/google/callback`;
   const googleConfigured = Boolean(gClientId && gClientSecret);
 
+  // Capability advertisement — the client derives control visibility from this, NEVER from a frontend
+  // assumption and NEVER from secrets. Only a boolean readiness flag is exposed (no client id/secret).
+  server.get('/auth/capabilities', async (_request, reply) => {
+    await reply.send({ googleLogin: googleConfigured });
+  });
+
   server.post('/auth/signup', async (request, reply) => {
     if (rateLimited(`signup:${ipOf(request)}`, 20, Date.now())) { await reply.code(429).send({ error: 'too many attempts, try again later' }); return; }
     const b = (request.body ?? {}) as { email?: unknown; password?: unknown };

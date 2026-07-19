@@ -122,6 +122,11 @@ export async function resetPassword(token: string, password: string): Promise<Au
 /** The full-page Google login entry (config-gated server-side). */
 export const GOOGLE_LOGIN_URL = '/api/auth/google/start';
 
+/** GET /auth/capabilities — server-declared readiness (no secrets). Drives control visibility. */
+export async function getAuthCapabilities(): Promise<{ googleLogin: boolean }> {
+  return request<{ googleLogin: boolean }>('auth/capabilities');
+}
+
 // ─── Account: export + permanent deletion (S0-T4, Article XIII) ──────────────────
 
 /** GET /account/export — the complete JSON the session founder owns (parsed). */

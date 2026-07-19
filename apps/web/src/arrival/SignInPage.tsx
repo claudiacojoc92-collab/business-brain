@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { signIn, ApiError, GOOGLE_LOGIN_URL } from '../api/client';
 import { AppShell, Button, GoogleButton, Field, authCard } from '../system/ui';
+import { useGoogleLoginAvailable } from './useGoogleLogin';
 
 /**
  * A–E Wave 1 — sign in (/signin). Email/password + Continue with Google. Failures are generic (the server
@@ -15,6 +16,7 @@ export function SignInPage() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const googleAvailable = useGoogleLoginAvailable();
 
   if (!isLoading && founderId) return <Navigate to="/welcome" replace />;
 
@@ -45,10 +47,14 @@ export function SignInPage() {
           <Link to="/recover" style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-3)' }}>Forgot password?</Link>
           <Link to="/login" style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-3)' }}>Use a magic link</Link>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '0 0 var(--sp-5)' }}>
-          <span style={{ flex: 1, height: 1, background: 'var(--line)' }} /><span style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--faint)' }}>or</span><span style={{ flex: 1, height: 1, background: 'var(--line)' }} />
-        </div>
-        <GoogleButton onClick={() => { window.location.href = GOOGLE_LOGIN_URL; }} />
+        {googleAvailable && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '0 0 var(--sp-5)' }}>
+              <span style={{ flex: 1, height: 1, background: 'var(--line)' }} /><span style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--faint)' }}>or</span><span style={{ flex: 1, height: 1, background: 'var(--line)' }} />
+            </div>
+            <GoogleButton onClick={() => { window.location.href = GOOGLE_LOGIN_URL; }} />
+          </>
+        )}
         <p style={{ textAlign: 'center', fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-3)', margin: 'var(--sp-6) 0 0' }}>
           New here? <Link to="/signup" style={{ color: 'var(--ink)' }}>Create an account</Link>
         </p>

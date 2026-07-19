@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { signUp, ApiError, GOOGLE_LOGIN_URL } from '../api/client';
 import { AppShell, Button, GoogleButton, Field, authCard } from '../system/ui';
+import { useGoogleLoginAvailable } from './useGoogleLogin';
 
 /**
  * A–E Wave 1 — create account (/signup). Email/password + Continue with Google. On success the session
@@ -15,6 +16,7 @@ export function SignUpPage() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const googleAvailable = useGoogleLoginAvailable();
 
   if (!isLoading && founderId) return <Navigate to="/welcome" replace />;
 
@@ -42,10 +44,14 @@ export function SignUpPage() {
           {error && <p role="alert" style={{ margin: 0, color: 'var(--warn-ink)', fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)' }}>{error}</p>}
           <Button type="submit" variant="primary" full loading={busy}>Create account</Button>
         </form>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: 'var(--sp-5) 0' }}>
-          <span style={{ flex: 1, height: 1, background: 'var(--line)' }} /><span style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--faint)' }}>or</span><span style={{ flex: 1, height: 1, background: 'var(--line)' }} />
-        </div>
-        <GoogleButton onClick={() => { window.location.href = GOOGLE_LOGIN_URL; }} />
+        {googleAvailable && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: 'var(--sp-5) 0' }}>
+              <span style={{ flex: 1, height: 1, background: 'var(--line)' }} /><span style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--faint)' }}>or</span><span style={{ flex: 1, height: 1, background: 'var(--line)' }} />
+            </div>
+            <GoogleButton onClick={() => { window.location.href = GOOGLE_LOGIN_URL; }} />
+          </>
+        )}
         <p style={{ textAlign: 'center', fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-3)', margin: 'var(--sp-6) 0 0' }}>
           Already have an account? <Link to="/signin" style={{ color: 'var(--ink)' }}>Sign in</Link>
         </p>

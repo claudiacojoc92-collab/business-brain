@@ -33,6 +33,12 @@ describe('password hashing', () => {
     expect(await verifyPassword('x', 'notscrypt')).toBe(false);
     expect(await verifyPassword('x', 'scrypt$zz')).toBe(false);
   });
+  it('ONE policy: a legacy bcrypt-format hash is NOT treated as a valid credential (fails closed)', async () => {
+    // The new flow reads identity.founder_credentials (scrypt only). The retired V034 bcrypt records live
+    // in the DISJOINT app.founder_auth / founder.founders space and are never read here; even if a bcrypt
+    // string reached verifyPassword, the non-'scrypt' prefix makes it fail closed.
+    expect(await verifyPassword('whatever', '$2b$10$abcdefghijklmnopqrstuv')).toBe(false);
+  });
 });
 
 // ── Unit: Google login identity linking (no DB) ──────────────────────────────────────────────────────
@@ -190,5 +196,17 @@ describe('Wave 1 auth — HTTP + persistence (real DB)', () => {
     const start = await app.inject({ method: 'GET', url: '/api/auth/google/start' });
     // 503 when unconfigured (default in test env); a 302 would mean a client IS configured — both are valid.
     expect([503, 302]).toContain(start.statusCode);
+  });
+
+  it('capabilities endpoint advertises google readiness consistently with the OAuth route (no secrets)', async (ctx) => {
+    if (!dbUp) { ctx.skip(); return; }
+    const caps = await app.inject({ method: 'GET', url: '/api/auth/capabilities' });
+    expect(caps.statusCode).toBe(200);
+    const body = caps.json<{ googleLogin: boolean }>();
+    expect(typeof body.googleLogin).toBe('boolean');
+    expect(caps.body).not.toMatch(/client_secret|GOCSPX|[0-9a-f]{32}/i); // never leaks config/secret detail
+    // consistency: capability=false ⇒ /start 503; capability=true ⇒ /start 302
+    const start = await app.inject({ method: 'GET', url: '/api/auth/google/start' });
+    expect(start.statusCode).toBe(body.googleLogin ? 302 : 503);
   });
 });
