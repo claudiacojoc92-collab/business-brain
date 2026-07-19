@@ -12,6 +12,7 @@ import { registerAccountRoutes } from './account.routes';
 import { registerReadRoutes } from './read.routes';
 import { registerConnectRoutes } from './connect.routes';
 import { registerDeclareRoutes } from './declare.routes';
+import { registerAuthCredentialRoutes } from './auth-credentials.routes';
 import { PgIdentityRepository } from '../session/pg-identity.repository';
 import { registerRequireFounder } from '../session/require-founder';
 import type { IEmailService } from '../session/email.service';
@@ -39,6 +40,7 @@ export async function registerRoutes(
   // API. One scope, not per-path edits; handlers are byte-identical, only their mount path moves.
   await server.register(async (api) => {
     registerSessionRoutes(api, opts.email); // S0-T2 — magic-link self-serve session → /api/auth/* (email adapter injected by main.ts; defaults to LogEmailService)
+    registerAuthCredentialRoutes(api, { email: opts.email }); // A–E Wave 1 — email/password + Google login → /api/auth/*; magic-link stays as fallback
     registerAccountRoutes(api);            // S0-T4 — export/delete → /api/account/*; session-scoped, ALL envs
     registerReadRoutes(api);               // S1-T4 — Business Read generate/retrieve → /api/reads*; strict session
     await registerConnectRoutes(api);      // S1-T5a — production connect (ingest-only) → /api/connect/*; strict session
