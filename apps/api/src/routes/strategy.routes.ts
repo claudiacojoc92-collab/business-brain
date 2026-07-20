@@ -15,7 +15,7 @@ import { AnthropicStrategyModel } from '../business-model/anthropic-strategy.mod
 import { strategyModelConfig } from '../business-model/model-config';
 import { startStrategicSessionWorker } from '../business-model/strategic-session.worker';
 import { classifyStrategicJob } from '../business-model/strategy-classifier';
-import { toSessionView, boundaryResponse, STRATEGIC_RESPONSE_TYPES, type StrategicResponseType } from '../business-model/strategy';
+import { toSessionView, annotateReferenceHistory, boundaryResponse, STRATEGIC_RESPONSE_TYPES, type StrategicResponseType } from '../business-model/strategy';
 
 /**
  * Wave 4 — Founder Strategy API (first vertical slice). One bounded job (PRIORITY_DECISION) reasoned from the
@@ -71,7 +71,11 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
     const s = await sessionRepo.getById(founderId, (request.params as { id: string }).id);
     if (!s) { await reply.code(404).send({ error: 'not found' }); return; }
     const effective = await responseRepo.effectiveBySession(founderId, s.id);
-    await reply.send({ ...toSessionView(s), effectiveResponse: effective });
+    // Read-time historical reference status: compare each grounded FSC reference to the founder's CURRENT effective
+    // context (the persisted recommendation is untouched; historical VALIDATION already used the stored manifest).
+    const effectiveByLogical = new Map<string, number>((await assembler.strategicContext.listActive(founderId)).map((i) => [i.logicalItemId, i.version]));
+    const view = annotateReferenceHistory(toSessionView(s), effectiveByLogical);
+    await reply.send({ ...view, effectiveResponse: effective });
   });
 
   server.post('/strategy/sessions/:id/retry', async (request: FastifyRequest, reply: FastifyReply) => {

@@ -2,14 +2,16 @@
   "model": "claude-sonnet-5",
   "passed": 3,
   "total": 3,
+  "policy": "Option B (whole-outcome degradation) with one bounded retry — the production worker path.",
   "records": [
     {
       "id": "grounded",
       "model": "claude-sonnet-5",
       "pass": true,
-      "groundingStatus": "DEGRADED",
-      "validated": 3,
-      "modelInventedRejected": 1
+      "terminalOutcome": "STRATEGIC_RECOMMENDATION | INSUFFICIENT_STRATEGIC_EVIDENCE (varies by run)",
+      "groundingStatus": "GROUNDED (clean) or UNGROUNDED (honest degrade)",
+      "modelInventedRejected": "1-2 per run",
+      "retried": true
     },
     {
       "id": "invented_probe",
@@ -26,6 +28,6 @@
       "groundingStatus": "NOT_APPLICABLE"
     }
   ],
-  "note": "Wave 4 Recommendation Provenance Integrity eval (KA-1). Exact production SYSTEM prompt + normalizer + deterministic validator. Two runs, 3/3 each. Notably the REAL model invented ~1 reference id per grounded recommendation (validated 3-4, rejected 1) which the validator caught and removed deterministically (grounding stayed intact, DEGRADED) \u2014 direct evidence of KA-1 value. The invented-id probe (fabricated grounding) always degraded to INSUFFICIENT/UNGROUNDED; the ungrounded-context fixture returned INSUFFICIENT. Application validation is authoritative; model variance recorded.",
-  "runs_note": "run1 grounded validated=4 rejected=1; run2 grounded validated=3 rejected=1; both 3/3"
+  "note": "Wave 4 Recommendation Provenance Integrity eval — RE-RUN under the remediated Option B policy (KA-1, Blocker 2). Exact production SYSTEM prompt + normalizer + deterministic validator + the worker's whole-outcome degradation (one bounded retry, then terminal INSUFFICIENT). The real model invents ~1-2 reference ids per grounded recommendation. Under Option B this yields exactly two honest terminal states, NEVER a falsely-grounded READY: (a) the bounded retry produces a clean fully-grounded recommendation -> READY/GROUNDED (run 1: invented 1, retry clean); or (b) the retry still invents -> INSUFFICIENT/UNGROUNDED with a founder-safe explanation and no grounding language (run 2: invented 2, honest degrade). The invented-id probe (fabricated grounding) always degrades to INSUFFICIENT/UNGROUNDED; the ungrounded-context fixture returns INSUFFICIENT. Prefer false-negative grounding over false-positive: an unrelated valid reference can never launder an unsupported claim. Application validation is authoritative; model variance recorded.",
+  "runs_note": "run1 grounded: modelInvented=1, retry recovered -> GROUNDED READY. run2 grounded: modelInvented=2, retry still invalid -> INSUFFICIENT/UNGROUNDED. Both PASS (no false grounding). invented_probe + ungrounded_context stable across runs."
 }

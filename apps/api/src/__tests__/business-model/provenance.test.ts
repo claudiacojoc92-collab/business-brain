@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { buildProvenanceManifest, validateRecommendationProvenance, PROVENANCE_MANIFEST_VERSION } from '../../business-model/provenance';
-import { normalizeStrategicOutput, type StrategicRecommendation, type EvidenceReference } from '../../business-model/strategy';
+import { buildProvenanceManifest, validateRecommendationProvenance, PROVENANCE_MANIFEST_VERSION,
+  serializeProvenanceManifest, deserializeProvenanceManifest, revalidateAgainstStoredManifest,
+  groundingIntegrityFailed, degradeForGroundingIntegrity, assertsGroundingClaim } from '../../business-model/provenance';
+import { normalizeStrategicOutput, type StrategicRecommendation, type InsufficientStrategicEvidence, type EvidenceReference } from '../../business-model/strategy';
 import type { StrategicContext } from '../../business-model/strategic-context.assembler';
 
 /**
@@ -127,5 +129,79 @@ describe('provenance — schema compatibility (19)', () => {
     // re-normalizing a persisted v4 payload preserves shared fields (old-payload read path)
     const reread = normalizeStrategicOutput(JSON.parse(JSON.stringify(v4)), 'CHANNEL_PRIORITY') as StrategicRecommendation;
     expect(reread.reasoning.supportingEvidence[0]!.refId).toBe('item-1');
+  });
+});
+
+// ── Blocker 1 — immutable manifest: serialize / deserialize / historical reconstruction ────────────────────
+describe('provenance — immutable manifest reconstruction (Blocker 1)', () => {
+  it('serialize → deserialize round-trips the exact allowed-reference set (no display labels, no bodies)', () => {
+    const s = serializeProvenanceManifest(M);
+    expect(s.manifestVersion).toBe('pm-1');
+    expect(s.understandingVersion).toBe(3);
+    expect(s.entries.every((e) => e.suppliedToModel === true)).toBe(true);
+    expect(s.entries.some((e) => e.space === 'CONCLUSION' && e.id === 'concl-1')).toBe(true);
+    expect(s.entries.some((e) => e.space === 'CONTEXT_ITEM' && e.id === 'item-1' && e.logicalItemId === 'log-1' && e.version === 1)).toBe(true);
+    // no free-text statement/label leaks into the manifest
+    expect(JSON.stringify(s)).not.toContain('Reach 5k MRR');
+    const back = deserializeProvenanceManifest(s);
+    expect([...back.conclusionIds].sort()).toEqual([...M.conclusionIds].sort());
+    expect(back.contextItemVersionByLogical.get('log-1')).toEqual({ id: 'item-1', version: 1 });
+  });
+  it('validation against the DESERIALIZED (stored) manifest is identical to the live manifest — reconstruction is faithful', () => {
+    const r = rec([{ kind: 'FOUNDER_STRATEGIC_CONTEXT', statement: 'x', refId: 'item-1', logicalItemId: 'log-1', version: 1 }, { kind: 'OBSERVED_BUSINESS_EVIDENCE', statement: 'y', refId: 'concl-1' }]);
+    const live = validateRecommendationProvenance(r, M);
+    const stored = revalidateAgainstStoredManifest(r, serializeProvenanceManifest(M));
+    expect(stored.validation.groundingStatus).toBe(live.validation.groundingStatus);
+    expect(stored.validation.validatedCount).toBe(live.validation.validatedCount);
+  });
+  it('the stored manifest does NOT depend on current effective state: a v1 ref is VERSION_MISMATCH against a later v2 manifest', () => {
+    const storedV1 = serializeProvenanceManifest(M); // item-1 @ version 1
+    const r = rec([{ kind: 'FOUNDER_STRATEGIC_CONTEXT', statement: 'v1 ref', refId: 'item-1', logicalItemId: 'log-1', version: 1 }]);
+    expect(revalidateAgainstStoredManifest(r, storedV1).validation.groundingStatus).not.toBe('UNGROUNDED'); // valid vs the historical manifest
+    // a manifest where the effective version has moved to 2 rejects the v1 reference (proves independence from "current")
+    const v2 = { ...storedV1, entries: storedV1.entries.map((e) => (e.space === 'CONTEXT_ITEM' && e.logicalItemId === 'log-1' ? { ...e, id: 'item-2', version: 2 } : e)) };
+    expect(revalidateAgainstStoredManifest(r, v2).validation.groundingStatus).toBe('UNGROUNDED');
+  });
+});
+
+// ── Blocker 2 — Option B whole-outcome degradation + grounding-language guard ──────────────────────────────
+describe('provenance — Option B whole-outcome degradation (Blocker 2)', () => {
+  const primaryInvalid = () => rec([{ kind: 'OBSERVED_BUSINESS_EVIDENCE', statement: 'invented primary', refId: 'ghost-primary' }, { kind: 'OBSERVED_BUSINESS_EVIDENCE', statement: 'unrelated valid', refId: 'concl-1' }]);
+
+  it('1–3. an invalid primary reference is not laundered by an unrelated valid reference — grounding integrity fails', () => {
+    const { validation } = validate(primaryInvalid());
+    // the validator itself keeps the valid ref (DEGRADED); the whole-outcome gate then flags integrity failure
+    expect(validation.groundingStatus).toBe('DEGRADED');
+    expect(groundingIntegrityFailed(validation)).toBe(true);
+  });
+  it('6–7. one valid + one invented reference on the same claim → degrade the WHOLE outcome to INSUFFICIENT', () => {
+    const { outcome, validation } = validate(primaryInvalid());
+    const degraded = degradeForGroundingIntegrity(outcome, validation);
+    expect(degraded.outcome.kind).toBe('INSUFFICIENT_STRATEGIC_EVIDENCE');
+    expect(degraded.validation.groundingStatus).toBe('UNGROUNDED');
+  });
+  it('4–5. when a bounded option’s support is degraded, the option is not left marked evidence-supported', () => {
+    const ins = normalizeStrategicOutput({ recommendation: { title: 'X', action: 'X', horizon: '30 days' }, reasoning: { supportingEvidence: [{ kind: 'OBSERVED_BUSINESS_EVIDENCE', statement: 'valid', refId: 'concl-1' }, { kind: 'OBSERVED_BUSINESS_EVIDENCE', statement: 'invented', refId: 'ghost' }] }, nextStep: { action: 'a', successSignal: 's', reviewAfter: '2w' }, whatWouldChangeThisRecommendation: ['x'], optionAssessment: [{ label: 'A', supportedByEvidence: true, excludedByContextRefId: null }] }, 'CHANNEL_PRIORITY')!;
+    const { outcome, validation } = validateRecommendationProvenance(ins, M);
+    const degraded = degradeForGroundingIntegrity(outcome, validation);
+    const oa = (degraded.outcome as InsufficientStrategicEvidence).optionAssessment;
+    expect(oa?.every((o) => o.supportedByEvidence === false)).toBe(true);
+  });
+  it('8–9. the degraded outcome exposes no raw invalid id and asserts no grounding language', () => {
+    const { outcome, validation } = validate(primaryInvalid());
+    const degraded = degradeForGroundingIntegrity(outcome, validation);
+    const text = JSON.stringify(degraded.outcome);
+    expect(text).not.toContain('ghost-primary');                 // no raw invalid id
+    const claims = (degraded.outcome as InsufficientStrategicEvidence).whatIsMissing.join(' ') + ' ' + (degraded.outcome as InsufficientStrategicEvidence).whyItMatters;
+    expect(assertsGroundingClaim(claims)).toBe(false);            // no "your evidence shows"-style grounding
+  });
+  it('a fully-grounded recommendation (no rejections) does NOT trigger degradation — READY stands', () => {
+    const { validation } = validate(rec([{ kind: 'OBSERVED_BUSINESS_EVIDENCE', statement: 'valid', refId: 'concl-1' }]));
+    expect(validation.groundingStatus).toBe('GROUNDED');
+    expect(groundingIntegrityFailed(validation)).toBe(false);
+  });
+  it('the grounding-language guard detects the forbidden phrases (and not neutral prose)', () => {
+    for (const bad of ['your evidence shows X', 'your data proves it', 'based on the supplied source', 'according to your business context', 'the founder context establishes']) expect(assertsGroundingClaim(bad)).toBe(true);
+    expect(assertsGroundingClaim('Prioritise LinkedIn for the next 30 days.')).toBe(false);
   });
 });

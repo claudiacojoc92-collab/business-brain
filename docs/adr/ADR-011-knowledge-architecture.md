@@ -294,9 +294,8 @@ effective period); Context Conflict (`itemIds` resolving to immutable context it
 
 **Hard rules:** the model may reference **only IDs supplied to it in the prompt**. An invented ID must never appear as
 grounded provenance. Deterministic validation is enforced today for the **NON_NEGOTIABLE_OPTION** rule (a model-echoed
-reference is discarded unless it resolves to an effective non-negotiable). **KA-1 — under remediation** (write-time
-validation landed at `d89110c` via the Recommendation Provenance Integrity slice; that acceptance was **superseded** by a
-bounded remediation closing two blockers — durable historical manifest + whole-outcome degradation — see
+reference is discarded unless it resolves to an effective non-negotiable). **KA-1 — RESOLVED** (write-time validation at
+`d89110c` + a bounded remediation closing two blockers — a durable immutable manifest and whole-outcome degradation — see
 `docs/architecture/recommendation-provenance-integrity-remediation.md`) (see
 `docs/architecture/recommendation-provenance-integrity-slice.md` and
 `docs/governance/recommendation-provenance-integrity-contract.md`): every model-produced reference is now validated at
@@ -383,14 +382,15 @@ Evaluated against ADR-007 (Honesty), ADR-010 (Two-Layer), and the two governance
   history; unknown≠zero; ACCEPT-writes-nothing; conflicts-not-invented; founder sovereignty; provenance echoing supplied
   ids only.
 - **Residual tensions (named honestly, not papered over):**
-  - **KA-1 — write-time provenance validation. Under remediation.** Write-time validation landed at `d89110c` (every
-    reference validated against a per-session founder-scoped input manifest; invalid refs removed, never substituted).
-    That acceptance was **superseded** by a bounded remediation closing two blockers: (1) the exact allowed-reference
-    manifest is now **persisted immutably** (V071) so historical revalidation never depends on current effective context;
-    (2) **whole-outcome degradation** (Option B) — any invalid grounding reference, after one bounded retry, degrades the
-    whole outcome to INSUFFICIENT, so an unrelated valid reference can never launder an unsupported claim. Eval evidence:
-    the real model invents ~1 reference id per grounded recommendation. See
-    `recommendation-provenance-integrity-remediation.md`.
+  - **KA-1 — write-time provenance validation. RESOLVED** (write-time validation `d89110c` + bounded remediation). Two
+    blockers were closed: (1) the exact allowed-reference manifest is now **persisted immutably** (V071
+    `provenance_manifest`, schema `pm-1`) and revalidated historically **without** the assembler or current effective
+    context; (2) **whole-outcome degradation** (Option B) — any invalid grounding reference, after one bounded retry,
+    degrades the whole outcome to INSUFFICIENT, so an unrelated valid reference can never launder an unsupported claim.
+    Eval evidence: the real model invents ~1–2 reference ids per grounded recommendation; the bounded retry either
+    recovers a clean grounded answer or degrades honestly to INSUFFICIENT — never a falsely-grounded READY. Remaining
+    debt **PI-1** (claim-level grounding, product-preserving) is not required for KA-1. See
+    `recommendation-provenance-integrity-remediation.md` + `../implementation/recommendation-provenance-integrity-closure.md`.
   - **KA-2 — legacy `memory.*` schema.** A pre-existing M2/ADR-010-era memory schema (threads, recommendations, patterns,
     voice_signatures, intelligence_events) coexists with the new strategy stack and is not yet reconciled under this
     taxonomy. It is **not** Strategic Memory; its relationship to the new stack is unresolved debt (see the map).

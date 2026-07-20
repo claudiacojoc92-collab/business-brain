@@ -10,7 +10,7 @@ import { assembleStrategicContext, type AssemblerDeps, type StrategicContext } f
 import type { StrategyModel } from './anthropic-strategy.model';
 import { STRATEGY_FAILURE_MESSAGE, type StrategicSession, type StrategicOutcome, type SessionContextConflict } from './strategy';
 import { detectNonNegotiableExcludesOnlyOption, effectiveNonNegotiables, optionExcludedBy, type BoundedOption } from './effective-strategic-context.resolver';
-import { buildProvenanceManifest, validateRecommendationProvenance } from './provenance';
+import { buildProvenanceManifest, validateRecommendationProvenance, serializeProvenanceManifest, groundingIntegrityFailed, degradeForGroundingIntegrity } from './provenance';
 
 /**
  * Rule 3 (NON_NEGOTIABLE_OPTION) over the strategist's OWN bounded option set: for each option the model assessed,
@@ -62,16 +62,34 @@ export async function processSession(session: StrategicSession, deps: StrategicW
   // PROVENANCE VALIDATION (KA-1) — deterministic, against the exact assembled manifest: invalid grounded references are
   // removed (never substituted); a recommendation left with no validated grounded basis degrades to INSUFFICIENT.
   const manifest = buildProvenanceManifest(context);
-  const { outcome: validated, validation } = validateRecommendationProvenance(outcome, manifest);
+  const serializedManifest = serializeProvenanceManifest(manifest); // immutable, persisted with the outcome (Blocker 1)
+  let { outcome: validated, validation } = validateRecommendationProvenance(outcome, manifest);
 
-  // Deterministic NON_NEGOTIABLE_OPTION conflict (rule 3), over the validated outcome's bounded option set.
+  // OPTION B — whole-outcome grounding integrity (Blocker 2). A recommendation that lost ANY grounding reference
+  // (DEGRADED) cannot be persisted as grounded READY: one bounded inline retry, then terminal INSUFFICIENT. An
+  // unrelated valid reference never launders an unsupported primary claim. Prefer false-negative grounding.
+  if (validated.kind === 'STRATEGIC_RECOMMENDATION' && groundingIntegrityFailed(validation)) {
+    let retry: StrategicOutcome | null = null;
+    try { retry = await model.reason(context); } catch { retry = null; }
+    const revalidated = retry != null ? validateRecommendationProvenance(retry, manifest) : null;
+    if (revalidated && revalidated.outcome.kind === 'STRATEGIC_RECOMMENDATION' && !groundingIntegrityFailed(revalidated.validation)) {
+      ({ outcome: validated, validation } = revalidated); // retry produced a fully-grounded recommendation
+    } else if (revalidated && revalidated.outcome.kind === 'INSUFFICIENT_STRATEGIC_EVIDENCE') {
+      ({ outcome: validated, validation } = revalidated); // retry collapsed to INSUFFICIENT on its own
+    } else {
+      const base = revalidated ?? { outcome: validated, validation }; // retry still degraded (or failed) → degrade whole outcome
+      ({ outcome: validated, validation } = degradeForGroundingIntegrity(base.outcome, base.validation));
+    }
+  }
+
+  // Deterministic NON_NEGOTIABLE_OPTION conflict (rule 3), over the (possibly degraded) validated outcome's option set.
   const contextConflicts = computeSessionContextConflicts(context, validated);
 
   if (validated.kind === 'INSUFFICIENT_STRATEGIC_EVIDENCE') {
-    return (await sessionRepo.markInsufficient(session.id, validated, 'I don’t have enough yet to make this call responsibly.', now(), contextConflicts, validation)) ?? (await sessionRepo.getById(session.founderId, session.id))!;
+    return (await sessionRepo.markInsufficient(session.id, validated, 'I don’t have enough yet to make this call responsibly.', now(), contextConflicts, validation, serializedManifest)) ?? (await sessionRepo.getById(session.founderId, session.id))!;
   }
-  // RECOMMENDATION → atomic READY (single-row publish; the recommendation is immutable thereafter).
-  return (await sessionRepo.markReady(session.id, validated, now(), contextConflicts, validation)) ?? (await sessionRepo.getById(session.founderId, session.id))!;
+  // RECOMMENDATION → atomic READY (single-row publish; the recommendation + manifest are immutable thereafter).
+  return (await sessionRepo.markReady(session.id, validated, now(), contextConflicts, validation, serializedManifest)) ?? (await sessionRepo.getById(session.founderId, session.id))!;
 }
 
 export function startStrategicSessionWorker(deps: StrategicWorkerDeps & { intervalMs?: number }): () => void {

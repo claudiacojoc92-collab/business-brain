@@ -33,6 +33,53 @@ export interface ProvenanceManifest {
   contextItemVersionByLogical: Map<string, { id: string; version: number }>;
 }
 
+// ── Immutable serialized manifest (Blocker 1 remediation) ────────────────────────────────────────────────
+// Persisted transactionally with the terminal outcome (V071) so the EXACT allowed-reference set is reconstructable
+// without the assembler or current effective context. No display labels, no source bodies — immutable ids + versions.
+export type ManifestSpace = 'CONCLUSION' | 'RESPONDED_CONCLUSION' | 'ENTITY' | 'FINDING' | 'SOURCE_URL' | 'CONTEXT_ITEM';
+export interface SerializedManifestEntry { space: ManifestSpace; id: string; logicalItemId?: string; version?: number; suppliedToModel: true }
+export interface SerializedProvenanceManifest { manifestVersion: string; understandingVersion: number | null; entries: SerializedManifestEntry[] }
+// Read side accepts a widened `space` (a persisted/round-tripped manifest carries a plain string): deserialize narrows
+// deterministically and ignores any unknown space, so an older or foreign shape can never manufacture a reference.
+export interface ReadableSerializedManifest { manifestVersion: string; understandingVersion: number | null; entries: Array<{ space: string; id: string; logicalItemId?: string; version?: number; suppliedToModel?: boolean }> }
+
+/** Serialize a manifest to the immutable, persistable form (stable order; every entry was supplied to the model). */
+export function serializeProvenanceManifest(m: ProvenanceManifest): SerializedProvenanceManifest {
+  const entries: SerializedManifestEntry[] = [];
+  for (const id of m.conclusionIds) entries.push({ space: 'CONCLUSION', id, suppliedToModel: true });
+  for (const id of m.respondedConclusionIds) entries.push({ space: 'RESPONDED_CONCLUSION', id, suppliedToModel: true });
+  for (const id of m.entityIds) entries.push({ space: 'ENTITY', id, suppliedToModel: true });
+  for (const id of m.findingIds) entries.push({ space: 'FINDING', id, suppliedToModel: true });
+  for (const value of m.sourceUrls) entries.push({ space: 'SOURCE_URL', id: value, suppliedToModel: true });
+  for (const [logicalItemId, v] of m.contextItemVersionByLogical) entries.push({ space: 'CONTEXT_ITEM', id: v.id, logicalItemId, version: v.version, suppliedToModel: true });
+  // context items with no logical-id mapping edge-case: include any bare context id not already covered
+  for (const id of m.contextItemIds) if (![...m.contextItemVersionByLogical.values()].some((v) => v.id === id)) entries.push({ space: 'CONTEXT_ITEM', id, suppliedToModel: true });
+  return { manifestVersion: m.manifestVersion, understandingVersion: m.understandingVersion, entries };
+}
+
+/** Rebuild the exact manifest (Sets/Maps) from a persisted serialized form — classifyRef validates against it unchanged. */
+export function deserializeProvenanceManifest(s: ReadableSerializedManifest): ProvenanceManifest {
+  const m: ProvenanceManifest = {
+    manifestVersion: s.manifestVersion, understandingVersion: s.understandingVersion,
+    conclusionIds: new Set(), respondedConclusionIds: new Set(), entityIds: new Set(), findingIds: new Set(),
+    sourceUrls: new Set(), contextItemIds: new Set(), contextItemVersionByLogical: new Map(),
+  };
+  for (const e of s.entries) {
+    if (e.space === 'CONCLUSION') m.conclusionIds.add(e.id);
+    else if (e.space === 'RESPONDED_CONCLUSION') m.respondedConclusionIds.add(e.id);
+    else if (e.space === 'ENTITY') m.entityIds.add(e.id);
+    else if (e.space === 'FINDING') m.findingIds.add(e.id);
+    else if (e.space === 'SOURCE_URL') m.sourceUrls.add(e.id);
+    else if (e.space === 'CONTEXT_ITEM') { m.contextItemIds.add(e.id); if (e.logicalItemId != null && e.version != null) m.contextItemVersionByLogical.set(e.logicalItemId, { id: e.id, version: e.version }); }
+  }
+  return m;
+}
+
+/** Historical revalidation — deterministic, against the STORED manifest only (never the assembler / current effective). */
+export function revalidateAgainstStoredManifest(outcome: StrategicOutcome, stored: ReadableSerializedManifest): { outcome: StrategicOutcome; validation: ProvenanceValidation } {
+  return validateRecommendationProvenance(outcome, deserializeProvenanceManifest(stored));
+}
+
 /** Build the allowed-reference manifest from the EXACT assembled context (founder-scoped by construction). */
 export function buildProvenanceManifest(context: StrategicContext): ProvenanceManifest {
   const bu = context.businessUnderstanding;
@@ -144,4 +191,41 @@ export function validateRecommendationProvenance(outcome: StrategicOutcome, m: P
     ...(oa ? { optionAssessment: oa } : {}),
   };
   return { outcome: cleaned, validation: { manifestVersion: m.manifestVersion, groundingStatus: rejected.length > 0 ? 'DEGRADED' : 'GROUNDED', validatedCount, rejectedCount: rejected.length, rejected } };
+}
+
+// ── Whole-outcome grounding integrity (Blocker 2 remediation — Option B) ──────────────────────────────────
+// The recommendation schema attaches references at the recommendation-GLOBAL level (a bag); the load-bearing surfaces
+// (title/action prose, optionAssessment.supportedByEvidence, nextStep, alternatives) are not reliably bound to exact
+// references. So a partially-grounded recommendation (any invalid grounding reference removed) cannot prove its primary
+// claim is still grounded — an unrelated valid reference must not launder it. A DEGRADED recommendation therefore fails
+// grounding integrity and, after a bounded retry, must degrade to INSUFFICIENT rather than persist as grounded READY.
+
+/** True when a validated recommendation still lost a grounding reference (DEGRADED) — grounding integrity has failed. */
+export function groundingIntegrityFailed(v: ProvenanceValidation): boolean { return v.groundingStatus === 'DEGRADED'; }
+
+/** Founder-safe phrases that assert grounding. Used to prove the terminal degrade outcome carries none. */
+const GROUNDING_PHRASES: readonly RegExp[] = [
+  /your evidence shows/i, /the evidence (?:shows|proves)/i, /your data proves/i, /based on the supplied source/i,
+  /according to your business context/i, /the founder context establishes/i, /your records show/i,
+  /grounded in your/i, /as your .* (?:shows|proves|confirms)/i,
+];
+/** Deterministic guard: does this text assert grounding? (No LLM; the degrade outcome must return false here.) */
+export function assertsGroundingClaim(text: string): boolean { return GROUNDING_PHRASES.some((re) => re.test(text)); }
+
+/** Option B — turn a grounding-integrity-failed recommendation into the terminal INSUFFICIENT outcome. No grounding
+ *  language survives; any bounded-option `supportedByEvidence` flag is cleared (it cannot be substantiated). Rejections
+ *  are preserved (redacted); groundingStatus becomes UNGROUNDED (no grounded outcome is persisted). */
+export function degradeForGroundingIntegrity(outcome: StrategicOutcome, validation: ProvenanceValidation): { outcome: InsufficientStrategicEvidence; validation: ProvenanceValidation } {
+  const rawOa = (outcome as { optionAssessment?: InsufficientStrategicEvidence['optionAssessment'] }).optionAssessment;
+  const oa = rawOa?.map((o) => ({ ...o, supportedByEvidence: false })); // cannot substantiate evidence-support after a grounding failure
+  const ins: InsufficientStrategicEvidence = {
+    kind: 'INSUFFICIENT_STRATEGIC_EVIDENCE',
+    whatIsMissing: ['A recommendation I could fully ground in your specific records — some of the evidence it leaned on didn’t match anything you’ve given me.'],
+    whyItMatters: 'A priority call has to point only at your actual records. I’d rather tell you I can’t ground it yet than hand you a confident answer built partly on evidence that isn’t there.',
+    smallestEvidenceAction: 'Confirm your business understanding, or add and review a competitor’s public site, so there’s more specific, verifiable evidence to reason from.',
+    provisionalPossible: false,
+    whatNotToConcludeYet: ['That any specific channel, offer, or positioning is right yet — the supporting evidence didn’t fully check out.'],
+    ...(oa && oa.length ? { optionAssessment: oa } : {}),
+  };
+  return { outcome: ins, validation: { ...validation, groundingStatus: 'UNGROUNDED' } };
 }

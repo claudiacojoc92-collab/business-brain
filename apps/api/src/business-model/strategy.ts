@@ -39,7 +39,12 @@ export interface EvidenceReference {
   logicalItemId?: string | null; version?: number | null; scope?: string | null; source?: string | null;
   effectiveFrom?: string | null; effectiveUntil?: string | null;
   validated?: boolean; // set by the deterministic provenance validator: true = resolved to the session manifest (grounded)
+  historicalStatus?: HistoricalReferenceStatus; // read-time: this grounded ref vs the CURRENT effective context
 }
+
+/** How a historically-grounded reference relates to the founder's CURRENT effective context (read-time only; the
+ *  persisted recommendation is unchanged). Invalid references never reach here — they were removed at write time. */
+export type HistoricalReferenceStatus = 'EFFECTIVE' | 'SUPERSEDED' | 'RETIRED' | 'AS_GENERATED';
 export interface LabeledAssumption { assumption: string; basis: string | null }
 export interface StrategicUnknown { unknown: string; whyItMatters: string | null }
 export interface ConflictReference { statement: string; observation: string; founderCorrection: string; refId: string | null }
@@ -59,6 +64,9 @@ export interface SessionContextConflict { id: string; type: string; itemIds: str
 
 /** The persisted provenance-validation result for a session (structural mirror of provenance.ts ProvenanceValidation). */
 export interface SessionProvenanceValidation { manifestVersion: string; groundingStatus: string; validatedCount: number; rejectedCount: number; rejected: Array<{ kind: string; reason: string }> }
+
+/** The persisted immutable provenance manifest (structural mirror of provenance.ts SerializedProvenanceManifest). */
+export interface SerializedProvenanceManifestView { manifestVersion: string; understandingVersion: number | null; entries: Array<{ space: string; id: string; logicalItemId?: string; version?: number; suppliedToModel: boolean }> }
 
 export interface StrategicRecommendation {
   kind: 'STRATEGIC_RECOMMENDATION';
@@ -228,6 +236,7 @@ export interface StrategicSession {
   contextHealth: unknown; recommendation: StrategicRecommendation | null; insufficientReason: InsufficientStrategicEvidence | null;
   contextConflicts: SessionContextConflict[] | null; // deterministic conflicts attached by the worker (e.g. NON_NEGOTIABLE_OPTION)
   provenanceValidation: SessionProvenanceValidation | null; // deterministic reference-validation result (grounding status)
+  provenanceManifest: SerializedProvenanceManifestView | null; // immutable allowed-reference set at generation (pm-1)
   failureCategory: StrategyFailureCategory | null; founderSafeError: string | null; priorSuccessfulSessionId: string | null;
   modelId: string | null; promptVersion: string | null; schemaVersion: string | null;
   attemptCount: number; maxAttempts: number;
@@ -250,8 +259,31 @@ export function toSessionView(s: StrategicSession) {
     message: s.founderSafeError, attempt: s.attemptCount, maxAttempts: s.maxAttempts,
     priorSuccessfulSessionId: s.priorSuccessfulSessionId,
     provenance: s.status === 'READY' ? { modelId: s.modelId, promptVersion: s.promptVersion, schemaVersion: s.schemaVersion } : null,
+    // Founder-safe manifest summary (not raw internals as the main experience); full manifest is in export only.
+    provenanceManifest: (s.status === 'READY' || s.status === 'INSUFFICIENT_EVIDENCE') && s.provenanceManifest
+      ? { manifestVersion: s.provenanceManifest.manifestVersion, understandingVersion: s.provenanceManifest.understandingVersion, referenceCount: s.provenanceManifest.entries.length }
+      : null,
     createdAt: s.createdAt, updatedAt: s.updatedAt,
   };
+}
+
+/** Read-time: annotate each grounded reference of a READY recommendation with its status vs the founder's CURRENT
+ *  effective context (EFFECTIVE / SUPERSEDED / RETIRED for versioned FSC refs; AS_GENERATED for immutable BU/positioning
+ *  refs). Pure; does not mutate the persisted recommendation. Invalid references never reach here (removed at write time). */
+export function annotateReferenceHistory(view: ReturnType<typeof toSessionView>, effectiveVersionByLogical: Map<string, number>): ReturnType<typeof toSessionView> {
+  const rec = view.recommendation;
+  if (!rec) return view;
+  const mark = (r: EvidenceReference): EvidenceReference => {
+    if (r.validated !== true) return r; // only grounded references carry a historical status
+    if (r.kind === 'FOUNDER_STRATEGIC_CONTEXT' && r.logicalItemId != null) {
+      const cur = effectiveVersionByLogical.get(r.logicalItemId);
+      if (cur == null) return { ...r, historicalStatus: 'RETIRED' };            // logical item no longer effective
+      if (r.version != null && cur > r.version) return { ...r, historicalStatus: 'SUPERSEDED' };
+      return { ...r, historicalStatus: 'EFFECTIVE' };
+    }
+    return { ...r, historicalStatus: 'AS_GENERATED' };                          // immutable BU/positioning references
+  };
+  return { ...view, recommendation: { ...rec, reasoning: { ...rec.reasoning, supportingEvidence: rec.reasoning.supportingEvidence.map(mark), founderDeclarations: rec.reasoning.founderDeclarations.map(mark), counterEvidence: rec.reasoning.counterEvidence.map(mark) } } };
 }
 
 // ── Founder response semantics (append-only) ───────────────────────────────────────────────────────────

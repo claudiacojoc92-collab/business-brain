@@ -29,12 +29,15 @@ Documentation only — nothing here changes runtime behavior. Verified against t
 
 ## Known architectural debt
 
-- **KA-1 — write-time provenance validation. Under remediation** (Recommendation Provenance Integrity slice + bounded
-  remediation; see `recommendation-provenance-integrity-slice.md`, `recommendation-provenance-integrity-remediation.md`
-  + `../governance/recommendation-provenance-integrity-contract.md`). Write-time validation landed at `d89110c`; that
-  acceptance was **superseded** to close two blockers — a **durable immutable manifest** (V071, historical revalidation
-  independent of current effective context) and **whole-outcome degradation** (Option B, no laundering of an unsupported
-  claim by an unrelated valid reference).
+- **KA-1 — write-time provenance validation. RESOLVED** (Recommendation Provenance Integrity slice + bounded remediation;
+  see `recommendation-provenance-integrity-slice.md`, `recommendation-provenance-integrity-remediation.md` +
+  `../governance/recommendation-provenance-integrity-contract.md`). Write-time validation landed at `d89110c`; the
+  bounded remediation closed two blockers — a **durable immutable manifest** (V071 `provenance_manifest`, schema `pm-1`;
+  historical revalidation independent of the assembler / current effective context) and **whole-outcome degradation**
+  (Option B; any invalid grounding reference → one bounded retry → else terminal INSUFFICIENT, so an unrelated valid
+  reference cannot launder an unsupported claim). *New debt:* **PI-1 — claim-level grounding** (each grounding claim
+  declares its exact references so only the affected claim is removed) is the product-preserving end state; not required
+  for KA-1, deferred.
   The worker now builds a per-session, founder-scoped **input manifest** from the exact assembled context
   (`provenance.ts` `buildProvenanceManifest`, version `pm-1`) and validates **every** model-produced reference against it
   at write time (`validateRecommendationProvenance`), before persistence. Reference-kind → target-category is enforced;
@@ -60,7 +63,8 @@ Documentation only — nothing here changes runtime behavior. Verified against t
 
 | Debt | Category | Required now? |
 |---|---|---|
-| KA-1 write-time provenance validation | 6 Provenance | **Under remediation** (durable manifest + whole-outcome degradation) |
+| KA-1 write-time provenance validation | 6 Provenance | **RESOLVED** (durable manifest + whole-outcome degradation) |
+| PI-1 claim-level grounding (product-preserving) | 6 Provenance | No — deferred; not required for KA-1 |
 | KA-2 legacy `memory.*` reconciliation | 14 (boundary) | No — later, at Capability C |
 | KA-3 structural conflicts not persisted | 7 Conflict | No — accepted |
 

@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthContext';
 import {
   createStrategySession, getStrategySession, listStrategySessions, retryStrategySession, respondToStrategy, ApiError,
   type StrategySessionView, type StrategyBoundary, type StrategicRecommendation, type InsufficientStrategicEvidence,
-  type StrategyResponseType, type EpistemicKind, type Band,
+  type StrategyResponseType, type EpistemicKind, type Band, type EvidenceReference,
 } from '../api/client';
 import { AppShell, Button, Thinking } from '../system/ui';
 
@@ -180,12 +180,19 @@ function ConfidenceRow({ label, band }: { label: string; band: Band }) {
   );
 }
 
-function EvidenceItem({ kind, statement, sourceUrl, validated }: { kind: EpistemicKind; statement: string; sourceUrl?: string | null; validated?: boolean }) {
+// A historically-grounded reference that is no longer the CURRENT effective version gets a quiet, honest tag. Invalid
+// references never reach the UI (removed at write time), so a tag never implies false grounding.
+const HISTORICAL_TAG: Partial<Record<NonNullable<EvidenceReference['historicalStatus']>, string>> = {
+  SUPERSEDED: 'since revised', RETIRED: 'since retired',
+};
+function EvidenceItem({ kind, statement, sourceUrl, validated, historicalStatus }: { kind: EpistemicKind; statement: string; sourceUrl?: string | null; validated?: boolean; historicalStatus?: EvidenceReference['historicalStatus'] }) {
   // Only a VALIDATED reference renders as a grounded citation (its source link). An unvalidated reference reaches the UI
   // only as the strategist's reasoning — never as a resolvable citation (the worker removes unresolved references).
+  const tag = validated && historicalStatus ? HISTORICAL_TAG[historicalStatus] : undefined;
   return (
     <li style={{ listStyle: 'none', marginBottom: 'var(--sp-3)' }}>
       <span style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-3)' }}>{KIND_LABEL[kind]}</span>
+      {tag && <span title="This grounded reference is preserved as it was when this recommendation was generated; your current context has changed since." style={{ marginLeft: 'var(--sp-2)', fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ink-3)', fontStyle: 'italic' }}>· {tag}</span>}
       <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '2px 0 0', lineHeight: 'var(--lh-body)' }}>{statement}{validated && sourceUrl && <> <a href={sourceUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--ink-3)', fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)' }}>source</a></>}</p>
     </li>
   );
@@ -223,8 +230,8 @@ function RecommendationView({ session, onResponded, on401 }: { session: Strategy
       {(r.reasoning.supportingEvidence.length > 0 || r.reasoning.founderDeclarations.length > 0) && <>
         <span style={sectionLabel}>What this is based on</span>
         <ul style={ulReset}>
-          {r.reasoning.founderDeclarations.map((e, i) => <EvidenceItem key={`d${i}`} kind={e.kind} statement={e.statement} sourceUrl={e.sourceUrl} validated={e.validated} />)}
-          {r.reasoning.supportingEvidence.map((e, i) => <EvidenceItem key={`s${i}`} kind={e.kind} statement={e.statement} sourceUrl={e.sourceUrl} validated={e.validated} />)}
+          {r.reasoning.founderDeclarations.map((e, i) => <EvidenceItem key={`d${i}`} kind={e.kind} statement={e.statement} sourceUrl={e.sourceUrl} validated={e.validated} historicalStatus={e.historicalStatus} />)}
+          {r.reasoning.supportingEvidence.map((e, i) => <EvidenceItem key={`s${i}`} kind={e.kind} statement={e.statement} sourceUrl={e.sourceUrl} validated={e.validated} historicalStatus={e.historicalStatus} />)}
         </ul>
       </>}
 
@@ -245,7 +252,7 @@ function RecommendationView({ session, onResponded, on401 }: { session: Strategy
       </>}
       {r.reasoning.counterEvidence.length > 0 && <>
         <span style={sectionLabel}>What cuts against this</span>
-        <ul style={ulReset}>{r.reasoning.counterEvidence.map((e, i) => <EvidenceItem key={i} kind={e.kind} statement={e.statement} sourceUrl={e.sourceUrl} validated={e.validated} />)}</ul>
+        <ul style={ulReset}>{r.reasoning.counterEvidence.map((e, i) => <EvidenceItem key={i} kind={e.kind} statement={e.statement} sourceUrl={e.sourceUrl} validated={e.validated} historicalStatus={e.historicalStatus} />)}</ul>
       </>}
 
       {/* confidence — five dimensions, never one % */}

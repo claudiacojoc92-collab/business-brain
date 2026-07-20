@@ -9,7 +9,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { SYSTEM } from '../../apps/api/src/business-model/anthropic-strategy.model';
 import { normalizeStrategicOutput, type StrategicOutcome, type StrategicRecommendation } from '../../apps/api/src/business-model/strategy';
-import { buildProvenanceManifest, validateRecommendationProvenance } from '../../apps/api/src/business-model/provenance';
+import { buildProvenanceManifest, validateRecommendationProvenance, groundingIntegrityFailed, degradeForGroundingIntegrity } from '../../apps/api/src/business-model/provenance';
 import type { StrategicContext } from '../../apps/api/src/business-model/strategic-context.assembler';
 import type { EffectiveContextItem } from '../../apps/api/src/business-model/effective-strategic-context.resolver';
 
@@ -50,15 +50,28 @@ async function main(): Promise<void> {
   if (!apiKey) { console.error('[prov-eval] no ANTHROPIC_API_KEY — skipping (no secret printed).'); process.exit(2); }
   const records: unknown[] = []; let passed = 0; const total = 3;
 
-  // 1. GROUNDED — the real model must cite only ids present in the supplied context (validator keeps grounding).
+  // 1. GROUNDED — the real model must cite only ids present in the supplied context. Applies the PRODUCTION Option B
+  //    policy (one bounded retry, then whole-outcome degrade): a clean grounded READY OR an honest INSUFFICIENT both
+  //    pass — the invariant is that NO falsely-grounded recommendation is ever persisted. Records model variance.
   {
     const ctx = grounded(); const manifest = buildProvenanceManifest(ctx);
-    const normalized = await reason(ctx);
-    const { outcome, validation } = normalized ? validateRecommendationProvenance(normalized, manifest) : { outcome: null, validation: { groundingStatus: 'PARSE_FAIL', rejectedCount: 0, validatedCount: 0 } as never };
-    const ok = outcome != null && outcome.kind === 'STRATEGIC_RECOMMENDATION' && validation.groundingStatus !== 'UNGROUNDED';
+    let first = await reason(ctx);
+    let v = first ? validateRecommendationProvenance(first, manifest) : null;
+    let retried = false; let invented = v ? v.validation.rejectedCount : 0;
+    if (v && v.outcome.kind === 'STRATEGIC_RECOMMENDATION' && groundingIntegrityFailed(v.validation)) {
+      retried = true; const second = await reason(ctx);
+      const v2 = second ? validateRecommendationProvenance(second, manifest) : null;
+      invented += v2 ? v2.validation.rejectedCount : 0;
+      if (v2 && v2.outcome.kind === 'STRATEGIC_RECOMMENDATION' && !groundingIntegrityFailed(v2.validation)) v = v2; // retry recovered
+      else v = { outcome: degradeForGroundingIntegrity((v2 ?? v).outcome, (v2 ?? v).validation).outcome, validation: degradeForGroundingIntegrity((v2 ?? v).outcome, (v2 ?? v).validation).validation };
+    }
+    const groundedReady = v != null && v.outcome.kind === 'STRATEGIC_RECOMMENDATION' && v.validation.groundingStatus === 'GROUNDED';
+    const honestInsufficient = v != null && v.outcome.kind === 'INSUFFICIENT_STRATEGIC_EVIDENCE';
+    const ok = groundedReady || honestInsufficient; // never a falsely-grounded persisted outcome
     if (ok) passed++;
-    console.log(`[${ok ? 'PASS' : 'FAIL'}] grounded — status=${validation.groundingStatus} validated=${validation.validatedCount} rejected(model invented)=${validation.rejectedCount}`);
-    records.push({ id: 'grounded', model: MODEL, pass: ok, groundingStatus: validation.groundingStatus, validated: validation.validatedCount, modelInventedRejected: validation.rejectedCount });
+    const terminal = v?.outcome.kind ?? 'null';
+    console.log(`[${ok ? 'PASS' : 'FAIL'}] grounded — terminal=${terminal} status=${v?.validation.groundingStatus} modelInvented=${invented} retried=${retried} (Option B: clean-READY or honest-INSUFFICIENT)`);
+    records.push({ id: 'grounded', model: MODEL, pass: ok, terminalOutcome: terminal, groundingStatus: v?.validation.groundingStatus ?? null, modelInventedRejected: invented, retried });
   }
 
   // 2. INVENTED-ID PROBE (deterministic; no model dependency) — even a fluent recommendation whose ids are invented is

@@ -91,4 +91,71 @@ Conversation added. The legacy `memory.*` schema (KA-2) was not reconciled. The 
 citation infrastructure beyond what current Business Brain recommendations require. Not deployed, not pushed, no prior
 commit amended.
 
-**KA-1 status: RESOLVED.** Identified by ADR-011; resolved by this slice.
+**KA-1 status: RESOLVED.** Identified by ADR-011; resolved by this slice — *later superseded and re-affirmed by the
+bounded remediation below.*
+
+---
+
+## Bounded remediation (supersedes the acceptance above; gate `010a243`, implementation next commit)
+
+The `d89110c` acceptance was **superseded** by a bounded remediation closing two acceptance blockers. Audits + designs
+recorded first in [`../architecture/recommendation-provenance-integrity-remediation.md`](../architecture/recommendation-provenance-integrity-remediation.md);
+governance contract Laws 7–8 amended; doc-only gate committed at `010a243` before any code.
+
+### Blocker 1 — the exact allowed-reference manifest was not historically reconstructable *(closed)*
+
+`recordAssembly` persisted only `understanding_version`/`context_health`/`horizon`; the `pm-1` manifest was built
+transiently and discarded, and `provenance_validation` was a redacted summary — proving what was *cited & accepted*, not
+what was *permitted*. **Fix:** V071 `provenance_manifest JSONB` persists the immutable serialized manifest (`pm-1`:
+`understandingVersion` + entries `{space, id, logicalItemId?, version?, suppliedToModel}` — immutable ids only, no
+labels, no bodies), written **transactionally with the terminal outcome** (`markReady`/`markInsufficient`, `WHERE
+status='PROCESSING'`) and never rewritten. `serializeProvenanceManifest`/`deserializeProvenanceManifest`/
+`revalidateAgainstStoredManifest` (in `provenance.ts`) reconstruct and revalidate historical provenance **without** the
+assembler or current effective context. Proven: a session generated at FSC v1, after the item is revised to v2, still
+carries v1 in its recommendation **and** its stored manifest; `revalidateAgainstStoredManifest` returns GROUNDED against
+the stored v1 manifest, and a v2-shaped manifest rejects the v1 reference (independence). Export carries the manifest;
+account deletion removes it with the session (zero orphans; no new table).
+
+### Blocker 2 — removing an invalid reference could leave a falsely-grounded claim *(closed)*
+
+**Granularity audit:** references attach at the recommendation-**global** level; the load-bearing surfaces
+(`recommendation` prose, `optionAssessment[].supportedByEvidence`, `nextStep`, `alternatives`) have no reliable binding
+to exact references. Claim-level (Option A) is not safely representable → **Option B whole-outcome degradation**. **Defect
+found:** the prior policy kept `READY`/`DEGRADED` if *any* grounded reference survived, so when the model invents the
+primary recommendation's support (~1–2/run) and an unrelated reference validates, the unrelated one **laundered** the
+unsupported claim. **Fix (worker):** a recommendation persists as grounded READY **only** when `rejectedCount === 0` /
+`GROUNDED`; any invalid grounding reference triggers **one bounded inline retry**, then — if still invalid — terminal
+`INSUFFICIENT_STRATEGIC_EVIDENCE` with a canned founder-safe explanation (no grounding language; `optionAssessment`
+`supportedByEvidence` cleared). `DEGRADED` is never a persisted READY. `groundingIntegrityFailed` / `assertsGroundingClaim`
+/ `degradeForGroundingIntegrity` in `provenance.ts`; no recommendation-schema/prompt bump (the persisted shape is
+unchanged — a policy change, not a contract change). Prefer false-negative over false-positive grounding.
+
+### API / UI
+
+Historical session views resolve references via the stored manifest, never current effective context. Each grounded
+`FOUNDER_STRATEGIC_CONTEXT` reference gets a read-time `historicalStatus` (`EFFECTIVE` / `SUPERSEDED` / `RETIRED`;
+immutable BU/positioning refs `AS_GENERATED`); the UI shows a quiet "· since revised" / "· since retired" tag. Invalid
+references never appear (removed at write time). A founder-safe manifest **summary** (version + reference count) surfaces;
+full manifest is export-only.
+
+### Re-acceptance evidence
+
+- **Deterministic:** `provenance.test.ts` — 23 tests (originals + Blocker 1 serialize/deserialize/reconstruction +
+  Blocker 2 no-laundering / whole-outcome degrade / option-flag / grounding-language guard).
+- **Live (real durable worker):** `provenance.live.test.ts` — 8 tests: A grounded READY + manifest persisted; B invalid
+  → Option B INSUFFICIENT (redacted, no leak); B2 bounded retry recovers → READY; C-launder no false grounding; grounding
+  collapse; C historical version + `revalidateAgainstStoredManifest` independent of current effective; E isolation;
+  export+manifest / delete zero orphans.
+- **Real-model eval (Scenario D):** `wave4-provenance-eval.ts` under the production Option B path — 3/3 twice. The model
+  invented 1–2 ids/run; run 1 the retry recovered to GROUNDED READY, run 2 the retry still invented → honest INSUFFICIENT.
+  **Never a falsely-grounded READY.**
+- **Browser (Scenarios A/C/E):** a controlled READY session rendered its grounded citations; after revising the cited FSC
+  item to v2 the historical recommendation still showed the **v1** statement tagged **"· since revised"** (SUPERSEDED),
+  no raw ids, no personality language; ACCEPT moved only the append-only `strategic_response` (0→1) — context/
+  understanding/all `memory.*` unchanged; export carried the full immutable manifest + redacted validation summary.
+- **Regression:** backend 788 pass / 1 skip; web build (tsc + vite) + 73 web tests green; API typecheck clean; migrations
+  V066–V071 present, V070/V071 columns live; frozen-engine hashes byte-identical.
+
+**KA-1: RESOLVED** — durable historical reconstruction + validation independent of current effective context + no
+falsely-grounded survivors. Remaining debt **PI-1** (claim-level grounding, product-preserving) is deferred, not required
+for KA-1.
