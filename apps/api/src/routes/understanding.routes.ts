@@ -29,7 +29,7 @@ const RESPONSES: ReadonlySet<string> = new Set(['confirmed', 'partly', 'correcte
 
 // Founder-facing projection — conclusions only; evidence referenced by count/ids, never dumped. The effective
 // founder response is OVERLAID per conclusion (the original synthesis + epistemic status are never rewritten).
-function toView(u: Understanding, responses: Map<string, ConclusionResponse>) {
+function toView(u: Understanding, responses: Map<string, ConclusionResponse>, revised: ReadonlySet<string> = new Set()) {
   const conclusions = u.conclusions
     .map((c: Conclusion) => ({ c, group: groupOf(c.type, c.epistemicStatus), priority: priorityOf(c.type, c.epistemicStatus) }))
     .sort((a, b) => (GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group)) || (b.priority - a.priority))
@@ -38,7 +38,7 @@ function toView(u: Understanding, responses: Map<string, ConclusionResponse>) {
       return {
         id: c.id, type: c.type, statement: c.statement, epistemicStatus: c.epistemicStatus, confidence: c.confidence,
         group, displayOrder: order, evidenceCount: c.evidenceRefs.length, evidenceRefs: c.evidenceRefs,
-        response: r ? { type: r.type, acceptedText: r.acceptedText, qualificationText: r.qualificationText, correctionText: r.correctionText, at: r.at, revisedEarlier: false } : null,
+        response: r ? { type: r.type, acceptedText: r.acceptedText, qualificationText: r.qualificationText, correctionText: r.correctionText, at: r.at, revisedEarlier: revised.has(c.id) } : null,
       };
     });
   // Groups present, in canonical order, with founder-legible labels (for the UI to section by).
@@ -100,6 +100,16 @@ export function registerUnderstandingRoutes(server: FastifyInstance): void {
   server.post('/understanding/runs', createRun);
   server.post('/understanding', createRun); // compatibility alias — the SAME single generation path (no competing path)
 
+  // GET /understanding/runs/active — the founder's in-flight run (so a page refresh reconnects to it instead
+  // of dropping to the intro form). Registered before /runs/:id (static wins in find-my-way anyway).
+  server.get('/understanding/runs/active', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const run = await runRepo.findActiveByFounder(founderId);
+    if (!run) { await reply.code(404).send({ status: 'none' }); return; }
+    await reply.send(toRunView(run));
+  });
+
   // GET /understanding/runs/:id — founder-safe run state (never internal diagnostics).
   server.get('/understanding/runs/:id', async (request: FastifyRequest, reply: FastifyReply) => {
     const founderId = await sessionFounder(request);
@@ -124,7 +134,8 @@ export function registerUnderstandingRoutes(server: FastifyInstance): void {
     const latest = await understanding.latest(founderId);
     if (!latest) { await reply.code(404).send({ status: 'none' }); return; }
     const effective = await responses.effectiveByConclusion(founderId);
-    await reply.send({ status: 'ok', understanding: toView(latest, effective) });
+    const revised = await responses.revisedConclusionIds(founderId);
+    await reply.send({ status: 'ok', understanding: toView(latest, effective, revised) });
   });
 
   server.post('/understanding/respond', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -145,7 +156,8 @@ export function registerUnderstandingRoutes(server: FastifyInstance): void {
     if (result.status === 'not_found') { await reply.code(404).send({ error: 'no such conclusion in your current understanding' }); return; }
     const latest = await understanding.latest(founderId);
     const effective = await responses.effectiveByConclusion(founderId);
-    await reply.send({ status: 'ok', understanding: latest ? toView(latest, effective) : null });
+    const revised = await responses.revisedConclusionIds(founderId);
+    await reply.send({ status: 'ok', understanding: latest ? toView(latest, effective, revised) : null });
   });
 
   // On-demand supporting evidence — one founder-owned fragment's verbatim text (collapsed by default in the UI).

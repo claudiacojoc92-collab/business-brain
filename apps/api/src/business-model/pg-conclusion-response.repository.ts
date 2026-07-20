@@ -42,6 +42,13 @@ export class PgConclusionResponseRepository {
     return m;
   }
 
+  /** Conclusion ids whose effective response REVISED an earlier one (≥1 superseded response exists). */
+  async revisedConclusionIds(founderId: string): Promise<Set<string>> {
+    const rows = await this.db.selectFrom('business.conclusion_response').select('conclusion_id')
+      .where('founder_id', '=', founderId).where('superseded_by', 'is not', null).execute();
+    return new Set((rows as AnyDB[]).map((r) => r.conclusion_id as string));
+  }
+
   /** Full history (all responses, oldest first) — for export. */
   async listByFounder(founderId: string): Promise<ConclusionResponse[]> {
     const rows = await this.db.selectFrom('business.conclusion_response').selectAll().where('founder_id', '=', founderId).orderBy('created_at', 'asc').execute();

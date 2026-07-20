@@ -41,6 +41,13 @@ export class PgUnderstandingRunRepository {
     return r ? this.toDomain(r) : null;
   }
 
+  /** The founder's current ACTIVE (non-terminal) run, or null — lets the UI reconnect to an in-flight run
+   *  after a page refresh instead of dropping the founder back to the intro form. */
+  async findActiveByFounder(founderId: string): Promise<UnderstandingRun | null> {
+    const r = await this.db.selectFrom('business.understanding_run').selectAll().where('founder_id', '=', founderId).where('status', 'in', ACTIVE).orderBy('created_at', 'desc').limit(1).executeTakeFirst();
+    return r ? this.toDomain(r) : null;
+  }
+
   /** Claim one QUEUED run → INGESTING with a fresh lease. Returns null if none available. */
   async claimQueued(now: Date, leaseMs: number): Promise<UnderstandingRun | null> {
     const nowIso = now.toISOString();

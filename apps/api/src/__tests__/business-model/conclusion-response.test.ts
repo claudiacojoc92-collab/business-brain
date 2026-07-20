@@ -14,7 +14,7 @@ import type { Understanding } from '../../business-model/understanding';
 /** Wave 2 item 4 — correction semantics. Seeds a known understanding directly (deterministic, no LLM), then
  *  drives Confirm/Partly/Correct/Reject + supersession over HTTP. Skip-guarded on DB. */
 const DB_URL = process.env['GATE_DB_URL'] ?? 'postgresql://bbuser:bbpassword@localhost:5432/businessbrain';
-const E = { a: 'resp.a@understand.test', b: 'resp.b@understand.test' };
+const E = { a: 'resp.a@understand.test', b: 'resp.b@understand.test', d: 'resp.d@understand.test' };
 const EMAILS = Object.values(E);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let db: any; let app: FastifyInstance; let dbUp = false;
@@ -68,6 +68,20 @@ const declaredCount = async (fid: string) => (await new PgEvidenceRepository(db)
 
 describe('conclusion response semantics (real DB)', () => {
   it('401 without a session', async (ctx) => { if (!dbUp) { ctx.skip(); return; } expect((await respond('', { conclusionId: 'x', response: 'confirmed' })).statusCode).toBe(401); });
+
+  it('revisedEarlier flags a conclusion whose response replaced an earlier one; false when answered once (D3)', async (ctx) => {
+    if (!dbUp) { ctx.skip(); return; }
+    const A = await signIn(E.d); const { c0, c1 } = await seedUnderstanding(A.founderId);         // dedicated founder (own understanding)
+    await respond(A.cookie, { conclusionId: c0, response: 'confirmed' });                         // first answer
+    await respond(A.cookie, { conclusionId: c0, response: 'corrected', correctionText: 'sharper' }); // revision (supersedes)
+    await respond(A.cookie, { conclusionId: c1, response: 'confirmed' });                         // answered once
+    const u = (await app.inject({ method: 'GET', url: '/api/understanding', headers: { cookie: A.cookie } }))
+      .json<{ understanding: { conclusions: Array<{ id: string; response: { type: string; revisedEarlier: boolean } | null }> } }>().understanding;
+    const r0 = u.conclusions.find((x) => x.id === c0)!.response;
+    const r1 = u.conclusions.find((x) => x.id === c1)!.response;
+    expect(r0?.type).toBe('corrected'); expect(r0?.revisedEarlier).toBe(true);   // revised
+    expect(r1?.type).toBe('confirmed'); expect(r1?.revisedEarlier).toBe(false);  // answered once → not revised
+  });
 
   it('Confirm: records acceptance, preserves epistemic status, creates NO declared evidence, no version bump', async (ctx) => {
     if (!dbUp) { ctx.skip(); return; }

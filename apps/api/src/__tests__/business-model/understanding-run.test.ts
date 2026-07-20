@@ -100,6 +100,19 @@ describe('durable run lifecycle (real DB, fake deps)', () => {
     expect(r2.json<{ runId: string }>().runId).toBe(runId); // same active run — idempotent
   });
 
+  it('GET /understanding/runs/active returns the in-flight run (refresh reconnect), else 404; founder-scoped (D1)', async (ctx) => {
+    if (!dbUp) { ctx.skip(); return; }
+    const A = await signIn(E.b); const B = await signIn(E.c);
+    expect((await app.inject({ method: 'GET', url: '/api/understanding/runs/active', headers: { cookie: B.cookie } })).statusCode).toBe(404); // none yet
+    const created = await app.inject({ method: 'POST', url: '/api/understanding/runs', headers: { cookie: A.cookie }, payload: { url: 'https://active.example' } });
+    const runId = created.json<{ runId: string }>().runId;
+    const active = await app.inject({ method: 'GET', url: '/api/understanding/runs/active', headers: { cookie: A.cookie } });
+    expect(active.statusCode).toBe(200);
+    expect(active.json<{ runId: string; status: string }>().runId).toBe(runId); // reconnects to the active run
+    expect((await app.inject({ method: 'GET', url: '/api/understanding/runs/active', headers: { cookie: B.cookie } })).statusCode).toBe(404); // isolation: B sees no active run
+    await db.deleteFrom('business.understanding_run').where('founder_id', '=', A.founderId).execute(); // cleanup: no leftover QUEUED run for the global-claim test
+  });
+
   it('claimQueued is exclusive; processRun drives QUEUED→READY and links exactly one understanding version', async (ctx) => {
     if (!dbUp) { ctx.skip(); return; }
     const A = await signIn(E.a);

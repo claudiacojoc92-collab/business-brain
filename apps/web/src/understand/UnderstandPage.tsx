@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import {
-  createUnderstandingRun, getUnderstandingRun, retryUnderstandingRun, getUnderstanding, respondToConclusion, getUnderstandingEvidence, ApiError,
+  createUnderstandingRun, getUnderstandingRun, getActiveUnderstandingRun, retryUnderstandingRun, getUnderstanding, respondToConclusion, getUnderstandingEvidence, ApiError,
   type UnderstandingView, type UnderstandingConclusion, type EpistemicStatus, type RunStatus,
 } from '../api/client';
 import { AppShell, Button, Field, Thinking, RevealBlock } from '../system/ui';
@@ -50,7 +50,20 @@ export function UnderstandPage() {
 
   useEffect(() => {
     if (!founderId) return;
-    getUnderstanding().then((u) => { if (u) { setView(u); setPhase('reveal'); } else setPhase('intro'); }).catch((e) => { if (!on401(e)) setPhase('intro'); });
+    let live = true;
+    (async () => {
+      try {
+        // Reconnect to an in-flight run first, so a page refresh during processing resumes polling
+        // instead of dropping the founder back to the intro form.
+        const active = await getActiveUnderstandingRun();
+        if (!live) return;
+        if (active) { setRunId(active.runId); setStage(active.status); setPhase('processing'); return; }
+        const u = await getUnderstanding();
+        if (!live) return;
+        if (u) { setView(u); setPhase('reveal'); } else setPhase('intro');
+      } catch (e) { if (live && !on401(e)) setPhase('intro'); }
+    })();
+    return () => { live = false; };
   }, [founderId, on401]);
 
   // Poll the active run until it reaches a terminal state; survives page refresh (runId re-created idempotently).
@@ -183,7 +196,7 @@ function ConclusionCard({ c, index, onRespond }: { c: UnderstandingConclusion; i
           </details>
         )}
 
-        {r ? (
+        {(!mode && r) ? (
           <div style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-3)' }}>
             <span>{RESPONSE_LABEL[r.type]}{r.revisedEarlier ? ' (revised)' : ''}</span>
             {(r.correctionText || r.qualificationText || r.acceptedText) && (

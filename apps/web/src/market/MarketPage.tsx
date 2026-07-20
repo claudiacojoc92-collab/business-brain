@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import {
-  getMarketEntities, addMarketEntity, createMarketReview, getMarketReview, retryMarketReview, getEntityFindings, respondToFinding, patchMarketEntity, ApiError,
-  type MarketEntity, type MarketFinding, type ReviewStatus, type FindingResponseInput, type AccuracyStatus, type RelevanceResponseStatus,
+  getMarketEntities, addMarketEntity, createMarketReview, getMarketReview, retryMarketReview, getEntityFindings, getEntityReviews, respondToFinding, patchMarketEntity, ApiError,
+  type MarketEntity, type MarketFinding, type ReviewStatus, type FindingResponseInput, type AccuracyStatus, type RelevanceResponseStatus, type EntityType,
 } from '../api/client';
 import { AppShell, Button, Field, Thinking } from '../system/ui';
 
+const ACTIVE_REVIEW: ReadonlySet<string> = new Set(['QUEUED', 'RETRIEVING', 'EXTRACTING', 'INFERRING']);
 const STAGE: Record<ReviewStatus, string> = {
   QUEUED: 'Getting ready…', RETRIEVING: 'Reading their public site…', EXTRACTING: 'Taking in what it says…',
   INFERRING: 'Forming a careful reading…', READY: 'Done.', INSUFFICIENT_EVIDENCE: '', FAILED: '',
@@ -23,21 +24,14 @@ export function MarketPage() {
   const [entities, setEntities] = useState<MarketEntity[]>([]);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
+  const [etype, setEtype] = useState<EntityType>('direct');
+  const [note, setNote] = useState('');
   const [findings, setFindings] = useState<Record<string, MarketFinding[]>>({});
   const [reviewState, setReviewState] = useState<Record<string, { reviewId: string; status: ReviewStatus; message: string | null }>>({});
 
   const on401 = useCallback((e: unknown) => { if (e instanceof ApiError && e.status === 401) navigate('/signin', { replace: true }); }, [navigate]);
   const refresh = useCallback(() => { getMarketEntities().then(setEntities).catch(on401); }, [on401]);
-  useEffect(() => { if (founderId) refresh(); }, [founderId, refresh]);
-
-  if (isLoading) return null;
-  if (!founderId) return <Navigate to="/signin" replace />;
-
-  const add = async () => {
-    if (!name.trim()) return;
-    try { await addMarketEntity({ name: name.trim(), websiteUrl: url.trim() || undefined }); setName(''); setUrl(''); refresh(); } catch (e) { on401(e); }
-  };
-  const poll = async (entityId: string, reviewId: string) => {
+  const poll = useCallback(async (entityId: string, reviewId: string) => {
     for (let i = 0; i < 60; i++) {
       await new Promise((r) => setTimeout(r, 1500));
       let r;
@@ -46,6 +40,43 @@ export function MarketPage() {
       if (r.status === 'READY') { try { const f = await getEntityFindings(entityId); setFindings((s) => ({ ...s, [entityId]: f })); } catch (e) { on401(e); } return; }
       if (r.status === 'INSUFFICIENT_EVIDENCE' || r.status === 'FAILED') return;
     }
+  }, [on401]);
+
+  // On mount (and founder change): load entities, HYDRATE each entity's existing findings, and RECONNECT to
+  // any in-flight review — so a page refresh restores the full state (findings + responses + live polling)
+  // instead of losing it.
+  useEffect(() => {
+    if (!founderId) return;
+    let live = true;
+    (async () => {
+      let ents;
+      try { ents = await getMarketEntities(); } catch (e) { on401(e); return; }
+      if (!live) return;
+      setEntities(ents);
+      for (const e of ents) {
+        try {
+          const f = await getEntityFindings(e.id);
+          if (live && f.length) setFindings((s) => ({ ...s, [e.id]: f }));
+          const reviews = await getEntityReviews(e.id); // newest first
+          const active = reviews.find((rv) => ACTIVE_REVIEW.has(rv.status));
+          if (live && active) { setReviewState((s) => ({ ...s, [e.id]: { reviewId: active.reviewId, status: active.status, message: active.message } })); void poll(e.id, active.reviewId); }
+          else if (live && reviews[0] && (reviews[0].status === 'FAILED' || reviews[0].status === 'INSUFFICIENT_EVIDENCE')) {
+            // Restore a terminal-failed latest review so the founder-safe message + retry survive a refresh.
+            const r0 = reviews[0];
+            setReviewState((s) => ({ ...s, [e.id]: { reviewId: r0.reviewId, status: r0.status, message: r0.message } }));
+          }
+        } catch (e2) { on401(e2); }
+      }
+    })();
+    return () => { live = false; };
+  }, [founderId, on401, poll]);
+
+  if (isLoading) return null;
+  if (!founderId) return <Navigate to="/signin" replace />;
+
+  const add = async () => {
+    if (!name.trim()) return;
+    try { await addMarketEntity({ name: name.trim(), websiteUrl: url.trim() || undefined, entityType: etype, relevanceNote: note.trim() || undefined }); setName(''); setUrl(''); setEtype('direct'); setNote(''); refresh(); } catch (e) { on401(e); }
   };
   const review = async (entityId: string) => {
     setFindings((s) => { const n = { ...s }; delete n[entityId]; return n; });
@@ -79,10 +110,23 @@ export function MarketPage() {
           how it presents itself <em>publicly</em> — what it claims about itself, not what the market thinks. You confirm what’s relevant.
         </p>
 
-        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', marginBottom: 'var(--sp-7)' }}>
-          <div style={{ flex: 1 }}><Field label="Company name" id="m-name" value={name} onChange={setName} /></div>
-          <div style={{ flex: 1 }}><Field label="Website (optional)" id="m-url" type="url" value={url} onChange={setUrl} placeholder="https://…" /></div>
-          <Button variant="primary" onClick={() => void add()}>Add</Button>
+        <div style={{ marginBottom: 'var(--sp-7)' }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 160px' }}><Field label="Company name" id="m-name" value={name} onChange={setName} /></div>
+            <div style={{ flex: '1 1 160px' }}><Field label="Website (optional)" id="m-url" type="url" value={url} onChange={setUrl} placeholder="https://…" /></div>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', flex: '1 1 160px' }}>Relationship
+              <select value={etype} onChange={(e) => setEtype(e.target.value as EntityType)} style={{ padding: '10px 12px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', background: 'var(--surface)', color: 'var(--ink)' }}>
+                <option value="direct">Direct competitor</option>
+                <option value="indirect">Indirect competitor</option>
+                <option value="alternative">Alternative</option>
+                <option value="reference">Reference / admired</option>
+              </select>
+            </label>
+          </div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', marginTop: 'var(--sp-3)' }}>
+            <div style={{ flex: 1 }}><Field label="Why it’s relevant (optional)" id="m-note" value={note} onChange={setNote} placeholder="e.g. same audience, different price point" /></div>
+            <Button variant="primary" onClick={() => void add()}>Add</Button>
+          </div>
         </div>
 
         {entities.length === 0 && <p style={{ fontFamily: 'var(--serif)', color: 'var(--ink-3)' }}>No companies added yet.</p>}

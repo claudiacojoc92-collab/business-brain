@@ -150,6 +150,11 @@ export async function createUnderstandingRun(url?: string): Promise<RunView> {
 export async function getUnderstandingRun(runId: string): Promise<RunView> {
   return request<RunView>(`understanding/runs/${encodeURIComponent(runId)}`);
 }
+/** GET /understanding/runs/active — the founder's in-flight run, or null (404). Lets a refresh reconnect. */
+export async function getActiveUnderstandingRun(): Promise<RunView | null> {
+  try { return await request<RunView>('understanding/runs/active'); }
+  catch (e) { if (e instanceof ApiError && e.status === 404) return null; throw e; }
+}
 /** POST /understanding/runs/:id/retry — re-queue an eligible failed run. */
 export async function retryUnderstandingRun(runId: string): Promise<RunView> {
   return request<RunView>(`understanding/runs/${encodeURIComponent(runId)}/retry`, { method: 'POST' });
@@ -188,6 +193,8 @@ export async function createMarketReview(entityId: string): Promise<MarketReview
 export async function getMarketReview(reviewId: string): Promise<MarketReview> { return request(`market/reviews/${reviewId}`); }
 export async function retryMarketReview(reviewId: string): Promise<MarketReview> { return request(`market/reviews/${reviewId}/retry`, { method: 'POST' }); }
 export async function getEntityFindings(id: string): Promise<MarketFinding[]> { return (await request<{ findings: MarketFinding[] }>(`market/entities/${id}/findings`)).findings; }
+/** GET /market/entities/:id/reviews — review history (newest first). Lets the page reconnect to an in-flight review after a refresh. */
+export async function getEntityReviews(id: string): Promise<MarketReview[]> { return (await request<{ reviews: MarketReview[] }>(`market/entities/${id}/reviews`)).reviews; }
 export interface FindingResponseInput { accuratelyReflectsSource: AccuracyStatus; relevanceStatus: RelevanceResponseStatus; accuracyQualification?: string; relevanceQualification?: string }
 export async function respondToFinding(id: string, input: FindingResponseInput): Promise<FindingResponseRecord> { return (await request<{ response: FindingResponseRecord }>(`market/findings/${id}/responses`, { method: 'POST', body: JSON.stringify(input) })).response; }
 
