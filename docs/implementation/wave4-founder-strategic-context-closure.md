@@ -4,6 +4,31 @@ Makes the existing bounded `PRIORITY_DECISION` strategist more realistic and per
 founder-controlled **Founder Strategic Context**: the conditions under which the founder's strategy must work.
 Governance + architecture gate committed *before* implementation (`299890d`, atop the strategy slice `5008573`).
 
+## Remediation review (supersedes the first acceptance)
+
+The first acceptance declaration (implementation `eaebcc1`) **was superseded by a remediation review** that identified
+three contract-level blockers, all now resolved in a follow-up remediation commit (migration `V068`):
+
+1. **Append-only was not real.** V067 `revise` flipped the prior row `ACTIVE → SUPERSEDED` and `retire` flipped
+   `ACTIVE → RETIRED` *in place* — mutating historical records. **Fixed:** the table is now strictly append-only —
+   `lifecycle ∈ {CREATE, REVISE, RETIRE}` per immutable version, effective/superseded/retired derived from
+   `MAX(version) + lifecycle`, retirement appends a terminal `RETIRE` version, and a **BEFORE UPDATE trigger forbids any
+   row update at the database**. Concurrency is arbitrated by the immutable `(founder, logical_item, version)` unique
+   index. Proven by a test that snapshots a prior version's full DB row before/after revision, later revision,
+   retirement, and a losing concurrent write (byte-identical each time) and asserts the DB rejects a direct `UPDATE`.
+2. **Conflict detection was incomplete.** Only GOAL_GOAL, a mis-specified HORIZON_FEASIBILITY (goal-end-after-horizon),
+   GOAL_CONSTRAINT-overlap, and a free-text marker existed. **Fixed:** all five required rules are now deterministic —
+   GOAL_GOAL; GOAL_RESOURCE (explicit `requiresResourceCategories` + a founder-explicit `UNAVAILABLE` resource — never
+   from `UNKNOWN`/absence); NON_NEGOTIABLE_OPTION over a bounded option set; HORIZON_FEASIBILITY over an explicit
+   `prerequisite` duration/date vs the decision-horizon window; and a quantitative GOAL_CONSTRAINT (explicit goal
+   `requires` budget/time exceeding an explicit constraint `limit`, same unit). Minimal founder-explicit typed fields
+   were added (`UNAVAILABLE`, `requiresResourceCategories`, `requires`, `prerequisite`, `limit`); no number is invented.
+3. **Schema change without a version bump.** **Fixed:** `SCHEMA_VERSION.strategy` bumped
+   `strategy-recommendation-1 → strategy-recommendation-2` (additive; the normalizer reads both; compat test proves v1 +
+   v2 payloads parse; new sessions persist `schema_version=strategy-recommendation-2`, old v1 sessions stay readable).
+
+The sections below describe the current (remediated) state.
+
 ## What was built
 
 **Domain** — [`founder-strategic-context.ts`](../../apps/api/src/business-model/founder-strategic-context.ts): one
@@ -87,6 +112,26 @@ removed afterward.
 - **Ownership**: both acceptance founders deleted via the real endpoint — **zero orphans** across context, sessions,
   responses, understanding; no acceptance-seed remains anywhere. Founder isolation holds (cross-founder revise → null,
   history → 404).
+
+## Remediation re-acceptance evidence
+
+- **Append-only (DB + API):** create → revise → retire over the real API; the v1 DB row is byte-identical after both
+  operations; history is `v1:CREATE:SUPERSEDED, v2:REVISE:SUPERSEDED, v3:RETIRE:RETIRED` (retirement is a new durable
+  terminal version); a direct SQL `UPDATE` is rejected by the trigger (`append-only`). Plus the immutability unit test.
+- **Five conflict rules (live API + UI):** GOAL_GOAL, GOAL_RESOURCE (goal requires TEAM + `UNAVAILABLE`),
+  HORIZON_FEASIBILITY (60-day prerequisite vs 30-day window), and quantitative GOAL_CONSTRAINT (£1000 required vs £150
+  limit) all appear in `/effective` conflicts and render in the Strategic Context tensions panel (DOM-verified). Rule 3
+  (NON_NEGOTIABLE_OPTION over a bounded option set) is proven by deterministic fixtures. **UNKNOWN ≠ UNAVAILABLE**
+  verified live: a `UNKNOWN` team resource produces **0** GOAL_RESOURCE conflicts.
+- **Schema v2:** a real durable session records `schema_version = strategy-recommendation-2`; its 4
+  `FOUNDER_STRATEGIC_CONTEXT` references all resolve to immutable stored records; v1/v2 payload compatibility unit test
+  passes.
+- **ACCEPT / isolation / ownership:** ACCEPT left context rows (11→11) and understanding (v1→v1) unchanged;
+  cross-founder history read → 404; both remediation founders deleted → zero orphans, no acceptance-seed remains.
+- **Regression (green):** API `496 passed / 1 skipped`; web `73 passed`; both type-checks clean; web prod build OK;
+  `V068` latest migration (append-only trigger + `lifecycle` + dropped mutable-`ACTIVE` index); frozen engine
+  byte-identical. Eval reran post-remediation: every parsed fixture met all criteria (only stochastic single-shot JSON
+  truncations varied, which the durable worker retries).
 
 ## What is NOT claimed (out of scope this slice)
 

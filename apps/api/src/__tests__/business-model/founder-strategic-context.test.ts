@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { normalizeContextItemInput, isNonNegotiable, ContextValidationError, type FounderStrategicContextItem, type ContextMetadata } from '../../business-model/founder-strategic-context';
-import { resolveEffectiveStrategicContext, detectStructuralContextConflicts, detectNonNegotiableOptionConflict, type EffectiveContextItem } from '../../business-model/effective-strategic-context.resolver';
+import { resolveEffectiveStrategicContext, detectStructuralContextConflicts, detectNonNegotiableExcludesOnlyOption, effectiveNonNegotiables, optionExcludedBy, type EffectiveContextItem } from '../../business-model/effective-strategic-context.resolver';
 
 /**
  * Wave 4 — PURE deterministic tests for Founder Strategic Context (no DB). Domain validation + discriminated
@@ -31,6 +31,23 @@ describe('strategic context — validation', () => {
     expect((r.metadata as { evidenceStatus: string }).evidenceStatus).toBe('FOUNDER_DECLARED');
   });
 
+  it('UNAVAILABLE is an explicit founder value; an unrecognized/absent availability defaults to UNKNOWN (never UNAVAILABLE)', () => {
+    expect((normalizeContextItemInput({ kind: 'RESOURCE', statement: 'no team', metadata: { category: 'TEAM', availability: 'UNAVAILABLE' } }, NOW).metadata as { availability: string }).availability).toBe('UNAVAILABLE');
+    expect((normalizeContextItemInput({ kind: 'RESOURCE', statement: 'team?', metadata: { category: 'TEAM' } }, NOW).metadata as { availability: string }).availability).toBe('UNKNOWN');
+    expect((normalizeContextItemInput({ kind: 'RESOURCE', statement: 'team?', metadata: { category: 'TEAM', availability: 'NONSENSE' } }, NOW).metadata as { availability: string }).availability).toBe('UNKNOWN');
+  });
+
+  it('parses explicit structured requirements/limits/prerequisites; drops invalid entries (never invents a number)', () => {
+    const g = normalizeContextItemInput({ kind: 'GOAL', statement: 'x', metadata: { priority: 'PRIMARY', requiresResourceCategories: ['TEAM', 'NONSENSE'], requires: [{ category: 'BUDGET', value: 1000, unit: 'GBP/mo' }, { category: 'BUDGET' }, { category: 'AUDIENCE', value: 5 }], prerequisite: { description: 'Hire', durationDays: 60 } } }, NOW).metadata as unknown as Record<string, unknown>;
+    expect(g['requiresResourceCategories']).toEqual(['TEAM']);                 // NONSENSE dropped
+    expect(g['requires']).toEqual([{ category: 'BUDGET', value: 1000, unit: 'GBP/mo' }]); // no-value + non-qty-category dropped
+    expect(g['prerequisite']).toMatchObject({ description: 'Hire', durationDays: 60 });
+    const c = normalizeContextItemInput({ kind: 'CONSTRAINT', statement: 'x', metadata: { category: 'BUDGET', limit: { value: 150, unit: 'GBP/mo' } } }, NOW).metadata as unknown as Record<string, unknown>;
+    expect(c['limit']).toEqual({ value: 150, unit: 'GBP/mo' });
+    const cNoNum = normalizeContextItemInput({ kind: 'CONSTRAINT', statement: 'x', metadata: { category: 'BUDGET', limit: { unit: 'GBP/mo' } } }, NOW).metadata as unknown as Record<string, unknown>;
+    expect(cNoNum['limit']).toBeUndefined();                                   // no explicit value → no limit invented
+  });
+
   it('rejects bad input with a founder-safe ContextValidationError', () => {
     expect(() => normalizeContextItemInput({ kind: 'NOPE', statement: 'x' }, NOW)).toThrow(ContextValidationError);
     expect(() => normalizeContextItemInput({ kind: 'GOAL', statement: '' }, NOW)).toThrow(/statement is required/);
@@ -51,7 +68,7 @@ function item(over: Partial<FounderStrategicContextItem> & { kind: FounderStrate
   return {
     id: over.id ?? `i-${Math.round((over.version ?? 1))}-${over.kind}`, founderId: 'f1', logicalItemId: over.logicalItemId ?? `l-${over.kind}`, version: over.version ?? 1,
     kind: over.kind, statement: over.statement ?? 'stmt', category: over.category ?? 'OTHER', scope: over.scope ?? 'GLOBAL_STRATEGY',
-    source: over.source ?? 'FOUNDER_DECLARED', status: over.status ?? 'ACTIVE',
+    source: over.source ?? 'FOUNDER_DECLARED', status: over.status ?? 'ACTIVE', lifecycle: over.lifecycle ?? 'CREATE',
     effectiveFrom: over.effectiveFrom ?? day(-1), effectiveUntil: over.effectiveUntil ?? null, reviewAt: over.reviewAt ?? null,
     metadata: over.metadata, supersedesItemId: over.supersedesItemId ?? null, createdAt: over.createdAt ?? day(-1),
   };
@@ -112,38 +129,68 @@ function group(items: EffectiveContextItem[]): Parameters<typeof detectStructura
 const eff = (id: string, kind: EffectiveContextItem['kind'], metadata: ContextMetadata, scope: EffectiveContextItem['scope'] = 'GLOBAL_STRATEGY', statement = 'x'): EffectiveContextItem =>
   ({ id, logicalItemId: `l-${id}`, version: 1, kind, statement, category: 'OTHER', scope, source: 'FOUNDER_DECLARED', effectiveFrom: day(-1), effectiveUntil: null, reviewAt: null, metadata });
 
-describe('strategic context — structured conflict detection (never invents)', () => {
-  it('flags multiple PRIMARY goals in overlapping scope (GOAL_GOAL)', () => {
-    const c = detectStructuralContextConflicts(group([
-      eff('g1', 'GOAL', { kind: 'GOAL', priority: 'PRIMARY' }),
-      eff('g2', 'GOAL', { kind: 'GOAL', priority: 'PRIMARY' }),
-    ]));
-    expect(c.filter((x) => x.type === 'GOAL_GOAL')).toHaveLength(1);
-  });
-
-  it('does NOT flag a single primary goal, or a primary + secondary', () => {
+describe('strategic context — the five required deterministic conflict rules (never invents)', () => {
+  // (1) GOAL_GOAL
+  it('1. multiple PRIMARY goals in overlapping scope', () => {
+    expect(detectStructuralContextConflicts(group([eff('g1', 'GOAL', { kind: 'GOAL', priority: 'PRIMARY' }), eff('g2', 'GOAL', { kind: 'GOAL', priority: 'PRIMARY' })])).filter((x) => x.type === 'GOAL_GOAL')).toHaveLength(1);
     expect(detectStructuralContextConflicts(group([eff('g1', 'GOAL', { kind: 'GOAL', priority: 'PRIMARY' }), eff('g2', 'GOAL', { kind: 'GOAL', priority: 'SECONDARY' })])).filter((x) => x.type === 'GOAL_GOAL')).toHaveLength(0);
   });
 
-  it('flags a goal ending after the decision horizon (HORIZON_FEASIBILITY)', () => {
-    const c = detectStructuralContextConflicts(group([
-      eff('dh', 'DECISION_HORIZON', { kind: 'DECISION_HORIZON', label: '30 days', appliesTo: 'CURRENT_PRIORITY', endsAt: day(30) }),
-      eff('g', 'GOAL', { kind: 'GOAL', priority: 'PRIMARY', horizon: { endsAt: day(120) } }),
-    ]));
-    expect(c.filter((x) => x.type === 'HORIZON_FEASIBILITY')).toHaveLength(1);
+  // (2) GOAL_RESOURCE — explicit required category + explicit UNAVAILABLE. UNKNOWN / absent never triggers.
+  it('2. a goal requiring an explicitly UNAVAILABLE resource category', () => {
+    const goalReqTeam = eff('g', 'GOAL', { kind: 'GOAL', priority: 'PRIMARY', requiresResourceCategories: ['TEAM'] });
+    const unavailTeam = eff('r', 'RESOURCE', { kind: 'RESOURCE', category: 'TEAM', availability: 'UNAVAILABLE', evidenceStatus: 'FOUNDER_DECLARED' });
+    expect(detectStructuralContextConflicts(group([goalReqTeam, unavailTeam])).filter((x) => x.type === 'GOAL_RESOURCE')).toHaveLength(1);
+  });
+  it('2b. UNKNOWN or absent resource does NOT trigger GOAL_RESOURCE (unknown ≠ unavailable)', () => {
+    const goalReqTeam = eff('g', 'GOAL', { kind: 'GOAL', priority: 'PRIMARY', requiresResourceCategories: ['TEAM'] });
+    const unknownTeam = eff('r', 'RESOURCE', { kind: 'RESOURCE', category: 'TEAM', availability: 'UNKNOWN', evidenceStatus: 'FOUNDER_DECLARED' });
+    expect(detectStructuralContextConflicts(group([goalReqTeam, unknownTeam])).filter((x) => x.type === 'GOAL_RESOURCE')).toHaveLength(0);
+    expect(detectStructuralContextConflicts(group([goalReqTeam])).filter((x) => x.type === 'GOAL_RESOURCE')).toHaveLength(0); // absent
   });
 
-  it('exposes a NON_NEGOTIABLE constraint against a primary goal as a trade-off (GOAL_CONSTRAINT)', () => {
-    const c = detectStructuralContextConflicts(group([
-      eff('g', 'GOAL', { kind: 'GOAL', priority: 'PRIMARY' }),
-      eff('c', 'CONSTRAINT', { kind: 'CONSTRAINT', category: 'BUDGET', founderClassification: 'NON_NEGOTIABLE', temporaryOrStructural: 'STRUCTURAL' }),
-    ]));
-    expect(c.filter((x) => x.type === 'GOAL_CONSTRAINT')).toHaveLength(1);
+  // (3) NON_NEGOTIABLE_OPTION over a bounded option set.
+  it('3. a non-negotiable excluding the only evidence-supported option', () => {
+    const g = group([eff('p', 'STRATEGIC_PREFERENCE', { kind: 'STRATEGIC_PREFERENCE', category: 'ACQUISITION', strength: 'NON_NEGOTIABLE' }, 'GLOBAL_STRATEGY', 'No paid advertising')]);
+    const nn = effectiveNonNegotiables(g);
+    const options = [
+      { label: 'Paid ads', supportedByEvidence: true, excludedByItemId: optionExcludedBy(nn, 'Run paid advertising campaigns') },
+      { label: 'Cold outreach', supportedByEvidence: false, excludedByItemId: null },
+    ];
+    expect(detectNonNegotiableExcludesOnlyOption(g, options)?.type).toBe('NON_NEGOTIABLE_OPTION_CONFLICT');
+    // if a supported option remains un-excluded → no conflict
+    expect(detectNonNegotiableExcludesOnlyOption(g, [...options, { label: 'Organic content', supportedByEvidence: true, excludedByItemId: null }])).toBeNull();
+    // if nothing is evidence-supported → no conflict (don't invent one)
+    expect(detectNonNegotiableExcludesOnlyOption(g, [{ label: 'Paid ads', supportedByEvidence: false, excludedByItemId: 'p' }])).toBeNull();
   });
 
-  it('marker helper flags a non-negotiable that the recommended approach touches', () => {
-    const g = group([eff('p', 'STRATEGIC_PREFERENCE', { kind: 'STRATEGIC_PREFERENCE', category: 'ACQUISITION', strength: 'NON_NEGOTIABLE' }, 'GLOBAL_STRATEGY', 'No paid advertising during this launch')]);
-    expect(detectNonNegotiableOptionConflict(g, 'Run paid advertising on Meta to acquire customers')?.type).toBe('NON_NEGOTIABLE_OPTION_CONFLICT');
-    expect(detectNonNegotiableOptionConflict(g, 'Publish an organic weekly newsletter')).toBeNull();
+  // (4) HORIZON_FEASIBILITY — an explicit prerequisite timeline that cannot fit the decision window.
+  it('4. a prerequisite duration/date that cannot fit the decision horizon', () => {
+    const dh = eff('dh', 'DECISION_HORIZON', { kind: 'DECISION_HORIZON', label: '30-day window', appliesTo: 'CURRENT_PRIORITY', startsAt: day(0), endsAt: day(30) });
+    const byDuration = eff('g', 'GOAL', { kind: 'GOAL', priority: 'PRIMARY', prerequisite: { description: 'Hire and onboard a marketer', durationDays: 60 } });
+    expect(detectStructuralContextConflicts(group([dh, byDuration])).filter((x) => x.type === 'HORIZON_FEASIBILITY')).toHaveLength(1);
+    const byDate = eff('g', 'GOAL', { kind: 'GOAL', priority: 'PRIMARY', prerequisite: { description: 'Regulatory approval', completionDate: day(90) } });
+    expect(detectStructuralContextConflicts(group([dh, byDate])).filter((x) => x.type === 'HORIZON_FEASIBILITY')).toHaveLength(1);
+  });
+  it('4b. a mere goal end-date after the horizon end does NOT count (needs an explicit prerequisite)', () => {
+    const dh = eff('dh', 'DECISION_HORIZON', { kind: 'DECISION_HORIZON', label: '30 days', appliesTo: 'CURRENT_PRIORITY', endsAt: day(30) });
+    const g = eff('g', 'GOAL', { kind: 'GOAL', priority: 'PRIMARY', horizon: { endsAt: day(120) } }); // goal-end-after only
+    expect(detectStructuralContextConflicts(group([dh, g])).filter((x) => x.type === 'HORIZON_FEASIBILITY')).toHaveLength(0);
+    // a prerequisite that DOES fit → no conflict
+    const fits = eff('g', 'GOAL', { kind: 'GOAL', priority: 'PRIMARY', prerequisite: { description: 'Draft copy', durationDays: 5 } });
+    expect(detectStructuralContextConflicts(group([dh, fits])).filter((x) => x.type === 'HORIZON_FEASIBILITY')).toHaveLength(0);
+  });
+
+  // (5) Quantitative GOAL_CONSTRAINT — a known required budget/time exceeds an explicit limit.
+  it('5. a known required quantity exceeding an explicit constraint limit', () => {
+    const goal = eff('g', 'GOAL', { kind: 'GOAL', priority: 'PRIMARY', requires: [{ category: 'BUDGET', value: 1000, unit: 'GBP/mo' }] });
+    const limit = eff('c', 'CONSTRAINT', { kind: 'CONSTRAINT', category: 'BUDGET', founderClassification: 'NON_NEGOTIABLE', temporaryOrStructural: 'STRUCTURAL', limit: { value: 150, unit: 'GBP/mo' } });
+    expect(detectStructuralContextConflicts(group([goal, limit])).filter((x) => x.type === 'GOAL_CONSTRAINT')).toHaveLength(1);
+  });
+  it('5b. required ≤ limit, mismatched unit, or unknown quantity → no quantitative conflict (no manufactured number)', () => {
+    const limit = eff('c', 'CONSTRAINT', { kind: 'CONSTRAINT', category: 'BUDGET', founderClassification: 'NEGOTIABLE', temporaryOrStructural: 'STRUCTURAL', limit: { value: 150, unit: 'GBP/mo' } });
+    expect(detectStructuralContextConflicts(group([eff('g', 'GOAL', { kind: 'GOAL', priority: 'PRIMARY', requires: [{ category: 'BUDGET', value: 100, unit: 'GBP/mo' }] }), limit]))).toHaveLength(0);
+    expect(detectStructuralContextConflicts(group([eff('g', 'GOAL', { kind: 'GOAL', priority: 'PRIMARY', requires: [{ category: 'BUDGET', value: 9999, unit: 'USD/mo' }] }), limit]))).toHaveLength(0); // unit mismatch
+    expect(detectStructuralContextConflicts(group([eff('g', 'GOAL', { kind: 'GOAL', priority: 'PRIMARY' }), limit]))).toHaveLength(0); // no declared requirement
   });
 });

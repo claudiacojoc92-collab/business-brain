@@ -109,6 +109,41 @@ describe('strategic context §LIVE — append-only revision lifecycle', () => {
     expect(await new PgFounderStrategicContextRepository(db).revise(b.founderId, g.logicalItemId, { statement: 'hijack', metadata: { priority: 'PRIMARY' } }, new Date())).toBeNull();
     expect((await new PgFounderStrategicContextRepository(db).listActive(b.founderId)).some((i) => i.logicalItemId === g.logicalItemId)).toBe(false);
   });
+
+  it('APPEND-ONLY: an earlier version row is byte-identical after revision, later revision, retirement, and a losing concurrent write; the DB forbids UPDATE', async (ctx) => {
+    if (!dbUp) { ctx.skip(); return; }
+    const { founderId } = await signIn(E1);
+    const repo = new PgFounderStrategicContextRepository(db);
+    const v1 = await repo.create(founderId, { kind: 'GOAL', statement: 'immutability v1', metadata: { priority: 'PRIMARY' } }, new Date());
+    const rawById = async (id: string) => db.selectFrom('business.founder_strategic_context_item').selectAll().where('id', '=', id).executeTakeFirst();
+    const snap0 = JSON.stringify(await rawById(v1.id)); // full row snapshot (every column)
+
+    const v2 = await repo.revise(founderId, v1.logicalItemId, { statement: 'immutability v2', metadata: { priority: 'PRIMARY' } }, new Date());
+    expect(JSON.stringify(await rawById(v1.id))).toBe(snap0);            // v1 unchanged after a revision
+    const snap2 = JSON.stringify(await rawById(v2!.id));
+
+    await repo.revise(founderId, v1.logicalItemId, { statement: 'immutability v3', metadata: { priority: 'PRIMARY' } }, new Date());
+    expect(JSON.stringify(await rawById(v1.id))).toBe(snap0);            // v1 unchanged after a LATER revision
+    expect(JSON.stringify(await rawById(v2!.id))).toBe(snap2);          // v2 unchanged too
+
+    await repo.retire(founderId, v1.logicalItemId, new Date());
+    expect(JSON.stringify(await rawById(v1.id))).toBe(snap0);            // v1 unchanged after retirement
+    const hist = await repo.history(founderId, v1.logicalItemId);
+    expect(hist.map((h) => `${h.version}:${h.lifecycle}:${h.status}`)).toEqual(['1:CREATE:SUPERSEDED', '2:REVISE:SUPERSEDED', '3:REVISE:SUPERSEDED', '4:RETIRE:RETIRED']); // retirement is a new durable terminal version
+
+    // A losing concurrent write does not alter the prior effective row.
+    const g2 = await repo.create(founderId, { kind: 'GOAL', statement: 'race base', metadata: { priority: 'PRIMARY' } }, new Date());
+    const baseSnap = JSON.stringify(await rawById(g2.id));
+    await Promise.allSettled([
+      repo.revise(founderId, g2.logicalItemId, { statement: 'race A', metadata: { priority: 'PRIMARY' } }, new Date()),
+      repo.revise(founderId, g2.logicalItemId, { statement: 'race B', metadata: { priority: 'PRIMARY' } }, new Date()),
+    ]);
+    expect(JSON.stringify(await rawById(g2.id))).toBe(baseSnap);         // the base version is untouched by the race
+
+    // The database itself forbids UPDATE (append-only trigger).
+    await expect(db.updateTable('business.founder_strategic_context_item').set({ statement: 'hacked' }).where('id', '=', v1.id).execute()).rejects.toThrow(/append-only/i);
+    expect(JSON.stringify(await rawById(v1.id))).toBe(snap0);            // still unchanged
+  });
 });
 
 describe('strategic context §LIVE — assembler consumption + provenance', () => {
@@ -119,8 +154,8 @@ describe('strategic context §LIVE — assembler consumption + provenance', () =
     // seed a minimal understanding so assembly has something (not required for founderContext, but realistic)
     await new PgUnderstandingRepository(db).save({ id: generateId(), founderId, version: 1, supersedesId: null, modelVersion: 'fsc-seed', sourceFragmentIds: ['f'], conclusions: [{ id: 'c-1', type: 'what_it_is', statement: 'A SaaS.', epistemicStatus: 'OBSERVED', evidenceRefs: ['f'], confidence: 'high', confirmationState: 'confirmed', founderCorrection: null }], createdAt: new Date().toISOString() });
 
-    const goal = await repo.create(founderId, { kind: 'GOAL', statement: 'Reach 5k MRR by Q3', metadata: { priority: 'PRIMARY' } }, new Date());
-    await repo.create(founderId, { kind: 'CONSTRAINT', statement: 'Budget: £200/mo max', metadata: { category: 'BUDGET', founderClassification: 'NON_NEGOTIABLE', temporaryOrStructural: 'STRUCTURAL' } }, new Date());
+    const goal = await repo.create(founderId, { kind: 'GOAL', statement: 'Reach 5k MRR by Q3', metadata: { priority: 'PRIMARY', requires: [{ category: 'BUDGET', value: 1000, unit: 'GBP/mo' }] } }, new Date());
+    await repo.create(founderId, { kind: 'CONSTRAINT', statement: 'Budget: £200/mo max', metadata: { category: 'BUDGET', founderClassification: 'NON_NEGOTIABLE', temporaryOrStructural: 'STRUCTURAL', limit: { value: 200, unit: 'GBP/mo' } } }, new Date());
     // an EXPIRED item must NOT be consumed
     await repo.create(founderId, { kind: 'CONSTRAINT', statement: 'Old freeze', effectiveFrom: new Date(Date.now() - 20 * 86400_000).toISOString(), effectiveUntil: new Date(Date.now() - 86400_000).toISOString(), metadata: { category: 'TIME', founderClassification: 'NEGOTIABLE', temporaryOrStructural: 'TEMPORARY' } }, new Date());
 
@@ -131,7 +166,7 @@ describe('strategic context §LIVE — assembler consumption + provenance', () =
     expect(mine?.version).toBe(1);                                       // provenance retained
     expect(fc.constraints.map((c) => c.statement)).toContain('Budget: £200/mo max');
     expect(fc.constraints.some((c) => c.statement === 'Old freeze')).toBe(false); // expired not consumed
-    expect(fc.conflicts.some((c) => c.type === 'GOAL_CONSTRAINT')).toBe(true);     // primary goal vs non-negotiable budget
+    expect(fc.conflicts.some((c) => c.type === 'GOAL_CONSTRAINT')).toBe(true);     // known required £1000 exceeds the £200 limit (quantitative)
 
     // revise the goal → the assembled context now reflects the NEW version, not the old
     await repo.revise(founderId, goal.logicalItemId, { statement: 'Reach 8k MRR by Q3', metadata: { priority: 'PRIMARY' } }, new Date());

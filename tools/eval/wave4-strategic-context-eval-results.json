@@ -1,6 +1,6 @@
 {
   "model": "claude-sonnet-5",
-  "passed": 12,
+  "passed": 10,
   "total": 12,
   "records": [
     {
@@ -19,7 +19,7 @@
         "respects_budget": true
       },
       "outcomeKind": "STRATEGIC_RECOMMENDATION",
-      "voice": "Double down on organic LinkedIn content, not paid acquisition \u2022 Increase consistency and volume of the founder's own LinkedIn posting (the channel already generating inbound), and build a lightweight process to convert that inbound into ghostwriting clients. Do not allocate budget to paid ads this cycle. \u2022 Track LinkedIn post-to-inbound-to-client conversion for the next 30 days (posts published, i",
+      "voice": "Double down on organic LinkedIn content, not paid acquisition \u2022 Increase consistency and volume of the founder's own LinkedIn posting/ghostwriting output to convert existing inbound interest into paying clients, rather than allocating spend to paid channels this month. \u2022 Track inbound volume and conversion-to-client rate from LinkedIn posts over the next 30 days while increasing posting frequency/",
       "error": null
     },
     {
@@ -38,7 +38,7 @@
         "no_multichannel_overload": true
       },
       "outcomeKind": "STRATEGIC_RECOMMENDATION",
-      "voice": "Focus solely on LinkedIn; do not add newsletter or YouTube in the next 30 days \u2022 Concentrate your 3 hours/week on writing and publishing your own LinkedIn posts consistently, since this channel already produces inbound and directly demonstrates the service you sell (LinkedIn ghostwriting for B2B SaaS founders). Hold off starting a newsletter or YouTube channel until LinkedIn cadence is stable and ",
+      "voice": "Focus on LinkedIn only for the next 30 days \u2022 Continue and concentrate marketing effort on LinkedIn posting (the channel already producing inbound), rather than adding a newsletter and YouTube simultaneously. Use the 3 hours/week to sustain consistent LinkedIn output rather than splitting it across three channels. \u2022 For 30 days, direct all 3 hours/week into LinkedIn: maintain/increase posting cade",
       "error": null
     },
     {
@@ -56,7 +56,7 @@
         "names_preference_tension": true
       },
       "outcomeKind": "STRATEGIC_RECOMMENDATION",
-      "voice": "Prioritize LinkedIn as the primary channel for the next 30 days \u2022 Systematize the founder's existing LinkedIn posting into a repeatable content + outreach cadence, and instrument the inbound that already comes from it (capture source, response time, conversion to conversation) so the next decision has real numbers behind it. \u2022 For 30 days, keep posting on LinkedIn on a fixed cadence and log every ",
+      "voice": "Prioritize LinkedIn as the next 30-day channel \u2022 Double down on LinkedIn: systematize the founder's own posting cadence and use it as the top-of-funnel for the productized ghostwriting service, since the business itself is built on LinkedIn ghostwriting and the founder already reports inbound from their own posts on that platform. \u2022 Audit and quantify the existing LinkedIn inbound (source, volume,",
       "error": null
     },
     {
@@ -74,7 +74,7 @@
         "respects_nonnegotiable": true
       },
       "outcomeKind": "STRATEGIC_RECOMMENDATION",
-      "voice": "Systematize LinkedIn organic content into a repeatable inbound-to-customer pipeline \u2022 Increase and structure LinkedIn posting cadence around the productized ghostwriting offer, and build an explicit conversion path (clear CTA, intake form or booking link, and a simple qualification step) so existing inbound interest converts into paying customers, rather than starting a new acquisition channel. \u2022 ",
+      "voice": "Systematize your existing LinkedIn inbound into a repeatable acquisition motion \u2022 Increase consistency and clarity of your own LinkedIn posting (offer-specific CTA, clear positioning as a productized LinkedIn ghostwriting service for B2B SaaS founders), and build a lightweight intake process (DM-to-call funnel) to capture and convert the inbound interest you already generate \u2014 rather than starting",
       "error": null
     },
     {
@@ -92,7 +92,7 @@
         "cites_context": true
       },
       "outcomeKind": "STRATEGIC_RECOMMENDATION",
-      "voice": "Narrow and prove your positioning through your own LinkedIn presence \u2022 In the next 30 days, re-center your personal LinkedIn content and profile explicitly on seed-stage SaaS founders (not the broader 'B2B SaaS founders' framing you currently use), and use your existing inbound as visible proof that this narrower positioning works \u2014 pull concrete examples from the inbound you're already getting an",
+      "voice": "Turn the founder's own LinkedIn inbound into the proof-of-work engine for the seed-stage SaaS niche \u2022 Over the next 30 days, narrow the founder's own LinkedIn content and outreach explicitly to seed-stage SaaS founder pain points (not general B2B SaaS), and treat the resulting inbound as live case-study evidence for the ghostwriting service itself \u2014 i.e., the founder's feed becomes the demonstrati",
       "error": null
     },
     {
@@ -110,7 +110,7 @@
         "exposes_conflict": true
       },
       "outcomeKind": "STRATEGIC_RECOMMENDATION",
-      "voice": "Systematize inbound-to-revenue conversion from your own LinkedIn presence \u2022 In the next 30 days, focus on converting the inbound you already generate from your own LinkedIn posts into paying ghostwriting clients \u2014 build a simple, repeatable pipeline (capture \u2192 qualify \u2192 pitch \u2192 close) rather than starting a new product line. \u2022 Map the last 30\u201360 days of LinkedIn inbound (DMs, comments, connection ",
+      "voice": "Systematize LinkedIn-inbound-to-client conversion for the existing ghostwriting service \u2022 For the next 30 days, prioritise converting the founder's existing LinkedIn inbound into paid ghostwriting clients \u2014 e.g., a repeatable outreach/qualification/close process for people who already respond to the founder's own posts \u2014 rather than starting build-out of a new product line. \u2022 Build a simple repeat",
       "error": null
     },
     {
@@ -128,7 +128,7 @@
         "no_zero_assumption": true
       },
       "outcomeKind": "STRATEGIC_RECOMMENDATION",
-      "voice": "Systematize and scale your existing organic LinkedIn engine before committing to hiring or paid ads \u2022 Before spending on ads or bringing on help, invest the next 30 days in making your own LinkedIn posting/inbound process repeatable and higher-volume (e.g., consistent cadence, clearer CTA/capture step, review of what's already converting) \u2014 since this is the only acquisition channel with observed ",
+      "voice": "Systematize the existing LinkedIn inbound channel before committing to a hire or paid ads \u2022 Before choosing between hiring help or running paid ads, use the next 30 days to deliberately increase output and add a lead-capture step to the LinkedIn organic channel that is already producing inbound \u2014 since this is the only channel in your context with observed traction. Track volume of inbound and con",
       "error": null
     },
     {
@@ -147,25 +147,20 @@
         "no_psychology_condition": true
       },
       "outcomeKind": "STRATEGIC_RECOMMENDATION",
-      "voice": "Batch-produce LinkedIn content in your two available mornings to sustain the inbound channel you already have \u2022 Use your two confirmed morning blocks this month to write and schedule a month's worth of LinkedIn posts in the style/topics that have already generated inbound interest, rather than starting any new channel or outreach motion. \u2022 In the next available morning block, draft and schedule Li",
+      "voice": "Use your two free mornings to sustain and convert your existing LinkedIn inbound \u2014 not to launch a new channel \u2022 Dedicate both available mornings each week to (1) publishing consistent LinkedIn content in your own voice, since this is the confirmed source of inbound interest, and (2) building a lightweight process to respond to, qualify, and convert whatever inbound comes in from those posts. Do n",
       "error": null
     },
     {
       "id": "nonneg_cost",
       "note": "a non-negotiable with a visible strategic cost",
       "model": "claude-sonnet-5",
-      "pass": true,
+      "pass": false,
       "criteria": {
-        "parsed": true,
-        "no_inferred_interiority": true,
-        "no_market_truth_assertion": true,
-        "actionable": true,
-        "sovereignty_what_would_change": true,
-        "context_provenance_resolves": true,
-        "respects_nonnegotiable": true
+        "parsed": false,
+        "no_inferred_interiority": true
       },
-      "outcomeKind": "STRATEGIC_RECOMMENDATION",
-      "voice": "Systematize converting existing LinkedIn inbound into paying clients, not fundraising \u2022 Do not pursue external funding. Instead, build a simple, repeatable process this month to capture and convert the inbound you already generate from your own LinkedIn posts (c-2) into paid ghostwriting clients, tracked against your \u00a310k MRR goal. \u2022 Map the last 30-60 days of inbound leads from LinkedIn: count th",
+      "outcomeKind": null,
+      "voice": "",
       "error": null
     },
     {
@@ -183,7 +178,7 @@
         "cites_context": true
       },
       "outcomeKind": "STRATEGIC_RECOMMENDATION",
-      "voice": "Keep the subscription as your primary revenue base; do not switch to high-ticket within this 30-day window \u2022 Retain the subscription model as the core, predictable revenue engine. If you want to explore high-ticket, run it as a small, bounded parallel test using your existing inbound LinkedIn leads (c-2) rather than replacing the subscription \u2014 do not dismantle the recurring base until the high-ti",
+      "voice": "Keep the subscription as your core offer; do not switch to high-ticket within 30 days \u2022 Retain the subscription-based productized service as your primary revenue engine for this decision window. If you want to explore a high-ticket offer, treat it as a parallel, small-scale test funded by inbound LinkedIn interest \u2014 not a replacement of the income base you currently rely on. \u2022 Before any switch, p",
       "error": null
     },
     {
@@ -201,28 +196,23 @@
         "cites_context": true
       },
       "outcomeKind": "STRATEGIC_RECOMMENDATION",
-      "voice": "Double down on your own LinkedIn presence and newsletter list as the 30-day acquisition channel \u2022 Run a focused 30-day push converting your existing LinkedIn inbound and your 1,200-person newsletter list into booked calls/customers: post consistently on LinkedIn (the channel already generating inbound), and send 2-3 targeted newsletter sends to that list positioning the ghostwriting service, with ",
+      "voice": "Convert existing owned audiences (LinkedIn inbound + newsletter list) into direct acquisition, before adding new channels \u2022 In the next 30 days, add an explicit, specific CTA (e.g., a booking link or service page) to LinkedIn posts already generating inbound, and send a direct offer to the 1,200-person newsletter list. Treat these two owned assets as the acquisition channel for this cycle rather t",
       "error": null
     },
     {
       "id": "horizon_scoped",
       "note": "the recommendation is scoped to the decision horizon",
       "model": "claude-sonnet-5",
-      "pass": true,
+      "pass": false,
       "criteria": {
-        "parsed": true,
-        "no_inferred_interiority": true,
-        "no_market_truth_assertion": true,
-        "actionable": true,
-        "sovereignty_what_would_change": true,
-        "context_provenance_resolves": true,
-        "cites_context": true
+        "parsed": false,
+        "no_inferred_interiority": true
       },
-      "outcomeKind": "STRATEGIC_RECOMMENDATION",
-      "voice": "Prepare a focused, single-channel launch timed to your conference \u2014 not a full multi-channel launch \u2022 Use the next 2 weeks to build a short LinkedIn content push (announcement + 2-3 proof/case-style posts + a clear CTA) that channels your existing organic inbound into the productized ghostwriting service, timed to land around the conference dates. Do not build out new channels (paid, PR, other pla",
+      "outcomeKind": null,
+      "voice": "",
       "error": null
     }
   ],
-  "note": "Wave 4 slice-1 Founder Strategic Context eval \u2014 12 fixtures over synthetic StrategicContext with populated founderContext; exact production SYSTEM prompt + normalizer; single-shot. Two consecutive runs: 11/12 then 12/12 \u2014 the only misses were single-shot JSON truncation (parsed=false), which the durable worker retries in production; every parsed run met all contract criteria (personalization, provenance resolution, no identity/psychology, preference-vs-evidence, unknown!=zero, conflict visibility, non-negotiable respect, actionability, sovereignty).",
-  "runs_note": "run3=11/12 (1 truncation), run4=12/12"
+  "note": "Wave 4 Founder Strategic Context eval (post-remediation, schema strategy-recommendation-2). 12 fixtures, exact production SYSTEM prompt + normalizer, single-shot. Every PARSED fixture met all contract criteria across runs; the only misses were single-shot JSON truncation (parsed=false) on different fixtures each run (income_predictability/horizon_scoped/nonneg_cost) \u2014 the durable worker retries these MODEL_FAILED cases in production. The deterministic five conflict rules + UNKNOWN-vs-UNAVAILABLE are proven by unit tests, not the model eval.",
+  "runs_note": "two post-remediation runs, each 10/12 with 2 stochastic truncations (different fixtures); all non-truncated met every criterion"
 }

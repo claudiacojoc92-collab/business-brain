@@ -114,74 +114,116 @@ export function resolveEffectiveStrategicContext(items: FounderStrategicContextI
 // ── Deterministic, structured conflict detection (never invents) ─────────────────────────────────────────
 type Groups = Record<StrategicContextKind, EffectiveContextItem[]>;
 
-/** Conflicts detectable purely from the structured effective items. Undeterminable tensions are NOT invented. */
+const overlaps = (a: EffectiveContextItem, b: EffectiveContextItem): boolean => a.scope === b.scope || a.scope === 'GLOBAL_STRATEGY' || b.scope === 'GLOBAL_STRATEGY';
+
+/**
+ * The five REQUIRED deterministic conflict rules — computed purely from explicit structured founder input. Nothing
+ * is inferred from absence/UNKNOWN, and no quantity or requirement is invented. Rule 3 (a non-negotiable removing the
+ * only supported option) needs a bounded option set and lives in detectNonNegotiableExcludesOnlyOption.
+ */
 export function detectStructuralContextConflicts(groups: Groups): StrategicContextConflict[] {
   const out: StrategicContextConflict[] = [];
+  const goals = groups.GOAL.filter((g) => g.metadata.kind === 'GOAL');
+  const primaries = goals.filter((g) => (g.metadata as { priority: string }).priority === 'PRIMARY');
 
-  // (1) GOAL_GOAL — multiple PRIMARY goals in overlapping scope (same scope, or either GLOBAL).
-  const primaries = groups.GOAL.filter((g) => g.metadata.kind === 'GOAL' && g.metadata.priority === 'PRIMARY');
+  // (1) GOAL_GOAL — multiple PRIMARY goals in overlapping scope.
   for (let a = 0; a < primaries.length; a++) for (let b = a + 1; b < primaries.length; b++) {
     const ga = primaries[a]!; const gb = primaries[b]!;
-    if (ga.scope === gb.scope || ga.scope === 'GLOBAL_STRATEGY' || gb.scope === 'GLOBAL_STRATEGY') {
-      out.push({ id: `gg:${ga.id}:${gb.id}`, type: 'GOAL_GOAL', itemIds: [ga.id, gb.id],
-        description: `Two goals are both marked PRIMARY in overlapping scope: "${ga.statement}" and "${gb.statement}".`,
-        strategicImpact: 'With more than one top priority in the same scope, effort and sequencing must be split — say which comes first.',
-        resolutionStatus: 'UNRESOLVED' });
-    }
+    if (overlaps(ga, gb)) out.push({ id: `gg:${ga.id}:${gb.id}`, type: 'GOAL_GOAL', itemIds: [ga.id, gb.id],
+      description: `Two goals are both marked PRIMARY in overlapping scope: "${ga.statement}" and "${gb.statement}".`,
+      strategicImpact: 'With more than one top priority in the same scope, effort and sequencing must be split — say which comes first.', resolutionStatus: 'UNRESOLVED' });
   }
 
-  // (4) HORIZON_FEASIBILITY — a goal needs to complete AFTER the decision horizon ends (the window closes too early).
+  // (2) GOAL_RESOURCE — a goal EXPLICITLY requires a resource category, and an effective RESOURCE in that category is
+  // EXPLICITLY UNAVAILABLE. UNKNOWN / absent / not-declared NEVER triggers this (unavailability is founder-explicit).
+  const unavailableByCat = new Map<string, EffectiveContextItem>();
+  for (const r of groups.RESOURCE) if (r.metadata.kind === 'RESOURCE' && r.metadata.availability === 'UNAVAILABLE') unavailableByCat.set(r.metadata.category, r);
+  for (const g of goals) {
+    const req = (g.metadata as { requiresResourceCategories?: string[] }).requiresResourceCategories ?? [];
+    for (const cat of req) { const r = unavailableByCat.get(cat); if (r) out.push({ id: `gr:${g.id}:${r.id}`, type: 'GOAL_RESOURCE', itemIds: [g.id, r.id],
+      description: `The goal "${g.statement}" explicitly requires ${cat.toLowerCase()}, which you've marked unavailable: "${r.statement}".`,
+      strategicImpact: 'A required resource is declared unavailable — this goal is not currently feasible without changing that.', resolutionStatus: 'UNRESOLVED' }); }
+  }
+
+  // (4) HORIZON_FEASIBILITY — an EXPLICIT prerequisite timeline cannot fit inside the active decision-horizon window.
+  // (a goal end date simply being after the horizon end does NOT qualify — a real prerequisite duration/date is required.)
   for (const dh of groups.DECISION_HORIZON) {
-    if (dh.metadata.kind !== 'DECISION_HORIZON' || !dh.metadata.endsAt) continue;
-    const dhEnd = new Date(dh.metadata.endsAt).getTime();
-    for (const g of groups.GOAL) {
-      if (g.metadata.kind !== 'GOAL' || !g.metadata.horizon?.endsAt) continue;
-      const gEnd = new Date(g.metadata.horizon.endsAt).getTime();
-      if (gEnd > dhEnd && (dh.scope === 'GLOBAL_STRATEGY' || g.scope === 'GLOBAL_STRATEGY' || dh.scope === g.scope)) {
-        out.push({ id: `hf:${dh.id}:${g.id}`, type: 'HORIZON_FEASIBILITY', itemIds: [dh.id, g.id],
-          description: `The goal "${g.statement}" is dated to complete after the decision horizon "${dh.metadata.label}" ends.`,
-          strategicImpact: 'The recommendation is scoped to the shorter decision window; this goal cannot fully land inside it.',
-          resolutionStatus: 'UNRESOLVED' });
-      }
+    if (dh.metadata.kind !== 'DECISION_HORIZON') continue;
+    const start = dh.metadata.startsAt ? new Date(dh.metadata.startsAt).getTime() : null;
+    const end = dh.metadata.endsAt ? new Date(dh.metadata.endsAt).getTime() : null;
+    if (end == null) continue;                                  // an unbounded horizon can't be over-run
+    const windowDays = start != null ? (end - start) / 86400_000 : null;
+    for (const g of goals) {
+      const pre = (g.metadata as { prerequisite?: { description: string; durationDays?: number; completionDate?: string } }).prerequisite;
+      if (!pre || !overlaps(dh, g)) continue;
+      const tooLongByDuration = pre.durationDays != null && windowDays != null && pre.durationDays > windowDays;
+      const tooLateByDate = pre.completionDate != null && new Date(pre.completionDate).getTime() > end;
+      if (tooLongByDuration || tooLateByDate) out.push({ id: `hf:${dh.id}:${g.id}`, type: 'HORIZON_FEASIBILITY', itemIds: [dh.id, g.id],
+        description: `The prerequisite "${pre.description}" for "${g.statement}" cannot complete inside the decision horizon "${dh.metadata.label}".`,
+        strategicImpact: 'A declared prerequisite runs past the decision window — the recommendation cannot assume this goal lands within it.', resolutionStatus: 'UNRESOLVED' });
     }
   }
 
-  // (5-structural) GOAL_CONSTRAINT — a NON_NEGOTIABLE constraint that overlaps a PRIMARY goal's scope: a real,
-  // founder-set trade-off to EXPOSE (not resolve). Only fires with an explicit non-negotiable classification.
-  const nnConstraints = groups.CONSTRAINT.filter((c) => c.metadata.kind === 'CONSTRAINT' && c.metadata.founderClassification === 'NON_NEGOTIABLE');
-  for (const c of nnConstraints) for (const g of primaries) {
-    if (c.scope === 'GLOBAL_STRATEGY' || g.scope === 'GLOBAL_STRATEGY' || c.scope === g.scope) {
-      out.push({ id: `gc:${c.id}:${g.id}`, type: 'GOAL_CONSTRAINT', itemIds: [c.id, g.id],
-        description: `Your PRIMARY goal "${g.statement}" must be pursued within the non-negotiable constraint "${c.statement}".`,
-        strategicImpact: 'This is a fixed boundary the recommendation must respect — it may narrow which approaches are feasible.',
-        resolutionStatus: 'UNRESOLVED' });
+  // (5) GOAL_CONSTRAINT (quantitative) — a goal declares a KNOWN required budget/time quantity that EXCEEDS an
+  // explicit constraint limit of the same category+unit. Fires only when BOTH quantities are explicitly structured.
+  for (const c of groups.CONSTRAINT) {
+    if (c.metadata.kind !== 'CONSTRAINT' || !c.metadata.limit) continue;
+    const lim = c.metadata.limit; const cat = c.metadata.category;
+    for (const g of goals) {
+      const reqs = (g.metadata as { requires?: Array<{ category: string; value: number; unit?: string }> }).requires ?? [];
+      for (const req of reqs) {
+        if (req.category !== cat) continue;
+        if ((req.unit ?? null) !== (lim.unit ?? null)) continue;   // don't compare across mismatched units
+        if (req.value > lim.value && overlaps(c, g)) out.push({ id: `qc:${g.id}:${c.id}`, type: 'GOAL_CONSTRAINT', itemIds: [g.id, c.id],
+          description: `"${g.statement}" needs ${req.value}${req.unit ? ' ' + req.unit : ''} of ${cat.toLowerCase()}, but your limit is ${lim.value}${lim.unit ? ' ' + lim.unit : ''}: "${c.statement}".`,
+          strategicImpact: 'The known requirement exceeds your explicit limit — the goal cannot be met within it as stated.', resolutionStatus: 'UNRESOLVED' });
+      }
     }
   }
 
   return out;
 }
 
-/**
- * Marker-based conflict (opt-in): a NON_NEGOTIABLE preference/constraint that excludes the ONLY recommended option.
- * Called post-recommendation with the resolvable recommended-approach text; returns a conflict only on a concrete
- * match (never invents). Kept separate so the resolver stays pure and the recommendation stays optional.
- */
-export function detectNonNegotiableOptionConflict(groups: Groups, recommendedApproachText: string): StrategicContextConflict | null {
-  const text = recommendedApproachText.toLowerCase();
-  const nonNegotiables = [
+/** The non-negotiables (constraint or preference) currently in effect. */
+export function effectiveNonNegotiables(groups: Groups): EffectiveContextItem[] {
+  return [
     ...groups.STRATEGIC_PREFERENCE.filter((p) => p.metadata.kind === 'STRATEGIC_PREFERENCE' && p.metadata.strength === 'NON_NEGOTIABLE'),
     ...groups.CONSTRAINT.filter((c) => c.metadata.kind === 'CONSTRAINT' && c.metadata.founderClassification === 'NON_NEGOTIABLE'),
   ];
+}
+
+export interface BoundedOption { label: string; supportedByEvidence: boolean; excludedByItemId?: string | null }
+
+/**
+ * (3) NON_NEGOTIABLE_OPTION_CONFLICT — over an EXPLICITLY BOUNDED option set: if there is at least one option supported
+ * by evidence and EVERY such supported option is excluded by a founder non-negotiable, no currently acceptable supported
+ * option remains. Deterministic: it neither violates the non-negotiable nor invents another supported option.
+ */
+export function detectNonNegotiableExcludesOnlyOption(groups: Groups, options: BoundedOption[]): StrategicContextConflict | null {
+  const supported = options.filter((o) => o.supportedByEvidence);
+  if (supported.length === 0) return null;                        // nothing evidence-supported to exclude
+  const remaining = supported.filter((o) => !o.excludedByItemId);
+  if (remaining.length > 0) return null;                          // an acceptable supported option still exists
+  const excludingIds = [...new Set(supported.map((o) => o.excludedByItemId!).filter(Boolean))];
+  return { id: `nno:${excludingIds.join('-')}`, type: 'NON_NEGOTIABLE_OPTION_CONFLICT', itemIds: excludingIds,
+    description: `Every evidence-supported option (${supported.map((o) => o.label).join(', ')}) is excluded by a non-negotiable you set.`,
+    strategicImpact: 'No currently acceptable supported option remains — the founder must relax a non-negotiable or add evidence for another option.', resolutionStatus: 'UNRESOLVED' };
+}
+
+/** Match one option's text against the non-negotiables → the item id that excludes it, or null (conservative token match). */
+export function optionExcludedBy(nonNegotiables: EffectiveContextItem[], optionText: string): string | null {
+  const text = optionText.toLowerCase();
   for (const nn of nonNegotiables) {
-    // Conservative: the excluded thing must be named in the item's own statement AND appear in the recommendation.
     const tokens = nn.statement.toLowerCase().match(/\b[a-z][a-z-]{3,}\b/g) ?? [];
-    const salient = tokens.filter((t) => !['does', 'want', 'this', 'that', 'with', 'from', 'during', 'until', 'have', 'will', 'your', 'must'].includes(t));
-    if (salient.some((t) => text.includes(t))) {
-      return { id: `nno:${nn.id}`, type: 'NON_NEGOTIABLE_OPTION_CONFLICT', itemIds: [nn.id],
-        description: `The recommended approach appears to touch a non-negotiable you set: "${nn.statement}".`,
-        strategicImpact: 'A non-negotiable overrides the recommended option — the recommendation must not depend on it.',
-        resolutionStatus: 'UNRESOLVED' };
-    }
+    const salient = tokens.filter((t) => !['does', 'want', 'this', 'that', 'with', 'from', 'during', 'until', 'have', 'will', 'your', 'must', 'would', 'much', 'rather', 'than', 'prefer'].includes(t));
+    if (salient.some((t) => text.includes(t))) return nn.id;
   }
   return null;
+}
+
+/** Back-compat marker helper: a non-negotiable that the recommended approach text touches (single-option shortcut). */
+export function detectNonNegotiableOptionConflict(groups: Groups, recommendedApproachText: string): StrategicContextConflict | null {
+  const nn = effectiveNonNegotiables(groups);
+  const excludedBy = optionExcludedBy(nn, recommendedApproachText);
+  return excludedBy ? detectNonNegotiableExcludesOnlyOption(groups, [{ label: 'the recommended approach', supportedByEvidence: true, excludedByItemId: excludedBy }]) : null;
 }

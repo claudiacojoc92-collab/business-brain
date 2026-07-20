@@ -37,7 +37,10 @@ export const PROMPT_VERSION: Record<ModelCapability, string> = {
 export const SCHEMA_VERSION: Record<ModelCapability, string> = {
   synthesis: 'conclusions-1',          // {conclusions:[{type,statement,epistemicStatus,evidenceRefs,confidence}]}
   'market-inference': 'market-inference-1', // {inferenceText,epistemicStatus,relevanceToFounder}
-  strategy: 'strategy-recommendation-1',   // {recommendation,reasoning,confidence,alternatives,nextStep,…}
+  // strategy-recommendation-2: adds the FOUNDER_STRATEGIC_CONTEXT epistemic kind + optional context-reference fields
+  // (logicalItemId/version/scope/source/effective period) on evidence references. Additive over v1 — the normalizer
+  // reads both, so a persisted v1 payload (no context fields) and a v2 payload both parse for the shared fields.
+  strategy: 'strategy-recommendation-2',
 };
 
 /** Production-capable mode = a real deploy. Local dev + tests are NOT production-capable and may use the default. */

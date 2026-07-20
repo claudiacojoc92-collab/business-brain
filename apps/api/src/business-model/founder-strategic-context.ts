@@ -21,11 +21,19 @@ export const CONTEXT_SCOPES: ReadonlySet<string> = new Set(['GLOBAL_STRATEGY', '
 
 // ── Discriminated per-kind metadata ──────────────────────────────────────────────────────────────────────
 export type GoalPriority = 'PRIMARY' | 'SECONDARY' | 'UNRANKED';
+/** A structured, founder-declared quantitative requirement (for deterministic budget/time conflict detection). */
+export interface QuantityRequirement { category: 'BUDGET' | 'TIME'; value: number; unit?: string; period?: string }
+/** A structured, founder-declared prerequisite that must complete before the goal can (for HORIZON_FEASIBILITY). */
+export interface GoalPrerequisite { description: string; durationDays?: number; completionDate?: string }
 export interface GoalMetadata {
   kind: 'GOAL';
   target?: { value: number | string; unit?: string };   // NOT required to be numeric
   horizon?: { label?: string; startsAt?: string; endsAt?: string; triggeringEvent?: string };
   priority: GoalPriority;
+  // Optional, founder-declared, explicit-only structured requirements (never inferred):
+  requiresResourceCategories?: string[];                 // resource categories the goal explicitly needs
+  requires?: QuantityRequirement[];                      // known required budget/time for this goal
+  prerequisite?: GoalPrerequisite;                       // a prerequisite whose timeline may not fit a decision horizon
 }
 
 export type ConstraintCategory = 'BUDGET' | 'TIME' | 'TEAM' | 'SKILL' | 'GEOGRAPHY' | 'LEGAL' | 'CONTRACTUAL' | 'CAPACITY' | 'RUNWAY' | 'SEASONALITY' | 'OTHER';
@@ -37,10 +45,12 @@ export interface ConstraintMetadata {
   founderClassification: FounderClassification; // NON_NEGOTIABLE only from an explicit founder write
   temporaryOrStructural: TemporaryOrStructural;
   severity?: 'LOW' | 'MEDIUM' | 'HIGH';
+  limit?: { value: number; unit?: string; period?: string }; // explicit max available (e.g. £150/month, 4h/week)
 }
 
 export type ResourceCategory = 'BUDGET' | 'TIME' | 'TEAM' | 'AUDIENCE' | 'SKILL' | 'CONTENT_ASSET' | 'PARTNERSHIP' | 'DISTRIBUTION' | 'REPUTATION' | 'TECHNOLOGY' | 'OTHER';
-export type ResourceAvailability = 'AVAILABLE' | 'PARTIALLY_AVAILABLE' | 'PLANNED' | 'UNKNOWN';
+// UNAVAILABLE is founder-explicit — it is NEVER inferred from absence, UNKNOWN, or a non-declared zero.
+export type ResourceAvailability = 'AVAILABLE' | 'PARTIALLY_AVAILABLE' | 'PLANNED' | 'UNAVAILABLE' | 'UNKNOWN';
 export type ResourceEvidenceStatus = 'FOUNDER_DECLARED' | 'VERIFIED' | 'NOT_VERIFIED';
 export interface ResourceMetadata {
   kind: 'RESOURCE';
@@ -83,7 +93,8 @@ export interface FounderStrategicContextItem {
   category: string;               // founder-legible sub-category (mirrors metadata.category where present)
   scope: ContextScope;
   source: ContextSource;
-  status: ContextStatus;
+  status: ContextStatus;                 // DERIVED from version ordering + lifecycle (never a mutated column)
+  lifecycle: 'CREATE' | 'REVISE' | 'RETIRE'; // immutable per-version marker
   effectiveFrom: string;
   effectiveUntil: string | null;
   reviewAt: string | null;
@@ -114,7 +125,15 @@ const GOAL_PRIORITIES = new Set(['PRIMARY', 'SECONDARY', 'UNRANKED']);
 const FOUNDER_CLASS = new Set(['NON_NEGOTIABLE', 'NEGOTIABLE', 'NOT_YET_CLASSIFIED']);
 const TEMP_STRUCT = new Set(['TEMPORARY', 'STRUCTURAL', 'UNKNOWN']);
 const SEVERITIES = new Set(['LOW', 'MEDIUM', 'HIGH']);
-const RESOURCE_AVAIL = new Set(['AVAILABLE', 'PARTIALLY_AVAILABLE', 'PLANNED', 'UNKNOWN']);
+const RESOURCE_AVAIL = new Set(['AVAILABLE', 'PARTIALLY_AVAILABLE', 'PLANNED', 'UNAVAILABLE', 'UNKNOWN']);
+const QTY_CATS = new Set(['BUDGET', 'TIME']);
+/** Parse a founder-declared quantity requirement/limit; null unless value is an explicit finite number. */
+function quantity(v: unknown): { value: number; unit?: string; period?: string } | null {
+  if (!v || typeof v !== 'object') return null;
+  const o = v as Record<string, unknown>;
+  if (typeof o['value'] !== 'number' || !Number.isFinite(o['value'])) return null;
+  return { value: o['value'] as number, ...(o['unit'] ? { unit: s(o['unit'], 40) } : {}), ...(o['period'] ? { period: s(o['period'], 40) } : {}) };
+}
 const RESOURCE_EVIDENCE = new Set(['FOUNDER_DECLARED', 'VERIFIED', 'NOT_VERIFIED']);
 const PREF_STRENGTHS = new Set(['PREFERENCE', 'STRONG_PREFERENCE', 'NON_NEGOTIABLE']);
 
@@ -130,6 +149,17 @@ function normalizeMetadata(kind: StrategicContextKind, raw: unknown): ContextMet
       }
       const h = m['horizon'] as Record<string, unknown> | undefined;
       if (h && typeof h === 'object') out.horizon = { ...(h['label'] ? { label: s(h['label'], 120) } : {}), ...(h['startsAt'] != null ? { startsAt: isoOrNull(h['startsAt'], 'horizon.startsAt')! } : {}), ...(h['endsAt'] != null ? { endsAt: isoOrNull(h['endsAt'], 'horizon.endsAt')! } : {}), ...(h['triggeringEvent'] ? { triggeringEvent: s(h['triggeringEvent'], 200) } : {}) };
+      // Explicit-only structured requirements (never inferred). Invalid entries are dropped, not guessed.
+      const rrc = Array.isArray(m['requiresResourceCategories']) ? (m['requiresResourceCategories'] as unknown[]).map((x) => String(x)).filter((x) => RESOURCE_CATS.has(x)) : [];
+      if (rrc.length) out.requiresResourceCategories = [...new Set(rrc)].slice(0, 10);
+      const reqs = Array.isArray(m['requires']) ? (m['requires'] as unknown[]).map((r) => { const ro = (r ?? {}) as Record<string, unknown>; const cat = String(ro['category']); const q = quantity(ro); return q && QTY_CATS.has(cat) ? { category: cat as 'BUDGET' | 'TIME', ...q } : null; }).filter((x): x is NonNullable<typeof x> => x != null) : [];
+      if (reqs.length) out.requires = reqs.slice(0, 6);
+      const pre = m['prerequisite'] as Record<string, unknown> | undefined;
+      if (pre && typeof pre === 'object' && s(pre['description'])) {
+        out.prerequisite = { description: s(pre['description'], 300),
+          ...(typeof pre['durationDays'] === 'number' && Number.isFinite(pre['durationDays']) ? { durationDays: pre['durationDays'] as number } : {}),
+          ...(pre['completionDate'] != null ? { completionDate: isoOrNull(pre['completionDate'], 'prerequisite.completionDate')! } : {}) };
+      }
       return out;
     }
     case 'CONSTRAINT': {
@@ -140,6 +170,8 @@ function normalizeMetadata(kind: StrategicContextKind, raw: unknown): ContextMet
         temporaryOrStructural: inSet(TEMP_STRUCT, m['temporaryOrStructural']) ? (m['temporaryOrStructural'] as TemporaryOrStructural) : 'UNKNOWN',
       };
       if (inSet(SEVERITIES, m['severity'])) out.severity = m['severity'] as 'LOW' | 'MEDIUM' | 'HIGH';
+      const lim = quantity(m['limit']);                    // explicit max available (for quantitative conflict)
+      if (lim) out.limit = lim;
       return out;
     }
     case 'RESOURCE': {

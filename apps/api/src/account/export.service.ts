@@ -2,6 +2,7 @@ import type { PgEvidenceRepository } from '@bb/infrastructure';
 import type { PgThreadRepository } from '../business-model/pg-thread.repository';
 import type { PgRecommendationRepository } from '../business-model/pg-recommendation.repository';
 import type { PgBusinessReadRepository } from '../business-model/pg-business-read.repository';
+import { PgFounderStrategicContextRepository } from '../business-model/pg-founder-strategic-context.repository';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDB = any;
@@ -124,10 +125,9 @@ export async function buildFounderExport(args: {
     .select(['id', 'session_id', 'response_type', 'qualification', 'supersedes_id', 'superseded_at', 'created_at'])
     .where('founder_id', '=', founderId).orderBy('created_at', 'asc').execute()) as Array<Record<string, unknown>>;
 
-  // Wave 4 — Founder Strategic Context: ALL versions (active + historical), every field is founder-owned + safe.
-  const strategicContext = (await db.selectFrom('business.founder_strategic_context_item')
-    .select(['id', 'logical_item_id', 'version', 'kind', 'statement', 'category', 'scope', 'source', 'status', 'effective_from', 'effective_until', 'review_at', 'metadata', 'supersedes_item_id', 'created_at'])
-    .where('founder_id', '=', founderId).orderBy('logical_item_id', 'asc').orderBy('version', 'asc').execute()) as Array<Record<string, unknown>>;
+  // Wave 4 — Founder Strategic Context: the COMPLETE immutable version history (all versions), with DERIVED status +
+  // lifecycle (via the repository — never the raw write-once status column). Every field is founder-owned + safe.
+  const strategicContext = await new PgFounderStrategicContextRepository(db).listAllForExport(founderId);
 
   // Run history — founder-safe (error CATEGORY only; never the internal error_detail).
   const runs = (await db
@@ -193,7 +193,7 @@ export async function buildFounderExport(args: {
       return { id: String(s['id']), status: String(s['status']), strategicJob: String(s['strategic_job']), subtype: (s['subtype'] as string | null) ?? null, question: String(s['question_text']), decisionHorizon: (s['decision_horizon'] as string | null) ?? null, understandingVersion: s['understanding_version'] == null ? null : Number(s['understanding_version']), contextHealth: j(s['context_health']), recommendation: j(s['recommendation']), insufficientReason: j(s['insufficient_reason']), failureCategory: (s['failure_category'] as string | null) ?? null, founderSafeError: (s['founder_safe_error'] as string | null) ?? null, priorSuccessfulSessionId: (s['prior_successful_session_id'] as string | null) ?? null, provenance: { modelId: (s['model_id'] as string | null) ?? null, promptVersion: (s['prompt_version'] as string | null) ?? null, schemaVersion: (s['schema_version'] as string | null) ?? null }, attempts: Number(s['attempt_count']), createdAt: iso(s['created_at']), finishedAt: iso(s['finished_at']) };
     }),
     strategicResponses: strategicResponses.map((r) => ({ id: String(r['id']), sessionId: String(r['session_id']), responseType: String(r['response_type']), qualification: (r['qualification'] as string | null) ?? null, supersedesId: (r['supersedes_id'] as string | null) ?? null, supersededAt: iso(r['superseded_at']), at: iso(r['created_at']) })),
-    strategicContext: strategicContext.map((c) => ({ id: String(c['id']), logicalItemId: String(c['logical_item_id']), version: Number(c['version']), kind: String(c['kind']), statement: String(c['statement']), category: String(c['category']), scope: String(c['scope']), source: String(c['source']), status: String(c['status']), effectiveFrom: iso(c['effective_from']), effectiveUntil: iso(c['effective_until']), reviewAt: iso(c['review_at']), metadata: typeof c['metadata'] === 'string' ? JSON.parse(c['metadata'] as string) : c['metadata'], supersedesItemId: (c['supersedes_item_id'] as string | null) ?? null, createdAt: iso(c['created_at']) })),
+    strategicContext: strategicContext.map((c) => ({ id: c.id, logicalItemId: c.logicalItemId, version: c.version, kind: c.kind, statement: c.statement, category: c.category, scope: c.scope, source: c.source, status: c.status, lifecycle: c.lifecycle, effectiveFrom: c.effectiveFrom, effectiveUntil: c.effectiveUntil, reviewAt: c.reviewAt, metadata: c.metadata, supersedesItemId: c.supersedesItemId, createdAt: c.createdAt })),
     understandingRuns: runs.map((r) => ({
       id: String(r['id']), sourceKey: String(r['source_key']), status: String(r['status']), attempts: Number(r['attempt_count']),
       errorCode: (r['error_code'] as string | null) ?? null, understandingVersion: r['understanding_version'] == null ? null : Number(r['understanding_version']),

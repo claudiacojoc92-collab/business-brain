@@ -128,6 +128,25 @@ describe('strategy — strict recommendation schema (normalizer)', () => {
     expect(normalizeStrategicOutput('not json', 'WEBSITE_PRIORITY')).toBeNull();
   });
 
+  it('schema-recommendation-2 compatibility: a v1 payload (no context refs) and a v2 payload (with them) both normalize', () => {
+    // v1 shape — evidence refs without any Founder Strategic Context fields (as persisted under strategy-recommendation-1).
+    const v1 = normalizeStrategicOutput(rawRecommendation(), 'POSITIONING_PRIORITY') as StrategicRecommendation;
+    expect(v1.reasoning.supportingEvidence[0]!.kind).toBe('PUBLIC_POSITIONING_OBSERVATION');
+    expect(v1.reasoning.supportingEvidence[0]!.logicalItemId).toBeUndefined(); // v1 refs simply omit the new fields
+
+    // v2 shape — a FOUNDER_STRATEGIC_CONTEXT ref carrying the new optional context fields.
+    const raw = rawRecommendation();
+    (raw['reasoning'] as Record<string, unknown>)['supportingEvidence'] = [
+      { kind: 'FOUNDER_STRATEGIC_CONTEXT', statement: 'Budget is £150/mo (non-negotiable).', refId: 'item-9', logicalItemId: 'logi-9', version: 2, scope: 'ACQUISITION', source: 'FOUNDER_DECLARED', effectiveFrom: '2026-07-01T00:00:00.000Z' },
+    ];
+    const v2 = normalizeStrategicOutput(raw, 'ACQUISITION_PRIORITY') as StrategicRecommendation;
+    const ref = v2.reasoning.supportingEvidence[0]!;
+    expect(ref.kind).toBe('FOUNDER_STRATEGIC_CONTEXT');
+    expect(ref.logicalItemId).toBe('logi-9'); expect(ref.version).toBe(2); expect(ref.scope).toBe('ACQUISITION'); expect(ref.source).toBe('FOUNDER_DECLARED');
+    // shared fields parse identically across versions
+    expect(ref.refId).toBe('item-9'); expect(ref.statement).toMatch(/Budget/);
+  });
+
   it('caps unbounded arrays so a runaway model cannot flood the founder', () => {
     const many = Array.from({ length: 40 }, (_v, i) => ({ kind: 'FOUNDER_DECLARATION', statement: `d${i}` }));
     const raw = rawRecommendation();
