@@ -305,3 +305,76 @@ export async function getDeclareQuestions(): Promise<DeclareQuestion[]> {
 export async function submitDeclaration(answers: { field: string; text: string }[]): Promise<DeclareResult> {
   return request<DeclareResult>('declare', { method: 'POST', body: JSON.stringify({ answers }) });
 }
+
+// ─── Founder Strategy: bounded priority-decision reasoning (Wave 4, slice 1) ──────────────────────
+// One supported job (PRIORITY_DECISION) over the durable session lifecycle. Out-of-scope questions get a
+// founder-safe boundary (no durable job). The recommendation preserves epistemic status + provenance; the
+// server view never exposes raw model output or internal error detail. Founder responses are append-only.
+
+export type StrategyStatus = 'QUEUED' | 'PROCESSING' | 'READY' | 'INSUFFICIENT_EVIDENCE' | 'FAILED';
+export type StrategyResponseType = 'ACCEPT' | 'REJECT' | 'QUALIFY' | 'NEEDS_MORE_EVIDENCE' | 'NOT_RELEVANT_NOW';
+export type EpistemicKind =
+  | 'OBSERVED_BUSINESS_EVIDENCE' | 'BUSINESS_UNDERSTANDING_INFERENCE' | 'PUBLIC_POSITIONING_OBSERVATION'
+  | 'MARKET_INFERENCE' | 'FOUNDER_DECLARATION' | 'FOUNDER_CORRECTION' | 'FOUNDER_RELEVANCE_DECISION'
+  | 'UNKNOWN' | 'CONVERSATION_HYPOTHESIS' | 'STRATEGIC_RECOMMENDATION';
+export type Band = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface EvidenceReference { kind: EpistemicKind; statement: string; refId: string | null; entityId?: string | null; sourceUrl?: string | null }
+export interface StrategicRecommendation {
+  kind: 'STRATEGIC_RECOMMENDATION'; strategicJob: 'PRIORITY_DECISION'; subtype: string;
+  recommendation: { title: string; action: string; horizon: string; priorityRank?: number };
+  reasoning: {
+    supportingEvidence: EvidenceReference[]; founderDeclarations: EvidenceReference[];
+    assumptions: Array<{ assumption: string; basis: string | null }>;
+    unknowns: Array<{ unknown: string; whyItMatters: string | null }>;
+    counterEvidence: EvidenceReference[];
+    conflicts: Array<{ statement: string; observation: string; founderCorrection: string; refId: string | null }>;
+  };
+  confidence: { evidenceStrength: Band; founderConfirmation: Band; marketContextQuality: Band; contradictionLevel: Band; unknownBurden: Band };
+  alternatives: Array<{ option: string; whyNotFirst: string; whenItBecomesPreferable: string }>;
+  nextStep: { action: string; successSignal: string; reviewAfter: string };
+  whatWouldChangeThisRecommendation: string[];
+}
+export interface InsufficientStrategicEvidence {
+  kind: 'INSUFFICIENT_STRATEGIC_EVIDENCE'; whatIsMissing: string[]; whyItMatters: string;
+  smallestEvidenceAction: string; provisionalPossible: boolean; whatNotToConcludeYet: string[];
+}
+export interface StrategyResponseRecord { id: string; sessionId: string; responseType: StrategyResponseType; qualification: string | null; supersedesId: string | null; supersededAt: string | null; createdAt: string }
+export interface StrategySessionView {
+  sessionId: string; status: StrategyStatus; strategicJob: 'PRIORITY_DECISION'; subtype: string; question: string;
+  decisionHorizon: string | null; understandingVersion: number | null; contextHealth: unknown;
+  recommendation: StrategicRecommendation | null; insufficient: InsufficientStrategicEvidence | null;
+  failureCategory: string | null; retryable: boolean; message: string | null; attempt: number; maxAttempts: number;
+  priorSuccessfulSessionId: string | null; provenance: { modelId: string | null; promptVersion: string | null; schemaVersion: string | null } | null;
+  createdAt: string; updatedAt: string; effectiveResponse?: StrategyResponseRecord | null;
+}
+export interface StrategyBoundary { kind: 'OUT_OF_SCOPE'; message: string; supported: string }
+export type CreateStrategyResult = { outOfScope: true; boundary: StrategyBoundary } | ({ outOfScope?: false } & StrategySessionView);
+
+/** POST /strategy/sessions — classify + start a priority-decision job, OR a founder-safe boundary if out of scope. */
+export async function createStrategySession(question: string): Promise<CreateStrategyResult> {
+  return request<CreateStrategyResult>('strategy/sessions', { method: 'POST', body: JSON.stringify({ question }) });
+}
+/** GET /strategy/sessions/:id — the founder-safe session view + the effective founder response. */
+export async function getStrategySession(id: string): Promise<StrategySessionView> {
+  return request<StrategySessionView>(`strategy/sessions/${encodeURIComponent(id)}`);
+}
+/** GET /strategy/sessions — the founder's priority-decision history, newest first. */
+export async function listStrategySessions(): Promise<StrategySessionView[]> {
+  const { sessions } = await request<{ sessions: StrategySessionView[] }>('strategy/sessions');
+  return sessions;
+}
+/** POST /strategy/sessions/:id/retry — re-queue a transiently FAILED session (409 if not retryable). */
+export async function retryStrategySession(id: string): Promise<StrategySessionView> {
+  return request<StrategySessionView>(`strategy/sessions/${encodeURIComponent(id)}/retry`, { method: 'POST' });
+}
+/** POST /strategy/sessions/:id/responses — append a founder response (ACCEPT does not execute or write memory). */
+export async function respondToStrategy(id: string, input: { responseType: StrategyResponseType; qualification?: string }): Promise<StrategyResponseRecord> {
+  const { response } = await request<{ response: StrategyResponseRecord }>(`strategy/sessions/${encodeURIComponent(id)}/responses`, { method: 'POST', body: JSON.stringify(input) });
+  return response;
+}
+/** GET /strategy/sessions/:id/responses — full append-only response history (oldest first). */
+export async function listStrategyResponses(id: string): Promise<StrategyResponseRecord[]> {
+  const { responses } = await request<{ responses: StrategyResponseRecord[] }>(`strategy/sessions/${encodeURIComponent(id)}/responses`);
+  return responses;
+}

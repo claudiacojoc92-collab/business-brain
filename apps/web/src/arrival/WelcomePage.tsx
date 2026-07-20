@@ -36,8 +36,10 @@ export function WelcomePage() {
             No forms to fill for their own sake. Nothing you tell me is wasted. You can leave, export, or delete
             everything at any time.
           </p>
-          <div className="bb-rise" style={{ ['--i' as string]: 5 }}>
+          <div className="bb-rise" style={{ ['--i' as string]: 5, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <Button variant="primary" onClick={() => navigate('/understand')}>Start with my business →</Button>
+            <button type="button" onClick={() => navigate('/market')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-3)' }}>Positioning context</button>
+            <button type="button" onClick={() => navigate('/strategy')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-3)' }}>Decide a priority</button>
           </div>
         </div>
       </div>

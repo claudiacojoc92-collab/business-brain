@@ -11,6 +11,8 @@ data:
   # value (unchanged during the eval pass): claude-sonnet-5.
   SYNTHESIS_MODEL:         "claude-sonnet-5"
   MARKET_INFERENCE_MODEL:  "claude-sonnet-5"
+  # Wave 4 — Founder Strategy reasoning model (falls back to SYNTHESIS_MODEL when unset).
+  STRATEGY_MODEL:          "claude-sonnet-5"
   LOG_LEVEL:         "info"
   OTEL_SERVICE_NAME: "businessbrain"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"

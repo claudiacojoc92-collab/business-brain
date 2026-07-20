@@ -13,7 +13,7 @@
  *   Market-context inference         → MARKET_INFERENCE_MODEL (falls back to SYNTHESIS_MODEL)
  */
 
-export type ModelCapability = 'synthesis' | 'market-inference';
+export type ModelCapability = 'synthesis' | 'market-inference' | 'strategy';
 
 export interface ModelConfig {
   capability: ModelCapability;
@@ -32,10 +32,12 @@ export const LOCAL_DEFAULT_MODEL = 'claude-sonnet-5';
 export const PROMPT_VERSION: Record<ModelCapability, string> = {
   synthesis: 'synthesis-1',
   'market-inference': 'market-infer-sys-1',
+  strategy: 'strategy-1',
 };
 export const SCHEMA_VERSION: Record<ModelCapability, string> = {
   synthesis: 'conclusions-1',          // {conclusions:[{type,statement,epistemicStatus,evidenceRefs,confidence}]}
   'market-inference': 'market-inference-1', // {inferenceText,epistemicStatus,relevanceToFounder}
+  strategy: 'strategy-recommendation-1',   // {recommendation,reasoning,confidence,alternatives,nextStep,…}
 };
 
 /** Production-capable mode = a real deploy. Local dev + tests are NOT production-capable and may use the default. */
@@ -70,9 +72,12 @@ function resolve(capability: ModelCapability, primaryEnv: string, fallbackEnv?: 
 
 export function synthesisModelConfig(): ModelConfig { return resolve('synthesis', 'SYNTHESIS_MODEL'); }
 export function marketInferenceModelConfig(): ModelConfig { return resolve('market-inference', 'MARKET_INFERENCE_MODEL', 'SYNTHESIS_MODEL'); }
+// Wave 4 — the strategist runs on its OWN key (STRATEGY_MODEL), falling back to the synthesis model. Same
+// fail-fast contract; no silent model switch. Does NOT change the synthesis/market models.
+export function strategyModelConfig(): ModelConfig { return resolve('strategy', 'STRATEGY_MODEL', 'SYNTHESIS_MODEL'); }
 
-/** Boot-time fail-fast: resolve BOTH capabilities so a production-capable process refuses to start with a
- *  missing/invalid model configuration. Returns the two configs for logging (never logs secrets). */
-export function validateModelConfig(): { synthesis: ModelConfig; marketInference: ModelConfig } {
-  return { synthesis: synthesisModelConfig(), marketInference: marketInferenceModelConfig() };
+/** Boot-time fail-fast: resolve ALL capabilities so a production-capable process refuses to start with a
+ *  missing/invalid model configuration. Returns the configs for logging (never logs secrets). */
+export function validateModelConfig(): { synthesis: ModelConfig; marketInference: ModelConfig; strategy: ModelConfig } {
+  return { synthesis: synthesisModelConfig(), marketInference: marketInferenceModelConfig(), strategy: strategyModelConfig() };
 }

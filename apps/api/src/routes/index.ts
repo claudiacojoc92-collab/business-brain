@@ -15,6 +15,7 @@ import { registerDeclareRoutes } from './declare.routes';
 import { registerAuthCredentialRoutes } from './auth-credentials.routes';
 import { registerUnderstandingRoutes } from './understanding.routes';
 import { registerMarketRoutes } from './market.routes';
+import { registerStrategyRoutes } from './strategy.routes';
 import { PgIdentityRepository } from '../session/pg-identity.repository';
 import { registerRequireFounder } from '../session/require-founder';
 import type { IEmailService } from '../session/email.service';
@@ -49,6 +50,7 @@ export async function registerRoutes(
     registerDeclareRoutes(api);            // P1·S1 — production declaration capture (persist-only) → /api/declare*; strict session
     registerUnderstandingRoutes(api);      // A–E Wave 2 — business understanding synthesis → /api/understanding*; strict session
     registerMarketRoutes(api);             // A–E Wave 3 — known-entity market context → /api/market*; strict session
+    registerStrategyRoutes(api);           // Wave 4 — Founder Strategy (priority-decision) → /api/strategy*; strict session
   }, { prefix: '/api' });
 
   // Dev-only nucleus endpoints (outside /v1). Never registered in production.

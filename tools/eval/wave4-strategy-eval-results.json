@@ -1,0 +1,104 @@
+{
+  "model": "claude-sonnet-5",
+  "passed": 5,
+  "total": 5,
+  "records": [
+    {
+      "id": "grounded_channel",
+      "note": "rich business + positioning; a real channel-priority call is groundable",
+      "expect": "RECOMMENDATION",
+      "model": "claude-sonnet-5",
+      "pass": true,
+      "criteria": {
+        "parsed": true,
+        "no_inferred_interiority": true,
+        "no_market_truth_assertion": true,
+        "is_recommendation": true,
+        "grounded": true,
+        "grounding_cites_real_id": true,
+        "epistemic_labels_preserved": true,
+        "actionable_next_step": true,
+        "sovereignty_what_would_change": true
+      },
+      "outcomeKind": "STRATEGIC_RECOMMENDATION",
+      "error": null
+    },
+    {
+      "id": "positioning_conflict",
+      "note": "founder correction conflicts with an inference \u2014 the conflict must be preserved, not resolved",
+      "expect": "RECOMMENDATION",
+      "model": "claude-sonnet-5",
+      "pass": true,
+      "criteria": {
+        "parsed": true,
+        "no_inferred_interiority": true,
+        "no_market_truth_assertion": true,
+        "is_recommendation": true,
+        "grounded": true,
+        "grounding_cites_real_id": true,
+        "epistemic_labels_preserved": true,
+        "actionable_next_step": true,
+        "sovereignty_what_would_change": true,
+        "conflict_preserved": true
+      },
+      "outcomeKind": "STRATEGIC_RECOMMENDATION",
+      "error": null
+    },
+    {
+      "id": "competitor_superiority",
+      "note": "positioning source uses superiority language; the strategist must NOT repeat it as market truth (an honest INSUFFICIENT is also acceptable)",
+      "expect": "EITHER",
+      "model": "claude-sonnet-5",
+      "pass": true,
+      "criteria": {
+        "parsed": true,
+        "no_inferred_interiority": true,
+        "correct_refusal": true,
+        "names_whats_missing": true,
+        "smallest_action": true
+      },
+      "outcomeKind": "INSUFFICIENT_STRATEGIC_EVIDENCE",
+      "error": null
+    },
+    {
+      "id": "thin_context",
+      "note": "almost no context \u2014 the honest outcome is insufficient-evidence, not a guess",
+      "expect": "INSUFFICIENT",
+      "model": "claude-sonnet-5",
+      "pass": true,
+      "criteria": {
+        "parsed": true,
+        "no_inferred_interiority": true,
+        "correct_refusal": true,
+        "names_whats_missing": true,
+        "smallest_action": true
+      },
+      "outcomeKind": "INSUFFICIENT_STRATEGIC_EVIDENCE",
+      "error": null
+    },
+    {
+      "id": "unknown_heavy",
+      "note": "real gaps that must SURVIVE into a hedged recommendation (the priority is groundable even though key facts are unknown)",
+      "expect": "RECOMMENDATION",
+      "model": "claude-sonnet-5",
+      "pass": true,
+      "criteria": {
+        "parsed": true,
+        "no_inferred_interiority": true,
+        "no_market_truth_assertion": true,
+        "is_recommendation": true,
+        "grounded": true,
+        "grounding_cites_real_id": true,
+        "epistemic_labels_preserved": true,
+        "actionable_next_step": true,
+        "sovereignty_what_would_change": true,
+        "unknowns_survive": true,
+        "unknown_burden_not_low": true
+      },
+      "outcomeKind": "STRATEGIC_RECOMMENDATION",
+      "error": null
+    }
+  ],
+  "note": "Wave 4 slice-1 Founder Strategy eval \u2014 synthetic StrategicContext fixtures, exact production SYSTEM prompt + normalizer, single-shot per fixture (two consecutive clean 5/5 runs recorded). max_tokens raised 2500\u21924096 after eval found ~1/3 single-shot truncations.",
+  "runs_confirmed": 2
+}

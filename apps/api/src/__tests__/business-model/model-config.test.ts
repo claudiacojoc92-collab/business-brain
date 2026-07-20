@@ -1,9 +1,9 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { synthesisModelConfig, marketInferenceModelConfig, validateModelConfig, LOCAL_DEFAULT_MODEL } from '../../business-model/model-config';
+import { synthesisModelConfig, marketInferenceModelConfig, strategyModelConfig, validateModelConfig, LOCAL_DEFAULT_MODEL } from '../../business-model/model-config';
 
 /** Wave-2 debt B — the explicit, validated model-configuration contract. Pure (no DB/network). */
 
-const KEYS = ['NODE_ENV', 'SYNTHESIS_MODEL', 'MARKET_INFERENCE_MODEL'] as const;
+const KEYS = ['NODE_ENV', 'SYNTHESIS_MODEL', 'MARKET_INFERENCE_MODEL', 'STRATEGY_MODEL'] as const;
 const saved: Record<string, string | undefined> = {};
 for (const k of KEYS) saved[k] = process.env[k];
 function setEnv(patch: Partial<Record<(typeof KEYS)[number], string | undefined>>): void {
@@ -19,6 +19,18 @@ describe('model-config contract', () => {
     expect(s.promptVersion).toBe('synthesis-1'); expect(s.schemaVersion).toBe('conclusions-1'); expect(s.effectiveValue).toBe(s.modelId);
     const m = marketInferenceModelConfig();
     expect(m.promptVersion).toBe('market-infer-sys-1'); expect(m.schemaVersion).toBe('market-inference-1');
+    const st = strategyModelConfig();
+    expect(st.modelId).toBe(LOCAL_DEFAULT_MODEL); expect(st.configuredSource).toBe('local-default');
+    expect(st.promptVersion).toBe('strategy-1'); expect(st.schemaVersion).toBe('strategy-recommendation-1');
+  });
+
+  it('strategy falls back to SYNTHESIS_MODEL when its own var is unset, and reads STRATEGY_MODEL when set', () => {
+    setEnv({ NODE_ENV: 'test', SYNTHESIS_MODEL: 'claude-sonnet-5', MARKET_INFERENCE_MODEL: undefined, STRATEGY_MODEL: undefined });
+    const fb = strategyModelConfig();
+    expect(fb.modelId).toBe('claude-sonnet-5'); expect(fb.configuredSource).toBe('SYNTHESIS_MODEL');
+    setEnv({ STRATEGY_MODEL: 'claude-opus-4-8' });
+    const ex = strategyModelConfig();
+    expect(ex.modelId).toBe('claude-opus-4-8'); expect(ex.configuredSource).toBe('STRATEGY_MODEL');
   });
 
   it('reads explicit env per capability, independently', () => {
@@ -41,9 +53,9 @@ describe('model-config contract', () => {
   });
 
   it('production-capable mode passes when explicitly configured', () => {
-    setEnv({ NODE_ENV: 'production', SYNTHESIS_MODEL: 'claude-sonnet-5', MARKET_INFERENCE_MODEL: 'claude-sonnet-5' });
+    setEnv({ NODE_ENV: 'production', SYNTHESIS_MODEL: 'claude-sonnet-5', MARKET_INFERENCE_MODEL: 'claude-sonnet-5', STRATEGY_MODEL: 'claude-sonnet-5' });
     const v = validateModelConfig();
-    expect(v.synthesis.modelId).toBe('claude-sonnet-5'); expect(v.marketInference.modelId).toBe('claude-sonnet-5');
+    expect(v.synthesis.modelId).toBe('claude-sonnet-5'); expect(v.marketInference.modelId).toBe('claude-sonnet-5'); expect(v.strategy.modelId).toBe('claude-sonnet-5');
   });
 
   it('rejects an invalid / non-Anthropic model id', () => {

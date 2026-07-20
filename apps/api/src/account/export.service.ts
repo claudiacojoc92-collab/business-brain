@@ -34,6 +34,8 @@ export interface FounderExport {
   marketFindings: unknown[];
   marketFindingResponses: unknown[];
   understandingRuns: unknown[];
+  strategicSessions: unknown[];
+  strategicResponses: unknown[];
   meta: { note: string };
 }
 
@@ -110,6 +112,17 @@ export async function buildFounderExport(args: {
   const effectiveResponseByFinding = new Map<string, Record<string, unknown>>();
   for (const r of marketFindingResponses) if (r['superseded_at'] == null) effectiveResponseByFinding.set(String(r['market_finding_id']), r);
 
+  // Wave 4 — Founder Strategy sessions (founder-safe: recommendation/insufficient reason + provenance + failure
+  // CATEGORY; the internal_error_detail and lease/claim internals are never selected).
+  const strategicSessions = (await db.selectFrom('business.strategic_session')
+    .select(['id', 'status', 'strategic_job', 'subtype', 'question_text', 'decision_horizon', 'understanding_version', 'context_health', 'recommendation', 'insufficient_reason', 'failure_category', 'founder_safe_error', 'prior_successful_session_id', 'model_id', 'prompt_version', 'schema_version', 'attempt_count', 'created_at', 'finished_at'])
+    .where('founder_id', '=', founderId).orderBy('created_at', 'asc').execute()) as Array<Record<string, unknown>>;
+
+  // Append-only founder responses to recommendations (effective = superseded_at null).
+  const strategicResponses = (await db.selectFrom('business.strategic_response')
+    .select(['id', 'session_id', 'response_type', 'qualification', 'supersedes_id', 'superseded_at', 'created_at'])
+    .where('founder_id', '=', founderId).orderBy('created_at', 'asc').execute()) as Array<Record<string, unknown>>;
+
   // Run history — founder-safe (error CATEGORY only; never the internal error_detail).
   const runs = (await db
     .selectFrom('business.understanding_run')
@@ -169,6 +182,11 @@ export async function buildFounderExport(args: {
     }),
     // Append-only response history — both dimensions, qualifications, supersession lineage (effective = supersededAt null).
     marketFindingResponses: marketFindingResponses.map((r) => ({ id: String(r['id']), marketFindingId: String(r['market_finding_id']), accuratelyReflectsSource: String(r['accurately_reflects_source']), relevanceStatus: String(r['relevance_status']), accuracyQualification: (r['accuracy_qualification'] as string | null) ?? null, relevanceQualification: (r['relevance_qualification'] as string | null) ?? null, supersedesId: (r['supersedes_id'] as string | null) ?? null, supersededAt: iso(r['superseded_at']), at: iso(r['created_at']) })),
+    strategicSessions: strategicSessions.map((s) => {
+      const j = (v: unknown) => (v == null ? null : typeof v === 'string' ? JSON.parse(v) : v);
+      return { id: String(s['id']), status: String(s['status']), strategicJob: String(s['strategic_job']), subtype: (s['subtype'] as string | null) ?? null, question: String(s['question_text']), decisionHorizon: (s['decision_horizon'] as string | null) ?? null, understandingVersion: s['understanding_version'] == null ? null : Number(s['understanding_version']), contextHealth: j(s['context_health']), recommendation: j(s['recommendation']), insufficientReason: j(s['insufficient_reason']), failureCategory: (s['failure_category'] as string | null) ?? null, founderSafeError: (s['founder_safe_error'] as string | null) ?? null, priorSuccessfulSessionId: (s['prior_successful_session_id'] as string | null) ?? null, provenance: { modelId: (s['model_id'] as string | null) ?? null, promptVersion: (s['prompt_version'] as string | null) ?? null, schemaVersion: (s['schema_version'] as string | null) ?? null }, attempts: Number(s['attempt_count']), createdAt: iso(s['created_at']), finishedAt: iso(s['finished_at']) };
+    }),
+    strategicResponses: strategicResponses.map((r) => ({ id: String(r['id']), sessionId: String(r['session_id']), responseType: String(r['response_type']), qualification: (r['qualification'] as string | null) ?? null, supersedesId: (r['supersedes_id'] as string | null) ?? null, supersededAt: iso(r['superseded_at']), at: iso(r['created_at']) })),
     understandingRuns: runs.map((r) => ({
       id: String(r['id']), sourceKey: String(r['source_key']), status: String(r['status']), attempts: Number(r['attempt_count']),
       errorCode: (r['error_code'] as string | null) ?? null, understandingVersion: r['understanding_version'] == null ? null : Number(r['understanding_version']),
