@@ -1,5 +1,11 @@
 # Recommendation Provenance Integrity — slice architecture
 
+> **Amended by [`recommendation-provenance-integrity-remediation.md`](recommendation-provenance-integrity-remediation.md)**
+> (supersedes the d89110c acceptance). Two blockers were closed: the allowed-reference manifest is now **persisted
+> immutably** (V071) so historical revalidation never uses the assembler/current effective context, and degradation is
+> now **whole-outcome** (Option B) rather than "collapse only when zero grounded". Read this record together with the
+> remediation record; where they differ, the remediation governs.
+
 Resolves **KA-1** (ADR-011). Smallest design that makes every grounded recommendation reference typed, resolvable,
 founder-isolated, version-exact, historically stable, input-bounded, and safe for export/reconstruction. Recorded before
 implementation; governed by [`recommendation-provenance-integrity-contract.md`](../governance/recommendation-provenance-integrity-contract.md).

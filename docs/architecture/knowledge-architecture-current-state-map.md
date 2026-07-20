@@ -29,8 +29,12 @@ Documentation only — nothing here changes runtime behavior. Verified against t
 
 ## Known architectural debt
 
-- **KA-1 — write-time provenance validation. RESOLVED** (Recommendation Provenance Integrity slice; see
-  `recommendation-provenance-integrity-slice.md` + `../governance/recommendation-provenance-integrity-contract.md`).
+- **KA-1 — write-time provenance validation. Under remediation** (Recommendation Provenance Integrity slice + bounded
+  remediation; see `recommendation-provenance-integrity-slice.md`, `recommendation-provenance-integrity-remediation.md`
+  + `../governance/recommendation-provenance-integrity-contract.md`). Write-time validation landed at `d89110c`; that
+  acceptance was **superseded** to close two blockers — a **durable immutable manifest** (V071, historical revalidation
+  independent of current effective context) and **whole-outcome degradation** (Option B, no laundering of an unsupported
+  claim by an unrelated valid reference).
   The worker now builds a per-session, founder-scoped **input manifest** from the exact assembled context
   (`provenance.ts` `buildProvenanceManifest`, version `pm-1`) and validates **every** model-produced reference against it
   at write time (`validateRecommendationProvenance`), before persistence. Reference-kind → target-category is enforced;
@@ -56,7 +60,7 @@ Documentation only — nothing here changes runtime behavior. Verified against t
 
 | Debt | Category | Required now? |
 |---|---|---|
-| KA-1 write-time provenance validation | 6 Provenance | **RESOLVED** (Recommendation Provenance Integrity slice) |
+| KA-1 write-time provenance validation | 6 Provenance | **Under remediation** (durable manifest + whole-outcome degradation) |
 | KA-2 legacy `memory.*` reconciliation | 14 (boundary) | No — later, at Capability C |
 | KA-3 structural conflicts not persisted | 7 Conflict | No — accepted |
 
