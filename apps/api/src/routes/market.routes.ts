@@ -10,9 +10,10 @@ import { PgUnderstandingRepository } from '../business-model/pg-understanding.re
 import { WebsiteResearchAdapter } from '../business-model/website-research.adapter';
 import { AnthropicMarketInference } from '../business-model/anthropic-market-inference';
 import { startMarketReviewWorker } from '../business-model/market-review.worker';
+import { maybeWrapMarketFixtures } from '../business-model/fixture-research.adapter';
 import { toReviewView } from '../business-model/market-review';
-import { recordFindingResponse, findingViewsForEntity, effectiveMarketContext } from '../business-model/market-context.service';
-import { ENTITY_TYPES, ACCURACY_STATUSES, RELEVANCE_RESPONSE_STATUSES, type EntityType, type AccuracyStatus, type RelevanceResponseStatus } from '../business-model/market-context';
+import { recordFindingResponse, findingViewsForEntity, effectiveMarketContext, listEntityViews } from '../business-model/market-context.service';
+import { ENTITY_TYPES, ACCURACY_STATUSES, RELEVANCE_RESPONSE_STATUSES, DuplicateEntityNameError, type EntityType, type AccuracyStatus, type RelevanceResponseStatus } from '../business-model/market-context';
 
 /**
  * PRODUCTION market-CONTEXT API (Wave 3 slice 1) — known-entity, source-backed public evidence (NOT market
@@ -42,8 +43,10 @@ export function registerMarketRoutes(server: FastifyInstance): void {
   }
 
   // Durable review worker (off under test; tests drive processReview). DB is authoritative — no in-memory guard.
+  // The controlled-outcome fixtures are wrapped in ONLY when explicitly enabled and never in production (throws).
   if (process.env['NODE_ENV'] !== 'test') {
-    startMarketReviewWorker({ reviewRepo, entities, findings, adapter: new WebsiteResearchAdapter(), inferenceModel: new AnthropicMarketInference(apiKey), founderBusiness, db, leaseMs: LEASE_MS, now: () => new Date() });
+    const wrapped = maybeWrapMarketFixtures(new WebsiteResearchAdapter(), new AnthropicMarketInference(apiKey));
+    startMarketReviewWorker({ reviewRepo, entities, findings, adapter: wrapped.adapter, inferenceModel: wrapped.inferenceModel, founderBusiness, db, leaseMs: LEASE_MS, now: () => new Date() });
   }
 
   server.post('/market/entities', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -60,32 +63,47 @@ export function registerMarketRoutes(server: FastifyInstance): void {
   server.get('/market/entities', async (request: FastifyRequest, reply: FastifyReply) => {
     const founderId = await sessionFounder(request);
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
-    await reply.send({ entities: await entities.list(founderId) });
+    await reply.send({ entities: await listEntityViews(founderId, entities, reviewRepo) });
   });
 
+  // Edit an entity (name / website / type / relevance note) OR change its status (dismiss/restore/confirm).
+  // Identity + origin + review history + findings + response history are always preserved. A website change
+  // records website_changed_at so prior findings become historical (excluded from current context) until a
+  // fresh review of the new site succeeds. A name collision with the founder's own entity is a 409.
   server.patch('/market/entities/:id', async (request: FastifyRequest, reply: FastifyReply) => {
     const founderId = await sessionFounder(request);
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
     const id = (request.params as { id: string }).id;
+    const cur = await entities.get(founderId, id);
+    if (!cur) { await reply.code(404).send({ error: 'not found' }); return; }
     const b = (request.body ?? {}) as Record<string, unknown>;
     const status = String(b['status'] ?? '');
     const patch: Parameters<PgMarketEntityRepository['patch']>[2] = {};
+    if (b['name'] !== undefined) {
+      const name = String(b['name']).trim();
+      if (!name) { await reply.code(400).send({ error: 'a company name is required' }); return; }
+      patch.name = name;
+    }
     if (ENTITY_TYPES.has(String(b['entityType']))) patch.entityType = b['entityType'] as EntityType;
-    if (b['websiteUrl'] !== undefined) patch.websiteUrl = b['websiteUrl'] ? String(b['websiteUrl']) : null;
+    if (b['websiteUrl'] !== undefined) {
+      const nextUrl = b['websiteUrl'] ? String(b['websiteUrl']) : null;
+      patch.websiteUrl = nextUrl;
+      if ((nextUrl ?? '') !== (cur.websiteUrl ?? '')) patch.websiteChangedAt = new Date(); // website changed → prior findings become historical
+    }
     if (b['relevanceNote'] !== undefined) patch.relevanceNote = String(b['relevanceNote']);
     if (status === 'confirmed') { patch.relevanceStatus = 'confirmed'; patch.dismissedAt = null; }
     if (status === 'dismissed') { patch.relevanceStatus = 'dismissed'; patch.dismissedAt = new Date(); }
     // Restore a dismissed entity to its origin-correct state (founder_added → confirmed; bb_suggested →
     // proposed, i.e. back to unverified, never silently promoted). Its reviews + findings are preserved.
-    if (status === 'restored') {
-      const cur = await entities.get(founderId, id);
-      if (!cur) { await reply.code(404).send({ error: 'not found' }); return; }
-      patch.relevanceStatus = cur.origin === 'bb_suggested' ? 'proposed' : 'confirmed';
-      patch.dismissedAt = null;
+    if (status === 'restored') { patch.relevanceStatus = cur.origin === 'bb_suggested' ? 'proposed' : 'confirmed'; patch.dismissedAt = null; }
+    try {
+      const entity = await entities.patch(founderId, id, patch, new Date());
+      if (!entity) { await reply.code(404).send({ error: 'not found' }); return; }
+      await reply.send({ entity });
+    } catch (e) {
+      if (e instanceof DuplicateEntityNameError) { await reply.code(409).send({ error: 'You already have a company with that name.' }); return; }
+      throw e;
     }
-    const entity = await entities.patch(founderId, id, patch, new Date());
-    if (!entity) { await reply.code(404).send({ error: 'not found' }); return; }
-    await reply.send({ entity });
   });
 
   // POST /market/entities/:id/reviews — create OR return the active review (idempotent); returns immediately.

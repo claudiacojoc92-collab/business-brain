@@ -148,3 +148,92 @@ _(none in Part A)_
 ## States not reproducible
 
 - **Google login hidden (live render):** Google is configured in this environment (`{googleLogin:true}`), so the button correctly shows. The hidden branch is the hook's safe default (server-declared readiness); reproducing the live hidden render would require unconfiguring Google + API reboot. Mechanism verified.
+
+---
+
+# Final Wave-3 founder-facing increment (from commit `7a88030`)
+
+Two objectives: (1) controlled browser coverage for **every** market-review terminal/failure category, and
+(2) **edit-after-create** for market entities. Rate-limit→429 was explicitly **excluded** (see transversal item).
+
+## 1. Controlled-outcome adapter (gating)
+
+`apps/api/src/business-model/fixture-research.adapter.ts` — a `FixtureResearchAdapter` + `FixtureInferenceModel`
+pair wrapping the real adapter/model, installed via `maybeWrapMarketFixtures`:
+- **disabled by default** (returns the real pair unchanged when `MARKET_FIXTURE_ADAPTER` is unset — verified);
+- **refuses to start in production-capable mode** (`NODE_ENV=production` + flag → throws — unit-tested);
+- **only the reserved dev host `fixture.market.test` triggers it**; every real URL delegates to the real
+  adapter (verified in-browser: a `getbusinessbrain.com` review still ran on `retrievalAdapter=website-connector`);
+- **no founder-facing internal detail** — outcomes flow through the normal founder-safe messages.
+
+Enabled for this browser session via the boot loader (`MARKET_FIXTURE_ADAPTER=1`, `NODE_ENV=development`).
+
+**Fixture catalog** — `https://fixture.market.test/<outcome>`: `ready`, `robots-blocked`, `unreachable`,
+`unsupported`, `insufficient`, `retrieval-failed`, `inference-failed`.
+
+## 2. All seven outcomes — browser-driven through the REAL durable worker
+
+Seven fixture entities (`FX <outcome>`) created + reviewed via the real create-review route → DB state machine →
+worker → polling → terminal-state rendering. Verified in the rendered UI after reload (mount restore):
+
+| Fixture | Terminal state | Founder-safe message (rendered) | "Try again" shown | Retryable (policy) |
+|---------|----------------|--------------------------------|-------------------|--------------------|
+| ready | READY | (findings render — "WHAT THEIR SITE SAYS" + inference) | — | — |
+| robots-blocked | FAILED / ROBOTS_BLOCKED | "That site asks not to be read automatically. Try a different source." | **no** | not retryable |
+| unreachable | FAILED / UNREACHABLE | "I couldn't reach that website. Check the address and try again." | **yes** | retryable |
+| unsupported | FAILED / UNSUPPORTED_CONTENT | "That page isn't a readable web page. Try a different page or URL." | **no** | not retryable |
+| insufficient | INSUFFICIENT_EVIDENCE / INSUFFICIENT_READABLE_EVIDENCE | "I couldn't read enough from that page. Try a page with more content." | **no** | not retryable |
+| retrieval-failed | FAILED / RETRIEVAL_FAILED | "Something went wrong reading that site. Nothing was lost — try again." | **yes** | retryable |
+| inference-failed | FAILED / INFERENCE_FAILED | "Something went wrong forming the reading. Nothing was lost — try again." | **yes** | retryable |
+
+- **Async start + polling + terminal + refresh/reconnect:** reviews start asynchronously (202); after a reload
+  the mount hydrates findings + restores the terminal-failed message + retry (the D5 restore).
+- **Retry requeues:** clicking "Try again" on `unreachable` re-queued the SAME review (attempt 2) through the
+  full lifecycle → failed again. Retry is offered **only** for retryable categories (browser-confirmed).
+- **No leakage:** a full scan of the rendered page + review views found **no** `lease_expires` /
+  `internal_error_detail` / raw fixture error strings / stack traces / `request_id` / provider errors /
+  credentials — only founder-safe messages. (The word "fixture" appears only inside the fixture's own
+  synthetic page content, shown correctly as observed source text.)
+
+## 3. Retry matrix (encoded in DOMAIN logic — `RETRYABLE_CATEGORY` in `market-review.ts`)
+
+| Category | Retryable | Rationale (founder-legible) |
+|----------|-----------|------------------------------|
+| ROBOTS_BLOCKED | no | deterministic block — change the source, not blind retry |
+| UNSUPPORTED_CONTENT | no | format won't change on retry — use a different URL |
+| INSUFFICIENT_READABLE_EVIDENCE | no | same page → same emptiness — change the page/source |
+| UNREACHABLE | yes | often transient network (or fix a typo'd URL by editing) |
+| RETRIEVAL_FAILED | yes | transient fetch failure |
+| INFERENCE_FAILED | yes | transient inference failure |
+
+Enforced in `PgMarketReviewRepository.retry()` (non-retryable → the retry route 409s) and surfaced as
+`retryable` in the review view; the UI shows "Try again" only when `retryable`.
+
+## 4. Entity edit-after-create (browser-driven)
+
+Edit affordance on each entity card → form (name / website / type / relevance note) → save. Verified:
+- **name / type / note edits** persist; **id + origin preserved**.
+- **name collision** with the founder's own entity → **409 "You already have a company with that name."**
+- **website change** → `website_changed_at` recorded; the form warns "current reading historical"; on save the
+  card shows the banner **"The website changed. The reading below is from the old site — run a fresh review to
+  update it."** + a **"Review new site"** button; prior findings remain **visible + preserved with their
+  original sourceUrl** but are **excluded from current orchestration** (`/market/context`); a **fresh successful
+  review of the new site restores** current-context eligibility (`needsFreshReview` → false).
+- editing a **dismissed** entity keeps it dismissed; **founder isolation** (B cannot edit A's entity → 404);
+  **export** reflects edited fields + `website_changed_at`; **delete** still removes all founder-owned data.
+
+## Defects found in this increment
+
+None. The implementation behaved correctly on first browser drive; no fixes required. (Automated coverage:
+`fixture-research.test.ts` 13 tests — gating/mapping/delegation + all 7 outcomes through the real worker;
+`market-entity-edit.test.ts` 4 tests — edits/dedupe/website-invalidation/isolation/export/delete.)
+
+## Closure statements
+
+- **Residual market failure-category browser gap: CLOSED.** All seven outcomes are now browser-exercised
+  end-to-end through the real create-review route, DB state machine, worker, polling, terminal rendering, retry
+  rules, and founder-safe presentation — via a gated, non-production controlled adapter (never a frontend simulator).
+- **Entity edit-after-create: COMPLETE** — name/website/type/note editable, all history preserved, website
+  changes do not contaminate current orchestration, name collisions are founder-legible.
+- **Wave 3 is now founder-facing complete.** The only remaining known item is transversal infrastructure
+  (rate-limit → 429 mapping, D4), tracked separately below — deliberately **not** part of Wave-3 closure.

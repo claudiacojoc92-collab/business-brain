@@ -24,14 +24,37 @@ export function canRetry(status: ReviewStatus, stale: boolean, attempt: number, 
 }
 
 /** Bounded, non-technical founder message per failure category. */
+// Founder-safe messages — each guides the action that matches the retry policy below (retry vs. change source).
 export const FAILURE_MESSAGE: Record<FailureCategory, string> = {
-  ROBOTS_BLOCKED: 'That site asks not to be read automatically, so I couldn’t review it.',
+  ROBOTS_BLOCKED: 'That site asks not to be read automatically. Try a different source.',
   UNREACHABLE: 'I couldn’t reach that website. Check the address and try again.',
-  UNSUPPORTED_CONTENT: 'That page isn’t in a format I can read.',
-  INSUFFICIENT_READABLE_EVIDENCE: 'I couldn’t read enough from that site to say anything useful.',
+  UNSUPPORTED_CONTENT: 'That page isn’t a readable web page. Try a different page or URL.',
+  INSUFFICIENT_READABLE_EVIDENCE: 'I couldn’t read enough from that page. Try a page with more content.',
   RETRIEVAL_FAILED: 'Something went wrong reading that site. Nothing was lost — try again.',
-  INFERENCE_FAILED: 'Something went wrong on my side. Nothing was lost — try again.',
+  INFERENCE_FAILED: 'Something went wrong forming the reading. Nothing was lost — try again.',
 };
+
+/**
+ * Explicit, founder-legible retry policy — encoded in DOMAIN logic (not UI conditionals). Transient failures
+ * (a flaky fetch, a flaky inference call, an unreachable host) support blind retry; deterministic "wrong
+ * source" failures do NOT — retrying the SAME URL would just fail identically, so the founder must change the
+ * source/page (via edit) or a different URL. Not all states are retryable.
+ */
+export const RETRYABLE_CATEGORY: Record<FailureCategory, boolean> = {
+  ROBOTS_BLOCKED: false,                 // deterministic block — change the source, not blind retry
+  UNSUPPORTED_CONTENT: false,            // format won't change on retry — use a different URL
+  INSUFFICIENT_READABLE_EVIDENCE: false, // same page → same emptiness — change the page/source
+  UNREACHABLE: true,                     // often transient network / can also be corrected by editing the URL
+  RETRIEVAL_FAILED: true,                // transient fetch failure
+  INFERENCE_FAILED: true,                // transient inference failure
+};
+
+/** Is a terminal review retryable? Requires a terminal-failed state, remaining attempts, and a retryable category. */
+export function reviewRetryable(status: ReviewStatus, failureCategory: FailureCategory | null, attempt: number, max: number): boolean {
+  if (status !== 'FAILED' && status !== 'INSUFFICIENT_EVIDENCE') return false;
+  if (attempt >= max) return false;
+  return failureCategory != null && RETRYABLE_CATEGORY[failureCategory] === true;
+}
 
 export interface MarketReview {
   id: string; founderId: string; marketEntityId: string; status: ReviewStatus; attemptCount: number; maxAttempts: number;
@@ -47,7 +70,8 @@ export interface MarketReview {
 export function toReviewView(r: MarketReview) {
   return {
     reviewId: r.id, entityId: r.marketEntityId, status: r.status, attempt: r.attemptCount, maxAttempts: r.maxAttempts,
-    failureCategory: r.status === 'FAILED' ? r.failureCategory : null,
+    failureCategory: (r.status === 'FAILED' || r.status === 'INSUFFICIENT_EVIDENCE') ? r.failureCategory : null,
+    retryable: reviewRetryable(r.status, r.failureCategory, r.attemptCount, r.maxAttempts), // explicit domain policy
     message: r.founderSafeError, priorSuccessfulReviewId: r.priorSuccessfulReviewId,
     provenance: r.status === 'READY'
       ? { retrievalAdapter: r.retrievalAdapter, extractionVersion: r.extractionVersion, inferenceModel: r.inferenceModel, inferencePromptVersion: r.inferencePromptVersion }

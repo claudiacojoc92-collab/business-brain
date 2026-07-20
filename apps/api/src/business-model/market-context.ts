@@ -54,8 +54,11 @@ export const ENTITY_TYPES: ReadonlySet<string> = new Set(['direct', 'indirect', 
 export interface MarketEntity {
   id: string; founderId: string; name: string; normalizedName: string; websiteUrl: string | null;
   entityType: EntityType; origin: EntityOrigin; relevanceStatus: RelevanceStatus; relevanceNote: string | null;
-  createdAt: string; updatedAt: string; dismissedAt: string | null;
+  createdAt: string; updatedAt: string; dismissedAt: string | null; websiteChangedAt: string | null;
 }
+
+/** Thrown when an entity name-edit would collide with the founder's existing entity (normalized-name dedupe). */
+export class DuplicateEntityNameError extends Error { constructor() { super('DUPLICATE_ENTITY_NAME'); this.name = 'DuplicateEntityNameError'; } }
 export interface MarketFinding {
   id: string; founderId: string; marketEntityId: string; reviewId: string | null; sourceUrl: string; canonicalUrl: string | null;
   sourceTitle: string | null; sourceType: string; retrievedAt: string; retrievalAdapter: string; extractionVersion: string;

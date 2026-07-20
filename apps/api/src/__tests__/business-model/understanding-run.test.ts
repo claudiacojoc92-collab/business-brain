@@ -118,10 +118,12 @@ describe('durable run lifecycle (real DB, fake deps)', () => {
     const A = await signIn(E.a);
     const fragIds = await seed(A.founderId);
     const runRepo = new PgUnderstandingRunRepository(db);
-    // the run from the previous test is QUEUED; claim it (exclusive)
+    // isolate the GLOBAL claim: ensure our run is QUEUED and no sibling QUEUED run interferes under parallel load
+    const run = await runRepo.create(A.founderId, 'https://x.example', new Date());
+    await db.deleteFrom('business.understanding_run').where('status', '=', 'QUEUED').where('id', '!=', run.id).execute();
     const claimedA = await runRepo.claimQueued(new Date(), 60_000);
     const claimedB = await runRepo.claimQueued(new Date(), 60_000); // nothing else queued
-    expect(claimedA).toBeTruthy(); expect(claimedB).toBeNull();
+    expect(claimedA?.id).toBe(run.id); expect(claimedB).toBeNull();
     expect(claimedA!.status).toBe('INGESTING');
     const done = await processRun(claimedA!, deps({ synthesisModel: okModel(fragIds) }));
     expect(done.status).toBe('READY');
@@ -136,6 +138,7 @@ describe('durable run lifecycle (real DB, fake deps)', () => {
     const priorVersion = (await new PgUnderstandingRepository(db).latest(A.founderId))!.version;
     const runRepo = new PgUnderstandingRunRepository(db);
     const run = await runRepo.create(A.founderId, 'https://x.example/2', new Date());
+    await db.deleteFrom('business.understanding_run').where('status', '=', 'QUEUED').where('id', '!=', run.id).execute(); // isolate the global claim
     const claimed = await runRepo.claimQueued(new Date(), 60_000);
     const failed = await processRun(claimed!, deps({ synthesisModel: throwModel }));
     expect(failed.status).toBe('FAILED');
@@ -146,6 +149,7 @@ describe('durable run lifecycle (real DB, fake deps)', () => {
     const retried = await runRepo.retry(A.founderId, run.id, new Date());
     expect(retried!.status).toBe('QUEUED'); expect(retried!.attemptCount).toBe(2);
     // retry of a non-failed run → null
+    await db.deleteFrom('business.understanding_run').where('status', '=', 'QUEUED').where('id', '!=', run.id).execute(); // isolate the global claim
     const claimed2 = await runRepo.claimQueued(new Date(), 60_000);
     expect(await runRepo.retry(A.founderId, claimed2!.id, new Date())).toBeNull(); // it's INGESTING now
   });

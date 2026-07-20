@@ -175,7 +175,7 @@ export async function getUnderstandingEvidence(fragmentId: string): Promise<{ te
 
 // ─── Public positioning context (A–E Wave 3) — known entities, source-backed public evidence ───────
 export type EntityType = 'direct' | 'indirect' | 'alternative' | 'reference';
-export interface MarketEntity { id: string; name: string; websiteUrl: string | null; entityType: EntityType; origin: string; relevanceStatus: string; relevanceNote: string | null }
+export interface MarketEntity { id: string; name: string; websiteUrl: string | null; entityType: EntityType; origin: string; relevanceStatus: string; relevanceNote: string | null; websiteChangedAt?: string | null; needsFreshReview?: boolean }
 // Two INDEPENDENT founder judgments per finding — accuracy (BB's reading of the source) and relevance
 // (strategic usefulness) — never collapsed into one status.
 export type AccuracyStatus = 'unreviewed' | 'yes' | 'partly' | 'no';
@@ -185,10 +185,10 @@ export interface MarketFinding { id: string; marketEntityId: string; reviewId: s
 
 export async function getMarketEntities(): Promise<MarketEntity[]> { return (await request<{ entities: MarketEntity[] }>('market/entities')).entities; }
 export async function addMarketEntity(body: { name: string; websiteUrl?: string; entityType?: EntityType; relevanceNote?: string }): Promise<MarketEntity> { return (await request<{ entity: MarketEntity }>('market/entities', { method: 'POST', body: JSON.stringify(body) })).entity; }
-export async function patchMarketEntity(id: string, body: { entityType?: EntityType; websiteUrl?: string; relevanceNote?: string; status?: 'confirmed' | 'dismissed' | 'restored' }): Promise<MarketEntity> { return (await request<{ entity: MarketEntity }>(`market/entities/${id}`, { method: 'PATCH', body: JSON.stringify(body) })).entity; }
+export async function patchMarketEntity(id: string, body: { name?: string; entityType?: EntityType; websiteUrl?: string | null; relevanceNote?: string; status?: 'confirmed' | 'dismissed' | 'restored' }): Promise<MarketEntity> { return (await request<{ entity: MarketEntity }>(`market/entities/${id}`, { method: 'PATCH', body: JSON.stringify(body) })).entity; }
 export type ReviewStatus = 'QUEUED' | 'RETRIEVING' | 'EXTRACTING' | 'INFERRING' | 'READY' | 'INSUFFICIENT_EVIDENCE' | 'FAILED';
 export interface ReviewProvenance { retrievalAdapter: string | null; extractionVersion: string | null; inferenceModel: string | null; inferencePromptVersion: string | null }
-export interface MarketReview { reviewId: string; entityId: string; status: ReviewStatus; attempt: number; maxAttempts: number; failureCategory: string | null; message: string | null; priorSuccessfulReviewId?: string | null; provenance?: ReviewProvenance | null }
+export interface MarketReview { reviewId: string; entityId: string; status: ReviewStatus; attempt: number; maxAttempts: number; failureCategory: string | null; retryable?: boolean; message: string | null; priorSuccessfulReviewId?: string | null; provenance?: ReviewProvenance | null }
 export async function createMarketReview(entityId: string): Promise<MarketReview> { return request(`market/entities/${entityId}/reviews`, { method: 'POST' }); }
 export async function getMarketReview(reviewId: string): Promise<MarketReview> { return request(`market/reviews/${reviewId}`); }
 export async function retryMarketReview(reviewId: string): Promise<MarketReview> { return request(`market/reviews/${reviewId}/retry`, { method: 'POST' }); }

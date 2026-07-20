@@ -4,7 +4,7 @@
  * in separate columns. No FK cascade (delete coverage explicit in delete.service).
  */
 import { generateId } from '@bb/shared';
-import { normalizeName, type EntityOrigin, type EntityType, type MarketEntity, type MarketFinding, type RelevanceStatus } from './market-context';
+import { normalizeName, DuplicateEntityNameError, type EntityOrigin, type EntityType, type MarketEntity, type MarketFinding, type RelevanceStatus } from './market-context';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDB = any;
@@ -37,19 +37,27 @@ export class PgMarketEntityRepository {
     const rows = await this.db.selectFrom('business.market_entity').selectAll().where('founder_id', '=', founderId).orderBy('created_at', 'desc').execute();
     return (rows as AnyDB[]).map((r) => this.toDomain(r));
   }
-  async patch(founderId: string, id: string, patch: { entityType?: EntityType; websiteUrl?: string | null; relevanceNote?: string | null; relevanceStatus?: RelevanceStatus; dismissedAt?: Date | null }, now: Date): Promise<MarketEntity | null> {
+  async patch(founderId: string, id: string, patch: { name?: string; entityType?: EntityType; websiteUrl?: string | null; relevanceNote?: string | null; relevanceStatus?: RelevanceStatus; dismissedAt?: Date | null; websiteChangedAt?: Date }, now: Date): Promise<MarketEntity | null> {
     const set: Record<string, unknown> = { updated_at: now.toISOString() };
+    if (patch.name !== undefined) { set['name'] = patch.name.trim(); set['normalized_name'] = normalizeName(patch.name); }
     if (patch.entityType) set['entity_type'] = patch.entityType;
     if (patch.websiteUrl !== undefined) set['website_url'] = patch.websiteUrl;
     if (patch.relevanceNote !== undefined) set['relevance_note'] = patch.relevanceNote;
     if (patch.relevanceStatus) set['relevance_status'] = patch.relevanceStatus;
     if (patch.dismissedAt !== undefined) set['dismissed_at'] = patch.dismissedAt ? patch.dismissedAt.toISOString() : null;
-    const r = await this.db.updateTable('business.market_entity').set(set).where('founder_id', '=', founderId).where('id', '=', id).returningAll().executeTakeFirst();
-    return r ? this.toDomain(r) : null;
+    if (patch.websiteChangedAt !== undefined) set['website_changed_at'] = patch.websiteChangedAt.toISOString();
+    try {
+      const r = await this.db.updateTable('business.market_entity').set(set).where('founder_id', '=', founderId).where('id', '=', id).returningAll().executeTakeFirst();
+      return r ? this.toDomain(r) : null;
+    } catch (e) {
+      // normalized-name unique-index violation → the founder already has an entity with that name
+      if (patch.name !== undefined) throw new DuplicateEntityNameError();
+      throw e;
+    }
   }
   private toDomain(r: AnyDB): MarketEntity {
     const iso = (v: unknown) => (v == null ? null : new Date(v as string).toISOString());
-    return { id: r.id, founderId: r.founder_id, name: r.name, normalizedName: r.normalized_name, websiteUrl: r.website_url ?? null, entityType: r.entity_type, origin: r.origin, relevanceStatus: r.relevance_status, relevanceNote: r.relevance_note ?? null, createdAt: new Date(r.created_at).toISOString(), updatedAt: new Date(r.updated_at).toISOString(), dismissedAt: iso(r.dismissed_at) };
+    return { id: r.id, founderId: r.founder_id, name: r.name, normalizedName: r.normalized_name, websiteUrl: r.website_url ?? null, entityType: r.entity_type, origin: r.origin, relevanceStatus: r.relevance_status, relevanceNote: r.relevance_note ?? null, createdAt: new Date(r.created_at).toISOString(), updatedAt: new Date(r.updated_at).toISOString(), dismissedAt: iso(r.dismissed_at), websiteChangedAt: iso(r.website_changed_at) };
   }
 }
 

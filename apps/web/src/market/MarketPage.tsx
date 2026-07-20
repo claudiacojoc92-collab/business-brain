@@ -27,7 +27,9 @@ export function MarketPage() {
   const [etype, setEtype] = useState<EntityType>('direct');
   const [note, setNote] = useState('');
   const [findings, setFindings] = useState<Record<string, MarketFinding[]>>({});
-  const [reviewState, setReviewState] = useState<Record<string, { reviewId: string; status: ReviewStatus; message: string | null }>>({});
+  const [reviewState, setReviewState] = useState<Record<string, { reviewId: string; status: ReviewStatus; message: string | null; retryable: boolean }>>({});
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editError, setEditError] = useState('');
 
   const on401 = useCallback((e: unknown) => { if (e instanceof ApiError && e.status === 401) navigate('/signin', { replace: true }); }, [navigate]);
   const refresh = useCallback(() => { getMarketEntities().then(setEntities).catch(on401); }, [on401]);
@@ -36,7 +38,7 @@ export function MarketPage() {
       await new Promise((r) => setTimeout(r, 1500));
       let r;
       try { r = await getMarketReview(reviewId); } catch (e) { on401(e); return; }
-      setReviewState((s) => ({ ...s, [entityId]: { reviewId, status: r.status, message: r.message } }));
+      setReviewState((s) => ({ ...s, [entityId]: { reviewId, status: r.status, message: r.message, retryable: r.retryable ?? false } }));
       if (r.status === 'READY') { try { const f = await getEntityFindings(entityId); setFindings((s) => ({ ...s, [entityId]: f })); } catch (e) { on401(e); } return; }
       if (r.status === 'INSUFFICIENT_EVIDENCE' || r.status === 'FAILED') return;
     }
@@ -59,11 +61,11 @@ export function MarketPage() {
           if (live && f.length) setFindings((s) => ({ ...s, [e.id]: f }));
           const reviews = await getEntityReviews(e.id); // newest first
           const active = reviews.find((rv) => ACTIVE_REVIEW.has(rv.status));
-          if (live && active) { setReviewState((s) => ({ ...s, [e.id]: { reviewId: active.reviewId, status: active.status, message: active.message } })); void poll(e.id, active.reviewId); }
+          if (live && active) { setReviewState((s) => ({ ...s, [e.id]: { reviewId: active.reviewId, status: active.status, message: active.message, retryable: active.retryable ?? false } })); void poll(e.id, active.reviewId); }
           else if (live && reviews[0] && (reviews[0].status === 'FAILED' || reviews[0].status === 'INSUFFICIENT_EVIDENCE')) {
             // Restore a terminal-failed latest review so the founder-safe message + retry survive a refresh.
             const r0 = reviews[0];
-            setReviewState((s) => ({ ...s, [e.id]: { reviewId: r0.reviewId, status: r0.status, message: r0.message } }));
+            setReviewState((s) => ({ ...s, [e.id]: { reviewId: r0.reviewId, status: r0.status, message: r0.message, retryable: r0.retryable ?? false } }));
           }
         } catch (e2) { on401(e2); }
       }
@@ -82,14 +84,14 @@ export function MarketPage() {
     setFindings((s) => { const n = { ...s }; delete n[entityId]; return n; });
     try {
       const r = await createMarketReview(entityId);
-      setReviewState((s) => ({ ...s, [entityId]: { reviewId: r.reviewId, status: r.status, message: r.message } }));
+      setReviewState((s) => ({ ...s, [entityId]: { reviewId: r.reviewId, status: r.status, message: r.message, retryable: r.retryable ?? false } }));
       void poll(entityId, r.reviewId);
     } catch (e) { on401(e); }
   };
   const retry = async (entityId: string, reviewId: string) => {
     try {
       const r = await retryMarketReview(reviewId);
-      setReviewState((s) => ({ ...s, [entityId]: { reviewId: r.reviewId, status: r.status, message: r.message } }));
+      setReviewState((s) => ({ ...s, [entityId]: { reviewId: r.reviewId, status: r.status, message: r.message, retryable: r.retryable ?? false } }));
       void poll(entityId, r.reviewId);
     } catch (e) { on401(e); }
   };
@@ -98,6 +100,13 @@ export function MarketPage() {
       const rec = await respondToFinding(findingId, input);
       setFindings((s) => ({ ...s, [entityId]: s[entityId]!.map((f) => f.id === findingId ? { ...f, effectiveResponse: rec, hasPriorResponses: true } : f) }));
     } catch (e) { on401(e); }
+  };
+  // Edit an entity's metadata. History (reviews/findings/responses) is preserved server-side; a website change
+  // marks prior findings historical (needsFreshReview) — orchestration excludes them until a fresh review.
+  const saveEdit = async (entityId: string, fields: { name?: string; websiteUrl?: string | null; entityType?: EntityType; relevanceNote?: string }) => {
+    setEditError('');
+    try { await patchMarketEntity(entityId, fields); setEditing(null); refresh(); }
+    catch (e) { if (e instanceof ApiError && e.status === 409) setEditError('You already have a company with that name.'); else on401(e); }
   };
 
   return (
@@ -141,14 +150,17 @@ export function MarketPage() {
                 <span style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-3)', color: 'var(--ink)' }}>{e.name}</span>
                 <span style={{ marginLeft: 8, fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{e.entityType}{e.origin === 'bb_suggested' && e.relevanceStatus !== 'confirmed' ? ' · suggested' : ''}</span>
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {e.websiteUrl && e.relevanceStatus !== 'dismissed' && !stalled && <Button variant="secondary" loading={active} onClick={() => void review(e.id)}>Read public site</Button>}
-                {stalled && <Button variant="secondary" onClick={() => void retry(e.id, rs!.reviewId)}>Try again</Button>}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {e.websiteUrl && e.relevanceStatus !== 'dismissed' && !stalled && <Button variant="secondary" loading={active} onClick={() => void review(e.id)}>{e.needsFreshReview ? 'Review new site' : 'Read public site'}</Button>}
+                {stalled && rs!.retryable && <Button variant="secondary" onClick={() => void retry(e.id, rs!.reviewId)}>Try again</Button>}
+                {e.relevanceStatus !== 'dismissed' && <button type="button" onClick={() => { setEditing(editing === e.id ? null : e.id); setEditError(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)' }}>{editing === e.id ? 'close' : 'edit'}</button>}
                 {e.relevanceStatus !== 'dismissed'
                   ? <button type="button" onClick={() => void patchMarketEntity(e.id, { status: 'dismissed' }).then(refresh)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)' }}>dismiss</button>
                   : <button type="button" onClick={() => void patchMarketEntity(e.id, { status: 'restored' }).then(refresh)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)' }}>restore</button>}
               </div>
             </div>
+            {editing === e.id && <EntityEditForm entity={e} error={editError} onSave={(fields) => saveEdit(e.id, fields)} onCancel={() => { setEditing(null); setEditError(''); }} />}
+            {e.needsFreshReview && editing !== e.id && <p style={{ marginTop: 8, fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--gold)' }}>The website changed. The reading below is from the old site — run a fresh review to update it.</p>}
             {active && <div style={{ marginTop: 'var(--sp-4)' }}><Thinking message={STAGE[rs.status]} /></div>}
             {stalled && <p style={{ marginTop: 8, fontFamily: 'var(--serif)', color: 'var(--ink-3)' }}>{rs.message ?? 'Not enough public evidence to read yet.'}</p>}
             {(findings[e.id] ?? []).map((f) => (
@@ -175,6 +187,39 @@ export function MarketPage() {
         })}
       </div>
     </AppShell>
+  );
+}
+
+const ENTITY_TYPE_OPTIONS: Array<{ v: EntityType; label: string }> = [{ v: 'direct', label: 'Direct competitor' }, { v: 'indirect', label: 'Indirect competitor' }, { v: 'alternative', label: 'Alternative' }, { v: 'reference', label: 'Reference / admired' }];
+
+/** Compact inline edit form for an existing entity — name / website / type / relevance note. History is
+ *  preserved server-side; changing the website marks prior evidence historical (a fresh review is needed). */
+function EntityEditForm({ entity, error, onSave, onCancel }: { entity: MarketEntity; error: string; onSave: (fields: { name?: string; websiteUrl?: string | null; entityType?: EntityType; relevanceNote?: string }) => Promise<void>; onCancel: () => void }) {
+  const [name, setName] = useState(entity.name);
+  const [website, setWebsite] = useState(entity.websiteUrl ?? '');
+  const [etype, setEtype] = useState<EntityType>(entity.entityType);
+  const [note, setNote] = useState(entity.relevanceNote ?? '');
+  const [saving, setSaving] = useState(false);
+  const websiteChanged = (website.trim() || '') !== (entity.websiteUrl ?? '');
+  const save = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    try { await onSave({ name: name.trim(), websiteUrl: website.trim() || null, entityType: etype, relevanceNote: note.trim() }); } finally { setSaving(false); }
+  };
+  const inp = { width: '100%', padding: '8px 10px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', background: 'var(--surface)', color: 'var(--ink)', boxSizing: 'border-box' as const };
+  return (
+    <div style={{ marginTop: 'var(--sp-4)', paddingTop: 'var(--sp-4)', borderTop: '1px solid var(--line)', display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
+      <label style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ink-3)' }}>Company name<input value={name} onChange={(ev) => setName(ev.target.value)} style={{ ...inp, marginTop: 4 }} /></label>
+      <label style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ink-3)' }}>Website<input type="url" value={website} onChange={(ev) => setWebsite(ev.target.value)} placeholder="https://…" style={{ ...inp, marginTop: 4 }} /></label>
+      <label style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ink-3)' }}>Relationship<select value={etype} onChange={(ev) => setEtype(ev.target.value as EntityType)} style={{ ...inp, marginTop: 4 }}>{ENTITY_TYPE_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}</select></label>
+      <label style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ink-3)' }}>Why it’s relevant<input value={note} onChange={(ev) => setNote(ev.target.value)} placeholder="e.g. same audience, different price point" style={{ ...inp, marginTop: 4 }} /></label>
+      {websiteChanged && <p style={{ margin: 0, fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--gold)' }}>Changing the website makes the current reading historical — you’ll need a fresh review of the new site.</p>}
+      {error && <p role="alert" style={{ margin: 0, fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--warn-ink)' }}>{error}</p>}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Button variant="primary" loading={saving} onClick={() => void save()}>Save</Button>
+        <Button variant="ghost" onClick={onCancel}>Cancel</Button>
+      </div>
+    </div>
   );
 }
 

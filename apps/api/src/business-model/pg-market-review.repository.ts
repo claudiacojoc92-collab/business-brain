@@ -5,7 +5,7 @@
  * successful lookup. Internal error detail is never returned to callers of the founder-safe view.
  */
 import { generateId } from '@bb/shared';
-import { assertTransition, type MarketReview, type ReviewStatus } from './market-review';
+import { assertTransition, reviewRetryable, type MarketReview, type ReviewStatus } from './market-review';
 import type { FailureCategory } from './market-context';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -42,11 +42,11 @@ export class PgMarketReviewRepository {
 
   /** The latest READY review id per entity (orchestration: only findings from the latest successful review
    *  are current). Keyed by market_entity_id. */
-  async latestReadyByEntity(founderId: string): Promise<Map<string, string>> {
-    const rows = await this.db.selectFrom('business.market_review').select(['id', 'market_entity_id'])
+  async latestReadyByEntity(founderId: string): Promise<Map<string, { reviewId: string; createdAt: string }>> {
+    const rows = await this.db.selectFrom('business.market_review').select(['id', 'market_entity_id', 'created_at'])
       .where('founder_id', '=', founderId).where('status', '=', 'READY').orderBy('created_at', 'asc').execute();
-    const m = new Map<string, string>();
-    for (const r of rows as AnyDB[]) m.set(r.market_entity_id, r.id); // asc → last wins = latest READY
+    const m = new Map<string, { reviewId: string; createdAt: string }>();
+    for (const r of rows as AnyDB[]) m.set(r.market_entity_id, { reviewId: r.id, createdAt: new Date(r.created_at).toISOString() }); // asc → last wins = latest READY
     return m;
   }
 
@@ -93,8 +93,9 @@ export class PgMarketReviewRepository {
     return Array.isArray(r) ? r.length : 0;
   }
   async retry(founderId: string, id: string, now: Date): Promise<MarketReview | null> {
-    const cur = await this.db.selectFrom('business.market_review').select(['attempt_count', 'max_attempts']).where('id', '=', id).where('founder_id', '=', founderId).where('status', 'in', ['FAILED', 'INSUFFICIENT_EVIDENCE']).executeTakeFirst();
-    if (!cur || Number(cur.attempt_count) >= Number(cur.max_attempts)) return null; // bounded attempts
+    const cur = await this.db.selectFrom('business.market_review').select(['attempt_count', 'max_attempts', 'status', 'failure_category']).where('id', '=', id).where('founder_id', '=', founderId).where('status', 'in', ['FAILED', 'INSUFFICIENT_EVIDENCE']).executeTakeFirst();
+    // Bounded attempts + explicit per-category retry policy (non-retryable categories are rejected here, in domain logic).
+    if (!cur || !reviewRetryable(cur.status as ReviewStatus, cur.failure_category ?? null, Number(cur.attempt_count), Number(cur.max_attempts))) return null;
     const r = await this.db.updateTable('business.market_review').set({ status: 'QUEUED', failure_category: null, founder_safe_error: null, internal_error_detail: null, claimed_at: null, lease_expires_at: null, finished_at: null, attempt_count: Number(cur.attempt_count) + 1, updated_at: now.toISOString() }).where('id', '=', id).where('founder_id', '=', founderId).where('status', 'in', ['FAILED', 'INSUFFICIENT_EVIDENCE']).returningAll().executeTakeFirst();
     return r ? this.toDomain(r) : null;
   }

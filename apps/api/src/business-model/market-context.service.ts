@@ -91,6 +91,18 @@ export async function findingViewsForEntity(founderId: string, entityId: string,
  * Excluded entirely: inaccurate (accuracy 'no'), not-relevant, superseded/stale (not the latest review),
  * failed-review, and unconfirmed suggested entities. Qualifications travel with the finding.
  */
+/** Entity list for the founder + a `needsFreshReview` flag: the website was edited and no successful review has
+ *  run against the new site yet, so any prior findings are historical (excluded from current context). */
+export async function listEntityViews(founderId: string, entities: PgMarketEntityRepository, reviews: PgMarketReviewRepository): Promise<Array<import('./market-context').MarketEntity & { needsFreshReview: boolean }>> {
+  const ents = await entities.list(founderId);
+  const latestReady = await reviews.latestReadyByEntity(founderId);
+  return ents.map((e) => {
+    const latest = latestReady.get(e.id);
+    const needsFreshReview = e.websiteUrl != null && e.relevanceStatus !== 'dismissed' && e.websiteChangedAt != null && (!latest || latest.createdAt < e.websiteChangedAt);
+    return { ...e, needsFreshReview };
+  });
+}
+
 export async function effectiveMarketContext(founderId: string, entities: PgMarketEntityRepository, findings: PgMarketFindingRepository, responses: PgMarketFindingResponseRepository, reviews: PgMarketReviewRepository): Promise<{
   confirmedEntities: Array<{ id: string; name: string; entityType: string; websiteUrl: string | null }>;
   suggestedUnconfirmed: Array<{ id: string; name: string; entityType: string }>;
@@ -103,16 +115,22 @@ export async function effectiveMarketContext(founderId: string, entities: PgMark
 }> {
   const ents = await entities.list(founderId);
   const eligible = new Set(ents.filter((e) => e.relevanceStatus === 'confirmed').map((e) => e.id));
+  const websiteChangedAt = new Map(ents.map((e) => [e.id, e.websiteChangedAt] as const));
   const all = await findings.listByFounder(founderId);
   const eff = await responses.effectiveByFounder(founderId);
   const latestReady = await reviews.latestReadyByEntity(founderId);
 
-  // Current = eligible entity + from the entity's latest READY review. Findings from a direct (non-durable,
-  // reviewId=null) path are current only when the entity has no READY review at all.
+  // Current = eligible entity + from the entity's latest READY review + that review ran AFTER any website change
+  // (a review predating a website edit was against the OLD site, so its findings are excluded from current
+  // context until a fresh review of the new website succeeds). Direct (reviewId=null) findings are current only
+  // when the entity has no READY review at all.
   const isCurrent = (f: MarketFinding): boolean => {
     if (!eligible.has(f.marketEntityId)) return false;
     const latest = latestReady.get(f.marketEntityId);
-    return latest ? f.reviewId === latest : f.reviewId === null;
+    if (!latest) return f.reviewId === null;
+    if (f.reviewId !== latest.reviewId) return false;
+    const changedAt = websiteChangedAt.get(f.marketEntityId);
+    return !changedAt || latest.createdAt >= changedAt; // stale if the latest review predates the website change
   };
   const current = all.filter(isCurrent);
 
