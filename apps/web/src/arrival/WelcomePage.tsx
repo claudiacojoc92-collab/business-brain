@@ -39,6 +39,7 @@ export function WelcomePage() {
           <div className="bb-rise" style={{ ['--i' as string]: 5, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <Button variant="primary" onClick={() => navigate('/understand')}>Start with my business →</Button>
             <button type="button" onClick={() => navigate('/market')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-3)' }}>Positioning context</button>
+            <button type="button" onClick={() => navigate('/strategic-context')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-3)' }}>Strategic context</button>
             <button type="button" onClick={() => navigate('/strategy')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-3)' }}>Decide a priority</button>
           </div>
         </div>

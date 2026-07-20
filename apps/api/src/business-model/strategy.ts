@@ -26,13 +26,19 @@ export function boundaryResponse(): BoundaryResponse {
 export type EpistemicKind =
   | 'OBSERVED_BUSINESS_EVIDENCE' | 'BUSINESS_UNDERSTANDING_INFERENCE' | 'PUBLIC_POSITIONING_OBSERVATION'
   | 'MARKET_INFERENCE' | 'FOUNDER_DECLARATION' | 'FOUNDER_CORRECTION' | 'FOUNDER_RELEVANCE_DECISION'
-  | 'UNKNOWN' | 'CONVERSATION_HYPOTHESIS' | 'STRATEGIC_RECOMMENDATION';
+  | 'FOUNDER_STRATEGIC_CONTEXT' | 'UNKNOWN' | 'CONVERSATION_HYPOTHESIS' | 'STRATEGIC_RECOMMENDATION';
 export const EPISTEMIC_KINDS: ReadonlySet<string> = new Set([
   'OBSERVED_BUSINESS_EVIDENCE', 'BUSINESS_UNDERSTANDING_INFERENCE', 'PUBLIC_POSITIONING_OBSERVATION', 'MARKET_INFERENCE',
-  'FOUNDER_DECLARATION', 'FOUNDER_CORRECTION', 'FOUNDER_RELEVANCE_DECISION', 'UNKNOWN', 'CONVERSATION_HYPOTHESIS', 'STRATEGIC_RECOMMENDATION',
+  'FOUNDER_DECLARATION', 'FOUNDER_CORRECTION', 'FOUNDER_RELEVANCE_DECISION', 'FOUNDER_STRATEGIC_CONTEXT', 'UNKNOWN', 'CONVERSATION_HYPOTHESIS', 'STRATEGIC_RECOMMENDATION',
 ]);
 
-export interface EvidenceReference { kind: EpistemicKind; statement: string; refId: string | null; entityId?: string | null; sourceUrl?: string | null }
+/** A grounding reference. Founder Strategic Context items add logicalItemId/version/scope/effective period so the
+ *  recommendation's provenance resolves to a specific stored, versioned context row. */
+export interface EvidenceReference {
+  kind: EpistemicKind; statement: string; refId: string | null; entityId?: string | null; sourceUrl?: string | null;
+  logicalItemId?: string | null; version?: number | null; scope?: string | null; source?: string | null;
+  effectiveFrom?: string | null; effectiveUntil?: string | null;
+}
 export interface LabeledAssumption { assumption: string; basis: string | null }
 export interface StrategicUnknown { unknown: string; whyItMatters: string | null }
 export interface ConflictReference { statement: string; observation: string; founderCorrection: string; refId: string | null }
@@ -110,7 +116,15 @@ function ref(r: unknown): EvidenceReference | null {
   const statement = s(o['statement'] ?? o['text']);
   if (!statement) return null;
   const kind = EPISTEMIC_KINDS.has(String(o['kind'])) ? (o['kind'] as EpistemicKind) : 'CONVERSATION_HYPOTHESIS';
-  return { kind, statement, refId: o['refId'] != null ? s(o['refId'], 64) : null, entityId: o['entityId'] != null ? s(o['entityId'], 64) : null, sourceUrl: o['sourceUrl'] != null ? s(o['sourceUrl'], 500) : null };
+  const base: EvidenceReference = { kind, statement, refId: o['refId'] != null ? s(o['refId'], 64) : null, entityId: o['entityId'] != null ? s(o['entityId'], 64) : null, sourceUrl: o['sourceUrl'] != null ? s(o['sourceUrl'], 500) : null };
+  // Founder Strategic Context provenance — preserved so a context citation resolves to a stored, versioned row.
+  if (o['logicalItemId'] != null) base.logicalItemId = s(o['logicalItemId'], 64);
+  if (typeof o['version'] === 'number') base.version = o['version'] as number;
+  if (o['scope'] != null) base.scope = s(o['scope'], 40);
+  if (o['source'] != null) base.source = s(o['source'], 40);
+  if (o['effectiveFrom'] != null) base.effectiveFrom = s(o['effectiveFrom'], 40);
+  if (o['effectiveUntil'] != null) base.effectiveUntil = s(o['effectiveUntil'], 40);
+  return base;
 }
 const refs = (v: unknown): EvidenceReference[] => arr(v).map(ref).filter((x): x is EvidenceReference => x != null).slice(0, 12);
 

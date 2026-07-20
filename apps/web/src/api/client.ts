@@ -378,3 +378,60 @@ export async function listStrategyResponses(id: string): Promise<StrategyRespons
   const { responses } = await request<{ responses: StrategyResponseRecord[] }>(`strategy/sessions/${encodeURIComponent(id)}/responses`);
   return responses;
 }
+
+// ─── Founder Strategic Context: founder-declared strategic operating conditions (Wave 4, slice 1) ──────────
+// Five kinds (GOAL/CONSTRAINT/RESOURCE/STRATEGIC_PREFERENCE/DECISION_HORIZON). Append-only, temporal, scoped.
+// Every write is an explicit founder action — nothing is inferred or persisted without confirmation.
+
+export type ContextKind = 'GOAL' | 'CONSTRAINT' | 'RESOURCE' | 'STRATEGIC_PREFERENCE' | 'DECISION_HORIZON';
+export type ContextStatus = 'ACTIVE' | 'RETIRED' | 'SUPERSEDED';
+export type ContextScope = 'GLOBAL_STRATEGY' | 'CURRENT_PRIORITY' | 'MARKETING' | 'OFFER' | 'ACQUISITION' | 'POSITIONING' | 'WEBSITE' | 'LAUNCH' | 'OTHER';
+
+export interface StrategicContextItem {
+  id: string; logicalItemId: string; version: number; kind: ContextKind;
+  statement: string; category: string; scope: ContextScope; source: string; status: ContextStatus;
+  effectiveFrom: string; effectiveUntil: string | null; reviewAt: string | null;
+  metadata: Record<string, unknown>; supersedesItemId: string | null; createdAt: string;
+}
+export interface ContextHealthItem { logicalItemId: string; itemId: string; kind: ContextKind; statement: string; reason: 'EXPIRED' | 'REVIEW_DUE'; date: string | null }
+export interface StrategicContextConflict { id: string; type: string; itemIds: string[]; description: string; strategicImpact: string; resolutionStatus: string }
+export interface EffectiveStrategicContext {
+  asOf: string; goals: StrategicContextItem[]; constraints: StrategicContextItem[]; resources: StrategicContextItem[];
+  strategicPreferences: StrategicContextItem[]; decisionHorizons: StrategicContextItem[];
+  conflicts: StrategicContextConflict[]; staleItems: ContextHealthItem[]; missingCriticalAreas: Array<{ area: ContextKind; why: string }>;
+}
+export interface ContextItemInput {
+  kind?: ContextKind; statement: string; scope?: ContextScope; source?: string;
+  effectiveFrom?: string; effectiveUntil?: string | null; reviewAt?: string | null; metadata?: Record<string, unknown>;
+}
+
+/** POST /founder-strategic-context/items — create a new logical item (explicit founder action). */
+export async function createContextItem(input: ContextItemInput): Promise<StrategicContextItem> {
+  const { item } = await request<{ item: StrategicContextItem }>('founder-strategic-context/items', { method: 'POST', body: JSON.stringify(input) });
+  return item;
+}
+/** GET /founder-strategic-context/items — all ACTIVE items (for management). */
+export async function listContextItems(): Promise<StrategicContextItem[]> {
+  const { items } = await request<{ items: StrategicContextItem[] }>('founder-strategic-context/items');
+  return items;
+}
+/** GET /founder-strategic-context/effective — the effective context now (what the strategist consumes). */
+export async function getEffectiveContext(): Promise<EffectiveStrategicContext> {
+  const { effective } = await request<{ effective: EffectiveStrategicContext }>('founder-strategic-context/effective');
+  return effective;
+}
+/** GET /founder-strategic-context/items/:logicalItemId/history — append-only version history. */
+export async function getContextHistory(logicalItemId: string): Promise<StrategicContextItem[]> {
+  const { versions } = await request<{ versions: StrategicContextItem[] }>(`founder-strategic-context/items/${encodeURIComponent(logicalItemId)}/history`);
+  return versions;
+}
+/** POST /founder-strategic-context/items/:logicalItemId/revisions — append-only revise (kind immutable). */
+export async function reviseContextItem(logicalItemId: string, input: Omit<ContextItemInput, 'kind'>): Promise<StrategicContextItem> {
+  const { item } = await request<{ item: StrategicContextItem }>(`founder-strategic-context/items/${encodeURIComponent(logicalItemId)}/revisions`, { method: 'POST', body: JSON.stringify(input) });
+  return item;
+}
+/** POST /founder-strategic-context/items/:logicalItemId/retire — retire the effective version. */
+export async function retireContextItem(logicalItemId: string): Promise<StrategicContextItem> {
+  const { item } = await request<{ item: StrategicContextItem }>(`founder-strategic-context/items/${encodeURIComponent(logicalItemId)}/retire`, { method: 'POST' });
+  return item;
+}

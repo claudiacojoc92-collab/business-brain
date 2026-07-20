@@ -25,7 +25,7 @@ function ctx(over: Partial<StrategicContext> & { question: StrategicContext['que
   return {
     businessUnderstanding: { version: 1, conclusions: [], founderResponses: [], conflicts: [], unknowns: [] },
     publicPositioningContext: { entities: [], observations: [], inferences: [], provisional: { observations: 0, inferences: 0 }, provenance: [] },
-    founderContext: { explicitGoals: [], explicitConstraints: [], explicitPreferences: [] },
+    founderContext: { goals: [], constraints: [], resources: [], strategicPreferences: [], decisionHorizons: [], conflicts: [], staleItems: [], missingCriticalAreas: [] },
     contextHealth: { missingAreas: [], staleAreas: [], contradictoryAreas: [], truncated: false },
     ...over,
   };

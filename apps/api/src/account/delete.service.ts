@@ -35,6 +35,7 @@ export async function deleteFounderAccount(
     await tx.deleteFrom('business.understanding').where('founder_id', '=', founderId).execute();   // Wave 2 (V058) — versioned understanding
     await tx.deleteFrom('business.understanding_run').where('founder_id', '=', founderId).execute(); // Wave 2 (V059) — generation runs
     await tx.deleteFrom('business.conclusion_response').where('founder_id', '=', founderId).execute(); // Wave 2 (V060) — founder response history
+    await tx.deleteFrom('business.founder_strategic_context_item').where('founder_id', '=', founderId).execute(); // Wave 4 (V067) — strategic context items (all versions)
     await tx.deleteFrom('business.strategic_response').where('founder_id', '=', founderId).execute(); // Wave 4 (V066) — strategy responses
     await tx.deleteFrom('business.strategic_session').where('founder_id', '=', founderId).execute();  // Wave 4 (V066) — strategy sessions
     await tx.deleteFrom('business.market_review').where('founder_id', '=', founderId).execute();      // Wave 3 (V062) — market reviews

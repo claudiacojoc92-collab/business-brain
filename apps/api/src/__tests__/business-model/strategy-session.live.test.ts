@@ -12,6 +12,7 @@ import { PgMarketFindingResponseRepository } from '../../business-model/pg-marke
 import { PgMarketReviewRepository } from '../../business-model/pg-market-review.repository';
 import { PgStrategicSessionRepository } from '../../business-model/pg-strategic-session.repository';
 import { PgStrategicResponseRepository } from '../../business-model/pg-strategic-response.repository';
+import { PgFounderStrategicContextRepository } from '../../business-model/pg-founder-strategic-context.repository';
 import { assembleStrategicContext, type AssemblerDeps } from '../../business-model/strategic-context.assembler';
 import { processSession, type StrategicWorkerDeps } from '../../business-model/strategic-session.worker';
 import { normalizeStrategicOutput, type StrategyFailureCategory, type StrategicOutcome } from '../../business-model/strategy';
@@ -34,7 +35,7 @@ const prev = { node: process.env['NODE_ENV'], db: process.env['DATABASE_URL'] };
 async function purge(database: any): Promise<void> {
   const rows = await database.selectFrom('identity.founders').select('founder_id').where('email', 'in', [E1, E2]).execute();
   const ids = rows.map((r: { founder_id: string }) => r.founder_id);
-  if (ids.length) for (const t of ['business.strategic_response', 'business.strategic_session', 'business.market_review', 'business.market_finding_response', 'business.market_finding', 'business.market_entity', 'business.conclusion_response', 'business.understanding', 'identity.sessions']) await database.deleteFrom(t).where('founder_id', 'in', ids).execute();
+  if (ids.length) for (const t of ['business.founder_strategic_context_item', 'business.strategic_response', 'business.strategic_session', 'business.market_review', 'business.market_finding_response', 'business.market_finding', 'business.market_entity', 'business.conclusion_response', 'business.understanding', 'identity.sessions']) await database.deleteFrom(t).where('founder_id', 'in', ids).execute();
   await database.deleteFrom('identity.magic_link_tokens').where('email', 'in', [E1, E2]).execute();
   await database.deleteFrom('identity.founders').where('email', 'in', [E1, E2]).execute();
 }
@@ -50,6 +51,7 @@ function assemblerDeps(): AssemblerDeps {
     understanding: new PgUnderstandingRepository(db), conclusionResponses: new PgConclusionResponseRepository(db),
     entities: new PgMarketEntityRepository(db), findings: new PgMarketFindingRepository(db),
     findingResponses: new PgMarketFindingResponseRepository(db), reviews: new PgMarketReviewRepository(db),
+    strategicContext: new PgFounderStrategicContextRepository(db),
   };
 }
 // Stub model (no network): returns whatever the test wires; `behavior` may throw to exercise the fail-closed path.

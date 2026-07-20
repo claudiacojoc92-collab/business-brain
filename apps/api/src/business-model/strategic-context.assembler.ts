@@ -14,6 +14,8 @@ import type { PgMarketReviewRepository } from './pg-market-review.repository';
 import { effectiveMarketContext, listEntityViews } from './market-context.service';
 import { groupOf, GROUP_ORDER, type ConclusionType, type EpistemicStatus } from './understanding';
 import type { StrategicSubtype } from './strategy';
+import type { PgFounderStrategicContextRepository } from './pg-founder-strategic-context.repository';
+import { resolveEffectiveStrategicContext, type EffectiveContextItem, type StrategicContextConflict, type ContextHealthItem, type MissingContextArea } from './effective-strategic-context.resolver';
 
 const CAP = { conclusions: 15, observations: 20, inferences: 20, provenance: 20 };
 
@@ -32,7 +34,11 @@ export interface StrategicContext {
     provisional: { observations: number; inferences: number };
     provenance: Array<{ findingId: string; reviewId: string | null; adapter: string; model: string | null; promptVersion: string | null }>;
   };
-  founderContext: { explicitGoals: string[]; explicitConstraints: string[]; explicitPreferences: string[] };
+  founderContext: {
+    goals: EffectiveContextItem[]; constraints: EffectiveContextItem[]; resources: EffectiveContextItem[];
+    strategicPreferences: EffectiveContextItem[]; decisionHorizons: EffectiveContextItem[];
+    conflicts: StrategicContextConflict[]; staleItems: ContextHealthItem[]; missingCriticalAreas: MissingContextArea[];
+  };
   question: { rawText: string; normalizedStrategicJob: 'PRIORITY_DECISION'; subtype: StrategicSubtype; decisionHorizon: string };
   contextHealth: { missingAreas: string[]; staleAreas: string[]; contradictoryAreas: string[]; truncated: boolean };
 }
@@ -44,6 +50,7 @@ export interface AssemblerDeps {
   findings: PgMarketFindingRepository;
   findingResponses: PgMarketFindingResponseRepository;
   reviews: PgMarketReviewRepository;
+  strategicContext: PgFounderStrategicContextRepository;
 }
 
 function decisionHorizon(q: string): string {
@@ -55,7 +62,7 @@ function decisionHorizon(q: string): string {
 
 const UNKNOWN_TYPES: ReadonlySet<string> = new Set(['missing_information', 'strategic_question']);
 
-export async function assembleStrategicContext(founderId: string, rawQuestion: string, subtype: StrategicSubtype, deps: AssemblerDeps): Promise<StrategicContext> {
+export async function assembleStrategicContext(founderId: string, rawQuestion: string, subtype: StrategicSubtype, deps: AssemblerDeps, asOf: Date = new Date()): Promise<StrategicContext> {
   const missingAreas: string[] = []; const staleAreas: string[] = []; const contradictoryAreas: string[] = []; let truncated = false;
 
   // ── Business Understanding (latest version + EFFECTIVE responses) ──────────────────────────────────────
@@ -103,6 +110,14 @@ export async function assembleStrategicContext(founderId: string, rawQuestion: s
   const entityViews = await listEntityViews(founderId, deps.entities, deps.reviews);
   if (entityViews.some((e) => e.needsFreshReview)) staleAreas.push('public_positioning_website_changed');
 
+  // ── Founder Strategic Context (current eligible, as-of the session) ────────────────────────────────────
+  // Read-only via the effective resolver: ACTIVE + not-future + not-expired + latest-version only. 'ANY' scope —
+  // a priority decision is holistic, so all effective founder conditions inform it (expired/future/retired excluded).
+  const eff = resolveEffectiveStrategicContext(await deps.strategicContext.listActive(founderId), asOf, 'ANY');
+  if (eff.missingCriticalAreas.length > 0) missingAreas.push('founder_strategic_context_incomplete');
+  if (eff.conflicts.length > 0) contradictoryAreas.push('founder_strategic_context_conflicts');
+  if (eff.staleItems.some((s) => s.reason === 'EXPIRED' || s.reason === 'REVIEW_DUE')) staleAreas.push('founder_strategic_context_review_due');
+
   return {
     businessUnderstanding: { version: u?.version ?? null, conclusions: buConclusions, founderResponses, conflicts, unknowns },
     publicPositioningContext: {
@@ -112,7 +127,11 @@ export async function assembleStrategicContext(founderId: string, rawQuestion: s
       provisional: { observations: ctx.provisional.observed.length, inferences: ctx.provisional.inferences.length },
       provenance,
     },
-    founderContext: { explicitGoals: [], explicitConstraints: [], explicitPreferences: [] }, // no goals/constraints model yet (this slice)
+    founderContext: {
+      goals: eff.goals, constraints: eff.constraints, resources: eff.resources,
+      strategicPreferences: eff.strategicPreferences, decisionHorizons: eff.decisionHorizons,
+      conflicts: eff.conflicts, staleItems: eff.staleItems, missingCriticalAreas: eff.missingCriticalAreas,
+    },
     question: { rawText: rawQuestion.slice(0, 1000), normalizedStrategicJob: 'PRIORITY_DECISION', subtype, decisionHorizon: decisionHorizon(rawQuestion) },
     contextHealth: { missingAreas, staleAreas, contradictoryAreas, truncated },
   };

@@ -32,7 +32,7 @@ export const LOCAL_DEFAULT_MODEL = 'claude-sonnet-5';
 export const PROMPT_VERSION: Record<ModelCapability, string> = {
   synthesis: 'synthesis-1',
   'market-inference': 'market-infer-sys-1',
-  strategy: 'strategy-1',
+  strategy: 'strategy-2',   // strategy-2: consumes Founder Strategic Context (goals/constraints/resources/prefs/horizon)
 };
 export const SCHEMA_VERSION: Record<ModelCapability, string> = {
   synthesis: 'conclusions-1',          // {conclusions:[{type,statement,epistemicStatus,evidenceRefs,confidence}]}

@@ -10,6 +10,7 @@ import { PgMarketFindingResponseRepository } from '../business-model/pg-market-f
 import { PgMarketReviewRepository } from '../business-model/pg-market-review.repository';
 import { PgStrategicSessionRepository } from '../business-model/pg-strategic-session.repository';
 import { PgStrategicResponseRepository } from '../business-model/pg-strategic-response.repository';
+import { PgFounderStrategicContextRepository } from '../business-model/pg-founder-strategic-context.repository';
 import { AnthropicStrategyModel } from '../business-model/anthropic-strategy.model';
 import { strategyModelConfig } from '../business-model/model-config';
 import { startStrategicSessionWorker } from '../business-model/strategic-session.worker';
@@ -30,6 +31,7 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
     understanding: new PgUnderstandingRepository(db), conclusionResponses: new PgConclusionResponseRepository(db),
     entities: new PgMarketEntityRepository(db), findings: new PgMarketFindingRepository(db),
     findingResponses: new PgMarketFindingResponseRepository(db), reviews: new PgMarketReviewRepository(db),
+    strategicContext: new PgFounderStrategicContextRepository(db),
   };
   const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
   const LEASE_MS = 5 * 60 * 1000;

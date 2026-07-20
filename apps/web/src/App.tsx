@@ -15,6 +15,7 @@ import { WelcomePage } from './arrival/WelcomePage';
 import { UnderstandPage } from './understand/UnderstandPage';
 import { MarketPage } from './market/MarketPage';
 import { StrategyPage } from './strategy/StrategyPage';
+import { StrategicContextPage } from './strategic-context/StrategicContextPage';
 import { ConnectPreviewPage } from './connect/ConnectPreviewPage';
 import { UploadPreviewPage } from './upload/UploadPreviewPage';
 import { GooglePreviewPage } from './google/GooglePreviewPage';
@@ -53,6 +54,9 @@ export function App() {
 
           {/* Wave 4 — Founder Strategy (bounded priority-decision reasoning over Waves 1–3 outputs). */}
           <Route path="/strategy" element={<StrategyPage />} />
+
+          {/* Wave 4 — Founder Strategic Context (explicit, founder-controlled strategy conditions). */}
+          <Route path="/strategic-context" element={<StrategicContextPage />} />
 
           {/* Real product: the connect surface (S1-T5b) — the authenticated landing. Magic Link → Connect
               → Generate → Read. Session-guarded; consumes only the production connect + generate endpoints. */}
