@@ -10,7 +10,9 @@ import { PgMarketFindingResponseRepository } from '../business-model/pg-market-f
 import { PgMarketReviewRepository } from '../business-model/pg-market-review.repository';
 import { PgStrategicSessionRepository } from '../business-model/pg-strategic-session.repository';
 import { PgStrategicResponseRepository } from '../business-model/pg-strategic-response.repository';
+import { PgStrategicDecisionRepository } from '../business-model/pg-strategic-decision.repository';
 import { PgFounderStrategicContextRepository } from '../business-model/pg-founder-strategic-context.repository';
+import { assertDecisionAdmissible, toDecisionView, DecisionValidationError, type DecisionInput } from '../business-model/strategic-decision';
 import { AnthropicStrategyModel } from '../business-model/anthropic-strategy.model';
 import { strategyModelConfig } from '../business-model/model-config';
 import { startStrategicSessionWorker } from '../business-model/strategic-session.worker';
@@ -27,6 +29,7 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
   const identity = new PgIdentityRepository(db);
   const sessionRepo = new PgStrategicSessionRepository(db);
   const responseRepo = new PgStrategicResponseRepository(db);
+  const decisionRepo = new PgStrategicDecisionRepository(db);
   const assembler = {
     understanding: new PgUnderstandingRepository(db), conclusionResponses: new PgConclusionResponseRepository(db),
     entities: new PgMarketEntityRepository(db), findings: new PgMarketFindingRepository(db),
@@ -110,4 +113,90 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
     if (!owned) { await reply.code(404).send({ error: 'not found' }); return; }
     await reply.send({ responses: await responseRepo.listBySession(founderId, id) });
   });
+
+  // ── Strategic Decision Records (founder-explicit; append-only; NOT recommendation feedback) ──────────────
+  // Parse the founder's explicit decision input from the request body (nothing here is inferred by the model).
+  const decisionInput = (b: Record<string, unknown>): DecisionInput => {
+    const co = (b['chosenOption'] ?? {}) as Record<string, unknown>;
+    const alts = Array.isArray(b['alternativesConsidered']) ? (b['alternativesConsidered'] as Array<Record<string, unknown>>) : [];
+    return {
+      chosenOption: { label: String(co['label'] ?? ''), source: String(co['source'] ?? '') as DecisionInput['chosenOption']['source'], statement: co['statement'] != null ? String(co['statement']) : null },
+      decisionStatement: String(b['decisionStatement'] ?? ''),
+      rationale: b['rationale'] != null ? String(b['rationale']) : null,
+      alternativesConsidered: alts.map((a) => ({ label: String(a['label'] ?? ''), source: String(a['source'] ?? 'FOUNDER_AUTHORED') as DecisionInput['alternativesConsidered'][number]['source'], disposition: String(a['disposition'] ?? '') as DecisionInput['alternativesConsidered'][number]['disposition'], reason: a['reason'] != null ? String(a['reason']) : null })),
+      tradeOffsAccepted: Array.isArray(b['tradeOffsAccepted']) ? (b['tradeOffsAccepted'] as unknown[]).map((t) => String(t)) : [],
+      acknowledgedInsufficientEvidence: b['acknowledgedInsufficientEvidence'] === true,
+      scope: b['scope'] != null ? (String(b['scope']) as DecisionInput['scope']) : undefined,
+      reversibility: b['reversibility'] != null ? (String(b['reversibility']) as DecisionInput['reversibility']) : undefined,
+      reviewAt: b['reviewAt'] != null ? String(b['reviewAt']) : null,
+      reviewTrigger: b['reviewTrigger'] != null ? String(b['reviewTrigger']) : null,
+      idempotencyKey: String(b['idempotencyKey'] ?? ''),
+    };
+  };
+
+  // Create ONE Strategic Decision Record from an explicit founder action on a terminal session (idempotent).
+  server.post('/strategy/sessions/:sessionId/decisions', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const sessionId = (request.params as { sessionId: string }).sessionId;
+    const session = await sessionRepo.getById(founderId, sessionId); // founder-owned only → cross-founder = 404
+    if (!session) { await reply.code(404).send({ error: 'not found' }); return; }
+    const input = decisionInput((request.body ?? {}) as Record<string, unknown>);
+    try { assertDecisionAdmissible(session, input); }
+    catch (e) { if (e instanceof DecisionValidationError) { await reply.code(400).send({ error: e.message, reason: e.reason }); return; } throw e; }
+    const decision = await decisionRepo.create(founderId, session, input, new Date());
+    await reply.code(201).send({ decision: toDecisionView(decision) });
+  });
+
+  server.get('/strategy/decisions', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    await reply.send({ decisions: (await decisionRepo.listByFounder(founderId)).map(toDecisionView) });
+  });
+
+  // A single logical decision: its full append-only revision history + the (immutable) linked recommendation.
+  server.get('/strategy/decisions/:logicalDecisionId', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const logicalDecisionId = (request.params as { logicalDecisionId: string }).logicalDecisionId;
+    const history = await decisionRepo.getHistory(founderId, logicalDecisionId);
+    if (!history.length) { await reply.code(404).send({ error: 'not found' }); return; }
+    const effective = history[history.length - 1]!;
+    // resolve the linked session for stable historical display (still founder-owned; may be null if never linked)
+    const session = effective.recommendationSessionId ? await sessionRepo.getById(founderId, effective.recommendationSessionId) : null;
+    await reply.send({ decision: toDecisionView(effective), history: history.map(toDecisionView), linkedSession: session ? toSessionView(session) : null });
+  });
+
+  // Append-only lifecycle. supersede = a new choice; reverse/retire = terminal.
+  server.post('/strategy/decisions/:logicalDecisionId/supersede', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const logicalDecisionId = (request.params as { logicalDecisionId: string }).logicalDecisionId;
+    const b = (request.body ?? {}) as Record<string, unknown>;
+    const sessionId = String(b['sessionId'] ?? '');
+    const session = await sessionRepo.getById(founderId, sessionId);
+    if (!session) { await reply.code(404).send({ error: 'not found' }); return; }
+    const input = decisionInput(b);
+    try { assertDecisionAdmissible(session, input); }
+    catch (e) { if (e instanceof DecisionValidationError) { await reply.code(400).send({ error: e.message, reason: e.reason }); return; } throw e; }
+    const decision = await decisionRepo.supersede(founderId, logicalDecisionId, session, input, new Date());
+    if (!decision) { await reply.code(409).send({ error: 'this decision can’t be superseded' }); return; }
+    await reply.code(201).send({ decision: toDecisionView(decision) });
+  });
+
+  for (const action of ['reverse', 'retire'] as const) {
+    server.post(`/strategy/decisions/:logicalDecisionId/${action}`, async (request: FastifyRequest, reply: FastifyReply) => {
+      const founderId = await sessionFounder(request);
+      if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+      const logicalDecisionId = (request.params as { logicalDecisionId: string }).logicalDecisionId;
+      const b = (request.body ?? {}) as Record<string, unknown>;
+      const note = b['note'] != null ? String(b['note']) : null;
+      const key = String(b['idempotencyKey'] ?? `${action}:${logicalDecisionId}`);
+      const decision = action === 'reverse'
+        ? await decisionRepo.reverse(founderId, logicalDecisionId, note, key, new Date())
+        : await decisionRepo.retire(founderId, logicalDecisionId, note, key, new Date());
+      if (!decision) { await reply.code(409).send({ error: `this decision can’t be ${action}d` }); return; }
+      await reply.code(201).send({ decision: toDecisionView(decision) });
+    });
+  }
 }

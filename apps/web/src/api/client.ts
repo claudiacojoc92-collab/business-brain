@@ -385,6 +385,48 @@ export async function listStrategyResponses(id: string): Promise<StrategyRespons
   return responses;
 }
 
+// ─── Strategic Decision Record: a founder-EXPLICIT choice among understood alternatives (ADR-011 cat 10) ────
+// A decision is NOT recommendation feedback and NOT a commitment or plan. Only an explicit founder action here
+// creates one; it is append-only and preserves the decision-time state.
+export type DecisionStatus = 'ACTIVE' | 'SUPERSEDED' | 'REVERSED' | 'RETIRED';
+export type Alignment = 'ALIGNED' | 'PARTIALLY_ALIGNED' | 'DIVERGENT' | 'NO_RECOMMENDATION';
+export type ChosenOptionSource = 'RECOMMENDED' | 'RECOMMENDED_WITH_MODIFICATION' | 'ALTERNATIVE' | 'FOUNDER_AUTHORED';
+export type AlternativeDisposition = 'CONSIDERED' | 'CHOSEN' | 'REJECTED' | 'DEFERRED' | 'UNSUPPORTED' | 'EXCLUDED_BY_NON_NEGOTIABLE';
+export type DecisionScope = 'BUSINESS' | 'MARKETING' | 'STRATEGIC_JOB' | 'CHANNEL' | 'OFFER' | 'POSITIONING';
+export type Reversibility = 'REVERSIBLE' | 'COSTLY_TO_REVERSE' | 'IRREVERSIBLE' | 'UNKNOWN';
+export interface DecisionAlternative { label: string; source: 'RECOMMENDATION_DERIVED' | 'FOUNDER_AUTHORED'; disposition: AlternativeDisposition; reason: string | null }
+export interface DecisionView {
+  decisionId: string; logicalDecisionId: string; revision: number; status: DecisionStatus; lifecycle: string;
+  chosenOption: { label: string; source: ChosenOptionSource; statement: string | null };
+  decisionStatement: string; rationale: string | null; alternativesConsidered: DecisionAlternative[];
+  tradeOffsAccepted: string[]; acknowledgedInsufficientEvidence: boolean; reviewTrigger: string | null;
+  recommendationSessionId: string | null; recommendationSchemaVersion: string | null; provenanceManifestVersion: string | null;
+  businessUnderstandingVersion: number | null; decisionHorizon: string | null; alignment: Alignment;
+  groundingStatusAtDecision: string | null; scope: DecisionScope; reversibility: Reversibility;
+  uncertainty: { confidence: unknown; unknowns: string[]; groundingStatus: string | null } | null;
+  authorship: Record<string, string>; decidedAt: string; reviewAt: string | null; decisionSchemaVersion: string; notACommitment: true;
+}
+export interface CreateDecisionInput {
+  chosenOption: { label: string; source: ChosenOptionSource; statement?: string | null };
+  decisionStatement: string; rationale?: string | null; alternativesConsidered: DecisionAlternative[];
+  tradeOffsAccepted?: string[]; acknowledgedInsufficientEvidence?: boolean; scope?: DecisionScope;
+  reversibility?: Reversibility; reviewAt?: string | null; reviewTrigger?: string | null; idempotencyKey: string;
+}
+/** POST /strategy/sessions/:id/decisions — record ONE founder decision (explicit; not feedback; not a commitment). */
+export async function createDecision(sessionId: string, input: CreateDecisionInput): Promise<DecisionView> {
+  const { decision } = await request<{ decision: DecisionView }>(`strategy/sessions/${encodeURIComponent(sessionId)}/decisions`, { method: 'POST', body: JSON.stringify(input) });
+  return decision;
+}
+/** GET /strategy/decisions — the founder's effective decisions, newest first. */
+export async function listDecisions(): Promise<DecisionView[]> {
+  const { decisions } = await request<{ decisions: DecisionView[] }>('strategy/decisions');
+  return decisions;
+}
+/** GET /strategy/decisions/:logicalDecisionId — the decision, its append-only history, and its linked recommendation. */
+export async function getDecision(logicalDecisionId: string): Promise<{ decision: DecisionView; history: DecisionView[]; linkedSession: StrategySessionView | null }> {
+  return request(`strategy/decisions/${encodeURIComponent(logicalDecisionId)}`);
+}
+
 // ─── Founder Strategic Context: founder-declared strategic operating conditions (Wave 4, slice 1) ──────────
 // Five kinds (GOAL/CONSTRAINT/RESOURCE/STRATEGIC_PREFERENCE/DECISION_HORIZON). Append-only, temporal, scoped.
 // Every write is an explicit founder action — nothing is inferred or persisted without confirmation.

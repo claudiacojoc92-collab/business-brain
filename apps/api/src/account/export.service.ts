@@ -38,6 +38,7 @@ export interface FounderExport {
   strategicSessions: unknown[];
   strategicResponses: unknown[];
   strategicContext: unknown[];
+  strategicDecisions: unknown[];
   meta: { note: string };
 }
 
@@ -129,6 +130,13 @@ export async function buildFounderExport(args: {
   // lifecycle (via the repository — never the raw write-once status column). Every field is founder-owned + safe.
   const strategicContext = await new PgFounderStrategicContextRepository(db).listAllForExport(founderId);
 
+  // ADR-011 cat 10 — Strategic Decision Records: the COMPLETE append-only revision history (all revisions), founder-
+  // authored + recommendation-derived + system-derived material labelled via `authorship`. Session/schema/manifest are
+  // references (Laws 4/5); no source bodies duplicated.
+  const strategicDecisions = (await db.selectFrom('business.strategic_decision_record')
+    .select(['id', 'logical_decision_id', 'revision', 'lifecycle', 'supersedes_id', 'chosen_option', 'decision_statement', 'rationale', 'alternatives_considered', 'trade_offs_accepted', 'acknowledged_insufficient_evidence', 'review_trigger', 'recommendation_session_id', 'recommendation_schema_version', 'provenance_manifest_version', 'business_understanding_version', 'decision_horizon', 'alignment', 'grounding_status_at_decision', 'scope', 'reversibility', 'uncertainty', 'authorship', 'decided_at', 'review_at', 'created_at'])
+    .where('founder_id', '=', founderId).orderBy('logical_decision_id', 'asc').orderBy('revision', 'asc').execute()) as Array<Record<string, unknown>>;
+
   // Run history — founder-safe (error CATEGORY only; never the internal error_detail).
   const runs = (await db
     .selectFrom('business.understanding_run')
@@ -194,6 +202,10 @@ export async function buildFounderExport(args: {
     }),
     strategicResponses: strategicResponses.map((r) => ({ id: String(r['id']), sessionId: String(r['session_id']), responseType: String(r['response_type']), qualification: (r['qualification'] as string | null) ?? null, supersedesId: (r['supersedes_id'] as string | null) ?? null, supersededAt: iso(r['superseded_at']), at: iso(r['created_at']) })),
     strategicContext: strategicContext.map((c) => ({ id: c.id, logicalItemId: c.logicalItemId, version: c.version, kind: c.kind, statement: c.statement, category: c.category, scope: c.scope, source: c.source, status: c.status, lifecycle: c.lifecycle, effectiveFrom: c.effectiveFrom, effectiveUntil: c.effectiveUntil, reviewAt: c.reviewAt, metadata: c.metadata, supersedesItemId: c.supersedesItemId, createdAt: c.createdAt })),
+    strategicDecisions: strategicDecisions.map((d) => {
+      const j = (v: unknown) => (v == null ? null : typeof v === 'string' ? JSON.parse(v) : v);
+      return { id: String(d['id']), logicalDecisionId: String(d['logical_decision_id']), revision: Number(d['revision']), lifecycle: String(d['lifecycle']), supersedesId: (d['supersedes_id'] as string | null) ?? null, chosenOption: j(d['chosen_option']), decisionStatement: String(d['decision_statement']), rationale: (d['rationale'] as string | null) ?? null, alternativesConsidered: j(d['alternatives_considered']), tradeOffsAccepted: j(d['trade_offs_accepted']), acknowledgedInsufficientEvidence: d['acknowledged_insufficient_evidence'] === true, reviewTrigger: (d['review_trigger'] as string | null) ?? null, recommendationSessionId: (d['recommendation_session_id'] as string | null) ?? null, recommendationSchemaVersion: (d['recommendation_schema_version'] as string | null) ?? null, provenanceManifestVersion: (d['provenance_manifest_version'] as string | null) ?? null, businessUnderstandingVersion: d['business_understanding_version'] == null ? null : Number(d['business_understanding_version']), decisionHorizon: (d['decision_horizon'] as string | null) ?? null, alignment: String(d['alignment']), groundingStatusAtDecision: (d['grounding_status_at_decision'] as string | null) ?? null, scope: String(d['scope']), reversibility: String(d['reversibility']), uncertainty: j(d['uncertainty']), authorship: j(d['authorship']), decidedAt: iso(d['decided_at']), reviewAt: iso(d['review_at']), createdAt: iso(d['created_at']), decisionSchemaVersion: 'strategic-decision-1' };
+    }),
     understandingRuns: runs.map((r) => ({
       id: String(r['id']), sourceKey: String(r['source_key']), status: String(r['status']), attempts: Number(r['attempt_count']),
       errorCode: (r['error_code'] as string | null) ?? null, understandingVersion: r['understanding_version'] == null ? null : Number(r['understanding_version']),

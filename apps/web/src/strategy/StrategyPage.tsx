@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import {
-  createStrategySession, getStrategySession, listStrategySessions, retryStrategySession, respondToStrategy, ApiError,
+  createStrategySession, getStrategySession, listStrategySessions, retryStrategySession, respondToStrategy, createDecision, ApiError,
   type StrategySessionView, type StrategyBoundary, type StrategicRecommendation, type InsufficientStrategicEvidence,
   type StrategyResponseType, type EpistemicKind, type Band, type EvidenceReference,
+  type DecisionView, type DecisionAlternative, type ChosenOptionSource,
 } from '../api/client';
 import { AppShell, Button, Thinking } from '../system/ui';
 
@@ -131,7 +132,7 @@ export function StrategyPage() {
               </div>
             ))}
             {session.status === 'READY' && session.recommendation && <RecommendationView session={session} onResponded={onResponded} on401={on401} />}
-            {session.status === 'INSUFFICIENT_EVIDENCE' && session.insufficient && <InsufficientView data={session.insufficient} onAddContext={() => navigate('/understand')} />}
+            {session.status === 'INSUFFICIENT_EVIDENCE' && session.insufficient && <><InsufficientView data={session.insufficient} onAddContext={() => navigate('/understand')} /><div style={{ marginTop: 'var(--sp-4)' }}><DecisionPanel session={session} on401={on401} /></div></>}
             {session.status === 'FAILED' && (
               <div style={card}>
                 <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-4)', color: 'var(--ink-2)', margin: 0 }}>{session.message ?? 'Something went wrong. Nothing was lost.'}</p>
@@ -284,9 +285,9 @@ function RecommendationView({ session, onResponded, on401 }: { session: Strategy
       {session.provenance && <p style={{ ...meta, marginTop: 'var(--sp-4)' }}>Reasoned by {session.provenance.modelId ?? 'the strategist'}{session.provenance.promptVersion ? ` · ${session.provenance.promptVersion}` : ''}{session.understandingVersion != null ? ` · from understanding v${session.understandingVersion}` : ''}. This is a recommendation, not an instruction — you decide.</p>}
       {(session.provenanceValidation?.rejectedCount ?? 0) > 0 && <p style={{ ...meta, marginTop: 4 }}>Every reference shown above is checked against your actual records; {session.provenanceValidation!.rejectedCount} unverifiable reference{session.provenanceValidation!.rejectedCount === 1 ? '' : 's'} {session.provenanceValidation!.rejectedCount === 1 ? 'was' : 'were'} left out so nothing is claimed that I can’t point to.</p>}
 
-      {/* founder response — append-only; ACCEPT records a decision, it does not execute anything */}
+      {/* founder feedback on the recommendation — append-only; this is NOT a decision (that is the separate surface below) */}
       <div style={{ marginTop: 'var(--sp-5)', paddingTop: 'var(--sp-4)', borderTop: '1px solid var(--line)' }}>
-        <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '0 0 6px' }}>What’s your call?</p>
+        <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '0 0 6px' }}>Your read on this recommendation</p>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {RESPONSES.map((o) => {
             const on = choice === o.v;
@@ -295,12 +296,141 @@ function RecommendationView({ session, onResponded, on401 }: { session: Strategy
         </div>
         {choice === 'QUALIFY' && <textarea value={qual} onChange={(e) => { setQual(e.target.value); setSaved(false); }} placeholder="What’s the caveat?" rows={2} style={{ width: '100%', boxSizing: 'border-box', marginTop: 8, fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }} />}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 'var(--sp-3)' }}>
-          <Button variant={choice ? 'secondary' : 'ghost'} loading={saving} onClick={() => void save()}>{hasPrior ? 'Update my response' : 'Record my response'}</Button>
+          <Button variant={choice ? 'secondary' : 'ghost'} loading={saving} onClick={() => void save()}>{hasPrior ? 'Update my read' : 'Save my read'}</Button>
           {saved
-            ? <span style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ok-ink)' }}>Recorded. This is your decision on record — nothing was executed. You can revise it.</span>
-            : hasPrior && <span style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ink-3)' }}>Your current response is shown. You can change it.</span>}
+            ? <span style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ok-ink)' }}>Saved. This is feedback on the recommendation — not a decision, and nothing was executed.</span>
+            : hasPrior && <span style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ink-3)' }}>Your current read is shown. You can change it.</span>}
         </div>
       </div>
+
+      {/* Strategic Decision Record — a SEPARATE, explicit founder act (Law 2). Not feedback, not a commitment. */}
+      <DecisionPanel session={session} on401={on401} />
+    </div>
+  );
+}
+
+// A Strategic Decision Record — an EXPLICIT founder act, separate from recommendation feedback. Two beats: choose, then
+// confirm. Records what was chosen + the alternatives, links the immutable session, and never disguises a value judgment
+// as evidence. It is not a commitment or plan.
+function DecisionPanel({ session, on401 }: { session: StrategySessionView; on401: (e: unknown) => void }) {
+  const rec = session.recommendation;
+  const insufficient = session.status === 'INSUFFICIENT_EVIDENCE';
+  const recommendedLabel = rec ? rec.recommendation.title : null;
+  // the option set the founder is choosing among (recommended + considered alternatives), all clearly sourced.
+  const recOptions = rec ? [recommendedLabel!, ...rec.alternatives.map((a) => a.option)] : [];
+  const [open, setOpen] = useState(false);
+  const [chosen, setChosen] = useState<string>(recommendedLabel ?? '');
+  const [ownLabel, setOwnLabel] = useState('');
+  const [statement, setStatement] = useState('');
+  const [rationale, setRationale] = useState('');
+  const [reversibility, setReversibility] = useState<'REVERSIBLE' | 'COSTLY_TO_REVERSE' | 'IRREVERSIBLE' | 'UNKNOWN'>('UNKNOWN');
+  const [ackInsufficient, setAckInsufficient] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<DecisionView | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const usingOwn = chosen === '__own__';
+  const chosenLabel = usingOwn ? ownLabel.trim() : chosen;
+  const source: ChosenOptionSource = usingOwn ? 'FOUNDER_AUTHORED' : chosen === recommendedLabel ? 'RECOMMENDED' : 'ALTERNATIVE';
+  const canConfirm = chosenLabel.length > 0 && statement.trim().length > 0 && (!insufficient || ackInsufficient);
+
+  const confirm = async () => {
+    setSaving(true); setError(null);
+    // alternatives considered: the chosen (CHOSEN) + the others (CONSIDERED), each clearly sourced (rec-derived vs authored).
+    const others = recOptions.filter((o) => o !== chosenLabel);
+    const alternatives: DecisionAlternative[] = [
+      { label: chosenLabel, source: usingOwn ? 'FOUNDER_AUTHORED' : 'RECOMMENDATION_DERIVED', disposition: 'CHOSEN', reason: null },
+      ...others.map((o): DecisionAlternative => ({ label: o, source: 'RECOMMENDATION_DERIVED', disposition: 'CONSIDERED', reason: null })),
+    ];
+    // guarantee ≥2 alternatives even if the recommendation offered none
+    if (alternatives.length < 2) alternatives.push({ label: 'Keep the current course', source: 'FOUNDER_AUTHORED', disposition: 'CONSIDERED', reason: null });
+    try {
+      const d = await createDecision(session.sessionId, {
+        chosenOption: { label: chosenLabel, source, statement: null },
+        decisionStatement: statement.trim(), rationale: rationale.trim() || null,
+        alternativesConsidered: alternatives, reversibility,
+        acknowledgedInsufficientEvidence: insufficient ? ackInsufficient : undefined,
+        idempotencyKey: (globalThis.crypto?.randomUUID?.() ?? String(Date.now())),
+      });
+      setSaved(d); setOpen(false);
+    } catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setError(e instanceof ApiError ? e.message : 'Could not record the decision.'); }
+    finally { setSaving(false); }
+  };
+
+  if (saved) {
+    return (
+      <div style={{ marginTop: 'var(--sp-5)', paddingTop: 'var(--sp-4)', borderTop: '2px solid var(--ink)' }}>
+        <span style={sectionLabel}>Your decision on record</span>
+        <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-4)', color: 'var(--ink)', margin: '4px 0 0' }}>{saved.chosenOption.label}</p>
+        <p style={{ ...meta, marginTop: 4 }}>{saved.decisionStatement}</p>
+        <p style={{ ...meta, marginTop: 8 }}>
+          {rec && <>Business Brain recommended “{recommendedLabel}”. </>}
+          {saved.alignment === 'ALIGNED' && 'You chose the recommended option.'}
+          {saved.alignment === 'PARTIALLY_ALIGNED' && 'You chose the recommended option with a modification.'}
+          {saved.alignment === 'DIVERGENT' && 'You chose differently — recorded exactly as you decided, with the evidence unchanged.'}
+          {saved.alignment === 'NO_RECOMMENDATION' && 'This was decided without a grounded recommendation.'}
+        </p>
+        {saved.acknowledgedInsufficientEvidence && <p style={{ ...meta, marginTop: 4 }}>You recorded this knowing the evidence was insufficient.</p>}
+        <p style={{ ...meta, marginTop: 8, fontStyle: 'italic' }}>This records your decision. It does not create a commitment or plan. You can supersede or reverse it later.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 'var(--sp-5)', paddingTop: 'var(--sp-4)', borderTop: '2px solid var(--ink)' }}>
+      {!open ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <Button variant="secondary" onClick={() => setOpen(true)}>Record a decision</Button>
+          <span style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ink-3)' }}>A decision is your explicit choice — separate from the read above, and not a commitment or plan.</span>
+        </div>
+      ) : (
+        <div>
+          <span style={sectionLabel}>Record a decision</span>
+          {rec && <p style={{ ...meta, marginTop: 2 }}>Business Brain recommends: <strong style={{ color: 'var(--ink-2)' }}>{recommendedLabel}</strong>. You’re choosing — you can pick this, an alternative, or your own.</p>}
+          {insufficient && <p style={{ ...meta, marginTop: 2 }}>This session didn’t have enough evidence for a grounded recommendation. You can still decide — it will be recorded as such.</p>}
+
+          <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '10px 0 4px' }}>You are choosing</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {recOptions.map((o) => (
+              <label key={o} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', cursor: 'pointer' }}>
+                <input type="radio" name="chosen" checked={chosen === o} onChange={() => setChosen(o)} />
+                <span>{o}{o === recommendedLabel && <span style={{ color: 'var(--accent, var(--ink-3))', fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)' }}> · recommended</span>}</span>
+              </label>
+            ))}
+            <label style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', cursor: 'pointer' }}>
+              <input type="radio" name="chosen" checked={usingOwn} onChange={() => setChosen('__own__')} />
+              <span>Something else — my own call</span>
+            </label>
+            {usingOwn && <input value={ownLabel} onChange={(e) => setOwnLabel(e.target.value)} placeholder="Name the option you’re choosing" style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', marginLeft: 24 }} />}
+          </div>
+
+          <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '12px 0 4px' }}>In your words, what are you deciding?</p>
+          <textarea value={statement} onChange={(e) => setStatement(e.target.value)} rows={2} placeholder="e.g. I’m committing my posting time to LinkedIn for the next 30 days." style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }} />
+
+          <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '12px 0 4px' }}>Why (optional)</p>
+          <textarea value={rationale} onChange={(e) => setRationale(e.target.value)} rows={2} placeholder="Your reasoning — kept as your own words." style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }} />
+
+          <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '12px 0 4px' }}>How reversible is this?</p>
+          <select value={reversibility} onChange={(e) => setReversibility(e.target.value as typeof reversibility)} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', padding: '6px 8px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }}>
+            <option value="UNKNOWN">I’m not sure</option><option value="REVERSIBLE">Easily reversible</option>
+            <option value="COSTLY_TO_REVERSE">Costly to reverse</option><option value="IRREVERSIBLE">Effectively irreversible</option>
+          </select>
+
+          {insufficient && (
+            <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 12, fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={ackInsufficient} onChange={(e) => setAckInsufficient(e.target.checked)} />
+              <span>I understand there wasn’t enough evidence for a grounded recommendation, and I’m deciding anyway.</span>
+            </label>
+          )}
+
+          <p style={{ ...meta, marginTop: 14, fontStyle: 'italic' }}>This records your decision. It does not create a commitment or plan.</p>
+          {error && <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--danger-ink, #a33)', marginTop: 6 }}>{error}</p>}
+          <div style={{ display: 'flex', gap: 10, marginTop: 'var(--sp-3)' }}>
+            <Button loading={saving} disabled={!canConfirm} onClick={() => void confirm()}>Confirm this decision</Button>
+            <Button variant="ghost" onClick={() => setOpen(false)}>Not now</Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
