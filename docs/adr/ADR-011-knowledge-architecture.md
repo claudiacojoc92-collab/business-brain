@@ -159,10 +159,15 @@ smuggle them in without a superseding gate). Each category names what it is and,
 - **What it is NOT:** not a decision, not a commitment, not execution, not truth, not memory. **ACCEPT does not execute,
   does not write context, does not write memory, does not become objective truth.**
 
-#### 10. Strategic Decision — *conceptual only (not implemented)*
-- **Definition (future):** A founder's *chosen* course of action, distinct from the recommendation that informed it.
+#### 10. Strategic Decision — *being implemented by the Strategic Decision Record slice*
+- **Definition:** A founder's *chosen* course of action among understood alternatives, distinct from the recommendation
+  that informed it, with decision-time evidence/recommendation/context/uncertainty/trade-offs preserved append-only.
 - **Controller:** Founder only, by an explicit, dedicated decision action (never auto-derived from ACCEPT).
-- **What it is NOT:** not a recommendation; not produced by the model; not a side effect of accepting a recommendation.
+- **What it is NOT:** not a recommendation; not produced by the model; not a side effect of accepting a recommendation;
+  not a Strategic Commitment (Law 9); not generic memory.
+- **Governance + architecture:** [`strategic-decision-record-contract.md`](../governance/strategic-decision-record-contract.md)
+  + [`strategic-decision-record-slice.md`](../architecture/strategic-decision-record-slice.md); schema `strategic-decision-1`,
+  table `business.strategic_decision_record` (V072), append-only.
 
 #### 11. Strategic Commitment — *conceptual only (not implemented)*
 - **Definition (future):** A decision the founder explicitly *binds to* for a period, with scope and validity.
