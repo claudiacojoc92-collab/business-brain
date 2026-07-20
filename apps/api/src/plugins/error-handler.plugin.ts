@@ -42,6 +42,25 @@ export function registerErrorHandler(
         return;
       }
 
+      // Trusted framework/client errors carrying a VALID 4xx statusCode (e.g. @fastify/rate-limit → 429,
+      // Fastify request validation → 400) keep their status — but with a SAFE, PUBLIC body. The raw
+      // error.message is NEVER echoed here (only the trusted DomainError/ApplicationError path above may),
+      // so no internal/provider/DB/stack detail leaks. Trust boundary: an integer strictly in 400–499.
+      // Anything else (200/302/5xx, non-integer, missing) stays an unclassified 500.
+      const statusCode = (error as { statusCode?: unknown }).statusCode;
+      if (typeof statusCode === 'number' && Number.isInteger(statusCode) && statusCode >= 400 && statusCode <= 499) {
+        const is429 = statusCode === 429;
+        void reply.status(statusCode).send({
+          error: {
+            code:       is429 ? 'RATE_LIMIT_EXCEEDED' : 'REQUEST_ERROR',
+            message:    is429 ? 'Too many requests. Please slow down and try again.' : 'The request could not be processed.',
+            request_id: traceId,
+            timestamp,
+          },
+        });
+        return;
+      }
+
       void reply.status(500).send({
         error: {
           code:       'INTERNAL_ERROR',
