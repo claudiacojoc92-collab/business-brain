@@ -6,9 +6,32 @@
  * successful session is preserved (prior_successful_session_id). Fails CLOSED — never a raw error to the founder.
  */
 import type { PgStrategicSessionRepository } from './pg-strategic-session.repository';
-import { assembleStrategicContext, type AssemblerDeps } from './strategic-context.assembler';
+import { assembleStrategicContext, type AssemblerDeps, type StrategicContext } from './strategic-context.assembler';
 import type { StrategyModel } from './anthropic-strategy.model';
-import { STRATEGY_FAILURE_MESSAGE, type StrategicSession } from './strategy';
+import { STRATEGY_FAILURE_MESSAGE, type StrategicSession, type StrategicOutcome, type SessionContextConflict } from './strategy';
+import { detectNonNegotiableExcludesOnlyOption, effectiveNonNegotiables, optionExcludedBy, type BoundedOption } from './effective-strategic-context.resolver';
+
+/**
+ * Rule 3 (NON_NEGOTIABLE_OPTION) over the strategist's OWN bounded option set: for each option the model assessed,
+ * resolve which founder non-negotiable excludes it (the model's echoed context id, validated against the effective
+ * non-negotiables; else a conservative token match), then deterministically decide whether every evidence-supported
+ * option is excluded. Returns the conflict (with references resolving to immutable context items) or null. Pure.
+ */
+export function computeSessionContextConflicts(context: StrategicContext, outcome: StrategicOutcome): SessionContextConflict[] {
+  const fc = context.founderContext;
+  const groups = { GOAL: fc.goals, CONSTRAINT: fc.constraints, RESOURCE: fc.resources, STRATEGIC_PREFERENCE: fc.strategicPreferences, DECISION_HORIZON: fc.decisionHorizons };
+  const oa = (outcome as { optionAssessment?: Array<{ label: string; supportedByEvidence: boolean; excludedByContextRefId: string | null }> }).optionAssessment;
+  if (!oa || oa.length === 0) return [];
+  const nn = effectiveNonNegotiables(groups);
+  const nnIds = new Set(nn.map((i) => i.id));
+  const options: BoundedOption[] = oa.map((o) => ({
+    label: o.label, supportedByEvidence: o.supportedByEvidence === true,
+    // Trust the model's echoed exclusion only if it resolves to a REAL effective non-negotiable id; else derive it.
+    excludedByItemId: (o.excludedByContextRefId && nnIds.has(o.excludedByContextRefId)) ? o.excludedByContextRefId : optionExcludedBy(nn, o.label),
+  }));
+  const conflict = detectNonNegotiableExcludesOnlyOption(groups, options);
+  return conflict ? [conflict] : [];
+}
 
 export interface StrategicWorkerDeps {
   sessionRepo: PgStrategicSessionRepository;
@@ -35,11 +58,14 @@ export async function processSession(session: StrategicSession, deps: StrategicW
   catch (e) { return failed('MODEL_FAILED', String((e as Error)?.message ?? e)); }
   if (outcome == null) return failed('MODEL_FAILED', 'strategy model output failed to parse/validate');
 
+  // Deterministic NON_NEGOTIABLE_OPTION conflict (rule 3), computed over the strategist's own bounded option set.
+  const contextConflicts = computeSessionContextConflicts(context, outcome);
+
   if (outcome.kind === 'INSUFFICIENT_STRATEGIC_EVIDENCE') {
-    return (await sessionRepo.markInsufficient(session.id, outcome, 'I don’t have enough yet to make this call responsibly.', now())) ?? (await sessionRepo.getById(session.founderId, session.id))!;
+    return (await sessionRepo.markInsufficient(session.id, outcome, 'I don’t have enough yet to make this call responsibly.', now(), contextConflicts)) ?? (await sessionRepo.getById(session.founderId, session.id))!;
   }
   // RECOMMENDATION → atomic READY (single-row publish; the recommendation is immutable thereafter).
-  return (await sessionRepo.markReady(session.id, outcome, now())) ?? (await sessionRepo.getById(session.founderId, session.id))!;
+  return (await sessionRepo.markReady(session.id, outcome, now(), contextConflicts)) ?? (await sessionRepo.getById(session.founderId, session.id))!;
 }
 
 export function startStrategicSessionWorker(deps: StrategicWorkerDeps & { intervalMs?: number }): () => void {

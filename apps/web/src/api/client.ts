@@ -340,10 +340,12 @@ export interface InsufficientStrategicEvidence {
   smallestEvidenceAction: string; provisionalPossible: boolean; whatNotToConcludeYet: string[];
 }
 export interface StrategyResponseRecord { id: string; sessionId: string; responseType: StrategyResponseType; qualification: string | null; supersedesId: string | null; supersededAt: string | null; createdAt: string }
+export interface SessionContextConflict { id: string; type: string; itemIds: string[]; description: string; strategicImpact: string; resolutionStatus: string }
 export interface StrategySessionView {
   sessionId: string; status: StrategyStatus; strategicJob: 'PRIORITY_DECISION'; subtype: string; question: string;
   decisionHorizon: string | null; understandingVersion: number | null; contextHealth: unknown;
   recommendation: StrategicRecommendation | null; insufficient: InsufficientStrategicEvidence | null;
+  contextConflicts?: SessionContextConflict[];
   failureCategory: string | null; retryable: boolean; message: string | null; attempt: number; maxAttempts: number;
   priorSuccessfulSessionId: string | null; provenance: { modelId: string | null; promptVersion: string | null; schemaVersion: string | null } | null;
   createdAt: string; updatedAt: string; effectiveResponse?: StrategyResponseRecord | null;

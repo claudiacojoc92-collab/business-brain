@@ -21,7 +21,7 @@ describe('model-config contract', () => {
     expect(m.promptVersion).toBe('market-infer-sys-1'); expect(m.schemaVersion).toBe('market-inference-1');
     const st = strategyModelConfig();
     expect(st.modelId).toBe(LOCAL_DEFAULT_MODEL); expect(st.configuredSource).toBe('local-default');
-    expect(st.promptVersion).toBe('strategy-2'); expect(st.schemaVersion).toBe('strategy-recommendation-2');
+    expect(st.promptVersion).toBe('strategy-3'); expect(st.schemaVersion).toBe('strategy-recommendation-3');
   });
 
   it('strategy falls back to SYNTHESIS_MODEL when its own var is unset, and reads STRATEGY_MODEL when set', () => {

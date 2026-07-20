@@ -32,15 +32,18 @@ export const LOCAL_DEFAULT_MODEL = 'claude-sonnet-5';
 export const PROMPT_VERSION: Record<ModelCapability, string> = {
   synthesis: 'synthesis-1',
   'market-inference': 'market-infer-sys-1',
-  strategy: 'strategy-2',   // strategy-2: consumes Founder Strategic Context (goals/constraints/resources/prefs/horizon)
+  // strategy-3: bounded-option handling — emits optionAssessment; returns insufficient (never promotes an unsupported
+  // option, never weakens a non-negotiable) when the only evidence-supported option is excluded by a non-negotiable.
+  strategy: 'strategy-3',
 };
 export const SCHEMA_VERSION: Record<ModelCapability, string> = {
   synthesis: 'conclusions-1',          // {conclusions:[{type,statement,epistemicStatus,evidenceRefs,confidence}]}
   'market-inference': 'market-inference-1', // {inferenceText,epistemicStatus,relevanceToFounder}
-  // strategy-recommendation-2: adds the FOUNDER_STRATEGIC_CONTEXT epistemic kind + optional context-reference fields
-  // (logicalItemId/version/scope/source/effective period) on evidence references. Additive over v1 — the normalizer
-  // reads both, so a persisted v1 payload (no context fields) and a v2 payload both parse for the shared fields.
-  strategy: 'strategy-recommendation-2',
+  // strategy-recommendation-3: adds the optional `optionAssessment` on both output shapes (bounded-option analysis
+  // driving the NON_NEGOTIABLE_OPTION rule). Additive over v2 (which added FOUNDER_STRATEGIC_CONTEXT + context-reference
+  // fields over v1). The normalizer reads all three — a persisted v1/v2 payload and a v3 payload parse identically for
+  // the shared fields; the new field is simply absent on older payloads.
+  strategy: 'strategy-recommendation-3',
 };
 
 /** Production-capable mode = a real deploy. Local dev + tests are NOT production-capable and may use the default. */

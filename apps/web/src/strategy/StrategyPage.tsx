@@ -123,6 +123,13 @@ export function StrategyPage() {
           <div style={{ marginBottom: 'var(--sp-6)' }}>
             <p style={{ ...meta, marginBottom: 'var(--sp-3)' }}>{SUBTYPE_LABEL[session.subtype] ?? session.subtype} · “{session.question}”</p>
             {active && <div style={{ marginTop: 'var(--sp-3)' }}><Thinking message={STAGE[session.status] ?? 'Working…'} /></div>}
+            {(session.contextConflicts ?? []).filter((c) => c.type === 'NON_NEGOTIABLE_OPTION_CONFLICT').map((c) => (
+              <div key={c.id} style={{ ...card, borderColor: 'var(--warn-ink)', marginBottom: 'var(--sp-4)' }}>
+                <span style={{ ...sectionLabel, marginTop: 0, color: 'var(--warn-ink)' }}>Your non-negotiable rules out the only supported option</span>
+                <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-4)', color: 'var(--ink)', margin: '4px 0 0', lineHeight: 'var(--lh-body)' }}>{c.description}</p>
+                <p style={{ ...meta, marginTop: 6 }}>{c.strategicImpact}</p>
+              </div>
+            ))}
             {session.status === 'READY' && session.recommendation && <RecommendationView session={session} onResponded={onResponded} on401={on401} />}
             {session.status === 'INSUFFICIENT_EVIDENCE' && session.insufficient && <InsufficientView data={session.insufficient} onAddContext={() => navigate('/understand')} />}
             {session.status === 'FAILED' && (

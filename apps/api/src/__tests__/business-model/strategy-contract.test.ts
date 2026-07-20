@@ -8,6 +8,8 @@ import {
   normalizeStrategicOutput, boundaryResponse, canTransition, assertTransition, isActiveSession, isTerminalSession,
   sessionRetryable, toSessionView, STRATEGIC_RESPONSE_TYPES, type StrategicSession, type StrategicRecommendation,
 } from '../../business-model/strategy';
+import { computeSessionContextConflicts } from '../../business-model/strategic-session.worker';
+import type { StrategicContext } from '../../business-model/strategic-context.assembler';
 
 /**
  * Wave 4 — PURE deterministic contract tests (no DB/network). Covers the parts of the Founder Conversation
@@ -128,6 +130,15 @@ describe('strategy — strict recommendation schema (normalizer)', () => {
     expect(normalizeStrategicOutput('not json', 'WEBSITE_PRIORITY')).toBeNull();
   });
 
+  it('schema-recommendation-3 compatibility: an optionAssessment (v3) parses; a payload without it (v1/v2) omits it', () => {
+    const withOA = rawRecommendation({ optionAssessment: [{ label: 'LinkedIn', supportedByEvidence: true, excludedByContextRefId: 'sc-9' }, { label: 'Instagram', supportedByEvidence: false }] });
+    const r3 = normalizeStrategicOutput(withOA, 'CHANNEL_PRIORITY') as StrategicRecommendation & { optionAssessment?: unknown[] };
+    expect(r3.optionAssessment).toHaveLength(2);
+    expect((r3.optionAssessment as Array<{ supportedByEvidence: boolean; excludedByContextRefId: string | null }>)[1]).toEqual({ label: 'Instagram', supportedByEvidence: false, excludedByContextRefId: null });
+    const r2 = normalizeStrategicOutput(rawRecommendation(), 'CHANNEL_PRIORITY') as StrategicRecommendation & { optionAssessment?: unknown };
+    expect(r2.optionAssessment).toBeUndefined(); // older payloads simply omit the new field
+  });
+
   it('schema-recommendation-2 compatibility: a v1 payload (no context refs) and a v2 payload (with them) both normalize', () => {
     // v1 shape — evidence refs without any Founder Strategic Context fields (as persisted under strategy-recommendation-1).
     const v1 = normalizeStrategicOutput(rawRecommendation(), 'POSITIONING_PRIORITY') as StrategicRecommendation;
@@ -192,7 +203,7 @@ describe('strategy — founder-safe session view', () => {
     id: 's1', founderId: 'f1', status: 'FAILED', strategicJob: 'PRIORITY_DECISION', subtype: 'CHANNEL_PRIORITY',
     questionText: 'Instagram or LinkedIn?', decisionHorizon: '30 days', understandingVersion: 2, contextHealth: { missingAreas: [] },
     recommendation: normalizeStrategicOutput(rawRecommendation(), 'CHANNEL_PRIORITY') as StrategicRecommendation,
-    insufficientReason: null, failureCategory: 'MODEL_FAILED', founderSafeError: 'Something went wrong. Try again.',
+    insufficientReason: null, contextConflicts: null, failureCategory: 'MODEL_FAILED', founderSafeError: 'Something went wrong. Try again.',
     priorSuccessfulSessionId: null, modelId: 'claude-sonnet-5', promptVersion: 'strategy-1', schemaVersion: 'strategy-recommendation-1',
     attemptCount: 1, maxAttempts: 3, claimedAt: null, leaseExpiresAt: 'lease-secret', startedAt: null, finishedAt: null,
     createdAt: '2026-07-20T00:00:00.000Z', updatedAt: '2026-07-20T00:00:00.000Z',
@@ -218,5 +229,46 @@ describe('strategy — founder-safe session view', () => {
 
   it('response-type vocabulary is exactly the five founder semantics', () => {
     expect([...STRATEGIC_RESPONSE_TYPES].sort()).toEqual(['ACCEPT', 'NEEDS_MORE_EVIDENCE', 'NOT_RELEVANT_NOW', 'QUALIFY', 'REJECT']);
+  });
+});
+
+describe('strategy — NON_NEGOTIABLE_OPTION (rule 3) wired through the worker over a bounded option set', () => {
+  // A minimal StrategicContext whose founderContext carries one NON_NEGOTIABLE preference (item id "sc-nn").
+  function ctxWithNonNegotiable(): StrategicContext {
+    const nn = { id: 'sc-nn', logicalItemId: 'l-nn', version: 1, kind: 'STRATEGIC_PREFERENCE' as const, statement: 'No LinkedIn during this launch', category: 'ACQUISITION', scope: 'GLOBAL_STRATEGY' as const, source: 'FOUNDER_DECLARED', effectiveFrom: '2026-07-01T00:00:00.000Z', effectiveUntil: null, reviewAt: null, metadata: { kind: 'STRATEGIC_PREFERENCE' as const, category: 'ACQUISITION' as const, strength: 'NON_NEGOTIABLE' as const } };
+    return {
+      businessUnderstanding: { version: 1, conclusions: [], founderResponses: [], conflicts: [], unknowns: [] },
+      publicPositioningContext: { entities: [], observations: [], inferences: [], provisional: { observations: 0, inferences: 0 }, provenance: [] },
+      founderContext: { goals: [], constraints: [], resources: [], strategicPreferences: [nn], decisionHorizons: [], conflicts: [], staleItems: [], missingCriticalAreas: [] },
+      question: { rawText: 'LinkedIn or Instagram?', normalizedStrategicJob: 'PRIORITY_DECISION', subtype: 'CHANNEL_PRIORITY', decisionHorizon: '30 days' },
+      contextHealth: { missingAreas: [], staleAreas: [], contradictoryAreas: [], truncated: false },
+    };
+  }
+  const insufficient = (oa: Array<{ label: string; supportedByEvidence: boolean; excludedByContextRefId: string | null }>) =>
+    normalizeStrategicOutput({ kind: 'INSUFFICIENT_STRATEGIC_EVIDENCE', whatIsMissing: ['x'], smallestEvidenceAction: 'gather', optionAssessment: oa }, 'CHANNEL_PRIORITY')!;
+
+  it('fires when the only evidence-supported option is excluded by a non-negotiable (ref echoed by the model)', () => {
+    const out = insufficient([{ label: 'LinkedIn', supportedByEvidence: true, excludedByContextRefId: 'sc-nn' }, { label: 'Instagram', supportedByEvidence: false, excludedByContextRefId: null }]);
+    const conflicts = computeSessionContextConflicts(ctxWithNonNegotiable(), out);
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0]!.type).toBe('NON_NEGOTIABLE_OPTION_CONFLICT');
+    expect(conflicts[0]!.itemIds).toContain('sc-nn'); // resolves to the stored non-negotiable item
+  });
+
+  it('also fires when the model omits the ref but the option text matches the non-negotiable (derived exclusion)', () => {
+    const out = insufficient([{ label: 'Prioritise LinkedIn', supportedByEvidence: true, excludedByContextRefId: null }, { label: 'Instagram', supportedByEvidence: false, excludedByContextRefId: null }]);
+    expect(computeSessionContextConflicts(ctxWithNonNegotiable(), out)[0]?.type).toBe('NON_NEGOTIABLE_OPTION_CONFLICT');
+  });
+
+  it('does NOT fire when a supported option remains, when nothing is supported, or when there is no option assessment', () => {
+    expect(computeSessionContextConflicts(ctxWithNonNegotiable(), insufficient([{ label: 'LinkedIn', supportedByEvidence: true, excludedByContextRefId: 'sc-nn' }, { label: 'Newsletter', supportedByEvidence: true, excludedByContextRefId: null }]))).toHaveLength(0);
+    expect(computeSessionContextConflicts(ctxWithNonNegotiable(), insufficient([{ label: 'LinkedIn', supportedByEvidence: false, excludedByContextRefId: 'sc-nn' }]))).toHaveLength(0);
+    expect(computeSessionContextConflicts(ctxWithNonNegotiable(), normalizeStrategicOutput({ kind: 'INSUFFICIENT_STRATEGIC_EVIDENCE', whatIsMissing: ['x'], smallestEvidenceAction: 'y' }, 'CHANNEL_PRIORITY')!)).toHaveLength(0);
+  });
+
+  it('ignores a model-echoed ref that does NOT resolve to a real non-negotiable (no manufactured provenance)', () => {
+    const out = insufficient([{ label: 'Something', supportedByEvidence: true, excludedByContextRefId: 'not-a-real-id' }]);
+    // no derivable exclusion by text either → no conflict (the fake ref is discarded)
+    expect(computeSessionContextConflicts(ctxWithNonNegotiable(), out)).toHaveLength(0);
   });
 });

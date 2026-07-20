@@ -48,6 +48,14 @@ export interface ConfidenceDimensions { evidenceStrength: Band; founderConfirmat
 export interface StrategicAlternative { option: string; whyNotFirst: string; whenItBecomesPreferable: string }
 export interface StrategicNextStep { action: string; successSignal: string; reviewAfter: string }
 
+/** The strategist's assessment of an explicitly bounded option set: which options the CURRENT evidence supports, and
+ *  which are excluded by a founder non-negotiable (echoing the excluding context item's id). Enables the deterministic
+ *  NON_NEGOTIABLE_OPTION rule to run over the strategist's own bounded set, with resolvable provenance. */
+export interface OptionAssessment { label: string; supportedByEvidence: boolean; excludedByContextRefId: string | null }
+
+/** A deterministic strategic-context conflict attached to a session by the worker (mirrors the resolver's shape). */
+export interface SessionContextConflict { id: string; type: string; itemIds: string[]; description: string; strategicImpact: string; resolutionStatus: string }
+
 export interface StrategicRecommendation {
   kind: 'STRATEGIC_RECOMMENDATION';
   strategicJob: StrategicJob;
@@ -65,6 +73,7 @@ export interface StrategicRecommendation {
   alternatives: StrategicAlternative[];
   nextStep: StrategicNextStep;
   whatWouldChangeThisRecommendation: string[];
+  optionAssessment?: OptionAssessment[];   // bounded-option questions only; drives the NON_NEGOTIABLE_OPTION rule
 }
 
 export interface InsufficientStrategicEvidence {
@@ -74,6 +83,7 @@ export interface InsufficientStrategicEvidence {
   smallestEvidenceAction: string;
   provisionalPossible: boolean;
   whatNotToConcludeYet: string[];
+  optionAssessment?: OptionAssessment[];   // when a bounded option set has no evidence-supported acceptable option left
 }
 
 export type StrategicOutcome = StrategicRecommendation | InsufficientStrategicEvidence;
@@ -128,6 +138,12 @@ function ref(r: unknown): EvidenceReference | null {
 }
 const refs = (v: unknown): EvidenceReference[] => arr(v).map(ref).filter((x): x is EvidenceReference => x != null).slice(0, 12);
 
+/** Parse the model's bounded-option assessment (optional). Each entry needs a label; supportedByEvidence is strict. */
+function optionAssessment(v: unknown): OptionAssessment[] | undefined {
+  const out = arr(v).map((x) => { const o = (x ?? {}) as Record<string, unknown>; const label = s(o['label'] ?? o['option'], 200); return label ? { label, supportedByEvidence: o['supportedByEvidence'] === true, excludedByContextRefId: o['excludedByContextRefId'] != null ? s(o['excludedByContextRefId'], 64) : null } : null; }).filter((x): x is OptionAssessment => x != null).slice(0, 8);
+  return out.length ? out : undefined;
+}
+
 /**
  * Normalize raw model JSON into a validated outcome, or null (→ MODEL_FAILED). Enforces the schema's hard
  * requirements: a recommendation needs a title + action + a next step + ≥1 "what would change this" AND at
@@ -150,6 +166,7 @@ export function normalizeStrategicOutput(raw: unknown, subtype: StrategicSubtype
       smallestEvidenceAction: smallestEvidenceAction || 'Add your website so I can read your business, or add a competitor and review its public site.',
       provisionalPossible: o['provisionalPossible'] === true,
       whatNotToConcludeYet: arr(o['whatNotToConcludeYet']).map((x) => s(x)).filter(Boolean).slice(0, 6),
+      ...(optionAssessment(o['optionAssessment']) ? { optionAssessment: optionAssessment(o['optionAssessment']) } : {}),
     };
   }
 
@@ -196,6 +213,7 @@ export function normalizeStrategicOutput(raw: unknown, subtype: StrategicSubtype
     alternatives: arr(o['alternatives']).map((a) => { const ao = a as Record<string, unknown>; const opt = s(ao?.['option']); return opt ? { option: opt, whyNotFirst: s(ao?.['whyNotFirst']), whenItBecomesPreferable: s(ao?.['whenItBecomesPreferable']) } : null; }).filter((x): x is StrategicAlternative => x != null).slice(0, 5),
     nextStep: { action: nextAction, successSignal: s(nextStepRaw?.['successSignal']), reviewAfter: s(nextStepRaw?.['reviewAfter'], 120) },
     whatWouldChangeThisRecommendation: whatWouldChange,
+    ...(optionAssessment(o['optionAssessment']) ? { optionAssessment: optionAssessment(o['optionAssessment']) } : {}),
   };
 }
 
@@ -204,6 +222,7 @@ export interface StrategicSession {
   id: string; founderId: string; status: StrategicSessionStatus; strategicJob: StrategicJob; subtype: StrategicSubtype;
   questionText: string; decisionHorizon: string | null; understandingVersion: number | null;
   contextHealth: unknown; recommendation: StrategicRecommendation | null; insufficientReason: InsufficientStrategicEvidence | null;
+  contextConflicts: SessionContextConflict[] | null; // deterministic conflicts attached by the worker (e.g. NON_NEGOTIABLE_OPTION)
   failureCategory: StrategyFailureCategory | null; founderSafeError: string | null; priorSuccessfulSessionId: string | null;
   modelId: string | null; promptVersion: string | null; schemaVersion: string | null;
   attemptCount: number; maxAttempts: number;
@@ -218,6 +237,7 @@ export function toSessionView(s: StrategicSession) {
     decisionHorizon: s.decisionHorizon, understandingVersion: s.understandingVersion, contextHealth: s.contextHealth,
     recommendation: s.status === 'READY' ? s.recommendation : null,
     insufficient: s.status === 'INSUFFICIENT_EVIDENCE' ? s.insufficientReason : null,
+    contextConflicts: (s.status === 'READY' || s.status === 'INSUFFICIENT_EVIDENCE') ? (s.contextConflicts ?? []) : [],
     failureCategory: s.status === 'FAILED' ? s.failureCategory : null,
     retryable: sessionRetryable(s.status, s.failureCategory, s.attemptCount, s.maxAttempts),
     message: s.founderSafeError, attempt: s.attemptCount, maxAttempts: s.maxAttempts,

@@ -133,6 +133,35 @@ removed afterward.
   byte-identical. Eval reran post-remediation: every parsed fixture met all criteria (only stochastic single-shot JSON
   truncations varied, which the durable worker retries).
 
+## Final re-acceptance check — NON_NEGOTIABLE_OPTION end-to-end (migration V069)
+
+A final review found the one remaining gap: rule 3 (NON_NEGOTIABLE_OPTION) had only deterministic-fixture evidence and
+**was not wired into the real pipeline**; running the actual scenario also exposed a **model-behaviour defect** — given
+the only evidence-supported option excluded by a non-negotiable, the strategist *invented a supported alternative*
+(prioritised the un-evidenced option). Both were fixed (one remediation commit; the prior acceptance is refined, not
+re-declared):
+
+- **Pipeline wiring:** the model now emits an `optionAssessment` (bounded options with `supportedByEvidence` +
+  `excludedByContextRefId`); the durable worker runs the deterministic `detectNonNegotiableExcludesOnlyOption` over it,
+  **validating each echoed reference against the effective non-negotiables** (a non-resolving ref is discarded — no
+  manufactured provenance), and persists any `NON_NEGOTIABLE_OPTION_CONFLICT` on the session (`context_conflicts`,
+  migration `V069`), surfaced in `toSessionView` and rendered on the strategy result page.
+- **Behaviour fix (prompt `strategy-2 → strategy-3`; schema `strategy-recommendation-2 → strategy-recommendation-3`,
+  additive):** for a bounded-option question where the only evidence-supported option is excluded by a non-negotiable
+  and no other option is supported, the strategist returns **INSUFFICIENT** — it does not promote an unsupported option,
+  does not weaken the non-negotiable, and states plainly that no currently supported acceptable option remains. `UNKNOWN`
+  is never treated as support.
+- **Real end-to-end proof** (founder with LinkedIn-only evidence + a `NON_NEGOTIABLE` "no LinkedIn this period", question
+  "LinkedIn or Instagram?"): session `INSUFFICIENT_EVIDENCE`, `schema_version=strategy-recommendation-3`;
+  `optionAssessment = [LinkedIn supported+excluded(→real item id), Instagram unsupported]`; the persisted
+  `NON_NEGOTIABLE_OPTION_CONFLICT` reads *"Every evidence-supported option (LinkedIn) is excluded by a non-negotiable you
+  set … No currently acceptable supported option remains"* with `itemIds` **resolving to the immutable stored
+  non-negotiable**; the insufficient reason states recommending Instagram *"would mean substituting the unevidenced
+  option … not a grounded strategic decision"*; **no personality/psychology language**; it **renders in the founder UI**
+  ("YOUR NON-NEGOTIABLE RULES OUT THE ONLY SUPPORTED OPTION"); **ACCEPT wrote no context/memory** (1→1, understanding
+  v1→v1); founder deleted → **zero orphans**. Regression: API `501 pass / 1 skip`, web green, prod build OK, `V069`
+  latest, frozen engine byte-identical.
+
 ## What is NOT claimed (out of scope this slice)
 
 Founder Strategic Context is **not** complete in all future forms. This slice does **not** implement: a separate
