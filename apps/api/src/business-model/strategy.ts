@@ -38,6 +38,7 @@ export interface EvidenceReference {
   kind: EpistemicKind; statement: string; refId: string | null; entityId?: string | null; sourceUrl?: string | null;
   logicalItemId?: string | null; version?: number | null; scope?: string | null; source?: string | null;
   effectiveFrom?: string | null; effectiveUntil?: string | null;
+  validated?: boolean; // set by the deterministic provenance validator: true = resolved to the session manifest (grounded)
 }
 export interface LabeledAssumption { assumption: string; basis: string | null }
 export interface StrategicUnknown { unknown: string; whyItMatters: string | null }
@@ -55,6 +56,9 @@ export interface OptionAssessment { label: string; supportedByEvidence: boolean;
 
 /** A deterministic strategic-context conflict attached to a session by the worker (mirrors the resolver's shape). */
 export interface SessionContextConflict { id: string; type: string; itemIds: string[]; description: string; strategicImpact: string; resolutionStatus: string }
+
+/** The persisted provenance-validation result for a session (structural mirror of provenance.ts ProvenanceValidation). */
+export interface SessionProvenanceValidation { manifestVersion: string; groundingStatus: string; validatedCount: number; rejectedCount: number; rejected: Array<{ kind: string; reason: string }> }
 
 export interface StrategicRecommendation {
   kind: 'STRATEGIC_RECOMMENDATION';
@@ -223,6 +227,7 @@ export interface StrategicSession {
   questionText: string; decisionHorizon: string | null; understandingVersion: number | null;
   contextHealth: unknown; recommendation: StrategicRecommendation | null; insufficientReason: InsufficientStrategicEvidence | null;
   contextConflicts: SessionContextConflict[] | null; // deterministic conflicts attached by the worker (e.g. NON_NEGOTIABLE_OPTION)
+  provenanceValidation: SessionProvenanceValidation | null; // deterministic reference-validation result (grounding status)
   failureCategory: StrategyFailureCategory | null; founderSafeError: string | null; priorSuccessfulSessionId: string | null;
   modelId: string | null; promptVersion: string | null; schemaVersion: string | null;
   attemptCount: number; maxAttempts: number;
@@ -238,6 +243,8 @@ export function toSessionView(s: StrategicSession) {
     recommendation: s.status === 'READY' ? s.recommendation : null,
     insufficient: s.status === 'INSUFFICIENT_EVIDENCE' ? s.insufficientReason : null,
     contextConflicts: (s.status === 'READY' || s.status === 'INSUFFICIENT_EVIDENCE') ? (s.contextConflicts ?? []) : [],
+    groundingStatus: (s.status === 'READY' || s.status === 'INSUFFICIENT_EVIDENCE') ? (s.provenanceValidation?.groundingStatus ?? null) : null,
+    provenanceValidation: (s.status === 'READY' || s.status === 'INSUFFICIENT_EVIDENCE') ? s.provenanceValidation : null,
     failureCategory: s.status === 'FAILED' ? s.failureCategory : null,
     retryable: sessionRetryable(s.status, s.failureCategory, s.attemptCount, s.maxAttempts),
     message: s.founderSafeError, attempt: s.attemptCount, maxAttempts: s.maxAttempts,

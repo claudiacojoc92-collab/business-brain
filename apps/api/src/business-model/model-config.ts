@@ -32,18 +32,17 @@ export const LOCAL_DEFAULT_MODEL = 'claude-sonnet-5';
 export const PROMPT_VERSION: Record<ModelCapability, string> = {
   synthesis: 'synthesis-1',
   'market-inference': 'market-infer-sys-1',
-  // strategy-3: bounded-option handling — emits optionAssessment; returns insufficient (never promotes an unsupported
-  // option, never weakens a non-negotiable) when the only evidence-supported option is excluded by a non-negotiable.
-  strategy: 'strategy-3',
+  // strategy-4: provenance discipline — cite ONLY ids present in the supplied context; never invent/reconstruct ids.
+  // (strategy-3: bounded-option handling — optionAssessment + insufficient rather than promoting an unsupported option.)
+  strategy: 'strategy-4',
 };
 export const SCHEMA_VERSION: Record<ModelCapability, string> = {
   synthesis: 'conclusions-1',          // {conclusions:[{type,statement,epistemicStatus,evidenceRefs,confidence}]}
   'market-inference': 'market-inference-1', // {inferenceText,epistemicStatus,relevanceToFounder}
-  // strategy-recommendation-3: adds the optional `optionAssessment` on both output shapes (bounded-option analysis
-  // driving the NON_NEGOTIABLE_OPTION rule). Additive over v2 (which added FOUNDER_STRATEGIC_CONTEXT + context-reference
-  // fields over v1). The normalizer reads all three — a persisted v1/v2 payload and a v3 payload parse identically for
-  // the shared fields; the new field is simply absent on older payloads.
-  strategy: 'strategy-recommendation-3',
+  // strategy-recommendation-4: adds the optional `validated` marker on each reference (set by the deterministic
+  // provenance validator = resolved to the session manifest). Additive over v3 (optionAssessment) / v2
+  // (FOUNDER_STRATEGIC_CONTEXT + context refs) / v1. The normalizer reads all versions; persisted v1-v3 remain readable.
+  strategy: 'strategy-recommendation-4',
 };
 
 /** Production-capable mode = a real deploy. Local dev + tests are NOT production-capable and may use the default. */

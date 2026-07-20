@@ -1,0 +1,31 @@
+{
+  "model": "claude-sonnet-5",
+  "passed": 3,
+  "total": 3,
+  "records": [
+    {
+      "id": "grounded",
+      "model": "claude-sonnet-5",
+      "pass": true,
+      "groundingStatus": "DEGRADED",
+      "validated": 3,
+      "modelInventedRejected": 1
+    },
+    {
+      "id": "invented_probe",
+      "pass": true,
+      "outcomeKind": "INSUFFICIENT_STRATEGIC_EVIDENCE",
+      "groundingStatus": "UNGROUNDED",
+      "rejected": 2
+    },
+    {
+      "id": "ungrounded_context",
+      "model": "claude-sonnet-5",
+      "pass": true,
+      "outcomeKind": "INSUFFICIENT_STRATEGIC_EVIDENCE",
+      "groundingStatus": "NOT_APPLICABLE"
+    }
+  ],
+  "note": "Wave 4 Recommendation Provenance Integrity eval (KA-1). Exact production SYSTEM prompt + normalizer + deterministic validator. Two runs, 3/3 each. Notably the REAL model invented ~1 reference id per grounded recommendation (validated 3-4, rejected 1) which the validator caught and removed deterministically (grounding stayed intact, DEGRADED) \u2014 direct evidence of KA-1 value. The invented-id probe (fabricated grounding) always degraded to INSUFFICIENT/UNGROUNDED; the ungrounded-context fixture returned INSUFFICIENT. Application validation is authoritative; model variance recorded.",
+  "runs_note": "run1 grounded validated=4 rejected=1; run2 grounded validated=3 rejected=1; both 3/3"
+}

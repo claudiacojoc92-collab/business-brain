@@ -294,11 +294,14 @@ effective period); Context Conflict (`itemIds` resolving to immutable context it
 
 **Hard rules:** the model may reference **only IDs supplied to it in the prompt**. An invented ID must never appear as
 grounded provenance. Deterministic validation is enforced today for the **NON_NEGOTIABLE_OPTION** rule (a model-echoed
-reference is discarded unless it resolves to an effective non-negotiable). For other model-produced references
-(recommendation evidence refs), the current implementation **carries** the echoed id without write-time validation — the
-id is *resolvable/verifiable at read time* but not *validated at write time*. This is recorded as **architectural debt
-KA-1** (see the current-state map): the intended end state is that any reference presented as grounded provenance is
-validated against supplied ids at write time.
+reference is discarded unless it resolves to an effective non-negotiable). **KA-1 — RESOLVED** by the Recommendation
+Provenance Integrity slice (see `docs/architecture/recommendation-provenance-integrity-slice.md` and
+`docs/governance/recommendation-provenance-integrity-contract.md`): every model-produced reference is now validated at
+write time in `provenance.ts` (`buildProvenanceManifest` → `validateRecommendationProvenance`) against a per-session,
+founder-scoped **input manifest** built from the exact assembled context. Invalid references are **removed, never
+substituted**; when grounding collapses the outcome is downgraded to INSUFFICIENT; the redacted validation summary is
+persisted (V070 `provenance_validation`) for export/historical fidelity. The end state is reached: any reference
+presented as grounded provenance is validated against supplied ids at write time.
 
 ### §7 — Recomputed vs persisted
 
@@ -377,9 +380,12 @@ Evaluated against ADR-007 (Honesty), ADR-010 (Two-Layer), and the two governance
   history; unknown≠zero; ACCEPT-writes-nothing; conflicts-not-invented; founder sovereignty; provenance echoing supplied
   ids only.
 - **Residual tensions (named honestly, not papered over):**
-  - **KA-1 — write-time provenance validation.** Recommendation evidence references are carried, not validated at write
-    time (only NON_NEGOTIABLE_OPTION refs are). "Invented IDs must never appear as grounded provenance" is currently
-    upheld by prompt discipline + read-time resolvability, not by a write-time guard. Remediation candidate (later).
+  - **KA-1 — write-time provenance validation. RESOLVED** (Recommendation Provenance Integrity slice). Every
+    recommendation evidence reference is now validated at write time against a per-session founder-scoped input manifest;
+    invalid refs are removed (never substituted), grounding-collapse downgrades to INSUFFICIENT, and the redacted result
+    is persisted. "Invented IDs must never appear as grounded provenance" is now enforced by a deterministic write-time
+    guard, not prompt discipline alone. Eval evidence: the real model invented ~1 reference id per grounded
+    recommendation, caught and removed deterministically.
   - **KA-2 — legacy `memory.*` schema.** A pre-existing M2/ADR-010-era memory schema (threads, recommendations, patterns,
     voice_signatures, intelligence_events) coexists with the new strategy stack and is not yet reconciled under this
     taxonomy. It is **not** Strategic Memory; its relationship to the new stack is unresolved debt (see the map).

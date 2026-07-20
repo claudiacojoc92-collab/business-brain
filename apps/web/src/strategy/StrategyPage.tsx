@@ -180,11 +180,13 @@ function ConfidenceRow({ label, band }: { label: string; band: Band }) {
   );
 }
 
-function EvidenceItem({ kind, statement, sourceUrl }: { kind: EpistemicKind; statement: string; sourceUrl?: string | null }) {
+function EvidenceItem({ kind, statement, sourceUrl, validated }: { kind: EpistemicKind; statement: string; sourceUrl?: string | null; validated?: boolean }) {
+  // Only a VALIDATED reference renders as a grounded citation (its source link). An unvalidated reference reaches the UI
+  // only as the strategist's reasoning — never as a resolvable citation (the worker removes unresolved references).
   return (
     <li style={{ listStyle: 'none', marginBottom: 'var(--sp-3)' }}>
       <span style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-3)' }}>{KIND_LABEL[kind]}</span>
-      <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '2px 0 0', lineHeight: 'var(--lh-body)' }}>{statement}{sourceUrl && <> <a href={sourceUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--ink-3)', fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)' }}>source</a></>}</p>
+      <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '2px 0 0', lineHeight: 'var(--lh-body)' }}>{statement}{validated && sourceUrl && <> <a href={sourceUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--ink-3)', fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)' }}>source</a></>}</p>
     </li>
   );
 }
@@ -221,8 +223,8 @@ function RecommendationView({ session, onResponded, on401 }: { session: Strategy
       {(r.reasoning.supportingEvidence.length > 0 || r.reasoning.founderDeclarations.length > 0) && <>
         <span style={sectionLabel}>What this is based on</span>
         <ul style={ulReset}>
-          {r.reasoning.founderDeclarations.map((e, i) => <EvidenceItem key={`d${i}`} kind={e.kind} statement={e.statement} sourceUrl={e.sourceUrl} />)}
-          {r.reasoning.supportingEvidence.map((e, i) => <EvidenceItem key={`s${i}`} kind={e.kind} statement={e.statement} sourceUrl={e.sourceUrl} />)}
+          {r.reasoning.founderDeclarations.map((e, i) => <EvidenceItem key={`d${i}`} kind={e.kind} statement={e.statement} sourceUrl={e.sourceUrl} validated={e.validated} />)}
+          {r.reasoning.supportingEvidence.map((e, i) => <EvidenceItem key={`s${i}`} kind={e.kind} statement={e.statement} sourceUrl={e.sourceUrl} validated={e.validated} />)}
         </ul>
       </>}
 
@@ -243,7 +245,7 @@ function RecommendationView({ session, onResponded, on401 }: { session: Strategy
       </>}
       {r.reasoning.counterEvidence.length > 0 && <>
         <span style={sectionLabel}>What cuts against this</span>
-        <ul style={ulReset}>{r.reasoning.counterEvidence.map((e, i) => <EvidenceItem key={i} kind={e.kind} statement={e.statement} sourceUrl={e.sourceUrl} />)}</ul>
+        <ul style={ulReset}>{r.reasoning.counterEvidence.map((e, i) => <EvidenceItem key={i} kind={e.kind} statement={e.statement} sourceUrl={e.sourceUrl} validated={e.validated} />)}</ul>
       </>}
 
       {/* confidence — five dimensions, never one % */}
@@ -273,6 +275,7 @@ function RecommendationView({ session, onResponded, on401 }: { session: Strategy
 
       {/* provenance — quiet, honest */}
       {session.provenance && <p style={{ ...meta, marginTop: 'var(--sp-4)' }}>Reasoned by {session.provenance.modelId ?? 'the strategist'}{session.provenance.promptVersion ? ` · ${session.provenance.promptVersion}` : ''}{session.understandingVersion != null ? ` · from understanding v${session.understandingVersion}` : ''}. This is a recommendation, not an instruction — you decide.</p>}
+      {(session.provenanceValidation?.rejectedCount ?? 0) > 0 && <p style={{ ...meta, marginTop: 4 }}>Every reference shown above is checked against your actual records; {session.provenanceValidation!.rejectedCount} unverifiable reference{session.provenanceValidation!.rejectedCount === 1 ? '' : 's'} {session.provenanceValidation!.rejectedCount === 1 ? 'was' : 'were'} left out so nothing is claimed that I can’t point to.</p>}
 
       {/* founder response — append-only; ACCEPT records a decision, it does not execute anything */}
       <div style={{ marginTop: 'var(--sp-5)', paddingTop: 'var(--sp-4)', borderTop: '1px solid var(--line)' }}>

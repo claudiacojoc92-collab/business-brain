@@ -10,6 +10,7 @@ import { assembleStrategicContext, type AssemblerDeps, type StrategicContext } f
 import type { StrategyModel } from './anthropic-strategy.model';
 import { STRATEGY_FAILURE_MESSAGE, type StrategicSession, type StrategicOutcome, type SessionContextConflict } from './strategy';
 import { detectNonNegotiableExcludesOnlyOption, effectiveNonNegotiables, optionExcludedBy, type BoundedOption } from './effective-strategic-context.resolver';
+import { buildProvenanceManifest, validateRecommendationProvenance } from './provenance';
 
 /**
  * Rule 3 (NON_NEGOTIABLE_OPTION) over the strategist's OWN bounded option set: for each option the model assessed,
@@ -58,14 +59,19 @@ export async function processSession(session: StrategicSession, deps: StrategicW
   catch (e) { return failed('MODEL_FAILED', String((e as Error)?.message ?? e)); }
   if (outcome == null) return failed('MODEL_FAILED', 'strategy model output failed to parse/validate');
 
-  // Deterministic NON_NEGOTIABLE_OPTION conflict (rule 3), computed over the strategist's own bounded option set.
-  const contextConflicts = computeSessionContextConflicts(context, outcome);
+  // PROVENANCE VALIDATION (KA-1) — deterministic, against the exact assembled manifest: invalid grounded references are
+  // removed (never substituted); a recommendation left with no validated grounded basis degrades to INSUFFICIENT.
+  const manifest = buildProvenanceManifest(context);
+  const { outcome: validated, validation } = validateRecommendationProvenance(outcome, manifest);
 
-  if (outcome.kind === 'INSUFFICIENT_STRATEGIC_EVIDENCE') {
-    return (await sessionRepo.markInsufficient(session.id, outcome, 'I don’t have enough yet to make this call responsibly.', now(), contextConflicts)) ?? (await sessionRepo.getById(session.founderId, session.id))!;
+  // Deterministic NON_NEGOTIABLE_OPTION conflict (rule 3), over the validated outcome's bounded option set.
+  const contextConflicts = computeSessionContextConflicts(context, validated);
+
+  if (validated.kind === 'INSUFFICIENT_STRATEGIC_EVIDENCE') {
+    return (await sessionRepo.markInsufficient(session.id, validated, 'I don’t have enough yet to make this call responsibly.', now(), contextConflicts, validation)) ?? (await sessionRepo.getById(session.founderId, session.id))!;
   }
   // RECOMMENDATION → atomic READY (single-row publish; the recommendation is immutable thereafter).
-  return (await sessionRepo.markReady(session.id, outcome, now(), contextConflicts)) ?? (await sessionRepo.getById(session.founderId, session.id))!;
+  return (await sessionRepo.markReady(session.id, validated, now(), contextConflicts, validation)) ?? (await sessionRepo.getById(session.founderId, session.id))!;
 }
 
 export function startStrategicSessionWorker(deps: StrategicWorkerDeps & { intervalMs?: number }): () => void {

@@ -319,7 +319,7 @@ export type EpistemicKind =
   | 'UNKNOWN' | 'CONVERSATION_HYPOTHESIS' | 'STRATEGIC_RECOMMENDATION';
 export type Band = 'LOW' | 'MEDIUM' | 'HIGH';
 
-export interface EvidenceReference { kind: EpistemicKind; statement: string; refId: string | null; entityId?: string | null; sourceUrl?: string | null }
+export interface EvidenceReference { kind: EpistemicKind; statement: string; refId: string | null; entityId?: string | null; sourceUrl?: string | null; validated?: boolean }
 export interface StrategicRecommendation {
   kind: 'STRATEGIC_RECOMMENDATION'; strategicJob: 'PRIORITY_DECISION'; subtype: string;
   recommendation: { title: string; action: string; horizon: string; priorityRank?: number };
@@ -346,6 +346,8 @@ export interface StrategySessionView {
   decisionHorizon: string | null; understandingVersion: number | null; contextHealth: unknown;
   recommendation: StrategicRecommendation | null; insufficient: InsufficientStrategicEvidence | null;
   contextConflicts?: SessionContextConflict[];
+  groundingStatus?: string | null;
+  provenanceValidation?: { manifestVersion: string; groundingStatus: string; validatedCount: number; rejectedCount: number; rejected: Array<{ kind: string; reason: string }> } | null;
   failureCategory: string | null; retryable: boolean; message: string | null; attempt: number; maxAttempts: number;
   priorSuccessfulSessionId: string | null; provenance: { modelId: string | null; promptVersion: string | null; schemaVersion: string | null } | null;
   createdAt: string; updatedAt: string; effectiveResponse?: StrategyResponseRecord | null;

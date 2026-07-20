@@ -5,7 +5,7 @@
  * The generated recommendation is immutable; internal error detail is never returned to founder-safe callers.
  */
 import { generateId } from '@bb/shared';
-import { assertTransition, sessionRetryable, type StrategicSession, type StrategicSessionStatus, type StrategicJob, type StrategicSubtype, type StrategyFailureCategory, type StrategicRecommendation, type InsufficientStrategicEvidence, type SessionContextConflict } from './strategy';
+import { assertTransition, sessionRetryable, type StrategicSession, type StrategicSessionStatus, type StrategicJob, type StrategicSubtype, type StrategyFailureCategory, type StrategicRecommendation, type InsufficientStrategicEvidence, type SessionContextConflict, type SessionProvenanceValidation } from './strategy';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDB = any;
@@ -55,13 +55,13 @@ export class PgStrategicSessionRepository {
     await this.db.updateTable('business.strategic_session').set({ understanding_version: snapshot.understandingVersion, context_health: JSON.stringify(snapshot.contextHealth ?? null), decision_horizon: snapshot.decisionHorizon, updated_at: now.toISOString() }).where('id', '=', id).execute();
   }
 
-  async markReady(id: string, recommendation: StrategicRecommendation, now: Date, contextConflicts?: SessionContextConflict[], tx?: unknown): Promise<StrategicSession | null> {
+  async markReady(id: string, recommendation: StrategicRecommendation, now: Date, contextConflicts?: SessionContextConflict[], provenanceValidation?: SessionProvenanceValidation, tx?: unknown): Promise<StrategicSession | null> {
     const db = (tx ?? this.db) as AnyDB;
-    const r = await db.updateTable('business.strategic_session').set({ status: 'READY', recommendation: JSON.stringify(recommendation), context_conflicts: contextConflicts && contextConflicts.length ? JSON.stringify(contextConflicts) : null, finished_at: now.toISOString(), lease_expires_at: null, updated_at: now.toISOString() }).where('id', '=', id).where('status', '=', 'PROCESSING').returningAll().executeTakeFirst();
+    const r = await db.updateTable('business.strategic_session').set({ status: 'READY', recommendation: JSON.stringify(recommendation), context_conflicts: contextConflicts && contextConflicts.length ? JSON.stringify(contextConflicts) : null, provenance_validation: provenanceValidation ? JSON.stringify(provenanceValidation) : null, finished_at: now.toISOString(), lease_expires_at: null, updated_at: now.toISOString() }).where('id', '=', id).where('status', '=', 'PROCESSING').returningAll().executeTakeFirst();
     return r ? this.toDomain(r) : null;
   }
-  async markInsufficient(id: string, reason: InsufficientStrategicEvidence, safe: string, now: Date, contextConflicts?: SessionContextConflict[]): Promise<StrategicSession | null> {
-    const r = await this.db.updateTable('business.strategic_session').set({ status: 'INSUFFICIENT_EVIDENCE', insufficient_reason: JSON.stringify(reason), context_conflicts: contextConflicts && contextConflicts.length ? JSON.stringify(contextConflicts) : null, founder_safe_error: safe, finished_at: now.toISOString(), lease_expires_at: null, updated_at: now.toISOString() }).where('id', '=', id).where('status', '=', 'PROCESSING').returningAll().executeTakeFirst();
+  async markInsufficient(id: string, reason: InsufficientStrategicEvidence, safe: string, now: Date, contextConflicts?: SessionContextConflict[], provenanceValidation?: SessionProvenanceValidation): Promise<StrategicSession | null> {
+    const r = await this.db.updateTable('business.strategic_session').set({ status: 'INSUFFICIENT_EVIDENCE', insufficient_reason: JSON.stringify(reason), context_conflicts: contextConflicts && contextConflicts.length ? JSON.stringify(contextConflicts) : null, provenance_validation: provenanceValidation ? JSON.stringify(provenanceValidation) : null, founder_safe_error: safe, finished_at: now.toISOString(), lease_expires_at: null, updated_at: now.toISOString() }).where('id', '=', id).where('status', '=', 'PROCESSING').returningAll().executeTakeFirst();
     return r ? this.toDomain(r) : null;
   }
   async markFailed(id: string, category: StrategyFailureCategory, safe: string, detail: string, now: Date): Promise<StrategicSession | null> {
@@ -85,7 +85,7 @@ export class PgStrategicSessionRepository {
     return {
       id: r.id, founderId: r.founder_id, status: r.status, strategicJob: r.strategic_job, subtype: r.subtype,
       questionText: r.question_text, decisionHorizon: r.decision_horizon ?? null, understandingVersion: r.understanding_version == null ? null : Number(r.understanding_version),
-      contextHealth: json(r.context_health), recommendation: json(r.recommendation), insufficientReason: json(r.insufficient_reason), contextConflicts: json(r.context_conflicts) ?? null,
+      contextHealth: json(r.context_health), recommendation: json(r.recommendation), insufficientReason: json(r.insufficient_reason), contextConflicts: json(r.context_conflicts) ?? null, provenanceValidation: json(r.provenance_validation) ?? null,
       failureCategory: (r.failure_category as StrategyFailureCategory) ?? null, founderSafeError: r.founder_safe_error ?? null, priorSuccessfulSessionId: r.prior_successful_session_id ?? null,
       modelId: r.model_id ?? null, promptVersion: r.prompt_version ?? null, schemaVersion: r.schema_version ?? null,
       attemptCount: Number(r.attempt_count), maxAttempts: Number(r.max_attempts),

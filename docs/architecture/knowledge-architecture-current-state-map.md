@@ -29,12 +29,18 @@ Documentation only — nothing here changes runtime behavior. Verified against t
 
 ## Known architectural debt
 
-- **KA-1 — write-time provenance validation (later).** The recommendation normalizer (`strategy.ts` `ref()`) carries
-  model-echoed `refId`/`entityId`/`logicalItemId` as strings **without validating them against supplied ids at write
-  time**. Only the NON_NEGOTIABLE_OPTION rule (`strategic-session.worker.ts` `computeSessionContextConflicts`) validates
-  references (discarding a ref that does not resolve to an effective non-negotiable). Today "no invented provenance" is
-  upheld by prompt discipline + read-time resolvability; the intended end state is write-time validation of any reference
-  presented as grounded provenance. *Remediation: later (a future strategy-stack hardening slice); not blocking.*
+- **KA-1 — write-time provenance validation. RESOLVED** (Recommendation Provenance Integrity slice; see
+  `recommendation-provenance-integrity-slice.md` + `../governance/recommendation-provenance-integrity-contract.md`).
+  The worker now builds a per-session, founder-scoped **input manifest** from the exact assembled context
+  (`provenance.ts` `buildProvenanceManifest`, version `pm-1`) and validates **every** model-produced reference against it
+  at write time (`validateRecommendationProvenance`), before persistence. Reference-kind → target-category is enforced;
+  a `FOUNDER_STRATEGIC_CONTEXT` ref must match the exact immutable `id`/`logicalItemId`/`version` supplied. Invalid refs
+  are **removed, never substituted**; a grounding kind with no locator degrades to reasoning; when all grounding
+  collapses the outcome is downgraded to INSUFFICIENT (`groundingStatus` GROUNDED/DEGRADED/UNGROUNDED). The redacted
+  validation summary (kind + reason only, never raw invalid ids) is persisted for export/historical fidelity (V070
+  `provenance_validation`); schema `strategy-recommendation-4`, prompt `strategy-4`. Founder isolation is by
+  construction (a cross-founder id is simply NOT_IN_MANIFEST). *Cross-slice note:* the NON_NEGOTIABLE_OPTION rule that
+  previously carried the only write-time validation is now one case within the unified provenance pass.
 - **KA-2 — legacy `memory.*` schema (later).** The M2/ADR-010-era recommendation/thread primitive (schema `memory.*`)
   coexists with the new Wave-4 strategy stack and is **not yet reconciled** under the ADR-011 taxonomy. It is **not**
   Strategic Memory (category 14). Its relationship to the new stack (whether it is retired, folded into Evidence, or kept
@@ -50,7 +56,7 @@ Documentation only — nothing here changes runtime behavior. Verified against t
 
 | Debt | Category | Required now? |
 |---|---|---|
-| KA-1 write-time provenance validation | 6 Provenance | No — later hardening |
+| KA-1 write-time provenance validation | 6 Provenance | **RESOLVED** (Recommendation Provenance Integrity slice) |
 | KA-2 legacy `memory.*` reconciliation | 14 (boundary) | No — later, at Capability C |
 | KA-3 structural conflicts not persisted | 7 Conflict | No — accepted |
 
