@@ -6,6 +6,11 @@ metadata:
 data:
   LLM_STRONG_MODEL:  "claude-sonnet-4-6"
   LLM_MEDIUM_MODEL:  "claude-haiku-4-5"
+  # Layer-2 model config (explicit + validated; boot fails fast if unset in production). Drives Business
+  # Understanding synthesis + market-context inference — separate from the frozen engine. Current effective
+  # value (unchanged during the eval pass): claude-sonnet-5.
+  SYNTHESIS_MODEL:         "claude-sonnet-5"
+  MARKET_INFERENCE_MODEL:  "claude-sonnet-5"
   LOG_LEVEL:         "info"
   OTEL_SERVICE_NAME: "businessbrain"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"

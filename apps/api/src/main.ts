@@ -3,6 +3,7 @@ import { createKyselyClient } from '@bb/infrastructure';
 import { createRedisClient } from '@bb/infrastructure';
 import { createLogger } from '@bb/infrastructure';
 import { selectEmailService } from './session/email.compose';
+import { validateModelConfig } from './business-model/model-config';
 
 const logger = createLogger({ service: 'bb-api' });
 
@@ -12,6 +13,12 @@ async function main(): Promise<void> {
 
   if (!databaseUrl) throw new Error('DATABASE_URL is required');
   if (!redisUrl)    throw new Error('REDIS_URL is required');
+
+  // Fail fast on missing/invalid model configuration in production-capable mode — the two Layer-2 capabilities
+  // (synthesis, market inference) must never silently fall back to an unintended model. Logs the resolved
+  // model ids + prompt/schema versions (never any secret).
+  const models = validateModelConfig();
+  logger.info({ synthesis: models.synthesis, marketInference: models.marketInference }, 'Model configuration resolved');
 
   const db    = createKyselyClient(databaseUrl);
   const redis = createRedisClient(redisUrl);

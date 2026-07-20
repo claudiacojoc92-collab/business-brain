@@ -7,10 +7,9 @@
  */
 import { createAnthropicClient } from '@bb/infrastructure';
 import type { SynthesisModel, SynthesisInput, RawConclusion } from './understanding';
+import { synthesisModelConfig } from './model-config';
 
-const SYNTH_MODEL = process.env['SYNTHESIS_MODEL'] ?? 'claude-sonnet-5';
-
-const SYSTEM = [
+export const SYSTEM = [
   "You are Business Brain's synthesis layer. From a business's OWN material (website), produce a SMALL set",
   '(at most 9) of founder-legible conclusions about the business. Synthesize — never echo raw page text.',
   '',
@@ -36,7 +35,9 @@ function safeJson(s: string): { conclusions?: unknown[] } | null {
 }
 
 export class AnthropicSynthesisModel implements SynthesisModel {
-  readonly version = `synthesis-1:${SYNTH_MODEL}`;
+  // Explicit, validated model config (fails fast in production-capable mode if unset/invalid).
+  private readonly config = synthesisModelConfig();
+  readonly version = `${this.config.promptVersion}:${this.config.modelId}`;
   constructor(private readonly apiKey: string) {}
 
   async synthesize(input: SynthesisInput): Promise<RawConclusion[]> {
@@ -45,7 +46,7 @@ export class AnthropicSynthesisModel implements SynthesisModel {
     const inferred = input.inferred.map((i) => `- ${i.category}: ${i.statement}`).join('\n') || '(none)';
     const user = `EVIDENCE (cite by [id]):\n${evidence}\n\nENGINE INFERENCE:\n${inferred}\n\nEngine confidence: ${input.engineModelConfidence}\n\nReturn the JSON now.`;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const resp: any = await client.messages.create({ model: SYNTH_MODEL, max_tokens: 2000, system: SYSTEM, messages: [{ role: 'user', content: user }] });
+    const resp: any = await client.messages.create({ model: this.config.modelId, max_tokens: 2000, system: SYSTEM, messages: [{ role: 'user', content: user }] });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const text = (resp.content ?? []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
     const parsed = safeJson(text);

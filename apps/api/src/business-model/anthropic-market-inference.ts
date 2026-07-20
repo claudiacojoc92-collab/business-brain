@@ -5,10 +5,9 @@
  */
 import { createAnthropicClient } from '@bb/infrastructure';
 import type { MarketInferenceInput, MarketInferenceModel, MarketInferenceResult, EpistemicStatus } from './market-context';
+import { marketInferenceModelConfig } from './model-config';
 
-const MODEL = process.env['MARKET_INFERENCE_MODEL'] ?? process.env['SYNTHESIS_MODEL'] ?? 'claude-sonnet-5';
-
-const SYSTEM = [
+export const SYSTEM = [
   "You read a company's OWN public website to describe how it PRESENTS itself — never to claim market facts.",
   'Use hedged language: "The site presents…", "This may suggest…", "Publicly it appears to position itself as…".',
   'You MUST NOT assert as fact: demand, market share, customer preference, conversion, growth, leadership,',
@@ -22,16 +21,18 @@ const SYSTEM = [
 function safeJson(s: string): Record<string, unknown> | null { try { const m = s.match(/\{[\s\S]*\}/); return m ? JSON.parse(m[0]) : null; } catch { return null; } }
 
 export class AnthropicMarketInference implements MarketInferenceModel {
-  readonly version = `market-infer-1:${MODEL}`;
-  readonly modelId = MODEL;                    // provenance — the model that produced the reading
-  readonly promptVersion = 'market-infer-sys-1'; // provenance — the system-prompt version above
+  // Explicit, validated model config (fails fast in production-capable mode if unset/invalid).
+  private readonly config = marketInferenceModelConfig();
+  readonly version = `${this.config.promptVersion}:${this.config.modelId}`;
+  readonly modelId = this.config.modelId;            // provenance — the model that produced the reading
+  readonly promptVersion = this.config.promptVersion; // provenance — the system-prompt version above
   constructor(private readonly apiKey: string) {}
   async infer(input: MarketInferenceInput): Promise<MarketInferenceResult> {
     const client = createAnthropicClient(this.apiKey);
     const obs = input.observed.map((p) => `[${p.title || p.url}] ${p.text.replace(/\s+/g, ' ').slice(0, 700)}`).join('\n');
     const user = `Founder's business: ${input.founderBusiness || '(unknown)'}\n\nEntity: ${input.entityName} (${input.entityType})\n\nPUBLIC PAGES:\n${obs}\n\nReturn the JSON.`;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const resp: any = await client.messages.create({ model: MODEL, max_tokens: 900, system: SYSTEM, messages: [{ role: 'user', content: user }] });
+    const resp: any = await client.messages.create({ model: this.config.modelId, max_tokens: 900, system: SYSTEM, messages: [{ role: 'user', content: user }] });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const text = (resp.content ?? []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
     const p = safeJson(text);
