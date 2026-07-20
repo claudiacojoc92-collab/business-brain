@@ -1,0 +1,1807 @@
+{
+ "meta": {
+  "models": {
+   "baseline": "claude-sonnet-4-6",
+   "configured": "claude-sonnet-5"
+  },
+  "synthFixtures": 9,
+  "marketFixtures": 12,
+  "samplingParams": "production-equivalent (no temperature/seed set)"
+ },
+ "results": [
+  {
+   "capability": "synthesis",
+   "fixture": "clear",
+   "note": "information-rich",
+   "model": "claude-sonnet-4-6",
+   "latencyMs": 17707,
+   "usage": {
+    "input": 450,
+    "output": 990
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawCount": 9,
+    "keptCount": 9,
+    "bands": {
+     "OBSERVED": 3,
+     "SYNTHESIZED_FROM_OBSERVED": 3,
+     "NEEDS_MORE_EVIDENCE": 3
+    },
+    "rawMarketDemonstrated": 0,
+    "groundedAllCited": true,
+    "duplicates": 0
+   },
+   "conclusions": [
+    {
+     "type": "what_it_is",
+     "band": "OBSERVED",
+     "refs": 2,
+     "statement": "A fractional CFO service operating at roughly 2 days per week, positioned as a part-time finance leadership plug-in for early-stage companies."
+    },
+    {
+     "type": "what_it_offers",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "Three named deliverables — monthly financial modeling, fundraising prep, and board reporting — bundled at a stated entry price of $2,500/month."
+    },
+    {
+     "type": "who_it_addresses",
+     "band": "OBSERVED",
+     "refs": 2,
+     "statement": "Explicitly targets seed-stage SaaS founders who have not yet justified or cannot afford a full-time CFO hire."
+    },
+    {
+     "type": "positioning_clarity",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "The positioning is tight and legible: stage (seed), vertical (SaaS), format (fractional/2 days/week), price anchor ($2,500/mo), and credibility signal (ex-Big-4) are all present in minimal copy. This is unusually clear for a services homepage."
+    },
+    {
+     "type": "underused_strength",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 1,
+     "statement": "The ex-Big-4 CFO credential is mentioned once in passing on the About page but not developed — no firm named, no tenure or deal history cited. This could be a stronger trust signal if substantiated."
+    },
+    {
+     "type": "inconsistency",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 1,
+     "statement": "The homepage targets 'seed-stage SaaS' specifically, but the three deliverables (financial modeling, fundraising prep, board reporting) are generic enough to fit any venture-backed startup. The copy does not explain what is SaaS-specific about the methodology or the model templates — creating a slight tension between the niche claim and the generalist service description."
+    },
+    {
+     "type": "missing_information",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 1,
+     "statement": "No information is present about engagement scope limits, what happens above or below $2,500/mo, whether pricing scales with stage or ARR, or any tier structure — making it unclear if the offer handles the full seed-to-Series-A journey."
+    },
+    {
+     "type": "missing_information",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "No social proof is visible — no client names, logos, testimonials, or outcome metrics (e.g., capital raised for clients). For a high-trust, recurring-retainer service, this is a notable absence."
+    },
+    {
+     "type": "strategic_question",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 1,
+     "statement": "The 2-days-per-week constraint is stated as a feature, but it is also a capacity ceiling. Is the business structured as a solo operator taking a small number of retainers, or is there a team/associate model that allows it to scale beyond one founder's bandwidth?"
+    }
+   ]
+  },
+  {
+   "capability": "synthesis",
+   "fixture": "ambiguous",
+   "note": "ambiguous positioning",
+   "model": "claude-sonnet-4-6",
+   "latencyMs": 14829,
+   "usage": {
+    "input": 416,
+    "output": 886
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawCount": 9,
+    "keptCount": 9,
+    "bands": {
+     "OBSERVED": 3,
+     "SYNTHESIZED_FROM_OBSERVED": 4,
+     "HYPOTHESIS": 2
+    },
+    "rawMarketDemonstrated": 0,
+    "groundedAllCited": true,
+    "duplicates": 0
+   },
+   "conclusions": [
+    {
+     "type": "what_it_offers",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "The site names three service pillars — strategy, design, and something labeled 'magic' — but only the first two are concrete; the third is undefined."
+    },
+    {
+     "type": "promise",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "The stated promise is emotional impact: stories that 'move people.' This is a feeling-based outcome, not a functional or commercial one."
+    },
+    {
+     "type": "what_it_is",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "A creative studio that combines strategy and design work for brand clients."
+    },
+    {
+     "type": "who_it_addresses",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "The intended client is described as a 'visionary' and a brand that 'dares,' signaling an appetite for bold or unconventional clients rather than risk-averse ones."
+    },
+    {
+     "type": "positioning_clarity",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "The positioning relies almost entirely on attitude and tone ('dare,' 'magic,' 'visionaries') with no specifics about deliverables, industries served, scale, or process — making it difficult to distinguish from many other creative studios."
+    },
+    {
+     "type": "inconsistency",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "The home page foregrounds storytelling, but the about page foregrounds strategy and design. It is unclear whether this is a narrative/content studio, a brand strategy consultancy, or a visual design shop — or how these fit together."
+    },
+    {
+     "type": "strategic_question",
+     "band": "HYPOTHESIS",
+     "refs": 1,
+     "statement": "What does 'magic' actually refer to in the service offering? If it is a genuine capability, naming it obscures rather than differentiates; if it is filler, it dilutes the credibility of the other two pillars."
+    },
+    {
+     "type": "underused_strength",
+     "band": "HYPOTHESIS",
+     "refs": 1,
+     "statement": "The phrase 'we partner with visionaries' implies a collaborative, long-term relationship model rather than a transactional project model — but this is not developed anywhere in the available material and could be a meaningful differentiator if substantiated."
+    },
+    {
+     "type": "missing_information",
+     "band": "OBSERVED",
+     "refs": 2,
+     "statement": "No evidence of work samples, case studies, client names, team credentials, pricing model, or engagement format. The material is entirely declarative with no proof points."
+    }
+   ]
+  },
+  {
+   "capability": "synthesis",
+   "fixture": "sparse",
+   "note": "sparse website",
+   "model": "claude-sonnet-4-6",
+   "latencyMs": 7132,
+   "usage": {
+    "input": 385,
+    "output": 342
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawCount": 5,
+    "keptCount": 5,
+    "bands": {
+     "OBSERVED": 3,
+     "SYNTHESIZED_FROM_OBSERVED": 1,
+     "HYPOTHESIS": 1
+    },
+    "rawMarketDemonstrated": 0,
+    "groundedAllCited": true,
+    "duplicates": 0
+   },
+   "conclusions": [
+    {
+     "type": "what_it_is",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "Rivera Consulting appears to be a consulting business, but the website provides almost no substantive information beyond a welcome message."
+    },
+    {
+     "type": "positioning_clarity",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 1,
+     "statement": "With only a welcome line visible, the site communicates no distinct positioning, promise, or reason to engage — a first-time visitor learns nothing actionable about Rivera Consulting."
+    },
+    {
+     "type": "strategic_question",
+     "band": "HYPOTHESIS",
+     "refs": 1,
+     "statement": "Is the website intentionally minimal (e.g., a placeholder or referral-only business), or is it an underinvested asset that is failing to communicate value to potential clients?"
+    },
+    {
+     "type": "missing_information",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "The website contains no description of services offered, industries served, team background, methodology, pricing, or any differentiating detail — making it impossible to characterize the business meaningfully."
+    },
+    {
+     "type": "missing_information",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "There is no indication of who the intended client is — no target industry, company size, function, or problem type is mentioned anywhere on the site."
+    }
+   ]
+  },
+  {
+   "capability": "synthesis",
+   "fixture": "contradictory",
+   "note": "contradictory pages",
+   "model": "claude-sonnet-4-6",
+   "latencyMs": 15387,
+   "usage": {
+    "input": 430,
+    "output": 877
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawCount": 8,
+    "keptCount": 8,
+    "bands": {
+     "OBSERVED": 3,
+     "SYNTHESIZED_FROM_OBSERVED": 2,
+     "HYPOTHESIS": 1,
+     "NEEDS_MORE_EVIDENCE": 2
+    },
+    "rawMarketDemonstrated": 0,
+    "groundedAllCited": true,
+    "duplicates": 0
+   },
+   "conclusions": [
+    {
+     "type": "what_it_is",
+     "band": "OBSERVED",
+     "refs": 2,
+     "statement": "A branding business offering design products and services across at least two distinct tiers."
+    },
+    {
+     "type": "what_it_offers",
+     "band": "OBSERVED",
+     "refs": 2,
+     "statement": "At the high end: fully custom, bespoke branding engagements starting at $25,000. At the low end: a self-serve logo template pack priced at $19."
+    },
+    {
+     "type": "who_it_addresses",
+     "band": "OBSERVED",
+     "refs": 2,
+     "statement": "The homepage targets luxury clients with substantial budgets ($25k+); the pricing page targets budget-conscious, DIY individuals. Whether these are intentionally separate audiences served under one roof is unclear."
+    },
+    {
+     "type": "positioning_clarity",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "There is no stated bridge or segmentation logic between the $19 and $25,000 offerings — no mid-tier, no explained reason for the coexistence, and no separate audience framing for each. The business appears to be speaking to two incompatible buyers with a single brand voice."
+    },
+    {
+     "type": "inconsistency",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "The homepage signals 'bespoke, premium, luxury' while the pricing page sells a $19 DIY template pack. These two offerings project contradictory brand identities and may confuse or repel the luxury buyer the homepage is trying to attract."
+    },
+    {
+     "type": "underused_strength",
+     "band": "HYPOTHESIS",
+     "refs": 1,
+     "statement": "If the $19 template pack has meaningful sales volume or customer data, it could serve as a legitimate proof-of-concept for design taste and demand — but only if that story is told deliberately, which it currently is not."
+    },
+    {
+     "type": "strategic_question",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "Is the $19 template pack a deliberate entry-level funnel toward premium services, a separate revenue stream, or a legacy product that hasn't been reconsidered in light of the luxury positioning? The answer has significant implications for how the site should be structured."
+    },
+    {
+     "type": "missing_information",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "There is no visible middle-market offering, no case studies or portfolio, no explanation of what 'fully custom' entails at the $25k tier, and no credentialing that substantiates the luxury claim. These gaps make it hard to assess whether the premium positioning is supported by evidence elsewhere on the site."
+    }
+   ]
+  },
+  {
+   "capability": "synthesis",
+   "fixture": "empty",
+   "note": "empty/nearly empty",
+   "model": "claude-sonnet-4-6",
+   "insufficient": true,
+   "checks": {
+    "insufficientEvidenceGuard": true
+   }
+  },
+  {
+   "capability": "synthesis",
+   "fixture": "promo_no_evidence",
+   "note": "promotional claims without evidence",
+   "model": "claude-sonnet-4-6",
+   "latencyMs": 12697,
+   "usage": {
+    "input": 429,
+    "output": 703
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawCount": 7,
+    "keptCount": 7,
+    "bands": {
+     "OBSERVED": 2,
+     "SYNTHESIZED_FROM_OBSERVED": 2,
+     "NEEDS_MORE_EVIDENCE": 3
+    },
+    "rawMarketDemonstrated": 0,
+    "groundedAllCited": true,
+    "duplicates": 0
+   },
+   "conclusions": [
+    {
+     "type": "who_it_addresses",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "The stated target is 'ambitious brands' — a qualifier that signals aspiration but provides no specificity about industry, size, stage, or geography."
+    },
+    {
+     "type": "positioning_clarity",
+     "band": "OBSERVED",
+     "refs": 2,
+     "statement": "All positioning language ('unmatched ROI', 'industry-leading', '#1', 'award-winning', 'trusted by the best') is superlative and generic — no claim is grounded in a specific mechanism, metric, award name, or named client."
+    },
+    {
+     "type": "what_it_is",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 1,
+     "statement": "The business presents itself as a 'growth partner' for brands, suggesting an agency or consultancy model rather than a software or product company."
+    },
+    {
+     "type": "inconsistency",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "Claiming to be 'award-winning' and 'trusted by the best' without naming a single award or client creates a credibility gap; the claims cannot be evaluated or trusted by a skeptical visitor."
+    },
+    {
+     "type": "what_it_offers",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "No specific service, product, methodology, or deliverable is described anywhere in the available material. What the business actually does is unknown from this evidence."
+    },
+    {
+     "type": "missing_information",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "Critical missing elements: what the business specifically does, pricing or engagement model, team or founder background, named clients or case studies, and any verifiable proof point for the ROI or award claims."
+    },
+    {
+     "type": "strategic_question",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "What is the single concrete outcome a client achieves after engaging this business, and can it be stated in one specific sentence? The current material cannot answer this."
+    }
+   ]
+  },
+  {
+   "capability": "synthesis",
+   "fixture": "multi_offer",
+   "note": "multiple offers/audiences",
+   "model": "claude-sonnet-4-6",
+   "latencyMs": 15344,
+   "usage": {
+    "input": 432,
+    "output": 901
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawCount": 9,
+    "keptCount": 9,
+    "bands": {
+     "OBSERVED": 3,
+     "SYNTHESIZED_FROM_OBSERVED": 2,
+     "HYPOTHESIS": 2,
+     "NEEDS_MORE_EVIDENCE": 2
+    },
+    "rawMarketDemonstrated": 0,
+    "groundedAllCited": true,
+    "duplicates": 0
+   },
+   "conclusions": [
+    {
+     "type": "what_it_is",
+     "band": "OBSERVED",
+     "refs": 2,
+     "statement": "A growth services business offering at least three distinct service lines: coaching, local SEO, and enterprise demand generation."
+    },
+    {
+     "type": "who_it_addresses",
+     "band": "OBSERVED",
+     "refs": 2,
+     "statement": "The business explicitly names three very different customer types: solo coaches, dental clinics, and Series-B SaaS companies — spanning individual practitioners to funded startups."
+    },
+    {
+     "type": "what_it_offers",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "Service offerings are 1:1 coaching packages, local SEO retainers for clinics, and enterprise demand-gen retainers — each mapped to a distinct customer segment."
+    },
+    {
+     "type": "positioning_clarity",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "The business presents three structurally unrelated customer segments and service types under a single 'we help you grow' umbrella, making it difficult to identify a coherent, defensible positioning statement."
+    },
+    {
+     "type": "inconsistency",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "The needs, budgets, sales cycles, and success metrics of solo coaches, dental clinics, and Series-B SaaS teams differ dramatically — serving all three under one brand risks credibility with each segment, as none may feel the business truly understands their context."
+    },
+    {
+     "type": "strategic_question",
+     "band": "HYPOTHESIS",
+     "refs": 2,
+     "statement": "Is the multi-segment approach intentional diversification, or did the business accumulate unrelated clients opportunistically? Knowing which segment drives the most revenue and retention would clarify where to focus positioning and product development."
+    },
+    {
+     "type": "underused_strength",
+     "band": "HYPOTHESIS",
+     "refs": 2,
+     "statement": "If the business has genuinely delivered results across all three segments, that cross-domain experience could be a differentiator — but the website currently does not surface any evidence of outcomes to leverage it."
+    },
+    {
+     "type": "missing_information",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "No pricing, package tiers, case studies, results, team credentials, or proof points are visible in the provided material — it is impossible to assess whether claims of growth expertise are substantiated."
+    },
+    {
+     "type": "missing_information",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 1,
+     "statement": "It is unclear whether the three service lines are delivered by the same people, through partners, or via a team — the operational model, capacity, and quality consistency cannot be assessed from available material."
+    }
+   ]
+  },
+  {
+   "capability": "synthesis",
+   "fixture": "elegant_vague",
+   "note": "elegant but operationally vague",
+   "model": "claude-sonnet-4-6",
+   "latencyMs": 15440,
+   "usage": {
+    "input": 413,
+    "output": 848
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawCount": 8,
+    "keptCount": 8,
+    "bands": {
+     "OBSERVED": 1,
+     "SYNTHESIZED_FROM_OBSERVED": 2,
+     "HYPOTHESIS": 1,
+     "NEEDS_MORE_EVIDENCE": 4
+    },
+    "rawMarketDemonstrated": 0,
+    "groundedAllCited": true,
+    "duplicates": 0
+   },
+   "conclusions": [
+    {
+     "type": "promise",
+     "band": "OBSERVED",
+     "refs": 2,
+     "statement": "The stated promise centers on 'resonance,' 'meaning,' 'momentum,' and 'transformation' — outcomes that are emotionally evocative but operationally undefined. A prospective client cannot determine what problem gets solved or what success looks like."
+    },
+    {
+     "type": "positioning_clarity",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "The positioning relies entirely on abstract language with no differentiating specifics — no named methodology, no sector focus, no case evidence, no comparison point. It is not possible to distinguish this business from hundreds of similarly worded practices."
+    },
+    {
+     "type": "inconsistency",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "The language implies high intentionality ('our practice lives at the intersection of intention and impact') yet the material itself lacks intention at the audience level — there is no signal of who this is for or what action they should take."
+    },
+    {
+     "type": "strategic_question",
+     "band": "HYPOTHESIS",
+     "refs": 2,
+     "statement": "Is the abstract language a deliberate positioning choice (e.g., to attract clients who self-select on values), or does it reflect an early-stage struggle to articulate the offer clearly? The answer would significantly change the advice worth giving."
+    },
+    {
+     "type": "what_it_is",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "The business presents itself as some kind of consulting, creative, or coaching practice, but the exact nature of the work (services offered, deliverables, industry) is entirely unclear from the available material."
+    },
+    {
+     "type": "what_it_offers",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "No concrete offer, product, service, or deliverable is described anywhere in the available material. It is impossible to determine what a client actually receives or pays for."
+    },
+    {
+     "type": "who_it_addresses",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "No target customer, industry, company size, role, or problem type is named or implied in the available material."
+    },
+    {
+     "type": "missing_information",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "Critical missing elements: what the business actually does, who it serves, what a client engagement looks like, pricing or access model, team or founder background, and any evidence of results. The evidence base is too thin to draw responsible conclusions about strategy."
+    }
+   ]
+  },
+  {
+   "capability": "synthesis",
+   "fixture": "founder_conflict",
+   "note": "founder claim conflicts with website evidence",
+   "model": "claude-sonnet-4-6",
+   "latencyMs": 7911,
+   "usage": {
+    "input": 430,
+    "output": 332
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawCount": 3,
+    "keptCount": 3,
+    "bands": {
+     "OBSERVED": 1,
+     "NEEDS_MORE_EVIDENCE": 2
+    },
+    "rawMarketDemonstrated": 0,
+    "groundedAllCited": true,
+    "duplicates": 0
+   },
+   "conclusions": [
+    {
+     "type": "inconsistency",
+     "band": "OBSERVED",
+     "refs": 2,
+     "statement": "The home page describes a solo freelance Webflow developer building for early-stage startups [h], while the founder-declared description claims a 40-person full-service agency serving Fortune 500 enterprises [d]. These two self-descriptions are irreconcilable and cannot both be accurate."
+    },
+    {
+     "type": "missing_information",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "Until the contradiction between the two self-descriptions is resolved, no reliable conclusions can be drawn about actual team size, service scope, or target client profile."
+    },
+    {
+     "type": "strategic_question",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "Which description reflects the current reality of the business — solo freelancer serving startups, or multi-person agency serving enterprises — and does the website accurately represent that reality to prospective clients?"
+    }
+   ]
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "clear_positioning",
+   "note": "clear positioning",
+   "model": "claude-sonnet-4-6",
+   "entityType": "direct",
+   "latencyMs": 8877,
+   "usage": {
+    "input": 269,
+    "output": 352
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "SYNTHESIZED_FROM_OBSERVED",
+    "cappedStatus": "HYPOTHESIS",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": true,
+    "hedged": true,
+    "inferenceLen": 1256
+   },
+   "inferenceText": "LedgerLoop's public website presents it as an automated bookkeeping and sales tax filing service targeted specifically at Shopify merchants, with a stated price point of $79/month. The site appears to position it as a narrow, verticalized financial operations tool — not a marketing, strategy, or growth advisory service. The stated audience (Shopify merchants) and stated function (reconciliation, sales tax compliance) suggest a back-office financial automation focus rather than anything related to customer acquisition, brand positioning, or go-to-market strategy. This does not establish any overlap in audience targeting, demand characteristics, or competitive dynamics with an AI marketing strategist serving solo founders. The founder's business appears oriented toward early-stage or independent operators navigating marketing decisions, whereas LedgerLoop publicly presents itself as serving e-commerce store owners with a specific accounting workflow problem. There may be a partial audience overlap — some solo founders run Shopify stores — but the value propositions appear distinct: financial compliance automation vs. marketing strategy guidance. No ambiguity is evident in LedgerLoop's stated positioning relative to the founder's offering.",
+   "relevanceToFounder": "Low. LedgerLoop publicly presents as a bookkeeping and tax automation tool for Shopify merchants, which appears categorically distinct from AI marketing strategy for solo founders. While a minor audience segment may overlap, the stated problems solved, pricing model, and functional category differ substantially. This does not establish competitive or complementary significance without further evidence."
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "ambiguous_positioning",
+   "note": "ambiguous positioning",
+   "model": "claude-sonnet-4-6",
+   "entityType": "direct",
+   "latencyMs": 7298,
+   "usage": {
+    "input": 255,
+    "output": 265
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "NEEDS_MORE_EVIDENCE",
+    "cappedStatus": "NEEDS_MORE_EVIDENCE",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": false,
+    "hedged": true,
+    "inferenceLen": 692
+   },
+   "inferenceText": "The site presents Northwind with a broad, aspirational positioning statement — 'We unlock potential' and 'partners with bold teams to build what matters' — which offers very limited specificity about its actual service offering, target audience, or pricing. The stated audience appears to be 'bold teams' (plural), which may suggest an orientation toward groups or organizations rather than solo founders. There is no visible reference to AI, marketing strategy, or solo entrepreneurship on the observed page. This does not establish any overlap with or distinction from an AI marketing strategist for solo founders — the positioning is too vague to confirm or rule out competitive relevance.",
+   "relevanceToFounder": "Relevance is unclear given the sparse public content. The apparent team-oriented framing ('bold teams') may suggest Northwind does not directly target solo founders, which could indicate low competitive overlap — but this hypothesis cannot be confirmed from a single homepage tagline. Additional pages covering services, pricing, and case studies would be needed to assess whether Northwind competes in AI-driven marketing strategy for individual founders."
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "sparse_source",
+   "note": "sparse source",
+   "model": "claude-sonnet-4-6",
+   "entityType": "alternative",
+   "latencyMs": 7282,
+   "usage": {
+    "input": 250,
+    "output": 255
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "NEEDS_MORE_EVIDENCE",
+    "cappedStatus": "NEEDS_MORE_EVIDENCE",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": false,
+    "hedged": true,
+    "inferenceLen": 600
+   },
+   "inferenceText": "The public website for Quill & Co. consists solely of a 'Coming soon' placeholder page, providing virtually no usable information about the entity's intended offering, positioning, target audience, pricing, or differentiators. The name 'Quill & Co.' may suggest a writing- or content-related focus, but this is speculative and cannot be substantiated from the available public content. No comparison to the founder's AI marketing strategist business for solo founders can be meaningfully drawn at this time. This does not establish any market presence, competitive positioning, or operational status.",
+   "relevanceToFounder": "Relevance to the founder's business cannot be assessed given the near-total absence of public-facing content. The name alone weakly hints at possible content or copywriting adjacency, which could theoretically overlap with AI marketing strategy, but this remains highly speculative. Further information — such as a launched site, product description, or stated audience — would be needed before any meaningful competitive or complementary relationship could be inferred."
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "contradictory_pages",
+   "note": "contradictory pages",
+   "model": "claude-sonnet-4-6",
+   "entityType": "direct",
+   "latencyMs": 7392,
+   "usage": {
+    "input": 266,
+    "output": 297
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "NEEDS_MORE_EVIDENCE",
+    "cappedStatus": "NEEDS_MORE_EVIDENCE",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": false,
+    "hedged": true,
+    "inferenceLen": 851
+   },
+   "inferenceText": "The site presents what appears to be a tension between its stated focus and pricing structure: the home page positions Duality as an enterprise-grade security platform targeting regulated banks, while the pricing page advertises a 'free forever' tier explicitly aimed at hobbyists and side projects with no credit card required. This apparent contradiction may suggest either a broad multi-segment strategy, an outdated page, or that the public-facing messaging is inconsistent. The stated audience of regulated banks does not overlap with the founder's target of solo founders, and the product category — security for financial institutions — bears no apparent relationship to AI marketing strategy for solo founders. This does not establish any competitive dynamic, shared customer base, or market overlap between Duality and the founder's business.",
+   "relevanceToFounder": "Relevance appears to be very low or negligible. The entity publicly positions itself in enterprise fintech security, a categorically different domain from AI-assisted marketing strategy for solo founders. The free hobbyist tier creates superficial pricing-model similarity, but the product, audience, and use case appear entirely distinct. No direct competitive relationship is suggested by the available public pages, though the internal inconsistency of Duality's own messaging limits confident inference."
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "promo_superiority",
+   "note": "promotional superiority language",
+   "model": "claude-sonnet-4-6",
+   "entityType": "direct",
+   "latencyMs": 9678,
+   "usage": {
+    "input": 266,
+    "output": 382
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "NEEDS_MORE_EVIDENCE",
+    "cappedStatus": "NEEDS_MORE_EVIDENCE",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": false,
+    "hedged": true,
+    "inferenceLen": 1300
+   },
+   "inferenceText": "ApexRank's public homepage presents it as an SEO-focused tool, with language emphasizing speed of ranking and a results guarantee. The site appears to position itself around search engine optimization outcomes ('Rank #1 faster than anyone'), suggesting its stated audience may be businesses or individuals seeking organic search visibility. The phrasing 'best SEO tool on the market' and 'unbeatable results' are superlative marketing claims on the site itself — this does not establish actual market leadership, superiority, or customer satisfaction. The offering appears to be a tool (likely software-based) rather than a strategic advisory or AI-driven marketing service. This may suggest a possible distinction from the founder's business, which is presented as an AI marketing strategist — implying broader strategic guidance beyond SEO alone, and potentially oriented specifically toward solo founders as a stated audience. Some surface-level overlap may exist if the founder's service touches on SEO strategy, but ApexRank publicly appears to position itself as a tactical SEO tool rather than a holistic marketing strategy partner. The homepage language is sparse and heavily promotional, leaving the actual feature set, pricing model, and true target audience ambiguous from what is visible.",
+   "relevanceToFounder": "Partial and uncertain. ApexRank publicly presents as an SEO tool, which may represent only partial overlap with an AI marketing strategist serving solo founders. The tool-versus-advisor distinction and the narrower SEO focus suggest they may not be direct substitutes, but more evidence on ApexRank's full feature set, pricing, and target audience is needed to assess competitive proximity confidently."
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "pricing_no_response",
+   "note": "pricing without market-response evidence",
+   "model": "claude-sonnet-4-6",
+   "entityType": "direct",
+   "latencyMs": 8804,
+   "usage": {
+    "input": 261,
+    "output": 339
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "NEEDS_MORE_EVIDENCE",
+    "cappedStatus": "NEEDS_MORE_EVIDENCE",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": true,
+    "hedged": true,
+    "inferenceLen": 1109
+   },
+   "inferenceText": "Pricepoint's public pricing page presents three tiers — Starter at $49, Growth at $199, and Scale at $999 — with the Growth tier visually or textually labeled 'Most Popular.' This labeling may suggest an intent to anchor prospective buyers toward the mid-tier offering, a common SaaS pricing presentation pattern. The price points themselves publicly position Pricepoint as targeting a range from budget-conscious users to higher-investment buyers, though the page content reviewed does not establish who the intended audience is, what features are included, or what problem domain Pricepoint addresses. Without knowing Pricepoint's core offering, it is not possible to confirm whether it competes directly with an AI marketing strategist for solo founders, though the Starter tier at $49 could be accessible to solo founders if the product were relevant. The 'Most Popular' designation does not establish actual customer preference, conversion rates, or demand — it is a presentation choice. Similarities to or distinctions from the founder's business remain ambiguous without more product-level information.",
+   "relevanceToFounder": "Pricing structure is potentially relevant as a benchmarking signal for how the founder might price their own AI marketing strategist offering, particularly the $49–$199 range as a possible market expectation. However, Pricepoint's actual product domain is unclear from the pricing page alone, making competitive relevance uncertain."
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "leadership_no_proof",
+   "note": "claims leadership without independent proof",
+   "model": "claude-sonnet-4-6",
+   "entityType": "direct",
+   "latencyMs": 10012,
+   "usage": {
+    "input": 256,
+    "output": 324
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "NEEDS_MORE_EVIDENCE",
+    "cappedStatus": "NEEDS_MORE_EVIDENCE",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": true,
+    "hedged": true,
+    "inferenceLen": 1093
+   },
+   "inferenceText": "MarketLead's homepage presents itself with self-declared language such as 'market leader' and 'define the category,' which appears to position it as an established, authoritative player in a founder-focused analytics space. The stated framing targets founders as an audience, which may suggest some audience overlap with the founder's AI marketing strategist offering. However, 'founder analytics' as presented appears to be a data/metrics-oriented framing, which may represent a distinct functional category from AI-driven marketing strategy. The self-referential claims ('we define the category,' 'set the standard') are promotional assertions on the company's own site — this does not establish actual market leadership, category ownership, customer preference, or superiority over alternatives. The specific offer, pricing, and feature set are not visible from the excerpt provided, leaving the degree of competitive overlap ambiguous. It is unclear whether MarketLead addresses marketing strategy guidance (as the founder's business does) or focuses on analytics dashboards and reporting.",
+   "relevanceToFounder": "Partial and ambiguous. There is a visible shared target audience (founders), but the apparent functional focus on 'analytics' versus 'AI marketing strategy' may indicate adjacent rather than direct competition. More information on MarketLead's actual feature set, pricing, and use cases would be needed to assess true competitive overlap."
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "trusted_by_logos",
+   "note": "\"trusted by\" logos without verifiable outcomes",
+   "model": "claude-sonnet-4-6",
+   "entityType": "reference",
+   "latencyMs": 9164,
+   "usage": {
+    "input": 268,
+    "output": 338
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "SYNTHESIZED_FROM_OBSERVED",
+    "cappedStatus": "HYPOTHESIS",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": true,
+    "hedged": true,
+    "inferenceLen": 1024
+   },
+   "inferenceText": "The LogoWall site presents a social-proof-oriented product, surfacing recognizable brand logos alongside a claim of '5,000+ others' to signal adoption scale. The phrasing 'trusted by teams' appears to position the offering toward team-based or organizational buyers rather than solo individuals. The call to action 'Join the movement' suggests a community or network-effect framing. This may indicate a B2B or multi-user product focus. Relative to the founder's business — an AI marketing strategist for solo founders — LogoWall appears to target a meaningfully different audience (teams and organizations vs. solo founders), though the specific product category remains ambiguous from the public page alone. The logo-wall pattern itself is a common credibility mechanism the founder might consider or contrast against in their own positioning. This does not establish any claims about LogoWall's market share, customer satisfaction, or actual adoption levels; the '5,000+' figure is a self-reported presentation claim only.",
+   "relevanceToFounder": "Low-to-moderate. LogoWall appears to serve teams and organizations, a potentially distinct audience from solo founders. However, its use of social proof mechanics and scale signaling may offer indirect positioning contrast useful to the founder — particularly if the founder wants to differentiate by speaking directly to solo operators who are typically excluded from or underserved by team-centric tools."
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "category_creation",
+   "note": "claims category creation",
+   "model": "claude-sonnet-4-6",
+   "entityType": "reference",
+   "latencyMs": 8734,
+   "usage": {
+    "input": 257,
+    "output": 331
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "NEEDS_MORE_EVIDENCE",
+    "cappedStatus": "NEEDS_MORE_EVIDENCE",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": true,
+    "hedged": true,
+    "inferenceLen": 1228
+   },
+   "inferenceText": "FirstMover's public site presents the brand as having 'invented Revenue Intelligence,' framing itself as the originator and ongoing leader of a category it claims to have pioneered. The language is strongly category-creation-oriented, suggesting a positioning strategy built around thought leadership and first-mover advantage narratives. The stated focus appears to be on 'Revenue Intelligence' as a defined discipline, though the site excerpt does not clarify the specific audience, pricing, or product mechanics. It is unclear whether FirstMover targets solo founders, enterprise clients, or other segments. The apparent differentiator presented is originality and categorical ownership rather than feature parity or price. This does not establish actual market leadership, demand, or customer adoption. Relevance to an AI marketing strategist for solo founders appears limited at this stage — FirstMover seems to position in a distinct category framing (revenue intelligence vs. marketing strategy), and solo founders are not a visible stated audience. However, the category-creation positioning tactic itself may be a strategically relevant signal worth noting for how the founder might consider their own category framing.",
+   "relevanceToFounder": "Low-to-moderate. FirstMover's category-creation language may offer a strategic framing reference point, but its apparent audience and focus area differ from an AI marketing strategist serving solo founders. More information is needed to assess any direct competitive or analogous overlap."
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "reference_not_competitor",
+   "note": "reference brand, not a direct competitor",
+   "model": "claude-sonnet-4-6",
+   "entityType": "reference",
+   "latencyMs": 7761,
+   "usage": {
+    "input": 258,
+    "output": 293
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "SYNTHESIZED_FROM_OBSERVED",
+    "cappedStatus": "HYPOTHESIS",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": true,
+    "hedged": true,
+    "inferenceLen": 916
+   },
+   "inferenceText": "Patagonia's public website presents the brand as an outdoor apparel company with an explicitly environmental mission — 'We are in business to save our home planet.' The site appears to position durability and planetary stewardship as core brand pillars rather than conventional retail value propositions. This may suggest a values-led brand identity strategy where the mission itself is the primary differentiator. This does not establish market share, customer preference, or superiority in any category. As a reference entity, Patagonia appears to have minimal direct relevance to an AI marketing strategist targeting solo founders — the audiences, categories, price points, and offers appear entirely distinct. However, it could serve as a reference case study in mission-driven positioning or brand clarity, which may be tangentially instructive for solo founders seeking to articulate a distinctive brand voice.",
+   "relevanceToFounder": "Low direct competitive relevance — Patagonia publicly presents itself as an outdoor apparel brand, which is a categorically different space from AI marketing strategy for solo founders. It may carry indirect relevance only as a potential reference example of concise, mission-forward brand positioning that a solo founder client might aspire to emulate or learn from."
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "twin_a",
+   "note": "similar language, different offer structure (A: productized subscription)",
+   "model": "claude-sonnet-4-6",
+   "entityType": "direct",
+   "latencyMs": 9514,
+   "usage": {
+    "input": 270,
+    "output": 367
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "SYNTHESIZED_FROM_OBSERVED",
+    "cappedStatus": "HYPOTHESIS",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": true,
+    "hedged": true,
+    "inferenceLen": 1191
+   },
+   "inferenceText": "BrandForge A's site presents itself as a premium brand strategy service targeting 'ambitious founders,' offered at a flat $2,000/month subscription with unlimited requests processed one at a time and a pause-anytime flexibility. The positioning appears to emphasize human-crafted strategy at a predictable cost, possibly signaling a productized-agency model. The stated audience of 'ambitious founders' overlaps with the founder's target of solo founders, suggesting a possible competitive adjacency. However, the site does not visibly surface AI as a delivery mechanism, which may suggest a human-led or human-fronted service — a potential point of distinction from an AI-native marketing strategist. The $2,000/month price point positions it at a premium tier relative to many AI-first tools, which may appeal to a different budget segment than the founder's likely audience. The 'brand strategy' framing is somewhat narrower than 'marketing strategy,' though the boundary between these is ambiguous and the two could substantially overlap in practice. This does not establish customer preference, demand volume, or whether solo founders specifically engage this service over alternatives.",
+   "relevanceToFounder": "High overlap in stated audience (founders), moderate overlap in service category (brand vs. marketing strategy), and a meaningful potential distinction in delivery mechanism (AI vs. apparent human-led) and price positioning. Worth monitoring as a direct competitive reference point, though the AI-vs-human differentiator and scope of 'brand' vs. 'marketing' remain somewhat ambiguous without deeper investigation."
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "twin_b",
+   "note": "similar language, different offer structure (B: bespoke retainer)",
+   "model": "claude-sonnet-4-6",
+   "entityType": "direct",
+   "latencyMs": 9042,
+   "usage": {
+    "input": 274,
+    "output": 363
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "SYNTHESIZED_FROM_OBSERVED",
+    "cappedStatus": "HYPOTHESIS",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": true,
+    "hedged": true,
+    "inferenceLen": 1232
+   },
+   "inferenceText": "BrandForge B's public homepage presents itself as a premium, high-touch brand strategy service targeting 'ambitious founders,' positioning through language like 'bespoke,' 'senior partner led,' and a stated minimum engagement of $75,000 over six months. This may suggest it is oriented toward well-funded or later-stage founders with substantial budgets, rather than solo founders who are typically resource-constrained. The scoped-per-client model and partner-led framing appear to signal exclusivity and human expertise as core differentiators. While the stated audience ('founders') nominally overlaps with the founder's business, the price point and engagement structure likely create a significant practical distinction — a $75,000 six-month commitment is structurally inaccessible to most solo founders. This does not establish that BrandForge B competes directly for the same buyers, nor does it confirm any market positioning effectiveness, customer preference, or demand. The founder's AI-driven, likely lower-cost or self-serve model may occupy a meaningfully different price and accessibility tier. Ambiguity remains around whether BrandForge B offers any lighter or digital-product offerings not visible on the homepage.",
+   "relevanceToFounder": "LOW_TO_MODERATE — nominal audience overlap on 'founders' but the $75,000 minimum engagement price point likely places BrandForge B in a structurally separate market segment from solo founders, suggesting limited direct competitive overlap with an AI marketing strategist serving that audience."
+  },
+  {
+   "capability": "synthesis",
+   "fixture": "clear",
+   "note": "information-rich",
+   "model": "claude-sonnet-5",
+   "latencyMs": 10830,
+   "usage": {
+    "input": 682,
+    "output": 1063
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawCount": 9,
+    "keptCount": 9,
+    "bands": {
+     "OBSERVED": 3,
+     "SYNTHESIZED_FROM_OBSERVED": 2,
+     "HYPOTHESIS": 2,
+     "NEEDS_MORE_EVIDENCE": 2
+    },
+    "rawMarketDemonstrated": 0,
+    "groundedAllCited": true,
+    "duplicates": 0
+   },
+   "conclusions": [
+    {
+     "type": "what_it_is",
+     "band": "OBSERVED",
+     "refs": 2,
+     "statement": "The business is a fractional CFO service, providing part-time (2 days/week) financial leadership rather than a full-time hire."
+    },
+    {
+     "type": "what_it_offers",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "Core deliverables are monthly financial modeling, fundraising preparation, and board reporting, packaged at a starting price of $2,500/mo."
+    },
+    {
+     "type": "who_it_addresses",
+     "band": "OBSERVED",
+     "refs": 2,
+     "statement": "Target customer is seed-stage SaaS founders who need CFO-level support but aren't ready to hire a full-time CFO."
+    },
+    {
+     "type": "promise",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "The value proposition centers on access to senior (ex-Big-4) financial expertise without the cost or commitment of a full-time executive."
+    },
+    {
+     "type": "positioning_clarity",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "Positioning is narrow and specific (seed-stage SaaS, fractional model, fixed starting price), which suggests a deliberately focused niche rather than a generalist offering."
+    },
+    {
+     "type": "underused_strength",
+     "band": "HYPOTHESIS",
+     "refs": 1,
+     "statement": "The 'ex-Big-4 CFO' credential is mentioned only briefly on the about page and could be leveraged more prominently as a trust signal alongside the pricing/service page."
+    },
+    {
+     "type": "strategic_question",
+     "band": "HYPOTHESIS",
+     "refs": 1,
+     "statement": "Is the $2,500/mo starting price meant to signal affordability relative to a full-time CFO, or is it a floor that scales significantly with company complexity — and is that scaling logic communicated to prospects?"
+    },
+    {
+     "type": "missing_information",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "The site does not specify what happens beyond seed stage (e.g., Series A+ support) or what triggers a transition to full-time hire, leaving the growth path for clients unclear."
+    },
+    {
+     "type": "missing_information",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 1,
+     "statement": "No case studies, client names, or outcome metrics (e.g., funds raised, board decks delivered) are presented to substantiate the fundraising-prep and board-reporting claims."
+    }
+   ]
+  },
+  {
+   "capability": "synthesis",
+   "fixture": "ambiguous",
+   "note": "ambiguous positioning",
+   "model": "claude-sonnet-5",
+   "latencyMs": 8595,
+   "usage": {
+    "input": 636,
+    "output": 879
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawCount": 8,
+    "keptCount": 8,
+    "bands": {
+     "OBSERVED": 3,
+     "SYNTHESIZED_FROM_OBSERVED": 2,
+     "HYPOTHESIS": 2,
+     "NEEDS_MORE_EVIDENCE": 1
+    },
+    "rawMarketDemonstrated": 0,
+    "groundedAllCited": true,
+    "duplicates": 0
+   },
+   "conclusions": [
+    {
+     "type": "what_it_is",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "The business presents itself as a creative studio focused on storytelling for brands."
+    },
+    {
+     "type": "what_it_offers",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "Services appear to span strategy, design, and creative/storytelling work, though specific deliverables (e.g., video, branding, campaigns) are not detailed."
+    },
+    {
+     "type": "promise",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "The core promise is emotional impact — 'stories that move people' — positioning creative output as transformative rather than purely functional."
+    },
+    {
+     "type": "who_it_addresses",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "The studio positions itself as working with 'brands that dare' and 'visionaries,' suggesting a target audience of ambitious or unconventional clients rather than mainstream/conservative brands."
+    },
+    {
+     "type": "positioning_clarity",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "Language leans heavily on abstract, evocative phrasing ('magic,' 'dare,' 'move people') without concrete proof points, making the actual scope of work or outcomes hard to pin down."
+    },
+    {
+     "type": "strategic_question",
+     "band": "HYPOTHESIS",
+     "refs": 2,
+     "statement": "Is the vague, brand-forward language ('magic,' 'dare') an intentional differentiation strategy, or a placeholder that needs to be backed with concrete proof of capability and results?"
+    },
+    {
+     "type": "market_opportunity",
+     "band": "HYPOTHESIS",
+     "refs": 2,
+     "statement": "Positioning toward 'visionaries' and brands willing to 'dare' may appeal to a premium, risk-tolerant client segment, but this is unconfirmed by the site alone."
+    },
+    {
+     "type": "missing_information",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 0,
+     "statement": "No evidence of specific services, industries served, past clients, case studies, or pricing model is present in the material."
+    }
+   ]
+  },
+  {
+   "capability": "synthesis",
+   "fixture": "sparse",
+   "note": "sparse website",
+   "model": "claude-sonnet-5",
+   "latencyMs": 8705,
+   "usage": {
+    "input": 600,
+    "output": 805
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawCount": 9,
+    "keptCount": 9,
+    "bands": {
+     "OBSERVED": 4,
+     "SYNTHESIZED_FROM_OBSERVED": 1,
+     "HYPOTHESIS": 2,
+     "NEEDS_MORE_EVIDENCE": 2
+    },
+    "rawMarketDemonstrated": 0,
+    "groundedAllCited": true,
+    "duplicates": 0
+   },
+   "conclusions": [
+    {
+     "type": "what_it_is",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "The website provides only a name and a generic welcome message, offering no description of services, industry focus, or business model."
+    },
+    {
+     "type": "promise",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "No explicit promise or value proposition is stated for prospective clients."
+    },
+    {
+     "type": "positioning_clarity",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 1,
+     "statement": "The site currently communicates no distinct positioning; a visitor cannot tell how this consultancy differs from any other."
+    },
+    {
+     "type": "strategic_question",
+     "band": "HYPOTHESIS",
+     "refs": 1,
+     "statement": "What core service area or specialty should the homepage lead with to give visitors a reason to stay?"
+    },
+    {
+     "type": "underused_strength",
+     "band": "HYPOTHESIS",
+     "refs": 1,
+     "statement": "If Rivera Consulting has notable expertise or client history, none of it is currently surfaced on the site, representing an untapped opportunity to build credibility."
+    },
+    {
+     "type": "missing_information",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "There is no information describing what Rivera Consulting actually does, what problems it solves, or for whom."
+    },
+    {
+     "type": "missing_information",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "No offerings, pricing, case studies, or credentials are presented anywhere in the material."
+    },
+    {
+     "type": "who_it_addresses",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 1,
+     "statement": "The target audience or client type cannot be determined from the available content."
+    },
+    {
+     "type": "market_position",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 1,
+     "statement": "Without stated services or differentiation, it is not possible to assess how this business is perceived relative to competitors."
+    }
+   ]
+  },
+  {
+   "capability": "synthesis",
+   "fixture": "contradictory",
+   "note": "contradictory pages",
+   "model": "claude-sonnet-5",
+   "latencyMs": 10254,
+   "usage": {
+    "input": 653,
+    "output": 893
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawCount": 7,
+    "keptCount": 7,
+    "bands": {
+     "OBSERVED": 2,
+     "SYNTHESIZED_FROM_OBSERVED": 2,
+     "HYPOTHESIS": 2,
+     "NEEDS_MORE_EVIDENCE": 1
+    },
+    "rawMarketDemonstrated": 0,
+    "groundedAllCited": true,
+    "duplicates": 0
+   },
+   "conclusions": [
+    {
+     "type": "what_it_is",
+     "band": "OBSERVED",
+     "refs": 2,
+     "statement": "The business presents itself as a branding provider, but the material shows two conflicting service models: bespoke premium branding and a low-cost DIY template product."
+    },
+    {
+     "type": "who_it_addresses",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "Messaging simultaneously targets luxury clients seeking custom bespoke work and budget-conscious DIY customers, suggesting no single, coherent audience definition."
+    },
+    {
+     "type": "positioning_clarity",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "The brand's positioning is unclear: it cannot be simultaneously read as an exclusive luxury studio and a mass-market discount seller without diluting the premium claim."
+    },
+    {
+     "type": "inconsistency",
+     "band": "OBSERVED",
+     "refs": 2,
+     "statement": "The home page positions the business as an exclusive, high-end custom branding studio (from $25,000) while the pricing page advertises a $19 DIY logo template pack — a stark contradiction in target customer, price point, and service depth."
+    },
+    {
+     "type": "strategic_question",
+     "band": "HYPOTHESIS",
+     "refs": 2,
+     "statement": "Is the $19 template pack meant to be a lead-generation funnel toward the $25,000 bespoke service, or is it a separate revenue line — and does the founder intend both to coexist under the same brand?"
+    },
+    {
+     "type": "market_position",
+     "band": "HYPOTHESIS",
+     "refs": 2,
+     "statement": "This dual pricing/positioning could confuse prospective luxury clients about brand credibility, or could confuse budget buyers about affordability — but actual audience reactions are unknown from this material alone."
+    },
+    {
+     "type": "missing_information",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "There is no explanation on the site of how the DIY and bespoke offerings relate (e.g., different sub-brands, tiers, or funnels), leaving visitors uncertain which service applies to them."
+    }
+   ]
+  },
+  {
+   "capability": "synthesis",
+   "fixture": "empty",
+   "note": "empty/nearly empty",
+   "model": "claude-sonnet-5",
+   "insufficient": true,
+   "checks": {
+    "insufficientEvidenceGuard": true
+   }
+  },
+  {
+   "capability": "synthesis",
+   "fixture": "promo_no_evidence",
+   "note": "promotional claims without evidence",
+   "model": "claude-sonnet-5",
+   "latencyMs": 9786,
+   "usage": {
+    "input": 656,
+    "output": 886
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawCount": 9,
+    "keptCount": 9,
+    "bands": {
+     "OBSERVED": 4,
+     "SYNTHESIZED_FROM_OBSERVED": 2,
+     "HYPOTHESIS": 2,
+     "NEEDS_MORE_EVIDENCE": 1
+    },
+    "rawMarketDemonstrated": 0,
+    "groundedAllCited": true,
+    "duplicates": 0
+   },
+   "conclusions": [
+    {
+     "type": "what_it_is",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "The business presents itself as a growth partner/agency-type service for brands."
+    },
+    {
+     "type": "who_it_addresses",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "Target audience is described only as 'ambitious brands,' with no further segmentation (size, industry, stage)."
+    },
+    {
+     "type": "promise",
+     "band": "OBSERVED",
+     "refs": 2,
+     "statement": "The site claims top-tier, unmatched results (\"#1\", \"unmatched ROI\", \"every time\") without qualification."
+    },
+    {
+     "type": "positioning_clarity",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "Language relies on superlative claims (#1, award-winning, unmatched) rather than specifics about services, methods, or clients, making the actual offer unclear."
+    },
+    {
+     "type": "inconsistency",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "Claims of being trusted, award-winning, and #1 are asserted without any supporting detail, creating a gap between claim and substantiation."
+    },
+    {
+     "type": "strategic_question",
+     "band": "HYPOTHESIS",
+     "refs": 2,
+     "statement": "What specific services, methodologies, or proof points differentiate this business from other agencies making similar claims?"
+    },
+    {
+     "type": "market_position",
+     "band": "HYPOTHESIS",
+     "refs": 1,
+     "statement": "Positioning as '#1' suggests an intent to compete on prestige/authority rather than price or niche specialization, but this is unverified against actual market standing."
+    },
+    {
+     "type": "missing_information",
+     "band": "OBSERVED",
+     "refs": 2,
+     "statement": "No evidence (case studies, metrics, client names) is provided to support claims of 'proven results' or 'unmatched ROI'."
+    },
+    {
+     "type": "missing_information",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "No concrete description of what services are delivered, for whom, or in what industries."
+    }
+   ]
+  },
+  {
+   "capability": "synthesis",
+   "fixture": "multi_offer",
+   "note": "multiple offers/audiences",
+   "model": "claude-sonnet-5",
+   "latencyMs": 13120,
+   "usage": {
+    "input": 658,
+    "output": 1239
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawCount": 8,
+    "keptCount": 8,
+    "bands": {
+     "OBSERVED": 3,
+     "SYNTHESIZED_FROM_OBSERVED": 2,
+     "HYPOTHESIS": 2,
+     "NEEDS_MORE_EVIDENCE": 1
+    },
+    "rawMarketDemonstrated": 0,
+    "groundedAllCited": true,
+    "duplicates": 0
+   },
+   "conclusions": [
+    {
+     "type": "what_it_is",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "The business positions itself as a growth/marketing services provider working across three distinct client types."
+    },
+    {
+     "type": "what_it_offers",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "Three separate service lines are offered, each tailored to one segment: 1:1 coaching packages, local SEO for clinics, and enterprise demand-gen retainers."
+    },
+    {
+     "type": "who_it_addresses",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "Stated target audiences are solo coaches, dental clinics, and Series-B SaaS teams — three segments with very different buying behavior, budget size, and sales cycles."
+    },
+    {
+     "type": "positioning_clarity",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "There is no unifying value proposition or methodology stated that connects these three segments, making it hard for a visitor to quickly understand who this is 'really' for."
+    },
+    {
+     "type": "inconsistency",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "The segment-to-service mapping (coaches→coaching, clinics→SEO, SaaS→demand-gen) suggests three loosely related businesses bundled under one brand rather than one coherent offering."
+    },
+    {
+     "type": "strategic_question",
+     "band": "HYPOTHESIS",
+     "refs": 2,
+     "statement": "Is serving three unrelated segments a deliberate diversification strategy (e.g., testing markets, hedging risk) or has the offering drifted without a chosen focus?"
+    },
+    {
+     "type": "market_opportunity",
+     "band": "HYPOTHESIS",
+     "refs": 2,
+     "statement": "Spreading across solo coaches, clinics, and enterprise SaaS could dilute credibility with any single segment, since prospects may see the business as a generalist rather than a specialist in their space."
+    },
+    {
+     "type": "missing_information",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "The material does not indicate which segment/service is the primary revenue driver or strategic focus versus which are secondary or experimental."
+    }
+   ]
+  },
+  {
+   "capability": "synthesis",
+   "fixture": "elegant_vague",
+   "note": "elegant but operationally vague",
+   "model": "claude-sonnet-5",
+   "latencyMs": 11287,
+   "usage": {
+    "input": 638,
+    "output": 1081
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawCount": 9,
+    "keptCount": 9,
+    "bands": {
+     "OBSERVED": 2,
+     "SYNTHESIZED_FROM_OBSERVED": 3,
+     "HYPOTHESIS": 1,
+     "NEEDS_MORE_EVIDENCE": 3
+    },
+    "rawMarketDemonstrated": 0,
+    "groundedAllCited": true,
+    "duplicates": 0
+   },
+   "conclusions": [
+    {
+     "type": "what_it_is",
+     "band": "OBSERVED",
+     "refs": 2,
+     "statement": "The site describes the business only in abstract, metaphorical terms ('craft resonance,' 'intersection of intention and impact') without naming an industry, service, or product category."
+    },
+    {
+     "type": "promise",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "The language positions the business around enabling 'transformation' through aligning meaning and momentum, suggesting a consulting, coaching, or advisory-style promise rather than a product."
+    },
+    {
+     "type": "positioning_clarity",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "Both home and about copy use nearly identical abstract phrasing ('meaning/momentum,' 'intention/impact'), indicating the site currently trades on tone and mood rather than differentiated positioning."
+    },
+    {
+     "type": "inconsistency",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "There is no factual inconsistency detectable, but there is a gap between the evocative brand voice and the total absence of substantiating detail — the copy asserts impact without evidence of what is actually done."
+    },
+    {
+     "type": "strategic_question",
+     "band": "HYPOTHESIS",
+     "refs": 2,
+     "statement": "What specific service, product, or engagement does 'resonance' and 'transformation' actually translate into for a client — and can the founder state it in one plain sentence?"
+    },
+    {
+     "type": "missing_information",
+     "band": "OBSERVED",
+     "refs": 2,
+     "statement": "Critical basics are absent: no description of services, pricing, process, proof (case studies, clients, results), or contact/next-step guidance."
+    },
+    {
+     "type": "what_it_offers",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "No concrete offering, deliverable, or service line is stated anywhere in the material provided."
+    },
+    {
+     "type": "who_it_addresses",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "No target audience, client type, or use case is named or implied."
+    },
+    {
+     "type": "market_position",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "Whether this abstract, tone-driven positioning differentiates the business or makes it indistinguishable from other consultancies/agencies using similar language cannot be determined from the site alone."
+    }
+   ]
+  },
+  {
+   "capability": "synthesis",
+   "fixture": "founder_conflict",
+   "note": "founder claim conflicts with website evidence",
+   "model": "claude-sonnet-5",
+   "latencyMs": 11032,
+   "usage": {
+    "input": 655,
+    "output": 1077
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawCount": 9,
+    "keptCount": 9,
+    "bands": {
+     "OBSERVED": 3,
+     "SYNTHESIZED_FROM_OBSERVED": 2,
+     "HYPOTHESIS": 1,
+     "NEEDS_MORE_EVIDENCE": 3
+    },
+    "rawMarketDemonstrated": 0,
+    "groundedAllCited": true,
+    "duplicates": 0
+   },
+   "conclusions": [
+    {
+     "type": "what_it_is",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "One stated identity is an independent, solo freelance Webflow developer."
+    },
+    {
+     "type": "what_it_is",
+     "band": "OBSERVED",
+     "refs": 1,
+     "statement": "A separate stated identity is a 40-person full-service agency."
+    },
+    {
+     "type": "who_it_addresses",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "Target audience claims diverge sharply: early-stage startups on one hand, Fortune 500 enterprises on the other — suggesting either a business model in transition, mixed messaging from different pages/authors, or outdated content."
+    },
+    {
+     "type": "positioning_clarity",
+     "band": "SYNTHESIZED_FROM_OBSERVED",
+     "refs": 2,
+     "statement": "Current material lacks a single coherent positioning statement — a visitor cannot tell whether they're hiring a solo developer or engaging a large agency team."
+    },
+    {
+     "type": "inconsistency",
+     "band": "OBSERVED",
+     "refs": 2,
+     "statement": "The site presents two conflicting identities: a solo freelance Webflow developer building marketing sites for early-stage startups [h], and a 40-person full-service agency serving Fortune 500 enterprises [d]. These cannot both be accurate as stated."
+    },
+    {
+     "type": "strategic_question",
+     "band": "HYPOTHESIS",
+     "refs": 2,
+     "statement": "Is the business currently mid-transition (e.g., scaling from solo freelancer to agency, or vice versa), and which identity should the site lead with for the intended next customer?"
+    },
+    {
+     "type": "missing_information",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "There is no explanation on the site for how a solo freelancer and a 40-person agency relate (e.g., rebrand, sub-brand, past vs. current state, or two different offerings)."
+    },
+    {
+     "type": "market_position",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "Whether the business is perceived by prospects as boutique/personal or as an enterprise-grade agency cannot be determined from the site alone and would depend on which pages/channels prospects actually see."
+    },
+    {
+     "type": "missing_information",
+     "band": "NEEDS_MORE_EVIDENCE",
+     "refs": 2,
+     "statement": "No evidence (case studies, team bios, client logos) is present to substantiate either the solo-freelancer claim or the 40-person Fortune 500 agency claim."
+    }
+   ]
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "clear_positioning",
+   "note": "clear positioning",
+   "model": "claude-sonnet-5",
+   "entityType": "direct",
+   "latencyMs": 7475,
+   "usage": {
+    "input": 427,
+    "output": 404
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "SYNTHESIZED_FROM_OBSERVED",
+    "cappedStatus": "HYPOTHESIS",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": true,
+    "hedged": true,
+    "inferenceLen": 920
+   },
+   "inferenceText": "The site presents LedgerLoop as an automated bookkeeping service specifically for Shopify merchants, with stated features of daily reconciliation and sales tax filing, offered at a listed price of $79/mo. Publicly it appears to position itself around convenience and automation for e-commerce sellers rather than for solo founders broadly. This does not establish market demand, customer satisfaction, or adoption levels. Compared to the founder's business—an AI marketing strategist for solo founders—LedgerLoop's stated focus is on financial/accounting operations rather than marketing strategy, suggesting a possible distinction in function and target user (Shopify merchants vs. solo founders generally), though both could serve overlapping small-business audiences. The page does not clarify whether their audience includes solo founders or only established merchants, leaving some ambiguity about audience overlap.",
+   "relevanceToFounder": "Possible adjacent or complementary service (bookkeeping vs. marketing) rather than a direct competitor; useful to note potential audience overlap with Shopify-based solo founders."
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "ambiguous_positioning",
+   "note": "ambiguous positioning",
+   "model": "claude-sonnet-5",
+   "entityType": "direct",
+   "latencyMs": 5303,
+   "usage": {
+    "input": 404,
+    "output": 409
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "NEEDS_MORE_EVIDENCE",
+    "cappedStatus": "NEEDS_MORE_EVIDENCE",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": false,
+    "hedged": true,
+    "inferenceLen": 921
+   },
+   "inferenceText": "The Northwind homepage presents a brief, tagline-style message ('We unlock potential... partners with bold teams to build what matters') without specifying its product, target audience, pricing, or concrete offerings. Publicly it appears to position itself around vague aspirational language rather than detailed service descriptions. This does not establish what Northwind actually does, who it serves, or whether it operates in marketing, consulting, or another domain entirely. Given the minimal content, any comparison to the founder's AI marketing strategist business for solo founders is speculative — there is no visible evidence Northwind targets solo founders, offers AI-driven services, or focuses on marketing strategy specifically. The phrase 'bold teams' may suggest a focus on organizations rather than solo individuals, which could be a possible distinction, but this is uncertain given the lack of detail.",
+   "relevanceToFounder": "Low-to-unclear direct relevance; insufficient public information to determine overlap in audience (solo founders vs. 'bold teams') or service focus (AI marketing strategy vs. unspecified 'building what matters')."
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "sparse_source",
+   "note": "sparse source",
+   "model": "claude-sonnet-5",
+   "entityType": "alternative",
+   "latencyMs": 3802,
+   "usage": {
+    "input": 396,
+    "output": 251
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "NEEDS_MORE_EVIDENCE",
+    "cappedStatus": "NEEDS_MORE_EVIDENCE",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": false,
+    "hedged": true,
+    "inferenceLen": 446
+   },
+   "inferenceText": "The only available public page for Quill & Co. displays a minimal 'Coming soon' message, offering no visible positioning, stated audience, offer or pricing details, or apparent differentiators. This does not establish what the business does, who it serves, or how it compares to an AI marketing strategist for solo founders. Any perceived similarity or distinction to the founder's business is speculative given the near-total absence of content.",
+   "relevanceToFounder": "Unclear; insufficient public information exists to determine whether Quill & Co. operates in a similar space or targets a similar audience as the founder's AI marketing strategist for solo founders."
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "contradictory_pages",
+   "note": "contradictory pages",
+   "model": "claude-sonnet-5",
+   "entityType": "direct",
+   "latencyMs": 8839,
+   "usage": {
+    "input": 423,
+    "output": 658
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "NEEDS_MORE_EVIDENCE",
+    "cappedStatus": "NEEDS_MORE_EVIDENCE",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": true,
+    "hedged": true,
+    "inferenceLen": 895
+   },
+   "inferenceText": "The site's home page presents Duality as an 'enterprise-grade security platform for regulated banks,' suggesting a publicly stated focus on compliance-heavy, high-trust institutional clients. However, the pricing page presents a contrasting message — 'free forever for hobbyists and side projects, no credit card' — which points to a very different audience of individual or casual users. This creates ambiguity about who the site is actually positioning itself toward: enterprise banking clients or hobbyist developers. It's possible these are two different product tiers or the pages reflect a broader platform with multiple use cases, but this cannot be resolved from the pages shown. This does not establish actual customer base, market demand, or which audience the company prioritizes. No pricing details beyond the free tier are visible, so overall commercial positioning remains unclear.",
+   "relevanceToFounder": "Based on the visible pages, Duality's stated focus on enterprise security for regulated banks appears unrelated to the founder's positioning as an AI marketing strategist for solo founders — the audiences (regulated financial institutions vs. solo entrepreneurs) and apparent value propositions (security/compliance vs. marketing strategy) seem distinct. The 'free for hobbyists' pricing note might suggest some overlap with small-scale independent users, but this is speculative given the limited and seemingly inconsistent information presented. No direct competitive or comparative claims can be drawn from this alone."
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "promo_superiority",
+   "note": "promotional superiority language",
+   "model": "claude-sonnet-5",
+   "entityType": "direct",
+   "latencyMs": 7247,
+   "usage": {
+    "input": 419,
+    "output": 552
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "NEEDS_MORE_EVIDENCE",
+    "cappedStatus": "NEEDS_MORE_EVIDENCE",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": false,
+    "hedged": true,
+    "inferenceLen": 1132
+   },
+   "inferenceText": "ApexRank's homepage presents itself with strong superiority claims — 'the best SEO tool on the market,' ranking '#1 faster than anyone,' and 'unbeatable results, guaranteed.' Publicly it appears to position itself as a premium, results-driven SEO solution, though the site provides no visible detail on pricing, target audience specifics, or the mechanics behind these claims. This does not establish actual market leadership, superiority, customer satisfaction, or conversion outcomes — these are self-presented marketing claims only. As a direct competitor category (SEO tool) versus the founder's broader AI marketing strategist offering for solo founders, there may be a distinction in scope: ApexRank's public presentation seems narrowly focused on SEO ranking outcomes, whereas the founder's business is described as a fuller marketing strategist function. The stated audience is ambiguous — no mention of solo founders, small businesses, or enterprises specifically. Given the minimal page content (a single home page tagline), there is significant ambiguity about actual product features, differentiators, or business model.",
+   "relevanceToFounder": "ApexRank is flagged as a direct competitor, but its public presentation is limited to broad SEO superiority claims without clarifying audience fit (e.g., solo founders) or feature overlap with an AI marketing strategist. This may suggest partial overlap in the broader 'marketing/SEO tools' space, but insufficient public detail exists to compare positioning, offer structure, or differentiation with the founder's business."
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "pricing_no_response",
+   "note": "pricing without market-response evidence",
+   "model": "claude-sonnet-5",
+   "entityType": "direct",
+   "latencyMs": 4936,
+   "usage": {
+    "input": 418,
+    "output": 389
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "NEEDS_MORE_EVIDENCE",
+    "cappedStatus": "NEEDS_MORE_EVIDENCE",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": true,
+    "hedged": true,
+    "inferenceLen": 859
+   },
+   "inferenceText": "The site presents Pricepoint with a tiered pricing structure (Starter $49, Growth $199, Scale $999), with the 'Growth' tier visually flagged as most popular. This framing may suggest the company wants to steer visitors toward a mid-tier plan, though this does not establish that this tier is actually preferred by most customers, nor does it indicate actual demand, conversion, or customer satisfaction. The page offers no visible detail on target audience, product features, or positioning language beyond pricing, making it hard to assess overlap with an AI marketing strategist aimed at solo founders. Publicly it appears to position itself primarily through pricing simplicity rather than articulated differentiators. Any similarity or distinction versus the founder's business remains ambiguous given the limited information available on this page alone.",
+   "relevanceToFounder": "Possible competitor or adjacent tool given shared use of tiered SaaS-style pricing, but insufficient public information to confirm audience or feature overlap with an AI marketing strategist for solo founders."
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "leadership_no_proof",
+   "note": "claims leadership without independent proof",
+   "model": "claude-sonnet-5",
+   "entityType": "direct",
+   "latencyMs": 6762,
+   "usage": {
+    "input": 402,
+    "output": 481
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "SYNTHESIZED_FROM_OBSERVED",
+    "cappedStatus": "HYPOTHESIS",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": true,
+    "hedged": true,
+    "inferenceLen": 1065
+   },
+   "inferenceText": "The site presents MarketLead as 'the market leader in founder analytics' and claims to 'define the category and set the standard.' This is self-描述 language from the company's own homepage and does not establish actual market share, customer preference, adoption, or industry consensus on leadership. Publicly it appears to position itself around authority and category-defining claims rather than detailing specific product features, pricing, or target audience segments. The stated focus on 'founder analytics' may suggest some topical overlap with the founder's AI marketing strategist offering for solo founders, though the homepage text alone does not clarify whether MarketLead targets solo founders specifically, offers marketing strategy guidance, or serves a different audience (e.g., larger startups or teams). There is ambiguity about product scope, delivery format (software vs. service), and how 'analytics' relates to marketing strategy work. This does not establish superiority, growth, or customer satisfaction — these are self-presented claims only.",
+   "relevanceToFounder": "Direct competitor by category label (self-styled 'market leader in founder analytics'), but insufficient public detail to confirm overlap in target audience (solo founders specifically) or service type (analytics vs. marketing strategy) versus the founder's AI marketing strategist business; further investigation needed to assess actual positioning and offer similarity."
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "trusted_by_logos",
+   "note": "\"trusted by\" logos without verifiable outcomes",
+   "model": "claude-sonnet-5",
+   "entityType": "reference",
+   "latencyMs": 6962,
+   "usage": {
+    "input": 415,
+    "output": 428
+   },
+   "checks": {
+    "schemaValid": false,
+    "parseFailure": true,
+    "rawStatus": "",
+    "cappedStatus": "HYPOTHESIS",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": true,
+    "hedged": false,
+    "inferenceLen": 0
+   },
+   "inferenceText": "",
+   "relevanceToFounder": ""
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "category_creation",
+   "note": "claims category creation",
+   "model": "claude-sonnet-5",
+   "entityType": "reference",
+   "latencyMs": 6963,
+   "usage": {
+    "input": 412,
+    "output": 456
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "NEEDS_MORE_EVIDENCE",
+    "cappedStatus": "NEEDS_MORE_EVIDENCE",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": true,
+    "hedged": true,
+    "inferenceLen": 978
+   },
+   "inferenceText": "The site presents FirstMover as the originator and self-described leader of a category it calls 'Revenue Intelligence.' This is a self-characterization rather than a verifiable claim; the page gives no detail on features, audience, pricing, or offer structure. This does not establish market leadership, category adoption, customer preference, or demand — these are marketing assertions made by the company about itself. Publicly it appears to position itself around category creation and thought leadership rather than a specific product mechanic. Compared to the founder's business — an AI marketing strategist for solo founders — FirstMover's stated focus on 'Revenue Intelligence' is ambiguous in scope and audience; it is unclear whether it targets solo founders, larger sales teams, or enterprises. Without further pages (pricing, product detail, target customer description), the similarities or distinctions versus the founder's offering cannot be meaningfully assessed.",
+   "relevanceToFounder": "Low-to-moderate: FirstMover may operate in an adjacent or overlapping marketing/sales intelligence space, but the single homepage snippet does not clarify audience (solo founders vs. larger teams) or offer specifics, limiting direct comparability to the founder's AI marketing strategist positioning."
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "reference_not_competitor",
+   "note": "reference brand, not a direct competitor",
+   "model": "claude-sonnet-5",
+   "entityType": "reference",
+   "latencyMs": 6637,
+   "usage": {
+    "input": 404,
+    "output": 488
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "SYNTHESIZED_FROM_OBSERVED",
+    "cappedStatus": "HYPOTHESIS",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": true,
+    "hedged": true,
+    "inferenceLen": 1260
+   },
+   "inferenceText": "The site presents Patagonia as an outdoor apparel company with a mission-driven identity centered on environmental sustainability, using the tagline 'built to last' and framing its purpose as being 'in business to save our home planet.' This suggests a public positioning that emphasizes durability and environmental values as core brand differentiators, rather than performance, price, or trend-driven appeals. The stated audience appears to be consumers who value outdoor activity and environmental causes, though the page does not specify demographics or customer segments in detail. No pricing or offer structure is presented on this page, and no claims about market share, customer satisfaction, or demand can be drawn from this content. This does not establish actual customer preference, sales performance, or competitive standing. In terms of relevance to the founder's business—an AI marketing strategist for solo founders—Patagonia represents a large, mission-driven consumer brand rather than a direct competitor or comparable entity; the businesses differ substantially in scale, industry, and target audience. Any comparison would be limited to general branding philosophy (e.g., values-based positioning) rather than functional or market overlap.",
+   "relevanceToFounder": "Low direct relevance; Patagonia operates in a different industry and scale, though its values-based public positioning may offer a loose stylistic reference point for how mission statements are framed on a homepage."
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "twin_a",
+   "note": "similar language, different offer structure (A: productized subscription)",
+   "model": "claude-sonnet-5",
+   "entityType": "direct",
+   "latencyMs": 7062,
+   "usage": {
+    "input": 430,
+    "output": 555
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "SYNTHESIZED_FROM_OBSERVED",
+    "cappedStatus": "HYPOTHESIS",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": true,
+    "hedged": true,
+    "inferenceLen": 1086
+   },
+   "inferenceText": "The site presents BrandForge A as a 'premium brand strategy' service targeting 'ambitious founders,' with a flat $2,000/mo subscription offering unlimited requests handled one at a time, and the ability to pause anytime. This framing may suggest a positioning toward higher-touch, potentially higher-budget clients compared to a self-serve AI tool, though the site does not specify whether services are human-delivered, AI-assisted, or hybrid. The 'pause anytime' and unlimited-request structure could be read as flexibility-oriented messaging, but this does not establish actual usage patterns, customer satisfaction, or demand levels. Compared to an AI marketing strategist for solo founders, BrandForge A's stated audience ('ambitious founders' broadly) and price point ($2,000/mo) may indicate a different market tier or service model, though overlap in target customer (founders seeking brand/marketing help) is plausible. There is ambiguity about whether 'requests' refers to design work, strategy consulting, content, or something else, and whether AI plays any role in delivery.",
+   "relevanceToFounder": "This may be relevant as a potential adjacent or competing offering targeting founders seeking brand/marketing support, though its premium pricing, unclear delivery model (human vs. AI), and broader founder audience (not specifically solo founders) suggest possible differences from the founder's specifically AI-driven, solo-founder-focused positioning. Further evidence would be needed to clarify actual overlap in service scope or target customer."
+  },
+  {
+   "capability": "market-inference",
+   "fixture": "twin_b",
+   "note": "similar language, different offer structure (B: bespoke retainer)",
+   "model": "claude-sonnet-5",
+   "entityType": "direct",
+   "latencyMs": 5531,
+   "usage": {
+    "input": 428,
+    "output": 449
+   },
+   "checks": {
+    "schemaValid": true,
+    "parseFailure": false,
+    "rawStatus": "SYNTHESIZED_FROM_OBSERVED",
+    "cappedStatus": "HYPOTHESIS",
+    "neverObserved": true,
+    "forbiddenMarketLanguageTriggersCap": true,
+    "hedged": true,
+    "inferenceLen": 1001
+   },
+   "inferenceText": "The site presents BrandForge B as a premium, high-touch brand strategy provider, publicly positioning itself around 'bespoke' 6-month engagements starting at $75,000, scoped per client and led by a senior partner. This framing appears to target well-resourced or 'ambitious' founders seeking customized, high-cost strategic services rather than self-serve or automated tools. This may suggest a positioning oriented toward high-budget, longer-term engagements, though the site does not establish actual client volume, satisfaction, or demand for this offering. Compared to the founder's AI marketing strategist for solo founders, a possible distinction is price point and delivery model: BrandForge B's stated pricing and human-led, bespoke structure contrasts with an AI-driven, likely more accessible or scalable offering aimed at solo founders. This does not establish superiority or market preference for either approach; it only reflects how BrandForge B publicly frames its service and audience.",
+   "relevanceToFounder": "Illustrates a potential premium/high-touch competitor segment, useful for contrasting positioning and pricing models against an AI-driven, presumably lower-cost solution for solo founders, without asserting factual market superiority or demand."
+  }
+ ]
+}

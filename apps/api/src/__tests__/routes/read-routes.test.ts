@@ -83,8 +83,9 @@ describe('POST /reads — strict session, status mapping, in-flight guard', () =
 
 describe('registration — OUTSIDE the dev gate', () => {
   it('POST /reads is present under NODE_ENV=production (401, not 404)', async () => {
-    const prevEnv = process.env['NODE_ENV'];
+    const prevEnv = process.env['NODE_ENV']; const prevSyn = process.env['SYNTHESIS_MODEL']; const prevMkt = process.env['MARKET_INFERENCE_MODEL'];
     process.env['NODE_ENV'] = 'production';
+    process.env['SYNTHESIS_MODEL'] = 'claude-sonnet-5'; process.env['MARKET_INFERENCE_MODEL'] = 'claude-sonnet-5'; // production requires explicit model config (fail-fast)
     try {
       const app = Fastify();
       await registerRoutes(app);
@@ -94,6 +95,8 @@ describe('registration — OUTSIDE the dev gate', () => {
       await app.close();
     } finally {
       if (prevEnv === undefined) delete process.env['NODE_ENV']; else process.env['NODE_ENV'] = prevEnv;
+      if (prevSyn === undefined) delete process.env['SYNTHESIS_MODEL']; else process.env['SYNTHESIS_MODEL'] = prevSyn;
+      if (prevMkt === undefined) delete process.env['MARKET_INFERENCE_MODEL']; else process.env['MARKET_INFERENCE_MODEL'] = prevMkt;
     }
   });
 });

@@ -2,9 +2,14 @@
  * Wave-2 debt B — production-model evaluation harness. Evaluates the two model-dependent Layer-2 capabilities
  * SEPARATELY (Business Understanding synthesis, Market-context inference) for the configured model
  * (claude-sonnet-5) vs the claude-sonnet-4-6 baseline, on identical synthetic fixtures with the EXACT
- * production prompts (imported, never copied) and the EXACT production normalizers. Deterministic (temperature 0).
+ * production prompts (imported, never copied) and the EXACT production normalizers.
  * Emits one structured JSON record per (capability, fixture, model). No secrets are printed. Synthetic
  * fixtures only. Run via the bundled runner: tools/eval/run-prod-model-eval.cjs.
+ *
+ * NOTE (eval-blocking-defect fix, Step 9): the harness originally set `temperature: 0` for determinism, but
+ * claude-sonnet-5 REJECTS temperature ("deprecated for this model") → every sonnet-5 call 400'd. Production
+ * code never sets temperature, so matching production (omit it) is both correct and unblocks the eval. There
+ * is NO seed/determinism knob; single-shot per fixture, matching production reality — variance is noted.
  */
 import Anthropic from '@anthropic-ai/sdk';
 import { SYSTEM as SYNTH_SYSTEM } from '../../apps/api/src/business-model/anthropic-synthesis.model';
@@ -53,7 +58,7 @@ const MARKET: MarketFixture[] = [
 async function call(model: string, system: string, user: string, maxTokens: number): Promise<{ text: string; latencyMs: number; usage: { input: number; output: number } | null }> {
   const t0 = Date.now();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const resp: any = await client.messages.create({ model, max_tokens: maxTokens, temperature: 0, system, messages: [{ role: 'user', content: user }] });
+  const resp: any = await client.messages.create({ model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] });
   const latencyMs = Date.now() - t0;
   const text = (resp.content ?? []).filter((b: { type: string }) => b.type === 'text').map((b: { text: string }) => b.text).join('');
   const usage = resp.usage ? { input: resp.usage.input_tokens ?? 0, output: resp.usage.output_tokens ?? 0 } : null;
@@ -124,6 +129,6 @@ async function main() {
     for (const fx of SYNTH) { try { results.push(await evalSynthesis(fx, model)); } catch (e) { results.push({ capability: 'synthesis', fixture: fx.id, model, error: String((e as Error).message) }); } }
     for (const fx of MARKET) { try { results.push(await evalMarket(fx, model)); } catch (e) { results.push({ capability: 'market-inference', fixture: fx.id, model, error: String((e as Error).message) }); } }
   }
-  console.log(JSON.stringify({ meta: { models: MODELS, synthFixtures: SYNTH.length, marketFixtures: MARKET.length, temperature: 0 }, results }, null, 1));
+  console.log(JSON.stringify({ meta: { models: MODELS, synthFixtures: SYNTH.length, marketFixtures: MARKET.length, samplingParams: 'production-equivalent (no temperature/seed set)' }, results }, null, 1));
 }
 void main();
