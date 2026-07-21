@@ -460,8 +460,10 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
   // The product performs NOTHING and verifies NOTHING (UNVERIFIED_FOUNDER_REPORT / NOT_PERFORMED_BY_PRODUCT). No plan/
   // decision/commitment/review mutation; no downstream artifacts; no external action. Evidence is stored, never fetched.
   const execErr = (reply: FastifyReply, e: ExecutionReportError) => {
-    const code = e.reason === 'STALE_HEAD' ? 'EXECUTION_REPORT_STALE_HEAD' : (e.reason === 'ALREADY_ACTIVE' || e.reason === 'NO_ACTIVE_REPORT') ? 'EXECUTION_REPORT_INVALID_TRANSITION' : e.reason;
-    const status = e.reason === 'STALE_HEAD' || e.reason === 'ALREADY_ACTIVE' || e.reason === 'NO_ACTIVE_REPORT' ? 409 : 400;
+    const code = e.reason === 'STALE_HEAD' ? 'EXECUTION_REPORT_STALE_HEAD'
+      : e.reason === 'LINEAGE_INVALID' ? 'EXECUTION_REPORT_LINEAGE_INVALID'
+      : (e.reason === 'ALREADY_ACTIVE' || e.reason === 'NO_ACTIVE_REPORT') ? 'EXECUTION_REPORT_INVALID_TRANSITION' : e.reason;
+    const status = e.reason === 'STALE_HEAD' || e.reason === 'LINEAGE_INVALID' || e.reason === 'ALREADY_ACTIVE' || e.reason === 'NO_ACTIVE_REPORT' ? 409 : 400;
     return reply.code(status).send({ error: { code, message: e.message }, reason: e.reason });
   };
   // ADR-015 remediation: execution identity is the EXACT immutable Plan revision. The routes take `:planId` (the plan

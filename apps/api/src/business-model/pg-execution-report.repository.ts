@@ -48,7 +48,14 @@ export class PgExecutionReportRepository {
       };
       try { return this.toDomain(await tx.insertInto('business.execution_report').values(values).returningAll().executeTakeFirst()); }
       catch (e) {
-        if (String((e as Error).message).match(/uniq_exr_founder_idempotency|duplicate key/i)) { const again = await this.byIdempotencyKey(founderId, input.idempotencyKey); if (again) return again; }
+        const msg = String((e as Error).message);
+        if (msg.match(/uniq_exr_founder_idempotency/i)) { const again = await this.byIdempotencyKey(founderId, input.idempotencyKey); if (again) return again; }
+        // Law 9 backstop: the database rejected structurally invalid lineage (V085 composite FK / chain-identity / shape /
+        // no-fork). The application normally rejects these earlier with a specific reason; map any that reach here to a
+        // bounded domain error so raw SQL never surfaces to the API/UI.
+        if (msg.match(/fk_exr_predecessor_same_chain|uq_exr_chain_identity|uniq_exr_chain_sequence|uniq_exr_predecessor|exr_sequence_predecessor_shape/i)) {
+          throw new ExecutionReportError('LINEAGE_INVALID', 'This execution report would break the chain lineage — refresh and try again.');
+        }
         throw e;
       }
     });

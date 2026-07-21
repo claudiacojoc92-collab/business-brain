@@ -255,4 +255,29 @@ describe('strategic execution boundary §LIVE', () => {
     expect((await erepo().getEffectiveForRevision(founderId, plan.id))[0]!.reportedState).toBe('ATTEMPTED');
   });
 
+  // ── Application and database AGREE (ADR-015 V085, Law 9) — the DB enforces lineage independently of the app ──
+  it('M. app-layer and database reject the SAME invalid cross-revision linkage; neither inserts a row', async (ctx) => {
+    if (!dbUp) { ctx.skip(); return; }
+    const { founderId, plan } = await founderWithPlan(nextEmail());
+    const r1 = await erepo().record(founderId, 'REPORT', plan, input({ executionState: 'ATTEMPTED', idempotencyKey: 'm-1' }), new Date());
+    const rev2 = await supersedePlan(founderId, plan);
+    // (1) through the repository (application path): correcting Revision 1's head under Revision 2 → bounded domain error.
+    await expect(erepo().record(founderId, 'CORRECT', rev2, input({ executionState: 'BLOCKED', idempotencyKey: 'm-2' }), new Date(), r1.id))
+      .rejects.toMatchObject({ name: 'ExecutionReportError' });
+    expect(await erepo().listForRevision(founderId, rev2.id)).toHaveLength(0); // (2) no row inserted via the app
+    // (3) the equivalent insertion DIRECTLY via SQL (bypassing the repo) is rejected by the database's composite FK.
+    let dbError = '';
+    try {
+      await db.insertInto('business.execution_report').values({
+        id: generateId(), founder_id: founderId, subject_type: 'MILESTONE', subject_id: 'ship-weekly',
+        plan_logical_id: rev2.logicalPlanId, plan_id: rev2.id, plan_revision: rev2.revision,
+        report_sequence: 2, predecessor_report_id: r1.id, report_kind: 'CORRECT', execution_state: 'BLOCKED',
+        founder_statement: 'direct sql cross-revision', idempotency_key: 'm-3',
+      }).execute();
+    } catch (e) { dbError = String((e as Error).message); }
+    expect(dbError).toMatch(/fk_exr_predecessor_same_chain/); // database rejected it
+    expect(await erepo().listForRevision(founderId, rev2.id)).toHaveLength(0); // (4/5) still zero rows on Revision 2
+    expect((await erepo().getEffectiveForRevision(founderId, plan.id))[0]!.reportedState).toBe('ATTEMPTED'); // Rev 1 intact
+  });
+
 });

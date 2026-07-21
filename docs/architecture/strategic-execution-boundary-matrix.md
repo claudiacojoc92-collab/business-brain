@@ -55,3 +55,38 @@ Impl: **mig** = `V084__execution_report_revision_scoped.sql` (indexes on `plan_i
 | 12 | Playwright proves Rev 1 shows only Rev 1, Rev 2 only Rev 2 | ui | **e2e** (+ evidence exec-rev1/rev2 PNGs) | COVERED |
 
 **Invariant proved:** no chain / sequence / predecessor / effective projection / UI view / export spans two plan revisions.
+
+---
+
+## DB-lineage matrix (2026-07-21) — database-enforced lineage integrity (V085, Laws 1–9)
+
+Impl: **mig** = `V085__execution_report_lineage_integrity.sql` (composite FK `fk_exr_predecessor_same_chain` + generated
+`predecessor_report_sequence` + FK-target unique `uq_exr_chain_identity`); **dom/repo** = `LINEAGE_INVALID` mapping in
+`execution-report.ts` / `pg-execution-report.repository.ts`; **api** = `EXECUTION_REPORT_LINEAGE_INVALID` (`strategy.routes.ts`).
+**dbtest** = `execution-report.db-lineage.live.test.ts` (routes/domain/repo bypassed — raw table inserts); **agree** =
+`execution-report.live.test.ts` scenario M.
+
+| Part-9 # | Direct-SQL case | Enforced by | Test | Status |
+|---|---|---|---|---|
+| 1 | valid initial REPORT (seq 1, null pred) accepted | shape CHECK + MATCH SIMPLE | dbtest 1 | COVERED |
+| 2 | valid same-chain CORRECT (seq 2→1) accepted | composite FK | dbtest 2 | COVERED |
+| 3 | valid same-chain WITHDRAW (seq 2→1) accepted | composite FK | dbtest 3 | COVERED |
+| 4 | Revision 2 independent seq 1 accepted | `uniq_exr_chain_sequence` (plan_id) | dbtest 4 | COVERED |
+| 5 | another subject independent seq 1 accepted | chain-sequence uniqueness | dbtest 5 | COVERED |
+| 6 | another founder independent seq 1 accepted | chain-sequence uniqueness | dbtest 6 | COVERED |
+| 7 | cross-REVISION predecessor rejected | `fk_exr_predecessor_same_chain` | dbtest 7 · agree M | COVERED |
+| 8 | cross-SUBJECT predecessor rejected | `fk_exr_predecessor_same_chain` | dbtest 8 | COVERED |
+| 9 | cross-FOUNDER predecessor rejected | `fk_exr_predecessor_same_chain` | dbtest 9 | COVERED |
+| 10 | non-adjacent sequence (seq 4→1) rejected | `fk_exr_predecessor_same_chain` (adjacency col) | dbtest 10 | COVERED |
+| 11 | sequence 2 with null predecessor rejected | `exr_sequence_predecessor_shape` | dbtest 11/15/16 | COVERED |
+| 12 | sequence 1 bearing a predecessor rejected | `exr_sequence_predecessor_shape` | dbtest 12 | COVERED |
+| 13/14 | initial CORRECT / initial WITHDRAW rejected | `exr_sequence_predecessor_shape` | dbtest 13/14 | COVERED |
+| 15/16 | CORRECT/WITHDRAW with null predecessor rejected | `exr_sequence_predecessor_shape` | dbtest 15/16 | COVERED |
+| 17 | ghost/missing predecessor rejected | `fk_exr_predecessor_same_chain` | dbtest 17 | COVERED |
+| 17b | second child of one predecessor (fork) rejected | `uniq_exr_predecessor` | dbtest 17b | COVERED |
+| 18/19 | direct UPDATE / individual DELETE rejected | `exr_no_update` / `exr_no_delete` | dbtest 18/19 | COVERED |
+| 20/21 | governed founder deletion succeeds; zero rows remain | `exr_no_delete` opt-in | dbtest 20/21 | COVERED |
+| — | application and DB reject the SAME linkage; neither inserts | repo + composite FK | agree M | COVERED |
+
+**Invariant proved (classification A):** no predecessor relationship — through routes, repository, OR direct SQL — can span
+two chains (founder / plan revision / subject) or skip a sequence.

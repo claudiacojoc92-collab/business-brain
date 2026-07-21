@@ -107,3 +107,47 @@ orphans.
 
 **Remaining debt** unchanged: product-performed execution; Review integration of execution testimony; outcome attribution —
 all deferred.
+
+---
+
+## Second remediation closure (2026-07-21) — database-enforced lineage integrity
+
+**Why the revision-scoped slice was still incomplete.** V084 fixed the *application's* chain identity, but a direct-SQL
+audit (`docs/audit/strategic-execution-boundary-db-lineage-audit.md`) proved the **database** still accepted a predecessor
+belonging to another Plan revision, another subject, another founder, or a non-adjacent sequence: `predecessor_report_id`
+had **no foreign key** and no validating trigger. Append-only, sequence *shape* (`exr_sequence_predecessor_shape`),
+per-revision sequence uniqueness (`uniq_exr_chain_sequence`), no-fork (`uniq_exr_predecessor`) were DB-enforced; chain
+*identity* matching was application-only → **classification B**.
+
+**Two remediation commits.** (1) governance clarification `c5e1030` (docs — audit + Laws 1–9 + ADR/architecture). (2)
+database remediation + tests + closure (this record). None of `045f228`/`77a5b63`/`dab9b33`/`a665442` amended.
+
+**Design (Preferred option — composite predecessor integrity):**
+- **V085** — a generated column `predecessor_report_sequence GENERATED ALWAYS AS (report_sequence - 1) STORED`; a FK-target
+  `UNIQUE(id, founder_id, plan_id, subject_type, subject_id, report_sequence)`; and a self-referential **composite FK**
+  `fk_exr_predecessor_same_chain (predecessor_report_id, founder_id, plan_id, subject_type, subject_id,
+  predecessor_report_sequence) → (id, founder_id, plan_id, subject_type, subject_id, report_sequence)` `MATCH SIMPLE`. So a
+  non-initial event's predecessor **must** be sequence-1 of the identical `(founder, plan_id, subject)` chain (Laws 2, 3, 6);
+  a sequence-1 initial event (null predecessor) is exempt via `MATCH SIMPLE`. Initial/non-initial event *shape* stays on the
+  existing CHECK (Laws 4, 5); no-fork on `uniq_exr_predecessor` (Law 7); append-only triggers untouched (Law 8). The
+  migration runs a **data audit first** and aborts loudly if any corrupt row exists — never silently rewrites (0 rows in dev
+  → clean).
+- **Error mapping (Law 9).** The application keeps its precise route/repository rejections; the repository maps any DB
+  lineage failure that reaches it (`fk_exr_predecessor_same_chain` / chain-sequence / shape / no-fork) to a bounded
+  `ExecutionReportError('LINEAGE_INVALID')` → API `EXECUTION_REPORT_LINEAGE_INVALID` (409). Raw SQL never surfaces to the UI.
+
+**Classification after V085: A — full chain integrity is enforced by the database.**
+
+**Acceptance.** Direct-DB `execution-report.db-lineage.live.test.ts` (**21**) — bypasses routes/domain/repository, writing
+straight to the table so only the DB decides: 6 valid cases accepted; cross-revision / cross-subject / cross-founder /
+non-adjacent / missing-predecessor / shape / initial-CORRECT / initial-WITHDRAW / null-predecessor / fork all **rejected by
+PostgreSQL**; UPDATE + individual DELETE rejected; governed founder deletion leaves zero rows. Application/DB **agreement**
+`execution-report.live.test.ts` scenario M (**+1**, live now **12**): the same invalid cross-revision linkage is rejected by
+the repository (bounded error, 0 rows) **and** by the database's composite FK on a direct insert (0 rows), Revision 1
+intact. Deterministic **18** unchanged. Full **backend 1057 pass / 1 skip** (was 1035 → +22). Web build + **73** unit;
+API + web typechecks clean; migrations through **V085**. Playwright regressions green: revision-scoped Execution Boundary,
+Consumption Gate, Consumption, Promotion Gate. Frozen strategist hashes byte-identical (`a39ea88` / `79802e9` / `f9df116`).
+Zero temp founders, zero orphans; servers stopped; not pushed; production untouched.
+
+**Remaining debt** unchanged: product-performed execution; Review integration of execution testimony; outcome attribution —
+all deferred.

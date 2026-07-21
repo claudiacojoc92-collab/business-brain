@@ -39,7 +39,11 @@ export interface ExecutionReportInput {
 
 export type ExecutionRejection =
   | 'PLAN_ITEM_NOT_FOUND' | 'INVALID_SUBJECT' | 'INVALID_STATE' | 'STATEMENT_REQUIRED' | 'IDEMPOTENCY_KEY_REQUIRED'
-  | 'INVALID_EVIDENCE' | 'ALREADY_ACTIVE' | 'NO_ACTIVE_REPORT' | 'STALE_HEAD';
+  | 'INVALID_EVIDENCE' | 'ALREADY_ACTIVE' | 'NO_ACTIVE_REPORT' | 'STALE_HEAD'
+  // Database-enforced lineage integrity (V085, Laws 1–3/6/9): the DB rejected a predecessor that is not sequence-1 of the
+  // identical (founder, plan revision, subject) chain. The application normally rejects such attempts earlier with a more
+  // specific reason; this is the backstop mapping so a defective/direct path surfaces a bounded domain error, never raw SQL.
+  | 'LINEAGE_INVALID';
 export class ExecutionReportError extends Error {
   constructor(public readonly reason: ExecutionRejection, message: string) { super(message); this.name = 'ExecutionReportError'; }
 }
