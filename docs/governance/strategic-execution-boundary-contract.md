@@ -75,3 +75,33 @@ execution; the product claims no execution; founder reports + evidence are expli
 stale-head/fork writes fail; correction/withdrawal preserve history; no Plan/Decision/Commitment/Review mutation and no
 Learning/Promotion/Snapshot/recommendation side effects; no progress percentage / completion score / engagement mechanics;
 export complete; deletion zero orphans; genuine rendered Playwright passes; frozen strategist hashes unchanged.
+
+---
+
+## Remediation clarification (2026-07-21) — execution identity is revision-scoped
+
+The initial slice keyed the execution chain on the *logical* plan (revision stored only as metadata), so sequence,
+predecessor, effective state, and projection bled across Plan revisions. This clarification makes execution identity
+**revision-scoped**. Documentation only.
+
+**R1 — Execution belongs to an exact intention.** The identity of an intention is the exact immutable Plan revision
+(`plan_id`). Execution chain identity is **(founder, plan_revision_id, subject)** — never the logical plan.
+
+**R2 — Two revisions are different intentions.** Execution never migrates automatically between revisions. Revision 1 and
+Revision 2 have independent chains; a new report on Revision 2 starts sequence 1.
+
+**R3 — No cross-revision linkage.** No predecessor may reference a report on another revision; no correction or withdrawal
+may target another revision (rejected). The no-fork guarantee is per revision-chain.
+
+**R4 — Effective state is revision-scoped.** The resolver derives one effective state per (revision, subject). A report on
+Revision 2 does not change Revision 1's effective state, and vice-versa; absence on a revision is `NOT_REPORTED` regardless
+of other revisions.
+
+**R5 — No inferred continuation.** Business Brain must never infer execution continuity from stable milestone ids or from a
+prior revision's reports. Stable milestone ids are structural identity only.
+
+**R6 — UI / export isolation.** The UI shows only the viewed revision's execution; the export preserves lineage + effective
+state per revision; reconstructing one revision never reconstructs another's execution.
+
+**R7 — Revised acceptance.** Accept only when chain/sequence/predecessor/effective/API/UI/export identity all include the
+exact plan revision, cross-revision correction/withdrawal are rejected, and Playwright proves revision isolation.

@@ -63,3 +63,41 @@ Overloading Plan status would make "the plan advanced" indistinguishable from "t
 product acted" — the exact conflation this boundary exists to forbid. A separate testimony ledger keeps intention, report,
 evidence, verification, and product-performance permanently distinguishable, append-only, and auditable, and leaves
 product-performed execution as an explicitly unsupported future capability.
+
+---
+
+## Remediation amendment (2026-07-21) — execution identity is REVISION-SCOPED, not revision-tagged
+
+**Verdict of the audit:** the initial slice (`77a5b63`) recorded `plan_id`/`plan_revision` as *metadata* on each event, but
+the execution **chain identity** was keyed on **(founder, logical_plan, subject)** — the unique/no-fork indexes, the
+sequence, the predecessor lookup, the advisory lock, the effective-state resolver, the API subject resolution, the UI
+projection, and the export all operated on the *logical* plan. Consequences: a report on Revision 1's milestone and a later
+report on Revision 2's same milestone id continue **one** chain (sequence spans revisions), and effective state resolves
+**across** revisions. That is a constitutional ambiguity: execution history bled between two *different intentions*.
+
+### Execution belongs to an exact intention (the immutable Plan revision)
+The identity of an intention is the **exact immutable Plan revision** (`plan_id`). Two revisions are constitutionally
+different intentions. Execution **never migrates automatically** between them. Business Brain must never infer "because
+Revision 1 was attempted, Revision 2 inherits that execution," nor "because milestone ids stayed stable, execution
+continues." **Stable milestone ids are structural identity; execution identity additionally requires the exact Plan
+revision.** A founder may deliberately begin executing Revision 2 — that starts a **new, independent** execution chain.
+
+### The required identity (this remediation, V084)
+Execution chain identity becomes **(founder, plan_revision_id, subject)**. Invariants:
+- Revision 1 sequences 1,2,3…; Revision 2 sequences **restart at 1**, independently.
+- No predecessor may reference a report on another revision; no correction/withdrawal may target another revision.
+- The effective-state resolver is **revision-scoped**: Revision 1 = "Reported attempted" and Revision 2 (same milestone id,
+  no reports) = "No execution report" — simultaneously, each unaffected by the other.
+- The UI shows **only** the viewed revision's execution; the export isolates lineage + effective state **per revision**; a
+  consumer reconstructing Revision 1 can never accidentally reconstruct Revision 2's execution.
+
+### Plan-revision id strategy (audited)
+Plan revisions are append-only immutable rows with distinct `plan_id`s; milestone ids may be founder-supplied (stable) or
+regenerated per revision (`m{n}`). Either way, revision-scoping holds: scoping on `plan_id` isolates chains even when
+milestone ids are identical across revisions, and when ids regenerate the subject also differs — so revision isolation is
+enforced independently of the milestone-id strategy.
+
+### Revised acceptance rule
+Accept only when chain identity, sequence, predecessor, effective state, API resolution, UI projection, and export are all
+scoped to `(founder, plan_revision_id, subject)`; correction/withdrawal cannot cross revisions; and Playwright proves that
+Revision 1 shows only Revision 1 execution and Revision 2 shows only Revision 2 execution.

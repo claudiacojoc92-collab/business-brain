@@ -45,3 +45,27 @@ already truthfully separated; the missing piece is founder-reported execution ac
 Plan/Decision/Commitment/Review unchanged; no inferred/product execution; deterministic lineage; stale-head/fork rejected;
 append-only; no downstream side effects; no progress/score/engagement mechanics; frozen strategist engine untouched.
 Deferred: product execution, connectors/receipts, Review integration, outcome inference, scoring, memory/graphs/embeddings.
+
+---
+
+## Remediation architecture (2026-07-21) — revision-scoped execution identity
+
+**Audit (code-traced):** chain identity was `(founder, plan_logical_id, subject)` across V083 `uniq_exr_chain_sequence` /
+`idx_exr_effective`, the repo advisory lock + `listForPlan`, the API `resolveExecutionSubject` (`planRepo.getEffective`),
+the effective route, the UI `getEffectiveExecution(logicalPlanId)`, and the export ordering. `plan_id`/`plan_revision` were
+metadata only → **classification B (revision-tagged)**.
+
+**Changed to `(founder, plan_id, subject)`:**
+- **V084** — drop + recreate the chain/effective indexes on `plan_id` (revision) instead of `plan_logical_id`:
+  `uniq_exr_chain_sequence (founder_id, plan_id, subject_type, subject_id, report_sequence)` +
+  `idx_exr_effective (founder_id, plan_id, subject_type, subject_id, report_sequence DESC)`. No data migration (0 rows).
+- **Repository** — advisory lock keyed on `plan.id`; `listForRevision(founderId, planId)` (by `plan_id`) replaces the
+  logical listing for chain/effective/head; `record` computes lineage from the revision's events only.
+- **API** — new `planRepo.getByRevisionId(founderId, planRevisionId)`; execution routes take the **exact plan revision id**
+  (`:planId`); subject validated against that revision's milestones; correction/withdrawal require the referenced report's
+  `plan_id` to equal the resolved revision (cross-revision → rejected). Effective route lists reports for that `plan_id`.
+- **UI** — `PlansPanel`/`ExecutionAccounting` call execution routes with `plan.planId` (the revision id); each revision
+  shows only its own execution.
+- **Export** — ordered by `plan_id, subject, report_sequence` so revisions are isolated.
+
+**Invariant:** no chain, sequence, predecessor, effective projection, UI view, or export spans two plan revisions.
