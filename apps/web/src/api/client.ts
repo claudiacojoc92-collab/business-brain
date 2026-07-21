@@ -625,6 +625,29 @@ export const contestLearning = (id: string, i: LifecycleActionInput) => lifecycl
 export const supersedeLearning = (id: string, i: LifecycleActionInput) => lifecycleAction('supersede', id, i);
 export const retireLearning = (id: string, i: LifecycleActionInput) => lifecycleAction('retire', id, i);
 
+// ─── Strategic Learning Promotion Gate (ADR-013) — the ONLY explicit path a learning influences BU/FSC ────────
+// Founder-explicit promotion of an EXACT learning revision into a target. Writes to no other record; regenerates nothing.
+export type PromotionTarget = 'BUSINESS_UNDERSTANDING' | 'FOUNDER_STRATEGIC_CONTEXT';
+export type PromotionScope = 'OFFER' | 'CUSTOMER' | 'PRICING' | 'POSITIONING' | 'MESSAGING' | 'ACQUISITION' | 'RETENTION' | 'BUSINESS' | 'FOUNDER' | 'OTHER';
+export interface PromotionView {
+  promotionId: string; target: PromotionTarget; promotionAction: 'PROMOTE' | 'REPLACE' | 'REMOVE'; scope: PromotionScope; rationale: string;
+  learning: { logicalLearningId: string; revisionId: string; revision: number; statement?: string | null; confidence?: string | null; lifecycleAction?: string | null };
+  createdAt: string; doesNotModifyLearning: true; regeneratesRecommendations: false;
+}
+export interface PromotionActionInput { target: PromotionTarget; scope: PromotionScope; rationale: string; idempotencyKey: string; }
+async function promotionAction(verb: 'promote' | 'replace-promotion' | 'remove-promotion', revisionId: string, input: PromotionActionInput): Promise<PromotionView> {
+  const { promotion } = await request<{ promotion: PromotionView }>(`strategy/learnings/revision/${encodeURIComponent(revisionId)}/${verb}`, { method: 'POST', body: JSON.stringify(input) });
+  return promotion;
+}
+export const promoteRevision = (revisionId: string, i: PromotionActionInput) => promotionAction('promote', revisionId, i);
+export const replacePromotion = (revisionId: string, i: PromotionActionInput) => promotionAction('replace-promotion', revisionId, i);
+export const removePromotion = (revisionId: string, i: PromotionActionInput) => promotionAction('remove-promotion', revisionId, i);
+/** GET the effective promoted set for a target (derived; latest event per thread wins). */
+export async function getPromotedInto(target: 'business-understanding' | 'founder-strategic-context'): Promise<PromotionView[]> {
+  const { promoted } = await request<{ promoted: PromotionView[] }>(`strategy/promotions/${target}`);
+  return promoted;
+}
+
 // ─── Founder Strategic Context: founder-declared strategic operating conditions (Wave 4, slice 1) ──────────
 // Five kinds (GOAL/CONSTRAINT/RESOURCE/STRATEGIC_PREFERENCE/DECISION_HORIZON). Append-only, temporal, scoped.
 // Every write is an explicit founder action — nothing is inferred or persisted without confirmation.

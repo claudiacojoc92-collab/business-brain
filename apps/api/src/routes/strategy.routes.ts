@@ -22,6 +22,8 @@ import { assertPlanAdmissible, toPlanView, linkedCommitmentStatus, PlanValidatio
 import { assertReviewAdmissible, toReviewView, linkedCommitmentStatusForReview, ReviewValidationError, type PlanReviewInput, type ReviewObservation, type EvidenceReference, type ContextChange } from '../business-model/strategic-plan-review';
 import { assertLearningAdmissible, toLearningView, LearningValidationError, deriveLifecycleStatus, type LearningInput, type ObservationSource, type LearningLifecycleAction } from '../business-model/strategic-learning';
 import { LearningLifecycleError, type LifecycleTransitionInput } from '../business-model/strategic-learning-lifecycle';
+import { PgLearningPromotionRepository } from '../business-model/pg-learning-promotion.repository';
+import { toPromotionView, PromotionValidationError, type PromotionInput, type PromotionAction, type PromotionTarget } from '../business-model/strategic-learning-promotion';
 import { AnthropicStrategyModel } from '../business-model/anthropic-strategy.model';
 import { strategyModelConfig } from '../business-model/model-config';
 import { startStrategicSessionWorker } from '../business-model/strategic-session.worker';
@@ -43,6 +45,7 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
   const planRepo = new PgStrategicPlanRepository(db);
   const planReviewRepo = new PgStrategicPlanReviewRepository(db);
   const learningRepo = new PgStrategicLearningRepository(db);
+  const promotionRepo = new PgLearningPromotionRepository(db);
   const assembler = {
     understanding: new PgUnderstandingRepository(db), conclusionResponses: new PgConclusionResponseRepository(db),
     entities: new PgMarketEntityRepository(db), findings: new PgMarketFindingRepository(db),
@@ -551,5 +554,50 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
     const rev = await learningRepo.getRevisionById(founderId, (request.params as { revisionId: string }).revisionId);
     if (!rev) { await reply.code(404).send({ error: 'not found' }); return; }
     await reply.send({ learning: toLearningView(rev) });
+  });
+
+  // ── Strategic Learning Promotion Gate (ADR-013) — the ONLY explicit path a learning influences BU/FSC ──────
+  // Founder-explicit PROMOTE/REPLACE/REMOVE of an EXACT learning revision into a target. Writes to NEITHER
+  // business.understanding NOR founder_strategic_context_item; edits no chain record; regenerates nothing.
+  const promotionHandler = (action: PromotionAction) => async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const revision = await learningRepo.getRevisionById(founderId, (request.params as { revisionId: string }).revisionId); // founder-owned only → 404
+    if (!revision) { await reply.code(404).send({ error: 'not found' }); return; }
+    const b = (request.body ?? {}) as Record<string, unknown>;
+    const input: PromotionInput = { target: String(b['target'] ?? '') as PromotionTarget, scope: String(b['scope'] ?? '') as PromotionInput['scope'], rationale: String(b['rationale'] ?? ''), idempotencyKey: String(b['idempotencyKey'] ?? '') };
+    let event;
+    try { event = await promotionRepo.record(founderId, action, revision, input, new Date()); }
+    catch (e) {
+      if (e instanceof PromotionValidationError) { const conflict = e.reason === 'ALREADY_PROMOTED' || e.reason === 'NOT_PROMOTED'; await reply.code(conflict ? 409 : 400).send({ error: { code: e.reason, message: e.message }, reason: e.reason }); return; }
+      throw e;
+    }
+    await reply.code(201).send({ promotion: toPromotionView(event) });
+  };
+  server.post('/strategy/learnings/revision/:revisionId/promote', promotionHandler('PROMOTE'));
+  server.post('/strategy/learnings/revision/:revisionId/replace-promotion', promotionHandler('REPLACE'));
+  server.post('/strategy/learnings/revision/:revisionId/remove-promotion', promotionHandler('REMOVE'));
+
+  async function effectivePromotions(founderId: string, target: PromotionTarget) {
+    const events = await promotionRepo.getEffective(founderId, target);
+    return Promise.all(events.map(async (e) => {
+      const rev = await learningRepo.getRevisionById(founderId, e.learningRevisionId);
+      return { ...toPromotionView(e), learning: { ...toPromotionView(e).learning, statement: rev?.learningStatement ?? null, confidence: rev?.confidence ?? null, lifecycleAction: rev?.lifecycleAction ?? null } };
+    }));
+  }
+  server.get('/strategy/promotions/business-understanding', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    await reply.send({ target: 'BUSINESS_UNDERSTANDING', promoted: await effectivePromotions(founderId, 'BUSINESS_UNDERSTANDING') });
+  });
+  server.get('/strategy/promotions/founder-strategic-context', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    await reply.send({ target: 'FOUNDER_STRATEGIC_CONTEXT', promoted: await effectivePromotions(founderId, 'FOUNDER_STRATEGIC_CONTEXT') });
+  });
+  server.get('/strategy/promotions', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    await reply.send({ promotions: (await promotionRepo.listEvents(founderId)).map(toPromotionView) });
   });
 }

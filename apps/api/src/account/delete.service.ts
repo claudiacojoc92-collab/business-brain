@@ -27,9 +27,11 @@ export async function deleteFounderAccount(
     if (!founder) return { deleted: false }; // unknown / already-deleted → idempotent no-op success
     const email = founder.email as string;
 
-    // Strategic Learning revisions are append-only with a BEFORE-DELETE guard (V078). Founder-account deletion (Law 26)
-    // is the ONLY sanctioned removal path — opt in for this transaction so the bulk delete below is permitted.
+    // Strategic Learning revisions (V078) and Promotion events (V079) are append-only with BEFORE-DELETE guards.
+    // Founder-account deletion is the ONLY sanctioned removal path — opt in so the bulk deletes below are permitted.
     await sql`SET LOCAL bb.allow_learning_delete = 'on'`.execute(tx);
+    await sql`SET LOCAL bb.allow_promotion_delete = 'on'`.execute(tx);
+    await tx.deleteFrom('business.learning_promotion_event').where('founder_id', '=', founderId).execute(); // ADR-013 (V079) — promotion ledger
 
     await tx.deleteFrom('evidence.fragments').where('founder_id', '=', founderId).execute();
     await tx.deleteFrom('app.oauth_credentials').where('founder_id', '=', founderId).execute(); // destroys encrypted tokens

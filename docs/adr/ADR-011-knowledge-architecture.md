@@ -221,7 +221,11 @@ smuggle them in without a superseding gate). Each category names what it is and,
   table `business.strategic_learning_record` (V076 + V077), append-only; no model role this slice. A founder-directed
   **single-thread lifecycle** (`CREATE → REFINE/CONTEST/SUPERSEDE/RETIRE`, V078) is governed by
   [ADR-012](ADR-012-strategic-learning-lifecycle.md) (dual-layer; inter-thread relationships deferred); CONTEST is a
-  single-thread usability downgrade, not an inter-thread relationship. It is **not** generic Strategic
+  single-thread usability downgrade, not an inter-thread relationship. The **only** explicit path a learning influences
+  Business Understanding or Founder Strategic Context is the **Promotion Gate** ([ADR-013](ADR-013-strategic-learning-promotion-gate.md),
+  V079): a founder promotes an EXACT learning revision via an append-only `PromotionEvent` ledger (effective set derived
+  from events, never the latest revision); promotion is governance, not evidence, writes to neither BU nor FSC content,
+  and regenerates nothing. It is **not** generic Strategic
   Memory (that still requires the §8 admission + §10 gate).
 
 ### §2 — Canonical matrix

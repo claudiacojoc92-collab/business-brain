@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import {
-  createStrategySession, getStrategySession, listStrategySessions, retryStrategySession, respondToStrategy, createDecision, createCommitment, createPlan, createPlanReview, createLearning, listLearningThreads, getLearningThread, refineLearning, contestLearning, supersedeLearning, retireLearning, ApiError,
+  createStrategySession, getStrategySession, listStrategySessions, retryStrategySession, respondToStrategy, createDecision, createCommitment, createPlan, createPlanReview, createLearning, listLearningThreads, getLearningThread, refineLearning, contestLearning, supersedeLearning, retireLearning, promoteRevision, replacePromotion, removePromotion, getPromotedInto, ApiError,
   type StrategySessionView, type StrategyBoundary, type StrategicRecommendation, type InsufficientStrategicEvidence,
   type StrategyResponseType, type EpistemicKind, type Band, type EvidenceReference,
   type DecisionView, type DecisionAlternative, type ChosenOptionSource,
@@ -10,6 +10,7 @@ import {
   type PlanView, type PlanScope,
   type PlanReviewView, type ReviewConclusion, type ReviewDisposition, type AssumptionAssessment, type DependencyAssessment, type MilestoneAssessment,
   type LearningView, type LearningCategory, type LearningConfidence, type LearningScope, type LearningThreadView,
+  type PromotionTarget, type PromotionScope, type PromotionView,
 } from '../api/client';
 import { AppShell, Button, Thinking } from '../system/ui';
 
@@ -1031,8 +1032,52 @@ function LifecycleForm({ thread, verb, onDone, onCancel, on401 }: { thread: Lear
   );
 }
 
-function ThreadCard({ thread, on401 }: { thread: LearningThreadView; on401: (e: unknown) => void }) {
+const PROMOTION_SCOPES: { v: PromotionScope; label: string }[] = [
+  { v: 'OFFER', label: 'Offer' }, { v: 'CUSTOMER', label: 'Customer' }, { v: 'PRICING', label: 'Pricing' }, { v: 'POSITIONING', label: 'Positioning' },
+  { v: 'MESSAGING', label: 'Messaging' }, { v: 'ACQUISITION', label: 'Acquisition' }, { v: 'RETENTION', label: 'Retention' },
+  { v: 'BUSINESS', label: 'The whole business' }, { v: 'FOUNDER', label: 'Founder strategy' }, { v: 'OTHER', label: 'Something else' },
+];
+const TARGET_LABEL: Record<PromotionTarget, string> = { BUSINESS_UNDERSTANDING: 'Business Understanding', FOUNDER_STRATEGIC_CONTEXT: 'Founder Strategic Context' };
+
+// Promotion is governance, not evidence — an explicit founder act pinning an EXACT learning revision into BU/FSC. It
+// modifies nothing else and regenerates nothing.
+function PromotionForm({ revisionId, target, action, onDone, onCancel, on401 }: { revisionId: string; target: PromotionTarget; action: 'promote' | 'replace' | 'remove'; onDone: () => void; onCancel: () => void; on401: (e: unknown) => void }) {
+  const [scope, setScope] = useState<PromotionScope | ''>('');
+  const [rationale, setRationale] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const submit = async () => {
+    setSaving(true); setError(null);
+    try {
+      const input = { target, scope: scope as PromotionScope, rationale: rationale.trim(), idempotencyKey: (globalThis.crypto?.randomUUID?.() ?? String(Date.now())) };
+      if (action === 'promote') await promoteRevision(revisionId, input);
+      else if (action === 'replace') await replacePromotion(revisionId, input);
+      else await removePromotion(revisionId, input);
+      try { window.dispatchEvent(new Event('bb:promotion-changed')); } catch { /* noop */ }
+      onDone();
+    } catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setError(e instanceof ApiError ? e.message : 'Could not save this promotion.'); }
+    finally { setSaving(false); }
+  };
+  const verb = action === 'promote' ? 'Promote to' : action === 'replace' ? 'Replace' : 'Remove from';
+  return (
+    <div data-testid="promotion-form" style={{ marginTop: 6, padding: 10, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }}>
+      <span style={sectionLabel}>{verb} {TARGET_LABEL[target]}</span>
+      <p style={{ ...meta, marginTop: 2 }}>This affects {TARGET_LABEL[target]}. This does NOT modify the learning. This does NOT modify review, plan, commitment or decision.</p>
+      <label style={lblStyle}>What is this promotion about?<br />
+        <select data-testid="promotion-scope" aria-label="Promotion scope" value={scope} onChange={(e) => setScope(e.target.value as PromotionScope)} style={selStyle}><option value="">Choose…</option>{PROMOTION_SCOPES.map((s) => <option key={s.v} value={s.v}>{s.label}</option>)}</select></label>
+      <label style={{ ...lblStyle, marginTop: 8 }}>Why should this shape your {TARGET_LABEL[target]}?<textarea data-testid="promotion-rationale" value={rationale} onChange={(e) => setRationale(e.target.value)} rows={2} style={taStyle} /></label>
+      {error && <p data-testid="promotion-error" style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--danger-ink, #a33)', marginTop: 6 }}>{error}</p>}
+      <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+        <button type="button" data-testid="promotion-submit" disabled={saving || !scope || !rationale.trim()} onClick={() => void submit()} style={{ ...lcBtn, background: 'var(--ink)', color: 'var(--surface)', borderColor: 'var(--ink)' }}>{saving ? 'Saving…' : `${verb} ${TARGET_LABEL[target]}`}</button>
+        <button type="button" onClick={onCancel} style={lcBtn}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function ThreadCard({ thread, promoted, on401 }: { thread: LearningThreadView; promoted: Partial<Record<PromotionTarget, string>>; on401: (e: unknown) => void }) {
   const [open, setOpen] = useState<null | 'refine' | 'contest' | 'supersede' | 'retire'>(null);
+  const [promo, setPromo] = useState<null | { revisionId: string; target: PromotionTarget; action: 'promote' | 'replace' | 'remove' }>(null);
   const [history, setHistory] = useState<LearningThreadView[] | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const loadHistory = async () => {
@@ -1040,6 +1085,8 @@ function ThreadCard({ thread, on401 }: { thread: LearningThreadView; on401: (e: 
     catch (e) { if (e instanceof ApiError && e.status === 401) on401(e); }
   };
   const retired = thread.lifecycleStatus === 'RETIRED';
+  const targets: PromotionTarget[] = ['BUSINESS_UNDERSTANDING', 'FOUNDER_STRATEGIC_CONTEXT'];
+  const tkey = (t: PromotionTarget) => (t === 'BUSINESS_UNDERSTANDING' ? 'bu' : 'fsc');
   return (
     <div data-testid={`thread-${thread.logicalLearningId}`} style={{ marginTop: 'var(--sp-3)', paddingTop: 'var(--sp-2)', borderTop: '1px dotted var(--line-2)' }}>
       <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink-1)' }}>“{thread.learningStatement}”</p>
@@ -1065,31 +1112,67 @@ function ThreadCard({ thread, on401 }: { thread: LearningThreadView; on401: (e: 
               <p style={{ ...meta }}>rev {r.revision} · {r.lifecycleAction} → {nice(r.lifecycleStatus)} · {nice(r.confidence)}{r.lifecycleReason ? ` · ${r.lifecycleReason}` : ''}</p>
               <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-xs)', color: 'var(--ink-2)' }}>“{r.learningStatement}”</p>
               {r.replacementSummary && <p style={{ ...meta }}>Replacement: {r.replacementSummary} · Retained: {r.retainedValidity}</p>}
+              {/* Promotion controls per revision (ADR-013) */}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+                {targets.map((t) => {
+                  const pinned = promoted[t];
+                  if (!pinned) return <button key={t} type="button" data-testid={`promote-${tkey(t)}-rev-${r.revision}`} onClick={() => setPromo({ revisionId: r.learningId, target: t, action: 'promote' })} style={lcBtn}>Promote to {TARGET_LABEL[t]}</button>;
+                  if (pinned === r.learningId) return <span key={t} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><span data-testid={`promoted-here-${tkey(t)}`} style={{ ...meta }}>✓ Promoted to {TARGET_LABEL[t]}</span><button type="button" data-testid={`remove-${tkey(t)}-rev-${r.revision}`} onClick={() => setPromo({ revisionId: r.learningId, target: t, action: 'remove' })} style={lcBtn}>Remove</button></span>;
+                  return <button key={t} type="button" data-testid={`replace-${tkey(t)}-rev-${r.revision}`} onClick={() => setPromo({ revisionId: r.learningId, target: t, action: 'replace' })} style={lcBtn}>Replace {TARGET_LABEL[t]} with this revision</button>;
+                })}
+              </div>
             </div>
           ))}
         </div>
       )}
+      {promo && <PromotionForm revisionId={promo.revisionId} target={promo.target} action={promo.action} onDone={() => setPromo(null)} onCancel={() => setPromo(null)} on401={on401} />}
     </div>
   );
 }
 
-// Page-level, persisted list of the founder's learning THREADS (effective revision each). Survives refresh; refetches on
-// keep/lifecycle events. Each thread exposes its lifecycle status, revision history, and the four lifecycle actions.
+function PromotedInto({ target, items }: { target: PromotionTarget; items: PromotionView[] }) {
+  if (!items.length) return <p data-testid={`promoted-${target === 'BUSINESS_UNDERSTANDING' ? 'bu' : 'fsc'}-empty`} style={{ ...meta, marginTop: 4 }}>Nothing promoted into {TARGET_LABEL[target]} yet.</p>;
+  return (
+    <div data-testid={`promoted-${target === 'BUSINESS_UNDERSTANDING' ? 'bu' : 'fsc'}`} style={{ marginTop: 4 }}>
+      {items.map((p) => (
+        <div key={p.promotionId} data-testid={`promoted-${target === 'BUSINESS_UNDERSTANDING' ? 'bu' : 'fsc'}-${p.learning.logicalLearningId}`} style={{ marginTop: 6 }}>
+          <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink-1)' }}>“{p.learning.statement ?? ''}”</p>
+          <p style={{ ...meta, marginTop: 2 }}>Promoted revision {p.learning.revision} · about {nice(p.scope)} · {p.rationale}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Page-level, persisted list of the founder's learning THREADS + the promotion ledger's effective sets. Survives refresh.
 function LearningsList({ on401 }: { on401: (e: unknown) => void }) {
   const [threads, setThreads] = useState<LearningThreadView[] | null>(null);
+  const [bu, setBu] = useState<PromotionView[]>([]);
+  const [fsc, setFsc] = useState<PromotionView[]>([]);
   const load = useCallback(async () => {
-    try { setThreads(await listLearningThreads()); }
-    catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setThreads([]); }
+    try {
+      const [t, b, f] = await Promise.all([listLearningThreads(), getPromotedInto('business-understanding'), getPromotedInto('founder-strategic-context')]);
+      setThreads(t); setBu(b); setFsc(f);
+    } catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setThreads([]); }
   }, [on401]);
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => { const h = () => void load(); for (const ev of ['bb:learning-kept', 'bb:lifecycle-changed']) window.addEventListener(ev, h); return () => { for (const ev of ['bb:learning-kept', 'bb:lifecycle-changed']) window.removeEventListener(ev, h); }; }, [load]);
+  useEffect(() => { const h = () => void load(); const evs = ['bb:learning-kept', 'bb:lifecycle-changed', 'bb:promotion-changed']; for (const ev of evs) window.addEventListener(ev, h); return () => { for (const ev of evs) window.removeEventListener(ev, h); }; }, [load]);
 
   if (!threads || threads.length === 0) return null;
+  const promotedFor = (logicalId: string): Partial<Record<PromotionTarget, string>> => ({
+    BUSINESS_UNDERSTANDING: bu.find((p) => p.learning.logicalLearningId === logicalId)?.learning.revisionId,
+    FOUNDER_STRATEGIC_CONTEXT: fsc.find((p) => p.learning.logicalLearningId === logicalId)?.learning.revisionId,
+  });
   return (
     <section data-testid="learnings-list" style={{ marginTop: 'var(--sp-5)', paddingTop: 'var(--sp-4)', borderTop: '1px solid var(--line)' }}>
       <span style={sectionLabel}>Your durable strategic learnings</span>
-      <p style={{ ...meta, marginTop: 2 }}>What you’ve explicitly decided to keep from your reviews. You can refine, contest, supersede, or retire each — every change keeps the full history and changes nothing else.</p>
-      {threads.map((t) => <ThreadCard key={t.logicalLearningId} thread={t} on401={on401} />)}
+      <p style={{ ...meta, marginTop: 2 }}>Refine, contest, supersede, or retire each — every change keeps the full history. You can also promote a specific revision into your Business Understanding or Founder Strategic Context (rarely — that’s an explicit governance act).</p>
+      {threads.map((t) => <ThreadCard key={t.logicalLearningId} thread={t} promoted={promotedFor(t.logicalLearningId)} on401={on401} />)}
+      <div style={{ marginTop: 'var(--sp-4)', paddingTop: 'var(--sp-3)', borderTop: '1px solid var(--line)' }}>
+        <span style={sectionLabel}>Promoted into Business Understanding</span>
+        <PromotedInto target="BUSINESS_UNDERSTANDING" items={bu} />
+        <div style={{ marginTop: 'var(--sp-3)' }}><span style={sectionLabel}>Promoted into Founder Strategic Context</span><PromotedInto target="FOUNDER_STRATEGIC_CONTEXT" items={fsc} /></div>
+      </div>
     </section>
   );
 }
