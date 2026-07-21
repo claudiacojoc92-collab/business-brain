@@ -58,6 +58,14 @@ function assemblerDeps(): AssemblerDeps {
 function stubModel(behavior: (ctx: StrategicContext) => StrategicOutcome | null): StrategyModel {
   return { version: 'stub:strategy-1', modelId: 'stub', promptVersion: 'strategy-1', schemaVersion: 'strategy-recommendation-1', reason: async (ctx) => behavior(ctx) };
 }
+// Deterministically claim THIS exact session (PROCESSING) — never the global claimQueued/delete-other-queued dance,
+// which races with other live-test files running in parallel on the shared session table.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function claimSpecific(repo: PgStrategicSessionRepository, founderId: string, id: string): Promise<any> {
+  const now = new Date();
+  await db.updateTable('business.strategic_session').set({ status: 'PROCESSING', claimed_at: now.toISOString(), lease_expires_at: new Date(now.getTime() + 5 * 60 * 1000).toISOString(), started_at: now.toISOString(), updated_at: now.toISOString() }).where('id', '=', id).where('founder_id', '=', founderId).where('status', '=', 'QUEUED').execute();
+  return repo.getById(founderId, id);
+}
 function workerDeps(model: StrategyModel): StrategicWorkerDeps {
   return { sessionRepo: new PgStrategicSessionRepository(db), assembler: assemblerDeps(), model, leaseMs: 5 * 60 * 1000, now: () => new Date() };
 }
@@ -128,9 +136,7 @@ describe('strategy §LIVE — durable worker: atomic publication, insufficient, 
   async function queueAndClaim(founderId: string, question: string, subtype: string): Promise<{ repo: PgStrategicSessionRepository; id: string; claimed: NonNullable<Awaited<ReturnType<PgStrategicSessionRepository['claimQueued']>>> }> {
     const repo = new PgStrategicSessionRepository(db);
     const created = await repo.create(founderId, { strategicJob: 'PRIORITY_DECISION', subtype: subtype as never, questionText: question, modelId: 'stub', promptVersion: 'strategy-1', schemaVersion: 'strategy-recommendation-1' }, new Date());
-    // isolate this session from any other QUEUED so the global oldest-claim lands on it
-    await db.deleteFrom('business.strategic_session').where('status', '=', 'QUEUED').where('id', '!=', created.id).execute();
-    const claimed = await repo.claimQueued(new Date(), 5 * 60 * 1000);
+    const claimed = await claimSpecific(repo, founderId, created.id);
     expect(claimed?.id).toBe(created.id); expect(claimed?.status).toBe('PROCESSING');
     return { repo, id: created.id, claimed: claimed! };
   }
@@ -177,8 +183,7 @@ describe('strategy §LIVE — durable worker: atomic publication, insufficient, 
     // retry → QUEUED again (attempt bumped), then a null parse also fails closed to MODEL_FAILED.
     const requeued = await repo.retry(founderId, id, new Date());
     expect(requeued?.status).toBe('QUEUED'); expect(requeued?.attemptCount).toBe(2);
-    await db.deleteFrom('business.strategic_session').where('status', '=', 'QUEUED').where('id', '!=', id).execute();
-    const claimed2 = await repo.claimQueued(new Date(), 5 * 60 * 1000);
+    const claimed2 = await claimSpecific(repo, founderId, id); // deterministic (no global claimQueued race)
     const done2 = await processSession(claimed2!, workerDeps(stubModel(() => null)));
     expect(done2.status).toBe('FAILED'); expect(done2.failureCategory).toBe('MODEL_FAILED');
   });
@@ -226,8 +231,7 @@ describe('strategy §LIVE — routes end-to-end + append-only responses', () => 
     // drive a session to READY out-of-band (worker is off under test)
     const repo = new PgStrategicSessionRepository(db);
     const created = await repo.create(founderId, { strategicJob: 'PRIORITY_DECISION', subtype: 'OFFER_PRIORITY', questionText: 'Which offer should I focus pricing on this quarter?', modelId: 'stub', promptVersion: 'strategy-1', schemaVersion: 'strategy-recommendation-1' }, new Date());
-    await db.deleteFrom('business.strategic_session').where('status', '=', 'QUEUED').where('id', '!=', created.id).execute();
-    const claimed = await repo.claimQueued(new Date(), 5 * 60 * 1000);
+    const claimed = await claimSpecific(repo, founderId, created.id); // deterministic (no global claimQueued race)
     const rec = normalizeStrategicOutput({
       recommendation: { title: 'Lead with the audit offer', action: 'Make the audit the single homepage CTA', horizon: '30 days' },
       reasoning: { founderDeclarations: [{ kind: 'FOUNDER_DECLARATION', statement: 'The audit converts best.', refId: 'c-1' }] },

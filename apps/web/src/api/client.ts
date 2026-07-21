@@ -427,6 +427,47 @@ export async function getDecision(logicalDecisionId: string): Promise<{ decision
   return request(`strategy/decisions/${encodeURIComponent(logicalDecisionId)}`);
 }
 
+// ─── Strategic Commitment Record: a founder-EXPLICIT, bounded declaration that a decision governs conduct ───
+// A commitment is NOT a decision, NOT a plan or tasks, NOT a promise to Business Brain. It references an exact
+// decision revision, is bounded (scope + review/expiry/exit), and is append-only.
+export type CommitmentStatus = 'ACTIVE' | 'SUPERSEDED' | 'RELEASED' | 'RETIRED' | 'EXPIRED';
+export type CommitmentScope = 'BUSINESS' | 'MARKETING' | 'STRATEGIC_JOB' | 'CHANNEL' | 'OFFER' | 'POSITIONING' | 'DECISION_SCOPE';
+export type Exclusivity = 'EXCLUSIVE' | 'DEPRIORITIZES_ALTERNATIVES' | 'PREFERRED_DIRECTION' | 'PARALLEL_EXPERIMENT_ALLOWED' | 'UNKNOWN';
+export type LinkedDecisionStatus = 'CURRENT' | 'DECISION_SUPERSEDED' | 'DECISION_REVERSED' | 'DECISION_RETIRED';
+export interface ResourceEnvelopeItem { kind: 'TIME' | 'BUDGET' | 'TEAM_CAPACITY' | 'FOUNDER_ATTENTION' | 'TEST_DURATION'; availability: 'FOUNDER_DECLARED' | 'UNKNOWN' | 'UNAVAILABLE'; boundaryType: 'MAXIMUM' | 'INTENDED_ALLOCATION'; amount: string | null }
+export interface AcceptedCost { statement: string; source: 'FOUNDER_CONFIRMED' | 'RECOMMENDATION_DERIVED'; confirmed: boolean }
+export interface CommitmentView {
+  commitmentId: string; logicalCommitmentId: string; revision: number; status: CommitmentStatus; lifecycle: string;
+  statement: string; scope: CommitmentScope; exclusivity: Exclusivity; governedBehavior: string[];
+  resourceEnvelope: ResourceEnvelopeItem[]; acceptedCosts: AcceptedCost[]; unknownCosts: string[];
+  exitConditions: string[]; reconsiderationConditions: string[]; acknowledgedInsufficientEvidence: boolean;
+  startsAt: string; reviewAt: string | null; reviewTrigger: string | null; expiresAt: string | null;
+  decision: { recordId: string; logicalId: string; revision: number; schemaVersion: string };
+  recommendationSessionId: string | null; recommendationSchemaVersion: string | null; provenanceManifestVersion: string | null;
+  alignmentAtCommitment: string; groundingStatusAtCommitment: string | null; authorship: Record<string, string>;
+  createdAt: string; commitmentSchemaVersion: string; linkedDecisionStatus?: LinkedDecisionStatus; notAPlan: true;
+}
+export interface CreateCommitmentInput {
+  statement: string; scope: CommitmentScope; exclusivity: Exclusivity;
+  governedBehavior?: string[]; resourceEnvelope?: ResourceEnvelopeItem[]; acceptedCosts?: AcceptedCost[]; unknownCosts?: string[];
+  exitConditions?: string[]; reconsiderationConditions?: string[]; acknowledgedInsufficientEvidence?: boolean;
+  startsAt?: string | null; reviewAt?: string | null; reviewTrigger?: string | null; expiresAt?: string | null; idempotencyKey: string;
+}
+/** POST /strategy/decisions/:logicalDecisionId/commitments — record ONE founder commitment from a decision. */
+export async function createCommitment(logicalDecisionId: string, input: CreateCommitmentInput): Promise<CommitmentView> {
+  const { commitment } = await request<{ commitment: CommitmentView }>(`strategy/decisions/${encodeURIComponent(logicalDecisionId)}/commitments`, { method: 'POST', body: JSON.stringify(input) });
+  return commitment;
+}
+/** GET /strategy/commitments — the founder's effective commitments, newest first. */
+export async function listCommitments(): Promise<CommitmentView[]> {
+  const { commitments } = await request<{ commitments: CommitmentView[] }>('strategy/commitments');
+  return commitments;
+}
+/** GET /strategy/commitments/:logicalCommitmentId — the commitment + append-only history + linked-decision status. */
+export async function getCommitment(logicalCommitmentId: string): Promise<{ commitment: CommitmentView; history: CommitmentView[] }> {
+  return request(`strategy/commitments/${encodeURIComponent(logicalCommitmentId)}`);
+}
+
 // ─── Founder Strategic Context: founder-declared strategic operating conditions (Wave 4, slice 1) ──────────
 // Five kinds (GOAL/CONSTRAINT/RESOURCE/STRATEGIC_PREFERENCE/DECISION_HORIZON). Append-only, temporal, scoped.
 // Every write is an explicit founder action — nothing is inferred or persisted without confirmation.

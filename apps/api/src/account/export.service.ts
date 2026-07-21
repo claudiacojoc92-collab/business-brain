@@ -39,6 +39,7 @@ export interface FounderExport {
   strategicResponses: unknown[];
   strategicContext: unknown[];
   strategicDecisions: unknown[];
+  strategicCommitments: unknown[];
   meta: { note: string };
 }
 
@@ -137,6 +138,12 @@ export async function buildFounderExport(args: {
     .select(['id', 'logical_decision_id', 'revision', 'lifecycle', 'supersedes_id', 'chosen_option', 'decision_statement', 'rationale', 'alternatives_considered', 'trade_offs_accepted', 'acknowledged_insufficient_evidence', 'review_trigger', 'recommendation_session_id', 'recommendation_schema_version', 'provenance_manifest_version', 'business_understanding_version', 'decision_horizon', 'alignment', 'grounding_status_at_decision', 'scope', 'reversibility', 'uncertainty', 'authorship', 'decided_at', 'review_at', 'created_at'])
     .where('founder_id', '=', founderId).orderBy('logical_decision_id', 'asc').orderBy('revision', 'asc').execute()) as Array<Record<string, unknown>>;
 
+  // ADR-011 cat 11 — Strategic Commitment Records: complete append-only revision history; founder-authored + system-
+  // derived material labelled via `authorship`; exact decision revision + session/manifest referenced (not duplicated).
+  const strategicCommitments = (await db.selectFrom('business.strategic_commitment_record')
+    .select(['id', 'logical_commitment_id', 'revision', 'lifecycle', 'supersedes_id', 'decision_record_id', 'decision_logical_id', 'decision_revision', 'decision_schema_version', 'recommendation_session_id', 'recommendation_schema_version', 'provenance_manifest_version', 'alignment_at_commitment', 'grounding_status_at_commitment', 'statement', 'scope', 'exclusivity', 'governed_behavior', 'resource_envelope', 'accepted_costs', 'unknown_costs', 'exit_conditions', 'reconsideration_conditions', 'acknowledged_insufficient_evidence', 'starts_at', 'review_at', 'review_trigger', 'expires_at', 'authorship', 'created_at'])
+    .where('founder_id', '=', founderId).orderBy('logical_commitment_id', 'asc').orderBy('revision', 'asc').execute()) as Array<Record<string, unknown>>;
+
   // Run history — founder-safe (error CATEGORY only; never the internal error_detail).
   const runs = (await db
     .selectFrom('business.understanding_run')
@@ -205,6 +212,10 @@ export async function buildFounderExport(args: {
     strategicDecisions: strategicDecisions.map((d) => {
       const j = (v: unknown) => (v == null ? null : typeof v === 'string' ? JSON.parse(v) : v);
       return { id: String(d['id']), logicalDecisionId: String(d['logical_decision_id']), revision: Number(d['revision']), lifecycle: String(d['lifecycle']), supersedesId: (d['supersedes_id'] as string | null) ?? null, chosenOption: j(d['chosen_option']), decisionStatement: String(d['decision_statement']), rationale: (d['rationale'] as string | null) ?? null, alternativesConsidered: j(d['alternatives_considered']), tradeOffsAccepted: j(d['trade_offs_accepted']), acknowledgedInsufficientEvidence: d['acknowledged_insufficient_evidence'] === true, reviewTrigger: (d['review_trigger'] as string | null) ?? null, recommendationSessionId: (d['recommendation_session_id'] as string | null) ?? null, recommendationSchemaVersion: (d['recommendation_schema_version'] as string | null) ?? null, provenanceManifestVersion: (d['provenance_manifest_version'] as string | null) ?? null, businessUnderstandingVersion: d['business_understanding_version'] == null ? null : Number(d['business_understanding_version']), decisionHorizon: (d['decision_horizon'] as string | null) ?? null, alignment: String(d['alignment']), groundingStatusAtDecision: (d['grounding_status_at_decision'] as string | null) ?? null, scope: String(d['scope']), reversibility: String(d['reversibility']), uncertainty: j(d['uncertainty']), authorship: j(d['authorship']), decidedAt: iso(d['decided_at']), reviewAt: iso(d['review_at']), createdAt: iso(d['created_at']), decisionSchemaVersion: 'strategic-decision-1' };
+    }),
+    strategicCommitments: strategicCommitments.map((c) => {
+      const j = (v: unknown) => (v == null ? null : typeof v === 'string' ? JSON.parse(v) : v);
+      return { id: String(c['id']), logicalCommitmentId: String(c['logical_commitment_id']), revision: Number(c['revision']), lifecycle: String(c['lifecycle']), supersedesId: (c['supersedes_id'] as string | null) ?? null, decision: { recordId: String(c['decision_record_id']), logicalId: String(c['decision_logical_id']), revision: Number(c['decision_revision']), schemaVersion: String(c['decision_schema_version']) }, recommendationSessionId: (c['recommendation_session_id'] as string | null) ?? null, recommendationSchemaVersion: (c['recommendation_schema_version'] as string | null) ?? null, provenanceManifestVersion: (c['provenance_manifest_version'] as string | null) ?? null, alignmentAtCommitment: String(c['alignment_at_commitment']), groundingStatusAtCommitment: (c['grounding_status_at_commitment'] as string | null) ?? null, statement: String(c['statement']), scope: String(c['scope']), exclusivity: String(c['exclusivity']), governedBehavior: j(c['governed_behavior']), resourceEnvelope: j(c['resource_envelope']), acceptedCosts: j(c['accepted_costs']), unknownCosts: j(c['unknown_costs']), exitConditions: j(c['exit_conditions']), reconsiderationConditions: j(c['reconsideration_conditions']), acknowledgedInsufficientEvidence: c['acknowledged_insufficient_evidence'] === true, startsAt: iso(c['starts_at']), reviewAt: iso(c['review_at']), reviewTrigger: (c['review_trigger'] as string | null) ?? null, expiresAt: iso(c['expires_at']), authorship: j(c['authorship']), createdAt: iso(c['created_at']), commitmentSchemaVersion: 'strategic-commitment-1' };
     }),
     understandingRuns: runs.map((r) => ({
       id: String(r['id']), sourceKey: String(r['source_key']), status: String(r['status']), attempts: Number(r['attempt_count']),

@@ -11,8 +11,10 @@ import { PgMarketReviewRepository } from '../business-model/pg-market-review.rep
 import { PgStrategicSessionRepository } from '../business-model/pg-strategic-session.repository';
 import { PgStrategicResponseRepository } from '../business-model/pg-strategic-response.repository';
 import { PgStrategicDecisionRepository } from '../business-model/pg-strategic-decision.repository';
+import { PgStrategicCommitmentRepository } from '../business-model/pg-strategic-commitment.repository';
 import { PgFounderStrategicContextRepository } from '../business-model/pg-founder-strategic-context.repository';
 import { assertDecisionAdmissible, toDecisionView, DecisionValidationError, type DecisionInput } from '../business-model/strategic-decision';
+import { assertCommitmentAdmissible, toCommitmentView, linkedDecisionStatus, CommitmentValidationError, type CommitmentInput, type ResourceEnvelopeItem, type AcceptedCost } from '../business-model/strategic-commitment';
 import { AnthropicStrategyModel } from '../business-model/anthropic-strategy.model';
 import { strategyModelConfig } from '../business-model/model-config';
 import { startStrategicSessionWorker } from '../business-model/strategic-session.worker';
@@ -30,6 +32,7 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
   const sessionRepo = new PgStrategicSessionRepository(db);
   const responseRepo = new PgStrategicResponseRepository(db);
   const decisionRepo = new PgStrategicDecisionRepository(db);
+  const commitmentRepo = new PgStrategicCommitmentRepository(db);
   const assembler = {
     understanding: new PgUnderstandingRepository(db), conclusionResponses: new PgConclusionResponseRepository(db),
     entities: new PgMarketEntityRepository(db), findings: new PgMarketFindingRepository(db),
@@ -197,6 +200,87 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
         : await decisionRepo.retire(founderId, logicalDecisionId, note, key, new Date());
       if (!decision) { await reply.code(409).send({ error: `this decision can’t be ${action}d` }); return; }
       await reply.code(201).send({ decision: toDecisionView(decision) });
+    });
+  }
+
+  // ── Strategic Commitment Records (founder-explicit; append-only; a decision does NOT auto-become a commitment) ──
+  const commitmentInput = (b: Record<string, unknown>): CommitmentInput => {
+    const arr = (k: string) => (Array.isArray(b[k]) ? (b[k] as unknown[]).map((x) => String(x)) : []);
+    const costs = Array.isArray(b['acceptedCosts']) ? (b['acceptedCosts'] as Array<Record<string, unknown>>) : [];
+    const envelope = Array.isArray(b['resourceEnvelope']) ? (b['resourceEnvelope'] as Array<Record<string, unknown>>) : [];
+    return {
+      statement: String(b['statement'] ?? ''), scope: String(b['scope'] ?? '') as CommitmentInput['scope'], exclusivity: String(b['exclusivity'] ?? '') as CommitmentInput['exclusivity'],
+      governedBehavior: arr('governedBehavior'), unknownCosts: arr('unknownCosts'), exitConditions: arr('exitConditions'), reconsiderationConditions: arr('reconsiderationConditions'),
+      resourceEnvelope: envelope.map((r): ResourceEnvelopeItem => ({ kind: String(r['kind'] ?? '') as ResourceEnvelopeItem['kind'], availability: String(r['availability'] ?? 'UNKNOWN') as ResourceEnvelopeItem['availability'], boundaryType: String(r['boundaryType'] ?? 'MAXIMUM') as ResourceEnvelopeItem['boundaryType'], amount: r['amount'] != null ? String(r['amount']) : null })),
+      acceptedCosts: costs.map((c): AcceptedCost => ({ statement: String(c['statement'] ?? ''), source: String(c['source'] ?? 'FOUNDER_CONFIRMED') as AcceptedCost['source'], confirmed: c['confirmed'] === true })),
+      acknowledgedInsufficientEvidence: b['acknowledgedInsufficientEvidence'] === true,
+      startsAt: b['startsAt'] != null ? String(b['startsAt']) : null, reviewAt: b['reviewAt'] != null ? String(b['reviewAt']) : null,
+      reviewTrigger: b['reviewTrigger'] != null ? String(b['reviewTrigger']) : null, expiresAt: b['expiresAt'] != null ? String(b['expiresAt']) : null,
+      idempotencyKey: String(b['idempotencyKey'] ?? ''),
+    };
+  };
+
+  // Create ONE Strategic Commitment from an explicit founder action on an EFFECTIVE, non-terminal decision (idempotent).
+  server.post('/strategy/decisions/:logicalDecisionId/commitments', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const logicalDecisionId = (request.params as { logicalDecisionId: string }).logicalDecisionId;
+    const decision = await decisionRepo.getEffective(founderId, logicalDecisionId); // founder-owned effective revision only
+    if (!decision) { await reply.code(404).send({ error: 'not found' }); return; }
+    const input = commitmentInput((request.body ?? {}) as Record<string, unknown>);
+    try { assertCommitmentAdmissible(decision, input); }
+    catch (e) { if (e instanceof CommitmentValidationError) { await reply.code(400).send({ error: e.message, reason: e.reason }); return; } throw e; }
+    const commitment = await commitmentRepo.create(founderId, decision, input, new Date());
+    await reply.code(201).send({ commitment: toCommitmentView(commitment, 'CURRENT') });
+  });
+
+  server.get('/strategy/commitments', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    await reply.send({ commitments: (await commitmentRepo.listByFounder(founderId, new Date())).map((c) => toCommitmentView(c)) });
+  });
+
+  server.get('/strategy/commitments/:logicalCommitmentId', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const logicalCommitmentId = (request.params as { logicalCommitmentId: string }).logicalCommitmentId;
+    const history = await commitmentRepo.getHistory(founderId, logicalCommitmentId, new Date());
+    if (!history.length) { await reply.code(404).send({ error: 'not found' }); return; }
+    const effective = history[history.length - 1]!;
+    // neutral notice if the linked decision changed since (never auto-terminates the commitment)
+    const effDecision = await decisionRepo.getEffective(founderId, effective.decisionLogicalId);
+    const linked = linkedDecisionStatus(effDecision, effective.decisionRecordId);
+    await reply.send({ commitment: toCommitmentView(effective, linked), history: history.map((c) => toCommitmentView(c)) });
+  });
+
+  server.post('/strategy/commitments/:logicalCommitmentId/supersede', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const logicalCommitmentId = (request.params as { logicalCommitmentId: string }).logicalCommitmentId;
+    const b = (request.body ?? {}) as Record<string, unknown>;
+    const decision = await decisionRepo.getEffective(founderId, String(b['logicalDecisionId'] ?? ''));
+    if (!decision) { await reply.code(404).send({ error: 'not found' }); return; }
+    const input = commitmentInput(b);
+    try { assertCommitmentAdmissible(decision, input); }
+    catch (e) { if (e instanceof CommitmentValidationError) { await reply.code(400).send({ error: e.message, reason: e.reason }); return; } throw e; }
+    const commitment = await commitmentRepo.supersede(founderId, logicalCommitmentId, decision, input, new Date());
+    if (!commitment) { await reply.code(409).send({ error: 'this commitment can’t be superseded' }); return; }
+    await reply.code(201).send({ commitment: toCommitmentView(commitment, 'CURRENT') });
+  });
+
+  for (const action of ['release', 'retire'] as const) {
+    server.post(`/strategy/commitments/:logicalCommitmentId/${action}`, async (request: FastifyRequest, reply: FastifyReply) => {
+      const founderId = await sessionFounder(request);
+      if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+      const logicalCommitmentId = (request.params as { logicalCommitmentId: string }).logicalCommitmentId;
+      const b = (request.body ?? {}) as Record<string, unknown>;
+      const note = b['note'] != null ? String(b['note']) : null;
+      const key = String(b['idempotencyKey'] ?? `${action}:${logicalCommitmentId}`);
+      const commitment = action === 'release'
+        ? await commitmentRepo.release(founderId, logicalCommitmentId, note, key, new Date())
+        : await commitmentRepo.retire(founderId, logicalCommitmentId, note, key, new Date());
+      if (!commitment) { await reply.code(409).send({ error: `this commitment can’t be ${action}d` }); return; }
+      await reply.code(201).send({ commitment: toCommitmentView(commitment) });
     });
   }
 }

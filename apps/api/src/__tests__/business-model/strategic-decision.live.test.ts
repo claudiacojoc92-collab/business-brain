@@ -97,8 +97,10 @@ describe('strategic decision §LIVE', () => {
     await new PgStrategicResponseRepository(db).record({ founderId: f, sessionId: s.id, responseType: 'ACCEPT', qualification: null, now: new Date() });
     const n = await db.selectFrom('business.strategic_decision_record').select(db.fn.countAll().as('c')).where('founder_id', '=', f).executeTakeFirst();
     expect(Number(n.c)).toBe(0); // recommendation + ACCEPT feedback wrote no decision
-    // no commitment/plan tables exist for this founder to have been written
-    expect(await db.introspection.getTables().then((ts: Array<{ name: string }>) => ts.some((t) => /commitment|strategic_plan/i.test(t.name)))).toBe(false);
+    // and no commitment rows for this founder (the commitment table may exist, but nothing was written); no plan/task table at all
+    const nc = await db.selectFrom('business.strategic_commitment_record').select(db.fn.countAll().as('c')).where('founder_id', '=', f).executeTakeFirst();
+    expect(Number(nc.c)).toBe(0);
+    expect(await db.introspection.getTables().then((ts: Array<{ name: string }>) => ts.some((t) => /strategic_plan|strategic_task/i.test(t.name)))).toBe(false);
   });
 
   it('3,4,12,13,14. explicit create makes exactly one record, idempotent, linked to the exact session/schema/manifest', async (ctx) => {

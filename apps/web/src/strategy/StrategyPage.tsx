@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import {
-  createStrategySession, getStrategySession, listStrategySessions, retryStrategySession, respondToStrategy, createDecision, ApiError,
+  createStrategySession, getStrategySession, listStrategySessions, retryStrategySession, respondToStrategy, createDecision, createCommitment, ApiError,
   type StrategySessionView, type StrategyBoundary, type StrategicRecommendation, type InsufficientStrategicEvidence,
   type StrategyResponseType, type EpistemicKind, type Band, type EvidenceReference,
   type DecisionView, type DecisionAlternative, type ChosenOptionSource,
+  type CommitmentView, type CommitmentScope, type Exclusivity,
 } from '../api/client';
 import { AppShell, Button, Thinking } from '../system/ui';
 
@@ -372,6 +373,8 @@ function DecisionPanel({ session, on401 }: { session: StrategySessionView; on401
         </p>
         {saved.acknowledgedInsufficientEvidence && <p style={{ ...meta, marginTop: 4 }}>You recorded this knowing the evidence was insufficient.</p>}
         <p style={{ ...meta, marginTop: 8, fontStyle: 'italic' }}>This records your decision. It does not create a commitment or plan. You can supersede or reverse it later.</p>
+        {/* A commitment is a SEPARATE, later act — a decision does not become one automatically (Law 1). */}
+        <CommitmentPanel decision={saved} on401={on401} />
       </div>
     );
   }
@@ -427,6 +430,125 @@ function DecisionPanel({ session, on401 }: { session: StrategySessionView; on401
           {error && <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--danger-ink, #a33)', marginTop: 6 }}>{error}</p>}
           <div style={{ display: 'flex', gap: 10, marginTop: 'var(--sp-3)' }}>
             <Button loading={saving} disabled={!canConfirm} onClick={() => void confirm()}>Confirm this decision</Button>
+            <Button variant="ghost" onClick={() => setOpen(false)}>Not now</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// A Strategic Commitment — a SEPARATE, later founder act on a recorded decision. Bounded (scope + review/expiry/exit),
+// with visible cost and exclusivity. It is NOT a plan or tasks, NOT a promise to Business Brain. Lifecycle stays neutral.
+const SCOPES: CommitmentScope[] = ['DECISION_SCOPE', 'CHANNEL', 'OFFER', 'POSITIONING', 'MARKETING', 'STRATEGIC_JOB', 'BUSINESS'];
+const EXCLUSIVITIES: { v: Exclusivity; label: string }[] = [
+  { v: 'PREFERRED_DIRECTION', label: 'A preferred direction (alternatives stay open)' },
+  { v: 'PARALLEL_EXPERIMENT_ALLOWED', label: 'Parallel experiments still allowed' },
+  { v: 'DEPRIORITIZES_ALTERNATIVES', label: 'Deprioritises alternatives' },
+  { v: 'EXCLUSIVE', label: 'Excludes alternatives' },
+  { v: 'UNKNOWN', label: 'I’m not sure yet' },
+];
+function CommitmentPanel({ decision, on401 }: { decision: DecisionView; on401: (e: unknown) => void }) {
+  const insufficient = decision.alignment === 'NO_RECOMMENDATION' || decision.acknowledgedInsufficientEvidence;
+  const [open, setOpen] = useState(false);
+  const [statement, setStatement] = useState('');
+  const [scope, setScope] = useState<CommitmentScope>('DECISION_SCOPE');
+  const [exclusivity, setExclusivity] = useState<Exclusivity>('PREFERRED_DIRECTION');
+  const [governed, setGoverned] = useState('');
+  const [reviewAt, setReviewAt] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
+  const [exit, setExit] = useState('');
+  const [cost, setCost] = useState('');
+  const [ackInsufficient, setAckInsufficient] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<CommitmentView | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const hasBoundary = !!reviewAt || !!expiresAt || exit.trim().length > 0;
+  const canConfirm = statement.trim().length > 0 && hasBoundary && (!insufficient || ackInsufficient);
+
+  const confirm = async () => {
+    setSaving(true); setError(null);
+    try {
+      const c = await createCommitment(decision.logicalDecisionId, {
+        statement: statement.trim(), scope, exclusivity,
+        governedBehavior: governed.trim() ? governed.split('\n').map((s) => s.trim()).filter(Boolean) : [],
+        acceptedCosts: cost.trim() ? [{ statement: cost.trim(), source: 'FOUNDER_CONFIRMED', confirmed: true }] : [],
+        exitConditions: exit.trim() ? exit.split('\n').map((s) => s.trim()).filter(Boolean) : [],
+        reviewAt: reviewAt ? new Date(reviewAt).toISOString() : null,
+        expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+        acknowledgedInsufficientEvidence: insufficient ? ackInsufficient : undefined,
+        idempotencyKey: (globalThis.crypto?.randomUUID?.() ?? String(Date.now())),
+      });
+      setSaved(c); setOpen(false);
+    } catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setError(e instanceof ApiError ? e.message : 'Could not record the commitment.'); }
+    finally { setSaving(false); }
+  };
+
+  if (saved) {
+    return (
+      <div style={{ marginTop: 'var(--sp-4)', paddingTop: 'var(--sp-3)', borderTop: '1px dashed var(--line-2)' }}>
+        <span style={sectionLabel}>Your commitment on record</span>
+        <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink)', margin: '4px 0 0' }}>{saved.statement}</p>
+        <p style={{ ...meta, marginTop: 4 }}>Scope: {saved.scope === 'DECISION_SCOPE' ? decision.chosenOption.label : saved.scope} · {saved.exclusivity.replace(/_/g, ' ').toLowerCase()}{saved.reviewAt ? ` · review ${new Date(saved.reviewAt).toLocaleDateString()}` : ''}{saved.expiresAt ? ` · expires ${new Date(saved.expiresAt).toLocaleDateString()}` : ''}</p>
+        <p style={{ ...meta, marginTop: 8, fontStyle: 'italic' }}>This is a strategic commitment. It does not create a plan or tasks. You can review, supersede, release, or retire it.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 'var(--sp-4)', paddingTop: 'var(--sp-3)', borderTop: '1px dashed var(--line-2)' }}>
+      {!open ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <Button variant="ghost" onClick={() => setOpen(true)}>Create a commitment from this decision</Button>
+          <span style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ink-3)' }}>A commitment lets this decision govern your conduct for a bounded scope and period. It’s a separate step — and not a plan.</span>
+        </div>
+      ) : (
+        <div>
+          <span style={sectionLabel}>Create a commitment</span>
+          <p style={{ ...meta, marginTop: 2 }}>You decided: <strong style={{ color: 'var(--ink-2)' }}>{decision.chosenOption.label}</strong>. A commitment means letting that govern your conduct — bounded, reviewable, and yours to leave.</p>
+
+          <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '12px 0 4px' }}>What are you committing to, in your words?</p>
+          <textarea value={statement} onChange={(e) => setStatement(e.target.value)} rows={2} placeholder="e.g. I’ll keep LinkedIn as my primary channel until the review date, without reopening the choice." style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }} />
+
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 10 }}>
+            <label style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)' }}>Scope<br />
+              <select value={scope} onChange={(e) => setScope(e.target.value as CommitmentScope)} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', padding: '6px 8px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', marginTop: 4 }}>
+                {SCOPES.map((s) => <option key={s} value={s}>{s === 'DECISION_SCOPE' ? 'Same as the decision' : s.toLowerCase()}</option>)}
+              </select>
+            </label>
+            <label style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)' }}>Exclusivity<br />
+              <select value={exclusivity} onChange={(e) => setExclusivity(e.target.value as Exclusivity)} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', padding: '6px 8px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', marginTop: 4 }}>
+                {EXCLUSIVITIES.map((x) => <option key={x.v} value={x.v}>{x.label}</option>)}
+              </select>
+            </label>
+          </div>
+
+          <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '12px 0 4px' }}>What behaviour does it govern? (optional, one per line — not tasks)</p>
+          <textarea value={governed} onChange={(e) => setGoverned(e.target.value)} rows={2} placeholder="e.g. Don’t reopen the channel choice before review." style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }} />
+
+          <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '12px 0 4px' }}>A cost you accept (optional)</p>
+          <input value={cost} onChange={(e) => setCost(e.target.value)} placeholder="e.g. Less flexibility to chase a new channel this quarter." style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }} />
+
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 10 }}>
+            <label style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)' }}>Review on<br /><input type="date" value={reviewAt} onChange={(e) => setReviewAt(e.target.value)} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', padding: '5px 8px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', marginTop: 4 }} /></label>
+            <label style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)' }}>Or expires on<br /><input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', padding: '5px 8px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', marginTop: 4 }} /></label>
+          </div>
+          <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '12px 0 4px' }}>How you’ll exit or reconsider (one per line)</p>
+          <textarea value={exit} onChange={(e) => setExit(e.target.value)} rows={2} placeholder="e.g. If demo volume drops below 5/week for a month, I reopen this." style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }} />
+          {!hasBoundary && <p style={{ ...meta, marginTop: 4 }}>Add a review date, an expiry, or an exit condition — a commitment has to be bounded.</p>}
+
+          {insufficient && (
+            <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 12, fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={ackInsufficient} onChange={(e) => setAckInsufficient(e.target.checked)} />
+              <span>This decision was made without enough evidence. I’m committing anyway, with that in mind.</span>
+            </label>
+          )}
+
+          <p style={{ ...meta, marginTop: 14, fontStyle: 'italic' }}>This creates a strategic commitment. It does not create a plan or tasks. You can review, supersede, release, or retire it.</p>
+          {error && <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--danger-ink, #a33)', marginTop: 6 }}>{error}</p>}
+          <div style={{ display: 'flex', gap: 10, marginTop: 'var(--sp-3)' }}>
+            <Button loading={saving} disabled={!canConfirm} onClick={() => void confirm()}>Confirm this commitment</Button>
             <Button variant="ghost" onClick={() => setOpen(false)}>Not now</Button>
           </div>
         </div>
