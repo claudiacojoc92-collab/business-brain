@@ -77,3 +77,51 @@ remove work and are explicit; BU/FSC promoted set is empty until an explicit pro
 (UPDATE + individual DELETE rejected); idempotency; no-fork/concurrency safe; cross-founder isolation; export full
 promotion history; account deletion zero orphans; existing BU/FSC/learning/decision/commitment/plan/review unchanged; no
 recommendation regenerated; the model has no authority; frozen engine byte-identical.
+
+---
+
+## Remediation clarification (2026-07-21) — canonical effective composition
+
+The initial slice recorded promotion in a ledger but **no canonical BU/FSC read consumed it** (audit classification B).
+This clarification adds the canonical-composition laws. It is documentation only.
+
+**C-1 (authority, not content).** A `PromotionEvent` is not BU or FSC; it is the governance authority by which an exact
+immutable learning revision enters the **effective** BU/FSC projection.
+
+**C-2 (canonical effective state exists now).** *Effective Business Understanding* = deterministic composition of native
+BU + effective BU promotions resolved to exact pinned revisions. *Effective Founder Strategic Context* = native effective
+FSC + effective FSC promotions resolved to exact pinned revisions. The composer (`composeEffectiveBusinessUnderstanding` /
+`composeEffectiveFounderStrategicContext`) is canonical, reusable, and authoritative. Any "Promoted into BU/FSC" list is
+generated from it, not from a separate answer. Ledger views remain **for audit only**.
+
+**C-3 (one canonical answer).** The system maintains exactly one authoritative answer to "what is the founder's current
+effective BU / current effective FSC?" — the composer. No route may call a bare ledger list "Business Understanding."
+
+**C-4 (provenance preserved).** Each effective item carries `sourceType` (`NATIVE_BUSINESS_UNDERSTANDING` /
+`NATIVE_FOUNDER_STRATEGIC_CONTEXT` / `PROMOTED_LEARNING`). Promoted items also expose `promotionEventId`, `target`,
+`logicalLearningId`, `learningRevisionId`, `learningRevisionNumber`, `rationale`, `scope`, the pinned revision's epistemic
+status + original source lineage, and (separately labelled) the thread lifecycle status at read time. Never flatten a
+promoted learning into an indistinguishable native record.
+
+**C-5 (no historical mutation).** Composition writes nothing: no insert into `business.understanding`/FSC history, no
+native-version rewrite, no learning mutation, no recommendation regeneration, no session creation, no Decision/Commitment/
+Plan/Review edit. GET-only.
+
+**C-6 (exact pinning).** The composed promoted item references the exact pinned revision. Later REFINE/CONTEST/SUPERSEDE/
+RETIRE change it not at all; only explicit REPLACE/REMOVE do.
+
+**C-7 (reasoning separation is explicit + deferred).** `assembleStrategicContext` (reasoning input) intentionally reads
+**native context only**. Consuming the promoted set in reasoning is the **Strategic Learning Consumption Gate** — a named,
+future, separately-governed slice. This remediation adds canonical *reads* now; it activates **no** reasoning adaptation.
+
+**C-8 (deterministic lineage; V080).** Effective promotion state derives from an explicit `promotion_sequence` +
+`predecessor_promotion_event_id` chain per (founder, target, logical thread) — **never `created_at` alone.** Chosen
+PROMOTE-after-REMOVE rule (**simpler alternative**): one contiguous chain; first event is PROMOTE at sequence 1 with null
+predecessor; REPLACE/REMOVE and any re-PROMOTE-after-REMOVE append the next sequence pointing to the exact current
+effective event. Effective = highest-sequence event; promoted iff its action ∈ {PROMOTE, REPLACE}. Guarantees: contiguous
+sequence, exact predecessor, no fork, stale predecessor rejected, concurrent transitions cannot both win, idempotent retry
+returns the same event.
+
+**C-9 (revised acceptance).** Accept only when PROMOTE changes canonical effective BU/FSC; a later learning revision leaves
+it pinned; REPLACE changes it to the new exact revision; REMOVE removes it — with native history unchanged and no
+recommendation regenerated.

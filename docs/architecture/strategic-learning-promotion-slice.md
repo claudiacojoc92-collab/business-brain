@@ -96,3 +96,32 @@ Export adds `learningPromotions` (the full append-only event history, ordered). 
 ## Deferred (own future gate)
 Any consumption of the promoted set to regenerate recommendations or adapt reasoning; Strategic Execution; model-assisted
 promotion suggestions; memory/knowledge/relationship graphs; semantic retrieval.
+
+---
+
+## Remediation architecture (2026-07-21) — canonical effective composition (classification B)
+
+**Audit (code-traced):** canonical BU read = `assembleStrategicContext` → `understanding.latest()` and `GET /understanding`
+→ `understanding.latest()` (native only); canonical FSC read = assembler → `resolveEffectiveStrategicContext(listActive())`
+and `GET /founder-strategic-context/effective` (native only). Promotion routes `/strategy/promotions/*` are parallel and
+read by nothing canonical. Promoted revisions never entered a canonical read path → **classification B**.
+
+**Added:**
+- **V080** `learning_promotion_event` gains `promotion_sequence INT` + `predecessor_promotion_event_id TEXT`; backfilled
+  from existing rows by stable `(created_at, id)` key per (founder, target, logical thread); constraints below.
+- **Domain composer** (`effective-context.ts`): `deriveEffectivePromotionForThread(events)` (sequence/predecessor chain →
+  highest-sequence event; promoted iff PROMOTE/REPLACE), `composeEffectiveBusinessUnderstanding(nativeBU, promotedItems)`,
+  `composeEffectiveFounderStrategicContext(nativeFSC, promotedItems)` → `{ target, native, promotedLearningItems[] }` with
+  `EffectiveContextItem` provenance. Not aliases for ledger listing.
+- **Repository** lineage: `record` computes next sequence + predecessor under the advisory lock; `getEffective` derives
+  from sequence, not `created_at`.
+- **Canonical routes:** `GET /strategy/effective-business-understanding`, `GET /strategy/effective-founder-strategic-context`
+  (native + promoted composition, provenance-carrying, GET-only). Ledger routes remain for audit.
+- **UI:** "Current effective Business Understanding / Founder Strategic Context" views built from the composer, with
+  native vs promoted-learning badges + exact revision + rationale + scope. Promotion History remains separate.
+
+**Lineage constraints (V080):** `promotion_sequence > 0`; `UNIQUE(founder, target, logical_learning_id, promotion_sequence)`;
+partial `UNIQUE(founder, predecessor_promotion_event_id)` (no-fork); `CHECK`: sequence 1 ⇒ predecessor null ∧ action
+PROMOTE; sequence > 1 ⇒ predecessor non-null. Rows immutable; individual delete blocked; account-deletion bypass retained.
+
+**Reasoning stays native-only** — the Strategic Learning Consumption Gate is deferred.
