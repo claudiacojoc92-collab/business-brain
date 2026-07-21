@@ -24,6 +24,7 @@ import { assertLearningAdmissible, toLearningView, LearningValidationError, deri
 import { LearningLifecycleError, type LifecycleTransitionInput } from '../business-model/strategic-learning-lifecycle';
 import { PgLearningPromotionRepository } from '../business-model/pg-learning-promotion.repository';
 import { toPromotionView, PromotionValidationError, type PromotionInput, type PromotionAction, type PromotionTarget } from '../business-model/strategic-learning-promotion';
+import { composeEffectiveBusinessUnderstanding, composeEffectiveFounderStrategicContext, toPromotedLearningItem, type EffectiveContextItem } from '../business-model/effective-context';
 import { AnthropicStrategyModel } from '../business-model/anthropic-strategy.model';
 import { strategyModelConfig } from '../business-model/model-config';
 import { startStrategicSessionWorker } from '../business-model/strategic-session.worker';
@@ -599,5 +600,28 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
     const founderId = await sessionFounder(request);
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
     await reply.send({ promotions: (await promotionRepo.listEvents(founderId)).map(toPromotionView) });
+  });
+
+  // CANONICAL effective-context reads (ADR-013 remediation; contract C-2/C-3). Compose the NATIVE records with the
+  // effective promoted learning revisions (each pinned to its EXACT revision, derived from the sequence chain — never
+  // createdAt, never the latest learning revision). GET-only; writes nothing; regenerates no recommendation; provenance
+  // preserved (NATIVE_* vs PROMOTED_LEARNING). These are AUTHORITATIVE for "current effective BU/FSC"; the
+  // /strategy/promotions[/*] routes above remain available for audit.
+  async function promotedItemsFor(founderId: string, target: PromotionTarget): Promise<EffectiveContextItem[]> {
+    const events = await promotionRepo.getEffective(founderId, target); // effective = chain-head, non-REMOVE
+    const items = await Promise.all(events.map(async (e) => toPromotedLearningItem(e, await learningRepo.getRevisionById(founderId, e.learningRevisionId))));
+    return items.filter((x): x is EffectiveContextItem => x != null);
+  }
+  server.get('/strategy/effective-business-understanding', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const native = await assembler.understanding.latest(founderId);
+    await reply.send({ effective: composeEffectiveBusinessUnderstanding(native, await promotedItemsFor(founderId, 'BUSINESS_UNDERSTANDING')) });
+  });
+  server.get('/strategy/effective-founder-strategic-context', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const nativeItems = await assembler.strategicContext.listActive(founderId);
+    await reply.send({ effective: composeEffectiveFounderStrategicContext(nativeItems, await promotedItemsFor(founderId, 'FOUNDER_STRATEGIC_CONTEXT')) });
   });
 }

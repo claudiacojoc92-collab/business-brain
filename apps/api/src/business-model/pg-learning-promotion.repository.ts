@@ -8,7 +8,8 @@
 import { sql } from 'kysely';
 import { generateId } from '@bb/shared';
 import {
-  assertPromotionAdmissible, buildPromotionFields, deriveEffectivePromotion, isThreadPromoted, PromotionValidationError,
+  assertPromotionAdmissible, buildPromotionFields, deriveEffectivePromotion, isThreadPromoted, nextLineage,
+  PromotionValidationError,
   type PromotionEvent, type PromotionInput, type PromotionAction, type PromotionTarget,
 } from './strategic-learning-promotion';
 import type { StrategicLearningRecord } from './strategic-learning';
@@ -30,10 +31,14 @@ export class PgLearningPromotionRepository {
       const currentlyPromoted = isThreadPromoted(events, input.target, revision.logicalLearningId);
       assertPromotionAdmissible(revision, currentlyPromoted, action, input);
       const f = buildPromotionFields(revision, action, input);
+      // Explicit deterministic lineage (V080, contract C-8): next sequence + exact predecessor from the chain head — the
+      // advisory lock above serializes the chain so the head we read is the exact predecessor we point at (no fork).
+      const lineage = nextLineage(events, input.target, revision.logicalLearningId);
       const values = {
         id: generateId(), founder_id: founderId, target: f.target, logical_learning_id: f.logicalLearningId,
         learning_revision_id: f.learningRevisionId, revision_number: f.revisionNumber, promotion_action: f.promotionAction,
         rationale: f.rationale, scope: f.scope, idempotency_key: f.idempotencyKey, created_at: now.toISOString(),
+        promotion_sequence: lineage.promotionSequence, predecessor_promotion_event_id: lineage.predecessorPromotionEventId,
       };
       try { return this.toDomain(await tx.insertInto('business.learning_promotion_event').values(values).returningAll().executeTakeFirst()); }
       catch (e) {
@@ -72,6 +77,7 @@ export class PgLearningPromotionRepository {
       learningRevisionId: r.learning_revision_id, revisionNumber: Number(r.revision_number), promotionAction: r.promotion_action,
       rationale: r.rationale, scope: r.scope, idempotencyKey: r.idempotency_key,
       createdAt: new Date(r.created_at as string).toISOString(),
+      promotionSequence: Number(r.promotion_sequence), predecessorPromotionEventId: r.predecessor_promotion_event_id ?? null,
     };
   }
 }

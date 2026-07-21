@@ -642,10 +642,31 @@ async function promotionAction(verb: 'promote' | 'replace-promotion' | 'remove-p
 export const promoteRevision = (revisionId: string, i: PromotionActionInput) => promotionAction('promote', revisionId, i);
 export const replacePromotion = (revisionId: string, i: PromotionActionInput) => promotionAction('replace-promotion', revisionId, i);
 export const removePromotion = (revisionId: string, i: PromotionActionInput) => promotionAction('remove-promotion', revisionId, i);
-/** GET the effective promoted set for a target (derived; latest event per thread wins). */
+/** GET the effective promoted set for a target (derived; latest event per thread wins). Ledger projection — for audit. */
 export async function getPromotedInto(target: 'business-understanding' | 'founder-strategic-context'): Promise<PromotionView[]> {
   const { promoted } = await request<{ promoted: PromotionView[] }>(`strategy/promotions/${target}`);
   return promoted;
+}
+
+// ─── CANONICAL effective context (ADR-013 remediation) — the authoritative "current effective BU/FSC" ──────────
+// Composes NATIVE records + the effective promoted learning revisions (each pinned to its EXACT revision). Provenance
+// preserved (NATIVE_* vs PROMOTED_LEARNING). GET-only; regenerates nothing.
+export interface EffectivePromotedItem {
+  id: string; sourceType: 'PROMOTED_LEARNING'; content: string; scope: string; rationale: string | null; effectiveFrom: string;
+  provenance: { promotionEventId: string; target: PromotionTarget; logicalLearningId: string; learningRevisionId: string; learningRevisionNumber: number; promotionSequence: number; epistemicStatus: string; lifecycleStatusAtRead: string; originalSourceLineage: { reviewRecordId: string; reviewRevision: number; recommendationSessionId: string | null } };
+}
+export interface EffectiveBusinessUnderstanding {
+  target: 'BUSINESS_UNDERSTANDING';
+  nativeBusinessUnderstanding: { sourceType: 'NATIVE_BUSINESS_UNDERSTANDING'; present: boolean; version: number | null; conclusions: Array<{ id: string; statement: string; type?: string }>; createdAt: string | null };
+  promotedLearningItems: EffectivePromotedItem[];
+}
+export interface EffectiveFscItem { id: string; sourceType: 'NATIVE_FOUNDER_STRATEGIC_CONTEXT'; content: string; scope: string; effectiveFrom: string; }
+export interface EffectiveFounderStrategicContext { target: 'FOUNDER_STRATEGIC_CONTEXT'; nativeItems: EffectiveFscItem[]; promotedLearningItems: EffectivePromotedItem[]; }
+export async function getEffectiveBusinessUnderstanding(): Promise<EffectiveBusinessUnderstanding> {
+  return (await request<{ effective: EffectiveBusinessUnderstanding }>(`strategy/effective-business-understanding`)).effective;
+}
+export async function getEffectiveFounderStrategicContext(): Promise<EffectiveFounderStrategicContext> {
+  return (await request<{ effective: EffectiveFounderStrategicContext }>(`strategy/effective-founder-strategic-context`)).effective;
 }
 
 // ─── Founder Strategic Context: founder-declared strategic operating conditions (Wave 4, slice 1) ──────────

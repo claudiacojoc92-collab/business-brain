@@ -23,6 +23,7 @@ import { type PlanReviewInput } from '../../business-model/strategic-plan-review
 import { type LearningInput } from '../../business-model/strategic-learning';
 import { type LifecycleTransitionInput } from '../../business-model/strategic-learning-lifecycle';
 import { PromotionValidationError, type PromotionInput } from '../../business-model/strategic-learning-promotion';
+import { composeEffectiveBusinessUnderstanding, composeEffectiveFounderStrategicContext, toPromotedLearningItem, type EffectiveContextItem } from '../../business-model/effective-context';
 import type { StrategyModel } from '../../business-model/anthropic-strategy.model';
 import type { StrategicContext } from '../../business-model/strategic-context.assembler';
 import type { StrategicOutcome, StrategicSession } from '../../business-model/strategy';
@@ -187,5 +188,86 @@ describe('strategic learning promotion §LIVE', () => {
     expect(await db.selectFrom('business.learning_promotion_event').select('id').where('founder_id', '=', a).execute()).toHaveLength(0);
     // the learning it promoted still exists (deleting a promotion does not touch the learning)
     expect((await lrepo().getThread(a, learning.logicalLearningId)).length).toBeGreaterThan(0);
+  });
+});
+
+// ── REMEDIATION §LIVE — canonical effective composition + explicit lineage (ADR-013 amendment) ──
+async function composeBU(founderId: string) {
+  const native = await new PgUnderstandingRepository(db).latest(founderId);
+  const events = await prepo().getEffective(founderId, 'BUSINESS_UNDERSTANDING');
+  const items = (await Promise.all(events.map(async (e) => toPromotedLearningItem(e, await lrepo().getRevisionById(founderId, e.learningRevisionId))))).filter((x): x is EffectiveContextItem => x != null);
+  return composeEffectiveBusinessUnderstanding(native, items);
+}
+async function composeFSC(founderId: string) {
+  const nativeItems = await new PgFounderStrategicContextRepository(db).listActive(founderId);
+  const events = await prepo().getEffective(founderId, 'FOUNDER_STRATEGIC_CONTEXT');
+  const items = (await Promise.all(events.map(async (e) => toPromotedLearningItem(e, await lrepo().getRevisionById(founderId, e.learningRevisionId))))).filter((x): x is EffectiveContextItem => x != null);
+  return composeEffectiveFounderStrategicContext(nativeItems, items);
+}
+
+describe('strategic learning promotion §LIVE — canonical effective composition + lineage', () => {
+  it('J. canonical effective BU composes native + the pinned promoted revision, with provenance; FSC excludes a BU-only promotion', async (ctx) => {
+    if (!dbUp) { ctx.skip(); return; }
+    const { founderId, learning } = await founderWithLearning(E1);
+    const before = await composeBU(founderId);
+    expect(before.nativeBusinessUnderstanding.present).toBe(true); // native BU visible
+    expect(before.promotedLearningItems.filter((i) => i.provenance && (i.provenance as { logicalLearningId?: string }).logicalLearningId === learning.logicalLearningId)).toHaveLength(0);
+    await prepo().record(founderId, 'PROMOTE', learning, promoInput({ idempotencyKey: 'j-1' }), new Date());
+    const after = await composeBU(founderId);
+    const mine = after.promotedLearningItems.find((i) => (i.provenance as { logicalLearningId?: string }).logicalLearningId === learning.logicalLearningId)!;
+    expect(mine.sourceType).toBe('PROMOTED_LEARNING');
+    expect(mine.content).toBe(learning.revisedUnderstanding); // EXACT pinned revision content
+    expect((mine.provenance as { learningRevisionId: string; learningRevisionNumber: number }).learningRevisionId).toBe(learning.id);
+    expect((mine.provenance as { promotionSequence: number }).promotionSequence).toBe(1);
+    expect(after.nativeBusinessUnderstanding.present).toBe(true); // native unchanged, still present
+    // BU-only promotion never enters FSC
+    const fsc = await composeFSC(founderId);
+    expect(fsc.promotedLearningItems.some((i) => (i.provenance as { logicalLearningId?: string }).logicalLearningId === learning.logicalLearningId)).toBe(false);
+    expect(fsc.nativeItems.length).toBeGreaterThan(0); // native FSC (the seeded GOAL) present
+  });
+
+  it('J2. REPLACE changes canonical effective BU to the new revision; REMOVE removes promoted content while native BU remains', async (ctx) => {
+    if (!dbUp) { ctx.skip(); return; }
+    const { founderId, learning } = await founderWithLearning(E1);
+    await prepo().record(founderId, 'PROMOTE', learning, promoInput({ idempotencyKey: 'j2-1' }), new Date());
+    const rev2 = await lrepo().appendRevision(founderId, learning.logicalLearningId, 'REFINE', lc({ sourceRevisionId: learning.id, expectedRevision: 1, confirmSameLearning: true, learningStatement: 'Sharper still.', revisedUnderstanding: 'Outreach is our proven primary channel.' }), new Date());
+    // before REPLACE the canonical effective BU is still pinned to revision 1 (a later learning revision changes nothing)
+    const pinned = (await composeBU(founderId)).promotedLearningItems.find((i) => (i.provenance as { logicalLearningId?: string }).logicalLearningId === learning.logicalLearningId)!;
+    expect((pinned.provenance as { learningRevisionNumber: number }).learningRevisionNumber).toBe(1);
+    await prepo().record(founderId, 'REPLACE', rev2, promoInput({ idempotencyKey: 'j2-2' }), new Date());
+    const replaced = (await composeBU(founderId)).promotedLearningItems.find((i) => (i.provenance as { logicalLearningId?: string }).logicalLearningId === learning.logicalLearningId)!;
+    expect(replaced.content).toBe('Outreach is our proven primary channel.');
+    expect((replaced.provenance as { learningRevisionNumber: number }).learningRevisionNumber).toBe(2);
+    await prepo().record(founderId, 'REMOVE', rev2, promoInput({ idempotencyKey: 'j2-3' }), new Date());
+    const removed = await composeBU(founderId);
+    expect(removed.promotedLearningItems.some((i) => (i.provenance as { logicalLearningId?: string }).logicalLearningId === learning.logicalLearningId)).toBe(false); // promoted content gone
+    expect(removed.nativeBusinessUnderstanding.present).toBe(true); // native BU remains
+  });
+
+  it('K. lineage is explicit: contiguous sequence + exact predecessor; a duplicate predecessor (fork) is rejected by the DB', async (ctx) => {
+    if (!dbUp) { ctx.skip(); return; }
+    const { founderId, learning } = await founderWithLearning(E1);
+    const e1 = await prepo().record(founderId, 'PROMOTE', learning, promoInput({ idempotencyKey: 'k-1' }), new Date());
+    const rev2 = await lrepo().appendRevision(founderId, learning.logicalLearningId, 'REFINE', lc({ sourceRevisionId: learning.id, expectedRevision: 1, confirmSameLearning: true, learningStatement: 'v2' }), new Date());
+    const e2 = await prepo().record(founderId, 'REPLACE', rev2, promoInput({ idempotencyKey: 'k-2' }), new Date());
+    expect(e1.promotionSequence).toBe(1); expect(e1.predecessorPromotionEventId).toBeNull();
+    expect(e2.promotionSequence).toBe(2); expect(e2.predecessorPromotionEventId).toBe(e1.id);
+    // Attempt to fork: a second event consuming e1 as predecessor → rejected by uniq_lpe_predecessor.
+    await expect(db.insertInto('business.learning_promotion_event').values({
+      id: generateId(), founder_id: founderId, target: 'BUSINESS_UNDERSTANDING', logical_learning_id: learning.logicalLearningId,
+      learning_revision_id: learning.id, revision_number: 1, promotion_action: 'REMOVE', rationale: 'fork', scope: 'POSITIONING',
+      idempotency_key: 'k-fork', created_at: new Date().toISOString(), promotion_sequence: 99, predecessor_promotion_event_id: e1.id,
+    }).execute()).rejects.toThrow(/uniq_lpe_predecessor|duplicate key/i);
+  });
+
+  it('L. PROMOTE-after-REMOVE re-promotes as the next sequence in the same chain (chosen rule)', async (ctx) => {
+    if (!dbUp) { ctx.skip(); return; }
+    const { founderId, learning } = await founderWithLearning(E1);
+    await prepo().record(founderId, 'PROMOTE', learning, promoInput({ idempotencyKey: 'l-1' }), new Date());
+    await prepo().record(founderId, 'REMOVE', learning, promoInput({ idempotencyKey: 'l-2' }), new Date());
+    expect((await composeBU(founderId)).promotedLearningItems.some((i) => (i.provenance as { logicalLearningId?: string }).logicalLearningId === learning.logicalLearningId)).toBe(false);
+    const re = await prepo().record(founderId, 'PROMOTE', learning, promoInput({ idempotencyKey: 'l-3' }), new Date()); // admissible again
+    expect(re.promotionSequence).toBe(3);
+    expect((await composeBU(founderId)).promotedLearningItems.some((i) => (i.provenance as { logicalLearningId?: string }).logicalLearningId === learning.logicalLearningId)).toBe(true); // effective again
   });
 });

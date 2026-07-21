@@ -89,3 +89,57 @@ commit amended.
 - **Consumption of the promoted set** by reasoning (regenerate recommendations / adapt) — a separate future gate.
 - Strategic **Execution**; model-assisted promotion *suggestions*; generic Strategic **Memory** — future-only.
   **PI-1 / KA-2** unchanged.
+
+---
+
+## Remediation closure (2026-07-21) — canonical effective composition
+
+**Why the ledger alone was insufficient.** The initial slice (`9e524da`) recorded promotions in an append-only ledger and
+exposed *parallel* projection endpoints, but **no canonical BU/FSC read path consumed them** (audit classification **B**):
+`assembleStrategicContext` and `GET /understanding` read `understanding.latest()`; `GET /founder-strategic-context/
+effective` reads `listActive()` — all native-only, zero promotion references. Promotion therefore recorded a governed
+intent that nothing effective honored.
+
+**Two remediation commits.** (1) governance clarification `4ca3740` (docs only — ADR-013 amendment + contract C-1…C-9 +
+architecture); (2) implementation remediation (this record). Neither `739ce77` nor `9e524da` amended.
+
+**Canonical composition architecture.** New pure composer
+[`effective-context.ts`](../../apps/api/src/business-model/effective-context.ts):
+`composeEffectiveBusinessUnderstanding(nativeBU, promotedItems)` → `{ nativeBusinessUnderstanding, promotedLearningItems }`;
+`composeEffectiveFounderStrategicContext(nativeItems, promotedItems)` → `{ nativeItems, promotedLearningItems }`;
+`toPromotedLearningItem(event, pinnedRevision)` builds an `EffectiveContextItem` with `sourceType: PROMOTED_LEARNING` and
+full provenance. Canonical routes `GET /strategy/effective-business-understanding` + `…/effective-founder-strategic-context`
+(GET-only; native + promoted; provenance-carrying) are **authoritative**; `/strategy/promotions[/*]` remain for **audit**.
+The UI adds a `CanonicalEffectiveContext` "Current effective BU/FSC" view (native vs promoted-learning badges, exact
+revision, rationale, scope); the ledger list is relabelled "Promotion history".
+
+**Native vs promoted provenance.** Native BU is returned as the versioned aggregate (`{present, version, conclusions}`);
+native FSC as its item list. Promoted items are never flattened — each exposes `promotionEventId`, `logicalLearningId`,
+`learningRevisionId`, `learningRevisionNumber`, `promotionSequence`, epistemic status (from the pinned revision), lifecycle
+status at read (separately labelled), and original source lineage.
+
+**Exact-revision pinning.** The composed promoted item's `content` = the pinned revision's `revisedUnderstanding`; later
+REFINE/CONTEST/SUPERSEDE/RETIRE change it not at all — only explicit REPLACE/REMOVE do (det + live J2 + e2e).
+
+**Event sequence/predecessor (V080).** `promotion_sequence` (1..N) + `predecessor_promotion_event_id` per (founder,
+target, thread). Effective state = highest-sequence chain head; promoted iff PROMOTE/REPLACE. Constraints: `>0`,
+`UNIQUE(founder,target,thread,sequence)`, partial `UNIQUE(founder,predecessor)` (no-fork), CHECK (seq 1 ⇒ null pred ∧
+PROMOTE; seq>1 ⇒ pred not null). Backfill orders existing rows by stable `(created_at,id)` and fails on an impossible
+fork. **Chosen PROMOTE-after-REMOVE rule:** re-promote appends the next sequence in the same chain (live L). Derivation is
+sequence-based, never `created_at` (det: identical-timestamp head resolves by sequence).
+
+**No historical mutation / no reasoning activation.** Composition writes nothing; the reasoning assembler still reads
+native only — the *Strategic Learning Consumption Gate* is deferred (C-7). e2e confirms no `business.understanding` version
+is written (count stays 1) and no session/recommendation is created.
+
+**Acceptance.** Deterministic `strategic-learning-promotion.test.ts` **22** (13 + 9 remediation); live
+`…live.test.ts` **10** (A–I + J/J2/K/L); genuine Playwright `…spec.ts` drives the canonical view (before → promote →
+pinned-after-refine → replace → history → remove → FSC-independent) with 7 evidence PNGs
+(`promotion-bu-{before,promoted,pinned,replaced,empty}`, `promotion-history`, `promotion-fsc-promoted`). Full **backend**
+project **990 pass / 1 skip** (977 + 13). Web build green; **73** web unit tests; API + web typechecks clean; migrations
+through **V080**; frozen hashes byte-identical (`a39ea88…` / `79802e9…` / `f9df116…`). Temp founders purged (zero orphans);
+servers stopped; bundle removed; nothing pushed; production untouched.
+
+**Remaining debt.** The **Strategic Learning Consumption Gate** (reasoning consumes the promoted set to regenerate/adapt) —
+future, separately governed. Strategic **Execution**; model-assisted promotion *suggestions*; generic Strategic **Memory**
+— future-only. **PI-1 / KA-2** unchanged.

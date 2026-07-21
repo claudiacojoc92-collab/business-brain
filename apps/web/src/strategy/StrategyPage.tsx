@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import {
-  createStrategySession, getStrategySession, listStrategySessions, retryStrategySession, respondToStrategy, createDecision, createCommitment, createPlan, createPlanReview, createLearning, listLearningThreads, getLearningThread, refineLearning, contestLearning, supersedeLearning, retireLearning, promoteRevision, replacePromotion, removePromotion, getPromotedInto, ApiError,
+  createStrategySession, getStrategySession, listStrategySessions, retryStrategySession, respondToStrategy, createDecision, createCommitment, createPlan, createPlanReview, createLearning, listLearningThreads, getLearningThread, refineLearning, contestLearning, supersedeLearning, retireLearning, promoteRevision, replacePromotion, removePromotion, getPromotedInto, getEffectiveBusinessUnderstanding, getEffectiveFounderStrategicContext, ApiError,
   type StrategySessionView, type StrategyBoundary, type StrategicRecommendation, type InsufficientStrategicEvidence,
   type StrategyResponseType, type EpistemicKind, type Band, type EvidenceReference,
   type DecisionView, type DecisionAlternative, type ChosenOptionSource,
@@ -11,6 +11,7 @@ import {
   type PlanReviewView, type ReviewConclusion, type ReviewDisposition, type AssumptionAssessment, type DependencyAssessment, type MilestoneAssessment,
   type LearningView, type LearningCategory, type LearningConfidence, type LearningScope, type LearningThreadView,
   type PromotionTarget, type PromotionScope, type PromotionView,
+  type EffectiveBusinessUnderstanding, type EffectiveFounderStrategicContext,
 } from '../api/client';
 import { AppShell, Button, Thinking } from '../system/ui';
 
@@ -1144,6 +1145,63 @@ function PromotedInto({ target, items }: { target: PromotionTarget; items: Promo
   );
 }
 
+// CANONICAL "current effective BU/FSC" (ADR-013 remediation) — native records + promoted learning revisions, composed by
+// the authoritative composer. Native and promoted items are clearly badged; promoted items show the EXACT revision,
+// rationale, and scope. This is the single authoritative answer; the "Promotion history" list below is for audit.
+function badge(bg: string): React.CSSProperties { return { display: 'inline-block', fontSize: '0.62rem', letterSpacing: '0.04em', textTransform: 'uppercase', padding: '1px 6px', borderRadius: 4, background: bg, color: 'var(--paper)', fontFamily: 'var(--sans)' }; }
+function PromotedLine({ p, target }: { p: EffectiveBusinessUnderstanding['promotedLearningItems'][number]; target: 'bu' | 'fsc' }) {
+  return (
+    <div data-testid={`effective-${target}-promoted-${p.provenance.logicalLearningId}`} style={{ marginTop: 8, paddingLeft: 8, borderLeft: '2px solid var(--accent, #8a6d3b)' }}>
+      <span style={badge('var(--accent, #8a6d3b)')} data-testid={`effective-${target}-promoted-badge`}>Promoted learning</span>
+      <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink-1)', marginTop: 4 }}>“{p.content}”</p>
+      <p style={{ ...meta, marginTop: 2 }}>
+        <span data-testid={`effective-${target}-revision`}>Revision {p.provenance.learningRevisionNumber}</span> · about {nice(p.scope)} · {p.rationale}
+        <span style={{ marginLeft: 6, opacity: 0.8 }}>· epistemic {nice(p.provenance.epistemicStatus)} · lifecycle {nice(p.provenance.lifecycleStatusAtRead)}</span>
+      </p>
+    </div>
+  );
+}
+function CanonicalEffectiveContext({ on401 }: { on401: (e: unknown) => void }) {
+  const [bu, setBu] = useState<EffectiveBusinessUnderstanding | null>(null);
+  const [fsc, setFsc] = useState<EffectiveFounderStrategicContext | null>(null);
+  const load = useCallback(async () => {
+    try { const [b, f] = await Promise.all([getEffectiveBusinessUnderstanding(), getEffectiveFounderStrategicContext()]); setBu(b); setFsc(f); }
+    catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } }
+  }, [on401]);
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { const h = () => void load(); const evs = ['bb:learning-kept', 'bb:lifecycle-changed', 'bb:promotion-changed']; for (const ev of evs) window.addEventListener(ev, h); return () => { for (const ev of evs) window.removeEventListener(ev, h); }; }, [load]);
+  if (!bu || !fsc) return null;
+  return (
+    <section data-testid="effective-context" style={{ marginTop: 'var(--sp-5)', paddingTop: 'var(--sp-4)', borderTop: '1px solid var(--line)' }}>
+      <span style={sectionLabel}>Current effective Business Understanding</span>
+      <p style={{ ...meta, marginTop: 2 }}>Your native understanding plus any learning revisions you have explicitly promoted. Promotion changes what this shows — it does not rewrite your native understanding.</p>
+      <div data-testid="effective-bu" style={{ marginTop: 6 }}>
+        <div>
+          <span style={badge('var(--ink-2, #555)')} data-testid="effective-bu-native-badge">Native understanding</span>
+          {bu.nativeBusinessUnderstanding.present
+            ? <ul data-testid="effective-bu-native" style={{ margin: '4px 0 0', paddingLeft: 18 }}>{bu.nativeBusinessUnderstanding.conclusions.map((c) => <li key={c.id} style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink-1)' }}>{c.statement}</li>)}</ul>
+            : <p data-testid="effective-bu-native-empty" style={{ ...meta, marginTop: 4 }}>No native Business Understanding yet.</p>}
+        </div>
+        {bu.promotedLearningItems.length === 0
+          ? <p data-testid="effective-bu-promoted-empty" style={{ ...meta, marginTop: 8 }}>No promoted learnings in your Business Understanding.</p>
+          : bu.promotedLearningItems.map((p) => <PromotedLine key={p.id} p={p} target="bu" />)}
+      </div>
+      <div style={{ marginTop: 'var(--sp-4)' }}>
+        <span style={sectionLabel}>Current effective Founder Strategic Context</span>
+        <div data-testid="effective-fsc" style={{ marginTop: 6 }}>
+          <span style={badge('var(--ink-2, #555)')} data-testid="effective-fsc-native-badge">Native context</span>
+          {fsc.nativeItems.length === 0
+            ? <p data-testid="effective-fsc-native-empty" style={{ ...meta, marginTop: 4 }}>No native Founder Strategic Context yet.</p>
+            : <ul data-testid="effective-fsc-native" style={{ margin: '4px 0 0', paddingLeft: 18 }}>{fsc.nativeItems.map((i) => <li key={i.id} style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink-1)' }}>{i.content}</li>)}</ul>}
+          {fsc.promotedLearningItems.length === 0
+            ? <p data-testid="effective-fsc-promoted-empty" style={{ ...meta, marginTop: 8 }}>No promoted learnings in your Founder Strategic Context.</p>
+            : fsc.promotedLearningItems.map((p) => <PromotedLine key={p.id} p={p} target="fsc" />)}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // Page-level, persisted list of the founder's learning THREADS + the promotion ledger's effective sets. Survives refresh.
 function LearningsList({ on401 }: { on401: (e: unknown) => void }) {
   const [threads, setThreads] = useState<LearningThreadView[] | null>(null);
@@ -1168,10 +1226,13 @@ function LearningsList({ on401 }: { on401: (e: unknown) => void }) {
       <span style={sectionLabel}>Your durable strategic learnings</span>
       <p style={{ ...meta, marginTop: 2 }}>Refine, contest, supersede, or retire each — every change keeps the full history. You can also promote a specific revision into your Business Understanding or Founder Strategic Context (rarely — that’s an explicit governance act).</p>
       {threads.map((t) => <ThreadCard key={t.logicalLearningId} thread={t} promoted={promotedFor(t.logicalLearningId)} on401={on401} />)}
-      <div style={{ marginTop: 'var(--sp-4)', paddingTop: 'var(--sp-3)', borderTop: '1px solid var(--line)' }}>
-        <span style={sectionLabel}>Promoted into Business Understanding</span>
+      {/* CANONICAL authoritative effective context (native + promoted) — the single answer to "what is my current BU/FSC?" */}
+      <CanonicalEffectiveContext on401={on401} />
+      {/* Audit-only: the promotion history (ledger projection). Clearly separated from the canonical effective context. */}
+      <div data-testid="promotion-history" style={{ marginTop: 'var(--sp-4)', paddingTop: 'var(--sp-3)', borderTop: '1px solid var(--line)' }}>
+        <span style={sectionLabel}>Promotion history (Business Understanding)</span>
         <PromotedInto target="BUSINESS_UNDERSTANDING" items={bu} />
-        <div style={{ marginTop: 'var(--sp-3)' }}><span style={sectionLabel}>Promoted into Founder Strategic Context</span><PromotedInto target="FOUNDER_STRATEGIC_CONTEXT" items={fsc} /></div>
+        <div style={{ marginTop: 'var(--sp-3)' }}><span style={sectionLabel}>Promotion history (Founder Strategic Context)</span><PromotedInto target="FOUNDER_STRATEGIC_CONTEXT" items={fsc} /></div>
       </div>
     </section>
   );

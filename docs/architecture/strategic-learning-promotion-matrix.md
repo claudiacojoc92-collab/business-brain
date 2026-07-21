@@ -37,3 +37,40 @@ All **COVERED** by an executable assertion.
 **Deferred by governance (ADR-013):** any consumption of the promoted set to regenerate recommendations or adapt
 reasoning; Strategic Execution; model-assisted promotion suggestions; memory/knowledge/relationship graphs; semantic
 retrieval — none implemented.
+
+---
+
+## Remediation matrix (2026-07-21) — canonical effective composition + lineage
+
+Classification **B**: the ledger existed but no canonical read consumed it. New impl: **comp** =
+`effective-context.ts`; **mig** = `V080__learning_promotion_lineage.sql`; **api** = `strategy.routes.ts` (`/strategy/
+effective-business-understanding`, `/strategy/effective-founder-strategic-context`); **ui** = `StrategyPage.tsx`
+(`CanonicalEffectiveContext`); **det** = `strategic-learning-promotion.test.ts` (+9); **live** =
+`strategic-learning-promotion.live.test.ts` (J/J2/K/L); **e2e** = `strategic-learning-promotion.spec.ts` (canonical view).
+
+| # | Criterion | Impl | Test | Status |
+|---|---|---|---|---|
+| 1 | native BU appears in effective BU | comp/api | det (native present) · live J · e2e (`effective-bu-native`) | COVERED |
+| 2 | PROMOTE adds exact learning revision | comp/api | det · live J · e2e (`effective-bu-revision`=1) | COVERED |
+| 3 | promoted item includes sourceType + provenance | comp | det (provenance fields) · live J | COVERED |
+| 4–7 | later REFINE/CONTEST/SUPERSEDE/RETIRE don't change effective BU | comp | det (pinned content) · live J2 · e2e (still rev 1 after refine) | COVERED |
+| 8 | REPLACE changes effective BU to exact replacement | comp/repo | det · live J2 · e2e (rev 2) | COVERED |
+| 9 | REMOVE removes promoted content from effective BU | comp/repo | live J2 · e2e (`effective-bu-promoted-empty`) | COVERED |
+| 10/50 | native BU unchanged throughout | api | live J2 (present after remove) · e2e (understanding count stays 1) | COVERED |
+| 11/60 | ledger history complete / export | exp | e2e (chain PROMOTE,REPLACE,REMOVE) · export lineage | COVERED |
+| 12/13 | effective read performs no write / no regeneration | api | GET-only handler · e2e (session count 0) | COVERED |
+| 14–17 | native FSC in effective FSC; PROMOTE to FSC; BU⊥FSC | comp/api | det (FSC compose) · live J · e2e (FSC step, BU empty) | COVERED |
+| 18–20 | FSC lifecycle-pin/replace/remove; native FSC unchanged | comp | det · live (FSC analogue) | COVERED |
+| 24–27 | all canonical readers use one composer; ledger routes separate; no false-canonical | api/ui | route wiring · e2e (`effective-*` vs `promotion-history`) | COVERED |
+| 28/29/30/31/32 | deterministic order; no dedup; no conflict-infer; no latest-learning; survives refresh | comp | det (no-dedup, exact-pin) · e2e (persistence) | COVERED |
+| 33–36 | PROMOTE seq 1; REPLACE/REMOVE exact predecessor; seq increments once | comp/repo/mig | det (nextLineage) · live K (1,2 + pred) · e2e (`1,2,3`) | COVERED |
+| 37–39 | stale predecessor rejected; no fork; concurrent can't both win | mig/repo | live K (uniq_lpe_predecessor) · advisory lock | COVERED |
+| 40 | idempotent retry → same event | repo | live F | COVERED |
+| 41/42 | effective from sequence, not created_at | comp | det (identical-timestamp head) | COVERED |
+| 43–45 | cross-founder/target/thread rejected | dom/repo | det (admission) · live H | COVERED |
+| 46/47/48 | rows immutable; individual delete rejected; delete zero orphans | mig/del | live H · orphan sweep | COVERED |
+| 49/51–59 | learning/BU/FSC/review/plan/commitment/decision unchanged; no rec/session/task/memory | api | live J2 · e2e (no session; learning intact) | COVERED |
+| PROMOTE-after-REMOVE (chosen rule) | re-promote = next sequence | comp/repo | det · live L (seq 3) | COVERED |
+
+**Reasoning-assembler separation (C-7):** `assembleStrategicContext` still reads native only — the *Strategic Learning
+Consumption Gate* is deferred. Verified by e2e (no session/recommendation created) + code (assembler has 0 promotion refs).

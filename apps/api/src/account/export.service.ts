@@ -169,8 +169,9 @@ export async function buildFounderExport(args: {
   // ADR-013 — Strategic Learning Promotion events: append-only ledger of founder-explicit promotions of an EXACT
   // learning revision into BU/FSC. Full history preserved (Law 19). Writes to no other table.
   const learningPromotions = (await db.selectFrom('business.learning_promotion_event')
-    .select(['id', 'target', 'logical_learning_id', 'learning_revision_id', 'revision_number', 'promotion_action', 'rationale', 'scope', 'created_at'])
-    .where('founder_id', '=', founderId).orderBy('created_at', 'asc').orderBy('id', 'asc').execute()) as Array<Record<string, unknown>>;
+    .select(['id', 'target', 'logical_learning_id', 'learning_revision_id', 'revision_number', 'promotion_action', 'rationale', 'scope', 'created_at', 'promotion_sequence', 'predecessor_promotion_event_id'])
+    // deterministic chain order (V080 lineage): by thread/target then explicit sequence — the complete promotion chain
+    .where('founder_id', '=', founderId).orderBy('target', 'asc').orderBy('logical_learning_id', 'asc').orderBy('promotion_sequence', 'asc').execute()) as Array<Record<string, unknown>>;
 
   // Run history — founder-safe (error CATEGORY only; never the internal error_detail).
   const runs = (await db
@@ -260,6 +261,8 @@ export async function buildFounderExport(args: {
     learningPromotions: learningPromotions.map((p) => ({
       id: String(p['id']), target: String(p['target']), promotionAction: String(p['promotion_action']), scope: String(p['scope']), rationale: String(p['rationale']),
       learning: { logicalLearningId: String(p['logical_learning_id']), revisionId: String(p['learning_revision_id']), revision: Number(p['revision_number']) },
+      // explicit lineage (V080) — the complete promotion chain, deterministically ordered
+      promotionSequence: Number(p['promotion_sequence']), predecessorPromotionEventId: p['predecessor_promotion_event_id'] ? String(p['predecessor_promotion_event_id']) : null,
       createdAt: iso(p['created_at']),
     })),
     understandingRuns: runs.map((r) => ({
