@@ -208,6 +208,15 @@ smuggle them in without a superseding gate). Each category names what it is and,
 - **What it is NOT:** not persistence (persistence ≠ memory); not context; not an inferred model of the founder's
   identity; not a silent write. Note: the legacy `memory.*` schema (thread/recommendation primitives, M2/ADR-010 era) is
   **not** this — see the current-state map.
+- **Strategic Learning (implemented precursor — *not* generic Strategic Memory):** a founder-explicit, append-only
+  **Strategic Learning Record** — a durable strategic understanding the founder *explicitly decides to keep* after a
+  review, with the full Review→Plan→Commitment→Decision→Recommendation→Evidence lineage. It records "what durably changed
+  in my strategic model", preserves uncertainty (`ESTABLISHED`/`TENTATIVE`/`CONDITIONAL`), and **never** auto-mutates
+  Business Understanding or Founder Strategic Context (Laws 12–14 — promotion into BU/FSC is a separate future gate).
+  Governed by [`strategic-learning-record-contract.md`](../governance/strategic-learning-record-contract.md) +
+  [`strategic-learning-record-slice.md`](../architecture/strategic-learning-record-slice.md); schema `strategic-learning-1`,
+  table `business.strategic_learning_record` (V076), append-only; no model role this slice. It is **not** generic Strategic
+  Memory (that still requires the §8 admission + §10 gate).
 
 ### §2 — Canonical matrix
 
