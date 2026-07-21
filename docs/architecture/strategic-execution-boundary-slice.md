@@ -69,3 +69,25 @@ metadata only → **classification B (revision-tagged)**.
 - **Export** — ordered by `plan_id, subject, report_sequence` so revisions are isolated.
 
 **Invariant:** no chain, sequence, predecessor, effective projection, UI view, or export spans two plan revisions.
+
+---
+
+## Second remediation architecture (2026-07-21) — database-enforced lineage integrity
+
+**Audit (direct-SQL probe, rolled back):** `predecessor_report_id` had **no foreign key** and no validating trigger, so
+raw inserts of cross-revision, cross-subject, cross-founder, and non-adjacent-sequence predecessors all **succeeded** —
+only the routes/repository rejected them → **classification B**. The DB already enforced append-only (`exr_no_update` /
+`exr_no_delete`), the sequence/predecessor *shape* (`exr_sequence_predecessor_shape`), per-revision sequence uniqueness
+(`uniq_exr_chain_sequence`, V084), and no-fork (`uniq_exr_predecessor`) — but never that the predecessor was in the *same
+canonical chain*.
+
+**V085 — canonical chain identity is now a database guarantee.** A `BEFORE INSERT` trigger loads the referenced
+predecessor `FOR SHARE` and rejects the row unless founder, `plan_id`, subject type, subject id all match and
+`NEW.report_sequence = predecessor.report_sequence + 1`; initial (sequence-1) and non-initial event shapes are
+re-asserted at the trigger so the same rules hold even under a `SET session_replication_role='replica'` bypass of CHECKs.
+No-fork, revision-scoped sequence uniqueness, append-only, account-deletion, and export are all preserved. Application
+route/repository validation is retained for good error messages; database failures map to the same bounded domain errors
+(Law 9 — application and DB agree).
+
+**Invariant:** no predecessor relationship — through any path, including direct SQL — can span two chains or skip a
+sequence.

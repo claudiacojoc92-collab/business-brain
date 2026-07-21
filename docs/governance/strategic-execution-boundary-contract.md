@@ -105,3 +105,43 @@ state per revision; reconstructing one revision never reconstructs another's exe
 
 **R7 — Revised acceptance.** Accept only when chain/sequence/predecessor/effective/API/UI/export identity all include the
 exact plan revision, cross-revision correction/withdrawal are rejected, and Playwright proves revision isolation.
+
+---
+
+## Second remediation clarification (2026-07-21) — the database owns structural lineage
+
+The revision-scoping remediation (V084) corrected the *application's* chain identity, but a direct-SQL audit
+(`docs/audit/strategic-execution-boundary-db-lineage-audit.md`, classification **B**) proved the **database** still
+accepts a predecessor pointing to another revision, another subject, another founder, or a non-adjacent sequence. The
+append-only ledger is only constitutionally sound if corrupt cross-chain lineage cannot be inserted through direct SQL, a
+future defective code path, a batch import, a migration, another repository, or disabled application validation. These
+laws make lineage integrity a database guarantee. Documentation only.
+
+**Law 1 — Database owns structural lineage.** Application validation improves errors and UX but is *not* the final
+authority for execution-report lineage. The database must reject structurally invalid predecessor relationships on its own.
+
+**Law 2 — Predecessor must match canonical identity.** A child and its predecessor must match on founder, exact Plan
+revision (`plan_id`), subject type, and subject id. Canonical chain identity =
+`(founder_id, plan_id, subject_type, subject_id)`.
+
+**Law 3 — Sequence must be adjacent.** For any non-initial event, `child.report_sequence = predecessor.report_sequence + 1`.
+A predecessor from an older, non-head sequence is structurally invalid even within the same chain.
+
+**Law 4 — Initial event shape.** The first event of a chain is `kind=REPORT`, `report_sequence=1`,
+`predecessor_report_id IS NULL`. No CORRECT or WITHDRAW may begin a chain.
+
+**Law 5 — Non-initial event shape.** Every event with `report_sequence > 1` has a predecessor; every CORRECT and every
+WITHDRAW has a predecessor.
+
+**Law 6 — No cross-chain linkage.** The database rejects a predecessor belonging to another founder, another Plan
+revision, another subject type, or another subject id.
+
+**Law 7 — No fork.** At most one child may reference a given predecessor. The existing `uniq_exr_predecessor` no-fork
+enforcement remains.
+
+**Law 8 — Append-only remains.** No lineage remediation may weaken the UPDATE prohibition, the DELETE prohibition, the
+founder-account-deletion behavior, export completeness, or deterministic chain resolution.
+
+**Law 9 — Application and database semantics agree.** Application-level and database-level errors represent the same
+constitutional rules. The application must not permit what the database rejects; the database must not permit what the
+application considers constitutionally invalid.

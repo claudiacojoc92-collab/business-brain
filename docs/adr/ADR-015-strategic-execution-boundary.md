@@ -101,3 +101,19 @@ enforced independently of the milestone-id strategy.
 Accept only when chain identity, sequence, predecessor, effective state, API resolution, UI projection, and export are all
 scoped to `(founder, plan_revision_id, subject)`; correction/withdrawal cannot cross revisions; and Playwright proves that
 Revision 1 shows only Revision 1 execution and Revision 2 shows only Revision 2 execution.
+
+---
+
+## Third clarification (2026-07-21) — database-enforced lineage integrity
+
+**Why a third pass.** Revision-scoping (V084) fixed the *application's* chain identity, but a direct-SQL audit
+(classification **B**) showed the **database** would still accept a predecessor from another revision, subject, founder,
+or a non-adjacent sequence: `predecessor_report_id` had no foreign key and no trigger comparing chain identity or
+sequence. Chain integrity was application-only.
+
+**Governing answer.** The database must independently guarantee that every predecessor relationship stays inside one
+canonical execution-report chain — `(founder_id, plan_id, subject_type, subject_id)` — with `child.report_sequence =
+predecessor.report_sequence + 1`. A valid predecessor must not depend only on route or repository validation, because the
+append-only ledger is constitutional only if corrupt cross-chain lineage cannot enter through direct SQL, a future
+defective code path, a batch import, a migration error, another repository, or disabled application validation. See Laws
+1–9 in the governance contract and the V085 remediation.
