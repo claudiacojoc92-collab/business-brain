@@ -76,3 +76,45 @@ Accepted only when: promotion changes context but creates no snapshot/recommenda
 a later promotion does **not** alter an existing snapshot (L8); a later learning revision does **not** alter an existing
 snapshot (L8); a recommendation **references** its snapshot (L7); history is **reproducible** (L6) — with native/learning
 history unchanged (L3/L4), no automatic regeneration/invalidation/recomputation (L9/L10/L11), and no model authority (L12).
+
+---
+
+## Remediation clarification (2026-07-21) — mandatory gate + full-input reproducibility
+
+The initial slice made snapshot binding optional and kept a live fallback, and the strategist consumed market/positioning
+context + the objective **live and unrecorded**. This clarification makes consumption a constitutional gate. Documentation
+only.
+
+**R1 — Mandatory for new generation.** Every new recommendation-generation command **requires** a founder-owned immutable
+snapshot. Missing / foreign / nonexistent snapshot → rejected **before** the worker runs (`CONTEXT_SNAPSHOT_REQUIRED`).
+Enforced at the API schema, the domain command, session creation, a DB CHECK, and the worker. Not UI-only.
+
+**R2 — No live fallback.** No new-generation path reads live BU/FSC/promotion/market/positioning or any other mutable
+reasoning input. The worker consumes only the frozen snapshot; if a governed session has no snapshot it fails, it does not
+fall back.
+
+**R3 — Legacy read-only.** `generation_contract_version = 0` sessions (null snapshot) remain readable but are **not**
+reproducible and **cannot regenerate live**; any retry/rerun rejects with `CONTEXT_SNAPSHOT_REQUIRED`. No retrospective
+snapshots are invented; legacy rows are never mutated.
+
+**R4 — Snapshot completeness.** The snapshot freezes the **entire** governed reasoning input actually consumed: Effective BU
+(native + promoted), Effective FSC (native + promoted), **and public-positioning/market context** — each with provenance +
+deterministic ordering, no later live lookups. The objective/question is pinned (stored + hashed) in the generation record.
+
+**R5 — Generation provenance (server-resolved).** Each new generation record stores: `contextSnapshotId`,
+`snapshotContentHash` (SHA-256), snapshot `payloadSchemaVersion`, `strategistVersion`, `promptTemplateHash` (SHA-256 of the
+`SYSTEM` prompt), `modelId`, material `modelConfiguration`, `objectiveHash`, `generatedAt`. The client cannot submit snapshot
+content, any hash, the prompt hash, or model provenance — the server resolves them.
+
+**R6 — SHA-256 authoritative.** `computeContextSnapshotHash(payload) = SHA-256(canonical serialize)`, lowercase hex,
+server-side, key-order-stable, array-order-sensitive, content-sensitive, export-preserved, re-verifiable. A `hash_algorithm`
+column records it. Dev snapshot rows are all removable (0 persistent) → clean forward migration; FNV is not relabelled.
+
+**R7 — No automatic reaction.** No automatic snapshot creation, regeneration, invalidation, background recomputation,
+reaction to promotion, or downstream execution. Founder explicitly (1) snapshots, (2) generates.
+
+**R8 — Contract version.** `generation_contract_version`: legacy = 0 (null snapshot allowed), governed = 1 (snapshot +
+provenance required, enforced by CHECK). All current write paths create version 1.
+
+**R9 — Revised acceptance.** Accept only when R1–R8 hold, current-context changes cannot alter a frozen generation input,
+prompt/model provenance is recorded, SHA-256 is authoritative, and Playwright proves the mandatory gate.

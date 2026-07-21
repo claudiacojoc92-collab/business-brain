@@ -44,3 +44,29 @@ Immutable snapshots (L3/L4/L5); explicit-only creation + consumption (L1/L2/L9);
 recommendation references the exact snapshot (L7) and stays reproducible (L6/L8); no model authority (L12); frozen
 strategist engine untouched. Deferred: automatic regeneration, market-context freeze, execution, agents, memory, graphs,
 embeddings, semantic retrieval.
+
+---
+
+## Remediation architecture (2026-07-21) — mandatory gate, full-input freeze, SHA-256
+
+**Audit (code-traced).** `POST /strategy/sessions` (optional `contextSnapshotId`) → `sessionRepo.create` → worker
+`processSession` → `assembleStrategicContext` → `model.reason(JSON.stringify(context))`. The strategist's user message is
+the **whole** `StrategicContext`; `SYSTEM` is a constant prompt. Live/unrecorded (class **E/C**): market + public-positioning
+context (`effectiveMarketContext`/`findings.listByFounder`/`listEntityViews`), the objective (`questionText`+`decisionHorizon`),
+the BU/FSC live fallback, and the unrecorded `SYSTEM` prompt + `max_tokens` config.
+
+**Added:**
+- **V082** — `context_snapshot`: `hash_algorithm`, `payload_schema_version`, `public_positioning_context` (frozen market
+  context). `strategic_session`: `generation_contract_version` (0 legacy / 1 governed), `snapshot_content_hash`,
+  `snapshot_schema_version`, `strategist_version`, `prompt_template_hash`, `model_configuration`, `objective_hash`,
+  `generated_at`; CHECK `generation_contract_version = 0 OR context_snapshot_id IS NOT NULL`.
+- **SHA-256** — `computeContextSnapshotHash` (node `crypto`, canonical serialize) replaces FNV-1a in `context-snapshot.ts`.
+- **Snapshot completeness** — capture + payload freeze `publicPositioningContext`; the assembler `frozen` override now
+  carries BU + FSC + public-positioning, skipping ALL live reads when frozen.
+- **Mandatory gate** — API requires `contextSnapshotId` (400 `CONTEXT_SNAPSHOT_REQUIRED`, 404 foreign/missing); domain +
+  session-create require it for contract 1; worker requires the loaded snapshot, verifies its SHA-256, builds the frozen
+  input, records generation provenance, and never reads live context. Legacy (v0) retries reject.
+- **Provenance** — `StrategyModel` exposes `promptTemplateHash` + `modelConfiguration`; the worker records the full
+  `GenerationProvenance` on the session. Export + delete extended.
+- **UI** — the ask-a-question flow is gated behind snapshot selection; legacy sessions are labelled non-reproducible with no
+  live-regenerate control.
