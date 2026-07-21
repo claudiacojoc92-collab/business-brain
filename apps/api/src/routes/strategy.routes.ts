@@ -13,10 +13,12 @@ import { PgStrategicResponseRepository } from '../business-model/pg-strategic-re
 import { PgStrategicDecisionRepository } from '../business-model/pg-strategic-decision.repository';
 import { PgStrategicCommitmentRepository } from '../business-model/pg-strategic-commitment.repository';
 import { PgStrategicPlanRepository } from '../business-model/pg-strategic-plan.repository';
+import { PgStrategicPlanReviewRepository } from '../business-model/pg-strategic-plan-review.repository';
 import { PgFounderStrategicContextRepository } from '../business-model/pg-founder-strategic-context.repository';
 import { assertDecisionAdmissible, toDecisionView, DecisionValidationError, type DecisionInput } from '../business-model/strategic-decision';
 import { assertCommitmentAdmissible, toCommitmentView, linkedDecisionStatus, CommitmentValidationError, type CommitmentInput, type ResourceEnvelopeItem, type AcceptedCost } from '../business-model/strategic-commitment';
 import { assertPlanAdmissible, toPlanView, linkedCommitmentStatus, PlanValidationError, type PlanInput, type Milestone, type Assumption, type Dependency } from '../business-model/strategic-plan';
+import { assertReviewAdmissible, toReviewView, linkedCommitmentStatusForReview, ReviewValidationError, type PlanReviewInput, type ReviewObservation, type EvidenceReference, type ContextChange } from '../business-model/strategic-plan-review';
 import { AnthropicStrategyModel } from '../business-model/anthropic-strategy.model';
 import { strategyModelConfig } from '../business-model/model-config';
 import { startStrategicSessionWorker } from '../business-model/strategic-session.worker';
@@ -36,6 +38,7 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
   const decisionRepo = new PgStrategicDecisionRepository(db);
   const commitmentRepo = new PgStrategicCommitmentRepository(db);
   const planRepo = new PgStrategicPlanRepository(db);
+  const planReviewRepo = new PgStrategicPlanReviewRepository(db);
   const assembler = {
     understanding: new PgUnderstandingRepository(db), conclusionResponses: new PgConclusionResponseRepository(db),
     entities: new PgMarketEntityRepository(db), findings: new PgMarketFindingRepository(db),
@@ -373,4 +376,70 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
       await reply.code(201).send({ plan: toPlanView(plan) });
     });
   }
+
+  // ── Strategic Plan Review Records (founder-explicit; append-only; creates NO lifecycle mutation) ──────────
+  const reviewInput = (b: Record<string, unknown>): PlanReviewInput => {
+    const obs = Array.isArray(b['observations']) ? (b['observations'] as Array<Record<string, unknown>>) : [];
+    const ev = Array.isArray(b['evidenceReferences']) ? (b['evidenceReferences'] as Array<Record<string, unknown>>) : [];
+    const aa = Array.isArray(b['assumptionAssessments']) ? (b['assumptionAssessments'] as Array<Record<string, unknown>>) : [];
+    const da = Array.isArray(b['dependencyAssessments']) ? (b['dependencyAssessments'] as Array<Record<string, unknown>>) : [];
+    const ma = Array.isArray(b['milestoneAssessments']) ? (b['milestoneAssessments'] as Array<Record<string, unknown>>) : [];
+    const cc = Array.isArray(b['contextChanges']) ? (b['contextChanges'] as Array<Record<string, unknown>>) : [];
+    return {
+      reviewStatement: b['reviewStatement'] != null ? String(b['reviewStatement']) : null,
+      reviewPeriodStart: b['reviewPeriodStart'] != null ? String(b['reviewPeriodStart']) : null, reviewPeriodEnd: b['reviewPeriodEnd'] != null ? String(b['reviewPeriodEnd']) : null,
+      observations: obs.map((o): NonNullable<PlanReviewInput['observations']>[number] => ({ statement: String(o['statement'] ?? ''), sourceType: String(o['sourceType'] ?? 'FOUNDER_REPORTED') as ReviewObservation['sourceType'], evidenceRef: o['evidenceRef'] != null ? String(o['evidenceRef']) : null, observedAt: o['observedAt'] != null ? String(o['observedAt']) : null, certainty: (o['certainty'] != null ? String(o['certainty']) : 'UNKNOWN') as ReviewObservation['certainty'] })),
+      evidenceReferences: ev.map((e): EvidenceReference => ({ space: String(e['space'] ?? '') as EvidenceReference['space'], id: String(e['id'] ?? '') })),
+      assumptionAssessments: aa.map((a) => ({ originalIndex: Number(a['originalIndex'] ?? -1), assessment: String(a['assessment'] ?? '') as NonNullable<PlanReviewInput['assumptionAssessments']>[number]['assessment'], explanation: a['explanation'] != null ? String(a['explanation']) : null })),
+      dependencyAssessments: da.map((d) => ({ originalIndex: Number(d['originalIndex'] ?? -1), assessment: String(d['assessment'] ?? '') as NonNullable<PlanReviewInput['dependencyAssessments']>[number]['assessment'], explanation: d['explanation'] != null ? String(d['explanation']) : null })),
+      milestoneAssessments: ma.map((m) => ({ milestoneId: String(m['milestoneId'] ?? ''), assessment: String(m['assessment'] ?? '') as NonNullable<PlanReviewInput['milestoneAssessments']>[number]['assessment'], explanation: m['explanation'] != null ? String(m['explanation']) : null })),
+      contextChanges: cc.map((c): ContextChange => ({ category: String(c['category'] ?? 'OTHER') as ContextChange['category'], statement: String(c['statement'] ?? '') })),
+      unresolvedUnknowns: Array.isArray(b['unresolvedUnknowns']) ? (b['unresolvedUnknowns'] as unknown[]).map((x) => String(x)) : [],
+      reviewConclusion: String(b['reviewConclusion'] ?? '') as PlanReviewInput['reviewConclusion'], selectedDisposition: String(b['selectedDisposition'] ?? '') as PlanReviewInput['selectedDisposition'],
+      idempotencyKey: String(b['idempotencyKey'] ?? ''),
+    };
+  };
+
+  // Create ONE Strategic Plan Review of an EXACT plan revision (explicit; creates NO plan/commitment lifecycle change).
+  server.post('/strategy/plans/:logicalPlanId/reviews', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const logicalPlanId = (request.params as { logicalPlanId: string }).logicalPlanId;
+    const now = new Date();
+    const history = await planRepo.getHistory(founderId, logicalPlanId, now); // founder-owned only → cross-founder = 404
+    if (!history.length) { await reply.code(404).send({ error: 'not found' }); return; }
+    const b = (request.body ?? {}) as Record<string, unknown>;
+    const targetId = b['planRecordId'] != null ? String(b['planRecordId']) : null;
+    const plan = targetId ? history.find((p) => p.id === targetId) : history[history.length - 1]; // any revision may be reviewed
+    if (!plan) { await reply.code(404).send({ error: 'not found' }); return; }
+    const input = reviewInput(b);
+    try { assertReviewAdmissible(plan, input); }
+    catch (e) { if (e instanceof ReviewValidationError) { await reply.code(400).send({ error: e.message, reason: e.reason }); return; } throw e; }
+    const review = await planReviewRepo.create(founderId, plan, input, now);
+    await reply.code(201).send({ review: toReviewView(review, { linkedCommitment: 'CURRENT' }) });
+  });
+
+  server.get('/strategy/plans/:logicalPlanId/reviews', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const logicalPlanId = (request.params as { logicalPlanId: string }).logicalPlanId;
+    const owned = await planRepo.getEffective(founderId, logicalPlanId, new Date());
+    if (!owned) { await reply.code(404).send({ error: 'not found' }); return; }
+    await reply.send({ reviews: (await planReviewRepo.listByPlan(founderId, logicalPlanId)).map((r) => toReviewView(r)) });
+  });
+
+  server.get('/strategy/plan-reviews/:reviewId', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const review = await planReviewRepo.getById(founderId, (request.params as { reviewId: string }).reviewId);
+    if (!review) { await reply.code(404).send({ error: 'not found' }); return; }
+    const now = new Date();
+    // neutral read-time notices — never mutate anything
+    const effCommitment = await commitmentRepo.getEffective(founderId, review.commitmentLogicalId, now);
+    const linked = linkedCommitmentStatusForReview(effCommitment?.status ?? null, effCommitment?.id ?? null, review.commitmentRecordId);
+    const effPlan = await planRepo.getEffective(founderId, review.planLogicalId, now);
+    const planHistory = await planRepo.getHistory(founderId, review.planLogicalId, now);
+    const reviewedPlanStatusNow = planHistory.find((p) => p.id === review.planRecordId)?.status;
+    await reply.send({ review: toReviewView(review, { linkedCommitment: linked, newerPlanRevisionExists: !!effPlan && effPlan.revision > review.planRevision, planStatusNow: reviewedPlanStatusNow }) });
+  });
 }

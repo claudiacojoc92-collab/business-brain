@@ -41,6 +41,7 @@ export interface FounderExport {
   strategicDecisions: unknown[];
   strategicCommitments: unknown[];
   strategicPlans: unknown[];
+  strategicPlanReviews: unknown[];
   meta: { note: string };
 }
 
@@ -151,6 +152,12 @@ export async function buildFounderExport(args: {
     .select(['id', 'logical_plan_id', 'revision', 'lifecycle', 'supersedes_id', 'commitment_record_id', 'commitment_logical_id', 'commitment_revision', 'commitment_schema_version', 'decision_record_id', 'recommendation_session_id', 'provenance_manifest_version', 'alignment_at_planning', 'grounding_status_at_planning', 'title', 'strategic_intent', 'scope', 'planning_horizon', 'milestones', 'assumptions', 'dependencies', 'resource_constraints', 'review_conditions', 'exit_conditions', 'no_milestone_rationale', 'acknowledged_insufficient_evidence', 'uncertainty_at_planning', 'conflicts', 'authorship', 'expires_at', 'activated_at', 'created_at'])
     .where('founder_id', '=', founderId).orderBy('logical_plan_id', 'asc').orderBy('revision', 'asc').execute()) as Array<Record<string, unknown>>;
 
+  // ADR-011 cat 12 (review sub-capability) — Strategic Plan Review Records: append-only reviews of exact plan revisions;
+  // founder-reported observations are NOT verified evidence; assessments map to the exact original plan elements.
+  const strategicPlanReviews = (await db.selectFrom('business.strategic_plan_review_record')
+    .select(['id', 'logical_review_id', 'revision', 'schema_version', 'plan_record_id', 'plan_logical_id', 'plan_revision', 'plan_schema_version', 'commitment_record_id', 'commitment_logical_id', 'commitment_revision', 'decision_record_id', 'recommendation_session_id', 'provenance_manifest_version', 'grounding_status_at_planning', 'alignment_at_planning', 'review_statement', 'review_period_start', 'review_period_end', 'observations', 'evidence_references', 'assumption_assessments', 'dependency_assessments', 'milestone_assessments', 'context_changes', 'unresolved_unknowns', 'review_conclusion', 'selected_disposition', 'authorship', 'created_at'])
+    .where('founder_id', '=', founderId).orderBy('created_at', 'asc').execute()) as Array<Record<string, unknown>>;
+
   // Run history — founder-safe (error CATEGORY only; never the internal error_detail).
   const runs = (await db
     .selectFrom('business.understanding_run')
@@ -227,6 +234,10 @@ export async function buildFounderExport(args: {
     strategicPlans: strategicPlans.map((p) => {
       const j = (v: unknown) => (v == null ? null : typeof v === 'string' ? JSON.parse(v) : v);
       return { id: String(p['id']), logicalPlanId: String(p['logical_plan_id']), revision: Number(p['revision']), lifecycle: String(p['lifecycle']), supersedesId: (p['supersedes_id'] as string | null) ?? null, commitment: { recordId: String(p['commitment_record_id']), logicalId: String(p['commitment_logical_id']), revision: Number(p['commitment_revision']), schemaVersion: String(p['commitment_schema_version']) }, decisionRecordId: (p['decision_record_id'] as string | null) ?? null, recommendationSessionId: (p['recommendation_session_id'] as string | null) ?? null, provenanceManifestVersion: (p['provenance_manifest_version'] as string | null) ?? null, alignmentAtPlanning: String(p['alignment_at_planning']), groundingStatusAtPlanning: (p['grounding_status_at_planning'] as string | null) ?? null, title: String(p['title']), strategicIntent: String(p['strategic_intent']), scope: String(p['scope']), planningHorizon: (p['planning_horizon'] as string | null) ?? null, milestones: j(p['milestones']), assumptions: j(p['assumptions']), dependencies: j(p['dependencies']), resourceConstraints: j(p['resource_constraints']), reviewConditions: j(p['review_conditions']), exitConditions: j(p['exit_conditions']), noMilestoneRationale: (p['no_milestone_rationale'] as string | null) ?? null, acknowledgedInsufficientEvidence: p['acknowledged_insufficient_evidence'] === true, uncertaintyAtPlanning: j(p['uncertainty_at_planning']), conflicts: j(p['conflicts']), authorship: j(p['authorship']), expiresAt: iso(p['expires_at']), activatedAt: iso(p['activated_at']), createdAt: iso(p['created_at']), planSchemaVersion: 'strategic-plan-1' };
+    }),
+    strategicPlanReviews: strategicPlanReviews.map((r) => {
+      const j = (v: unknown) => (v == null ? null : typeof v === 'string' ? JSON.parse(v) : v);
+      return { id: String(r['id']), logicalReviewId: String(r['logical_review_id']), revision: Number(r['revision']), plan: { recordId: String(r['plan_record_id']), logicalId: String(r['plan_logical_id']), revision: Number(r['plan_revision']), schemaVersion: String(r['plan_schema_version']) }, commitment: { recordId: String(r['commitment_record_id']), logicalId: String(r['commitment_logical_id']), revision: Number(r['commitment_revision']) }, decisionRecordId: (r['decision_record_id'] as string | null) ?? null, recommendationSessionId: (r['recommendation_session_id'] as string | null) ?? null, provenanceManifestVersion: (r['provenance_manifest_version'] as string | null) ?? null, groundingStatusAtPlanning: (r['grounding_status_at_planning'] as string | null) ?? null, alignmentAtPlanning: String(r['alignment_at_planning']), reviewStatement: (r['review_statement'] as string | null) ?? null, reviewPeriodStart: iso(r['review_period_start']), reviewPeriodEnd: iso(r['review_period_end']), observations: j(r['observations']), evidenceReferences: j(r['evidence_references']), assumptionAssessments: j(r['assumption_assessments']), dependencyAssessments: j(r['dependency_assessments']), milestoneAssessments: j(r['milestone_assessments']), contextChanges: j(r['context_changes']), unresolvedUnknowns: j(r['unresolved_unknowns']), reviewConclusion: String(r['review_conclusion']), selectedDisposition: String(r['selected_disposition']), authorship: j(r['authorship']), createdAt: iso(r['created_at']), reviewSchemaVersion: 'strategic-plan-review-1' };
     }),
     understandingRuns: runs.map((r) => ({
       id: String(r['id']), sourceKey: String(r['source_key']), status: String(r['status']), attempts: Number(r['attempt_count']),

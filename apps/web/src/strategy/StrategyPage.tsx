@@ -2,12 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import {
-  createStrategySession, getStrategySession, listStrategySessions, retryStrategySession, respondToStrategy, createDecision, createCommitment, createPlan, ApiError,
+  createStrategySession, getStrategySession, listStrategySessions, retryStrategySession, respondToStrategy, createDecision, createCommitment, createPlan, createPlanReview, ApiError,
   type StrategySessionView, type StrategyBoundary, type StrategicRecommendation, type InsufficientStrategicEvidence,
   type StrategyResponseType, type EpistemicKind, type Band, type EvidenceReference,
   type DecisionView, type DecisionAlternative, type ChosenOptionSource,
   type CommitmentView, type CommitmentScope, type Exclusivity,
   type PlanView, type PlanScope,
+  type PlanReviewView, type ReviewConclusion, type ReviewDisposition, type AssumptionAssessment, type DependencyAssessment, type MilestoneAssessment,
 } from '../api/client';
 import { AppShell, Button, Thinking } from '../system/ui';
 
@@ -610,6 +611,8 @@ function PlanPanel({ commitment, on401 }: { commitment: CommitmentView; on401: (
         <ul style={ulReset}>{saved.milestones.map((m) => <li key={m.id} style={{ ...meta, marginTop: 2 }}>{m.sequence}. {m.label}</li>)}</ul>
         {saved.conflicts.filter((c) => c.severity !== 'NON_BLOCKING').map((c, i) => <p key={i} style={{ ...meta, marginTop: 4, color: 'var(--warn-ink, var(--ink-3))' }}>· {c.description} ({SEVERITY_LABEL[c.severity]})</p>)}
         <p style={{ ...meta, marginTop: 8, fontStyle: 'italic' }}>This plan is active. It does not execute work or create tasks. You can supersede, retire, or cancel it.</p>
+        {/* Review is a SEPARATE, later act — it changes nothing (Law 13). */}
+        <ReviewPanel plan={saved} on401={on401} />
       </div>
     );
   }
@@ -663,6 +666,149 @@ function PlanPanel({ commitment, on401 }: { commitment: CommitmentView; on401: (
           {error && <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--danger-ink, #a33)', marginTop: 6 }}>{error}</p>}
           <div style={{ display: 'flex', gap: 10, marginTop: 'var(--sp-3)' }}>
             <Button loading={saving} disabled={!canActivate} onClick={() => void activate()}>Activate this plan</Button>
+            <Button variant="ghost" onClick={() => setOpen(false)}>Not now</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// A Strategic Plan Review — a SEPARATE, later founder act on an exact plan revision. The original plan is shown read-only;
+// the founder records observations and assesses each assumption/dependency/milestone, then a conclusion + intended
+// disposition. It changes NOTHING — no plan/commitment lifecycle, no execution/tasks/scores. Neutral throughout.
+const CONCLUSIONS: { v: ReviewConclusion; label: string }[] = [
+  { v: 'PLAN_REMAINS_COHERENT', label: 'The plan still holds together' },
+  { v: 'PLAN_NEEDS_REVISION', label: 'The plan needs revision' },
+  { v: 'PLAN_NO_LONGER_COHERENT', label: 'The plan no longer holds together' },
+  { v: 'MIXED_EVIDENCE', label: 'Mixed evidence' },
+  { v: 'COMMITMENT_REVIEW_NEEDED', label: 'The commitment itself needs a look' },
+  { v: 'INSUFFICIENT_INFORMATION', label: 'Not enough information yet' },
+];
+const DISPOSITIONS: { v: ReviewDisposition; label: string }[] = [
+  { v: 'CONTINUE_CURRENT_PLAN', label: 'Continue the current plan' },
+  { v: 'GATHER_MORE_INFORMATION', label: 'Gather more information' },
+  { v: 'CREATE_REVISED_PLAN', label: 'Create a revised plan (later, separately)' },
+  { v: 'SUPERSEDE_PLAN', label: 'Supersede the plan (later, separately)' },
+  { v: 'RECONSIDER_COMMITMENT', label: 'Reconsider the commitment (later, separately)' },
+  { v: 'ABANDON_PLAN', label: 'Abandon the plan' },
+  { v: 'RETIRE_PLAN', label: 'Retire the plan' },
+  { v: 'TAKE_NO_ACTION', label: 'Take no action for now' },
+];
+const A_ASSESS: AssumptionAssessment[] = ['NOT_REVIEWED', 'STILL_UNKNOWN', 'SUPPORTED', 'PARTIALLY_SUPPORTED', 'CONTRADICTED', 'NO_LONGER_RELEVANT'];
+const D_ASSESS: DependencyAssessment[] = ['NOT_REVIEWED', 'AVAILABLE', 'DEGRADED', 'UNAVAILABLE', 'UNKNOWN', 'NO_LONGER_REQUIRED'];
+const M_ASSESS: MilestoneAssessment[] = ['NOT_REVIEWED', 'EVIDENCE_NOT_AVAILABLE', 'CONDITION_NOT_MET', 'CONDITION_PARTIALLY_MET', 'CONDITION_MET', 'CONDITION_NO_LONGER_RELEVANT', 'CONDITION_CANNOT_BE_DETERMINED'];
+const nice = (s: string) => s.replace(/_/g, ' ').toLowerCase();
+function ReviewPanel({ plan, on401 }: { plan: PlanView; on401: (e: unknown) => void }) {
+  const [open, setOpen] = useState(false);
+  const [statement, setStatement] = useState('');
+  const [observations, setObservations] = useState(''); // one per line, founder-reported
+  const [aAssess, setAAssess] = useState<Record<number, AssumptionAssessment>>({});
+  const [dAssess, setDAssess] = useState<Record<number, DependencyAssessment>>({});
+  const [mAssess, setMAssess] = useState<Record<string, MilestoneAssessment>>({});
+  const [unknowns, setUnknowns] = useState('');
+  const [conclusion, setConclusion] = useState<ReviewConclusion | ''>('');
+  const [disposition, setDisposition] = useState<ReviewDisposition | ''>('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<PlanReviewView | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const canRecord = !!conclusion && !!disposition;
+
+  const record = async () => {
+    setSaving(true); setError(null);
+    try {
+      const r = await createPlanReview(plan.logicalPlanId, {
+        planRecordId: plan.planId,
+        reviewStatement: statement.trim() || null,
+        observations: observations.split('\n').map((s) => s.trim()).filter(Boolean).map((s) => ({ statement: s, sourceType: 'FOUNDER_REPORTED' as const })),
+        assumptionAssessments: Object.entries(aAssess).filter(([, v]) => v !== 'NOT_REVIEWED').map(([i, v]) => ({ originalIndex: Number(i), assessment: v })),
+        dependencyAssessments: Object.entries(dAssess).filter(([, v]) => v !== 'NOT_REVIEWED').map(([i, v]) => ({ originalIndex: Number(i), assessment: v })),
+        milestoneAssessments: Object.entries(mAssess).filter(([, v]) => v !== 'NOT_REVIEWED').map(([id, v]) => ({ milestoneId: id, assessment: v })),
+        unresolvedUnknowns: unknowns.split('\n').map((s) => s.trim()).filter(Boolean),
+        reviewConclusion: conclusion as ReviewConclusion, selectedDisposition: disposition as ReviewDisposition,
+        idempotencyKey: (globalThis.crypto?.randomUUID?.() ?? String(Date.now())),
+      });
+      setSaved(r); setOpen(false);
+    } catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setError(e instanceof ApiError ? e.message : 'Could not record the review.'); }
+    finally { setSaving(false); }
+  };
+
+  if (saved) {
+    return (
+      <div style={{ marginTop: 'var(--sp-4)', paddingTop: 'var(--sp-3)', borderTop: '1px dashed var(--line-2)' }}>
+        <span style={sectionLabel}>Your review on record</span>
+        <p style={{ ...meta, marginTop: 4 }}>Conclusion: {nice(saved.reviewConclusion)} · You intend to: {nice(saved.selectedDisposition)}</p>
+        <p style={{ ...meta, marginTop: 8, fontStyle: 'italic' }}>This recorded your review. It did not change the plan or commitment. Any next step is a separate, explicit action.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 'var(--sp-4)', paddingTop: 'var(--sp-3)', borderTop: '1px dashed var(--line-2)' }}>
+      {!open ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <Button variant="ghost" onClick={() => setOpen(true)}>Review this plan</Button>
+          <span style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ink-3)' }}>A review records what’s changed and what you make of it. It changes nothing on its own.</span>
+        </div>
+      ) : (
+        <div>
+          <span style={sectionLabel}>Review this plan</span>
+          <p style={{ ...meta, marginTop: 2 }}>Reviewing: <strong style={{ color: 'var(--ink-2)' }}>{plan.title}</strong> (revision {plan.revision}). The plan below is shown as it was — your review won’t change it.</p>
+
+          <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '12px 0 4px' }}>What have you observed since activating it? (one per line — your own report)</p>
+          <textarea value={observations} onChange={(e) => setObservations(e.target.value)} rows={2} placeholder="e.g. Posted 12 times; 3 demo requests came in." style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }} />
+
+          {plan.milestones.length > 0 && <>
+            <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '12px 0 4px' }}>Your milestones — is the strategic state there yet?</p>
+            {plan.milestones.map((m) => (
+              <div key={m.id} style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginBottom: 4 }}>
+                <span style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', flex: 1 }}>{m.label}</span>
+                <select value={mAssess[m.id] ?? 'NOT_REVIEWED'} onChange={(e) => setMAssess({ ...mAssess, [m.id]: e.target.value as MilestoneAssessment })} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', padding: '4px 6px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }}>{M_ASSESS.map((a) => <option key={a} value={a}>{nice(a)}</option>)}</select>
+              </div>
+            ))}
+          </>}
+
+          {plan.assumptions.length > 0 && <>
+            <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '12px 0 4px' }}>Your assumptions — do they still hold?</p>
+            {plan.assumptions.map((a, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginBottom: 4 }}>
+                <span style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', flex: 1 }}>{a.statement}</span>
+                <select value={aAssess[i] ?? 'NOT_REVIEWED'} onChange={(e) => setAAssess({ ...aAssess, [i]: e.target.value as AssumptionAssessment })} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', padding: '4px 6px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }}>{A_ASSESS.map((v) => <option key={v} value={v}>{nice(v)}</option>)}</select>
+              </div>
+            ))}
+          </>}
+
+          {plan.dependencies.length > 0 && <>
+            <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '12px 0 4px' }}>Your dependencies — where do they stand?</p>
+            {plan.dependencies.map((d, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginBottom: 4 }}>
+                <span style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', flex: 1 }}>{d.statement}</span>
+                <select value={dAssess[i] ?? 'NOT_REVIEWED'} onChange={(e) => setDAssess({ ...dAssess, [i]: e.target.value as DependencyAssessment })} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', padding: '4px 6px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }}>{D_ASSESS.map((v) => <option key={v} value={v}>{nice(v)}</option>)}</select>
+              </div>
+            ))}
+          </>}
+
+          <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '12px 0 4px' }}>What’s still unknown? (one per line)</p>
+          <textarea value={unknowns} onChange={(e) => setUnknowns(e.target.value)} rows={2} placeholder="e.g. Whether this pace is sustainable another month." style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }} />
+
+          <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '12px 0 4px' }}>Anything else you want to note?</p>
+          <textarea value={statement} onChange={(e) => setStatement(e.target.value)} rows={2} placeholder="Your read on where this plan stands." style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }} />
+
+          {/* conclusion + disposition kept visually separate */}
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 14 }}>
+            <label style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)' }}>What do you conclude?<br />
+              <select value={conclusion} onChange={(e) => setConclusion(e.target.value as ReviewConclusion)} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', padding: '6px 8px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', marginTop: 4, maxWidth: 300 }}><option value="">Choose…</option>{CONCLUSIONS.map((c) => <option key={c.v} value={c.v}>{c.label}</option>)}</select>
+            </label>
+            <label style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)' }}>What do you intend to do?<br />
+              <select value={disposition} onChange={(e) => setDisposition(e.target.value as ReviewDisposition)} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', padding: '6px 8px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', marginTop: 4, maxWidth: 300 }}><option value="">Choose…</option>{DISPOSITIONS.map((d) => <option key={d.v} value={d.v}>{d.label}</option>)}</select>
+            </label>
+          </div>
+
+          <p style={{ ...meta, marginTop: 14, fontStyle: 'italic' }}>This records your review. It does not change the plan or commitment.</p>
+          {error && <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--danger-ink, #a33)', marginTop: 6 }}>{error}</p>}
+          <div style={{ display: 'flex', gap: 10, marginTop: 'var(--sp-3)' }}>
+            <Button loading={saving} disabled={!canRecord} onClick={() => void record()}>Record this review</Button>
             <Button variant="ghost" onClick={() => setOpen(false)}>Not now</Button>
           </div>
         </div>

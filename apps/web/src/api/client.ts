@@ -511,6 +511,44 @@ export async function getPlan(logicalPlanId: string): Promise<{ plan: PlanView; 
   return request(`strategy/plans/${encodeURIComponent(logicalPlanId)}`);
 }
 
+// ─── Strategic Plan Review Record: a founder-EXPLICIT, append-only review of an exact plan revision ─────────
+// A review records observations + assessments + a conclusion + an intended disposition. It changes NOTHING —
+// no plan/commitment lifecycle, no execution/task/score. Founder-reported observations are not verified evidence.
+export type ReviewConclusion = 'PLAN_REMAINS_COHERENT' | 'PLAN_NEEDS_REVISION' | 'PLAN_NO_LONGER_COHERENT' | 'COMMITMENT_REVIEW_NEEDED' | 'INSUFFICIENT_INFORMATION' | 'MIXED_EVIDENCE';
+export type ReviewDisposition = 'CONTINUE_CURRENT_PLAN' | 'CREATE_REVISED_PLAN' | 'SUPERSEDE_PLAN' | 'ABANDON_PLAN' | 'RETIRE_PLAN' | 'RECONSIDER_COMMITMENT' | 'TAKE_NO_ACTION' | 'GATHER_MORE_INFORMATION';
+export type AssumptionAssessment = 'STILL_UNKNOWN' | 'SUPPORTED' | 'CONTRADICTED' | 'PARTIALLY_SUPPORTED' | 'NO_LONGER_RELEVANT' | 'NOT_REVIEWED';
+export type DependencyAssessment = 'AVAILABLE' | 'UNAVAILABLE' | 'DEGRADED' | 'UNKNOWN' | 'NO_LONGER_REQUIRED' | 'NOT_REVIEWED';
+export type MilestoneAssessment = 'NOT_REVIEWED' | 'EVIDENCE_NOT_AVAILABLE' | 'CONDITION_NOT_MET' | 'CONDITION_PARTIALLY_MET' | 'CONDITION_MET' | 'CONDITION_NO_LONGER_RELEVANT' | 'CONDITION_CANNOT_BE_DETERMINED';
+export interface PlanReviewView {
+  reviewId: string; logicalReviewId: string; revision: number;
+  plan: { recordId: string; logicalId: string; revision: number; schemaVersion: string };
+  commitment: { recordId: string; logicalId: string; revision: number };
+  reviewStatement: string | null; observations: unknown[]; evidenceReferences: unknown[];
+  assumptionAssessments: unknown[]; dependencyAssessments: unknown[]; milestoneAssessments: unknown[];
+  contextChanges: unknown[]; unresolvedUnknowns: string[]; reviewConclusion: ReviewConclusion; selectedDisposition: ReviewDisposition;
+  authorship: Record<string, string>; createdAt: string; reviewSchemaVersion: string;
+  linkedCommitmentStatus?: string; newerPlanRevisionExists?: boolean; reviewedPlanStatusNow?: string; notLifecycleAction: true;
+}
+export interface CreateReviewInput {
+  planRecordId?: string; reviewStatement?: string | null; reviewPeriodStart?: string | null; reviewPeriodEnd?: string | null;
+  observations?: Array<{ statement: string; sourceType: 'FOUNDER_REPORTED' | 'BUSINESS_RECORD_REFERENCE' | 'PUBLIC_REFERENCE' | 'SYSTEM_DERIVED'; certainty?: 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN' }>;
+  assumptionAssessments?: Array<{ originalIndex: number; assessment: AssumptionAssessment; explanation?: string | null }>;
+  dependencyAssessments?: Array<{ originalIndex: number; assessment: DependencyAssessment; explanation?: string | null }>;
+  milestoneAssessments?: Array<{ milestoneId: string; assessment: MilestoneAssessment; explanation?: string | null }>;
+  contextChanges?: Array<{ category: string; statement: string }>; unresolvedUnknowns?: string[];
+  reviewConclusion: ReviewConclusion; selectedDisposition: ReviewDisposition; idempotencyKey: string;
+}
+/** POST /strategy/plans/:logicalPlanId/reviews — record ONE founder review of an exact plan revision (no lifecycle change). */
+export async function createPlanReview(logicalPlanId: string, input: CreateReviewInput): Promise<PlanReviewView> {
+  const { review } = await request<{ review: PlanReviewView }>(`strategy/plans/${encodeURIComponent(logicalPlanId)}/reviews`, { method: 'POST', body: JSON.stringify(input) });
+  return review;
+}
+/** GET /strategy/plans/:logicalPlanId/reviews — all reviews of the plan, newest first. */
+export async function listPlanReviews(logicalPlanId: string): Promise<PlanReviewView[]> {
+  const { reviews } = await request<{ reviews: PlanReviewView[] }>(`strategy/plans/${encodeURIComponent(logicalPlanId)}/reviews`);
+  return reviews;
+}
+
 // ─── Founder Strategic Context: founder-declared strategic operating conditions (Wave 4, slice 1) ──────────
 // Five kinds (GOAL/CONSTRAINT/RESOURCE/STRATEGIC_PREFERENCE/DECISION_HORIZON). Append-only, temporal, scoped.
 // Every write is an explicit founder action — nothing is inferred or persisted without confirmation.
