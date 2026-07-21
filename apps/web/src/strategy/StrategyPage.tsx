@@ -15,6 +15,7 @@ import {
   createContextSnapshot, listContextSnapshots, type SnapshotView,
   listPlans, getPlan, getEffectiveExecution, addExecutionReport, correctExecutionReport, withdrawExecutionReport, listExecutionReports,
   type ExecutionState, type EffectiveExecutionResponse, type ExecutionReportView, type EvidenceType,
+  addOutcomeReview, listOutcomeReviews, type OutcomeReviewView, type ObservedOutcome,
 } from '../api/client';
 import { AppShell, Button, Thinking } from '../system/ui';
 
@@ -1385,6 +1386,84 @@ function ExecutionAccounting({ plan, on401 }: { plan: PlanView; on401: (e: unkno
   );
 }
 
+// ADR-016 — Strategic Outcome Review. The ONLY place intended action + founder-reported execution + evidence + observed
+// outcome are laid side by side, for one EXACT plan revision. An immutable historical assessment: it answers NO "what
+// next", creates NO learning, changes nothing, and shows NO score/rating. UNKNOWN is displayed explicitly. A second review
+// is a NEW immutable record; the first is never altered. Distinct from the mid-flight plan Review (ReviewPanel above).
+const OUTCOME_OPTS: Array<{ v: ObservedOutcome; label: string }> = [
+  { v: 'AS_INTENDED', label: 'As intended (as you report it)' }, { v: 'PARTIALLY_AS_INTENDED', label: 'Partially as intended' },
+  { v: 'NOT_AS_INTENDED', label: 'Not as intended' }, { v: 'UNKNOWN', label: 'Unknown — not enough to say' },
+];
+function OutcomeReviewPanel({ plan, on401 }: { plan: PlanView; on401: (e: unknown) => void }) {
+  const [reviews, setReviews] = useState<OutcomeReviewView[] | null>(null);
+  const [snaps, setSnaps] = useState<SnapshotView[]>([]);
+  const [open, setOpen] = useState(false);
+  const [outcome, setOutcome] = useState<ObservedOutcome | ''>('');
+  const [statement, setStatement] = useState('');
+  const [unknowns, setUnknowns] = useState('');
+  const [snapId, setSnapId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const load = useCallback(async () => {
+    try { setReviews(await listOutcomeReviews(plan.planId)); } catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setReviews([]); }
+    try { const s = await listContextSnapshots(); setSnaps(s); setSnapId((cur) => cur || (s[0]?.snapshotId ?? '')); } catch { /* noop */ }
+  }, [plan.planId, on401]);
+  useEffect(() => { void load(); }, [load]);
+  const makeSnapshot = async () => {
+    setErr(''); setBusy(true);
+    try { const s = await createContextSnapshot(); const list = await listContextSnapshots(); setSnaps(list); setSnapId(s.snapshotId); }
+    catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setErr('Could not create a snapshot.'); }
+    finally { setBusy(false); }
+  };
+  const submit = async () => {
+    setErr(''); setBusy(true);
+    try {
+      await addOutcomeReview(plan.planId, { contextSnapshotId: snapId, observedOutcome: outcome as ObservedOutcome, founderOutcomeStatement: statement.trim(), unknowns: unknowns.split('\n').map((u) => u.trim()).filter(Boolean), idempotencyKey: newKey() });
+      setOpen(false); setOutcome(''); setStatement(''); setUnknowns(''); await load();
+    } catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setErr(e instanceof ApiError ? e.message : 'Could not record the review.'); }
+    finally { setBusy(false); }
+  };
+  if (!reviews) return null;
+  return (
+    <section data-testid={`outcome-review-${plan.planId}`} style={{ marginTop: 'var(--sp-4)', paddingTop: 'var(--sp-3)', borderTop: '1px solid var(--line)' }}>
+      <span style={sectionLabel}>Strategic outcome review</span>
+      <p style={{ ...meta, marginTop: 2 }}>An <strong>immutable record</strong> of what was intended, what you reported, what evidence existed, and what you observed — for this exact plan revision. It <strong>describes</strong> history; it decides nothing, creates no learning, and is <strong>not a score</strong>. Later evidence makes a <em>new</em> review; earlier reviews never change.</p>
+      {reviews.length === 0 && <p data-testid={`outcome-review-none-${plan.planId}`} style={{ ...meta, marginTop: 6 }}>No outcome review yet.</p>}
+      {reviews.map((r) => (
+        <div key={r.reviewId} data-testid={`outcome-review-item-${plan.planId}-${r.reviewSequence}`} style={{ marginTop: 10, paddingLeft: 8, borderLeft: '2px solid var(--line)' }}>
+          <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink-1)' }}>Review #{r.reviewSequence} · <span data-testid={`outcome-verdict-${plan.planId}-${r.reviewSequence}`}>{r.observedOutcomeLabel}</span></p>
+          <p style={{ ...meta, marginTop: 2, fontStyle: 'italic' }}>“{r.founderOutcomeStatement}”</p>
+          <p style={{ ...meta, marginTop: 2 }}>Intended: {r.assessment.intended.milestones.map((m) => `${m.label} → ${m.intendedState}`).join(' · ') || r.assessment.intended.strategicIntent}</p>
+          <p style={{ ...meta, marginTop: 2 }}>Reported: {r.assessment.reported.length ? r.assessment.reported.map((s) => `${s.subjectId}: ${nice(s.reportedState)}`).join(' · ') : 'nothing reported'}</p>
+          <p style={{ ...meta, marginTop: 2 }}>Evidence at review: snapshot {r.contextSnapshotHash.slice(0, 12)}… · {r.assessment.evidence.executionEvidence.length} founder-supplied reference(s), none verified</p>
+          <p data-testid={`outcome-unknowns-${plan.planId}-${r.reviewSequence}`} style={{ ...meta, marginTop: 2 }}>Unknown: {r.unknowns.length ? r.unknowns.join(' · ') : (r.observedOutcome === 'UNKNOWN' ? 'outcome unknown — not enough to say' : 'none recorded')}</p>
+          <p style={{ ...meta, marginTop: 2, color: 'var(--ink-3)' }}>Immutable · not verified by Business Brain · not a score · reproducible (hash {r.reproducibility.contentHash.slice(0, 12)}…)</p>
+        </div>
+      ))}
+      {!open && <button type="button" data-testid={`outcome-review-open-${plan.planId}`} onClick={() => setOpen(true)} style={{ ...lcBtn, marginTop: 8 }}>Record an outcome review</button>}
+      {open && (
+        <div data-testid={`outcome-review-form-${plan.planId}`} style={{ marginTop: 10 }}>
+          {snaps.length === 0 && <p data-testid={`outcome-review-need-snapshot-${plan.planId}`} style={{ ...meta }}>Create a context snapshot first — a review freezes the exact context it was made against.</p>}
+          <button type="button" data-testid={`outcome-create-snapshot-${plan.planId}`} onClick={() => void makeSnapshot()} disabled={busy} style={{ ...lcBtn, marginTop: 6 }}>Create context snapshot</button>
+          <label style={{ ...meta, display: 'block', marginTop: 6 }}>Observed outcome
+            <select data-testid={`outcome-select-${plan.planId}`} aria-label="Observed outcome" value={outcome} onChange={(e) => setOutcome(e.target.value as ObservedOutcome)} style={selStyle}><option value="">Choose…</option>{OUTCOME_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}</select></label>
+          <label style={{ ...meta, display: 'block', marginTop: 6 }}>What you observed (your account — not verified)
+            <textarea data-testid={`outcome-statement-${plan.planId}`} value={statement} onChange={(e) => setStatement(e.target.value)} rows={2} placeholder="e.g. We shipped weekly for three weeks, then paused." style={taStyle} /></label>
+          <label style={{ ...meta, display: 'block', marginTop: 6 }}>What remains unknown (one per line)
+            <textarea data-testid={`outcome-unknowns-input-${plan.planId}`} value={unknowns} onChange={(e) => setUnknowns(e.target.value)} rows={2} placeholder="e.g. Whether the cadence drove the signups." style={taStyle} /></label>
+          {snaps.length > 0 && <label style={{ ...meta, display: 'block', marginTop: 6 }}>Context snapshot
+            <select data-testid={`outcome-snapshot-${plan.planId}`} aria-label="Context snapshot" value={snapId} onChange={(e) => setSnapId(e.target.value)} style={selStyle}>{snaps.map((s) => <option key={s.snapshotId} value={s.snapshotId}>{s.snapshotId.slice(0, 12)}… ({s.contentHash.slice(0, 8)}…)</option>)}</select></label>}
+          {err && <p data-testid={`outcome-review-error-${plan.planId}`} style={{ ...meta, color: 'var(--warn-ink)', marginTop: 6 }}>{err}</p>}
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <Button variant="primary" loading={busy} disabled={!outcome || !statement.trim() || !snapId} onClick={() => void submit()}><span data-testid={`outcome-submit-${plan.planId}`}>Record review</span></Button>
+            <button type="button" data-testid={`outcome-cancel-${plan.planId}`} onClick={() => { setOpen(false); setErr(''); }} style={lcBtn}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 // The founder's plans (intention). ADR-015 remediation: execution belongs to an EXACT plan revision, so EVERY revision is
 // listed as its own block with its OWN revision-scoped execution accounting. A later revision is a different intention and
 // starts with "No execution report" even if an earlier revision was reported — execution never migrates between revisions.
@@ -1411,6 +1490,7 @@ function PlansPanel({ on401 }: { on401: (e: unknown) => void }) {
           <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-4)', color: 'var(--ink)' }}>{p.title} <span data-testid={`plan-rev-label-${p.planId}`} style={{ ...meta }}>· revision {p.revision} · {nice(p.status)}</span></p>
           <ul style={ulReset}>{p.milestones.map((m) => <li key={m.id} style={{ ...meta, marginTop: 2 }}>Planned: {m.label}</li>)}</ul>
           <ExecutionAccounting plan={p} on401={on401} />
+          <OutcomeReviewPanel plan={p} on401={on401} />
         </div>
       ))}
     </section>

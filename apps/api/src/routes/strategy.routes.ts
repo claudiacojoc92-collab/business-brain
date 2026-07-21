@@ -30,6 +30,8 @@ import { captureEffectiveContext } from '../business-model/context-snapshot.capt
 import { toSnapshotView } from '../business-model/context-snapshot';
 import { PgExecutionReportRepository } from '../business-model/pg-execution-report.repository';
 import { toExecutionReportView, toEffectiveExecutionView, effectiveFromHead, chainHead as executionChainHead, ExecutionReportError, type ExecutionReportInput, type ReportKind, type ExecutionSubjectType } from '../business-model/execution-report';
+import { PgStrategicOutcomeReviewRepository } from '../business-model/pg-strategic-outcome-review.repository';
+import { toOutcomeReviewView, OutcomeReviewError, type ObservedOutcome, type StrategicOutcomeReviewInput } from '../business-model/strategic-outcome-review';
 import { AnthropicStrategyModel } from '../business-model/anthropic-strategy.model';
 import { strategyModelConfig } from '../business-model/model-config';
 import { startStrategicSessionWorker } from '../business-model/strategic-session.worker';
@@ -54,6 +56,7 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
   const promotionRepo = new PgLearningPromotionRepository(db);
   const snapshotRepo = new PgContextSnapshotRepository(db);
   const executionRepo = new PgExecutionReportRepository(db);
+  const outcomeReviewRepo = new PgStrategicOutcomeReviewRepository(db);
   const assembler = {
     understanding: new PgUnderstandingRepository(db), conclusionResponses: new PgConclusionResponseRepository(db),
     entities: new PgMarketEntityRepository(db), findings: new PgMarketFindingRepository(db),
@@ -532,6 +535,59 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
     const milestones = plan.milestones.map((m) => ({ milestoneId: m.id, label: m.label, execution: toEffectiveExecutionView(effectiveFromHead(executionChainHead(events, plan.id, 'MILESTONE', m.id), 'MILESTONE', m.id)) }));
     const planLevel = toEffectiveExecutionView(effectiveFromHead(executionChainHead(events, plan.id, 'PLAN', plan.logicalPlanId), 'PLAN', plan.logicalPlanId));
     await reply.send({ planIntention: { planId: plan.id, logicalPlanId: plan.logicalPlanId, revision: plan.revision, status: plan.status }, milestones, planLevel, notExecution: true, productExecutionStatus: 'NOT_PERFORMED_BY_PRODUCT' });
+  });
+
+  // STRATEGIC OUTCOME REVIEW (ADR-016). The ONLY place Business Brain compares intended action + founder-reported execution
+  // + available evidence + observed outcome, for one EXACT Plan revision. Append-only immutable historical assessment;
+  // deterministic composition of FROZEN inputs (exact plan revision + exact context snapshot + revision-scoped effective
+  // execution); UNKNOWN first-class; answers NO "what next"; creates NO Learning/Promotion; mutates NOTHING; no external
+  // action; verifies/scores nothing. No "latest" — planId is the exact revision and contextSnapshotId is exact.
+  const outcomeReviewErr = (reply: FastifyReply, e: OutcomeReviewError) => {
+    const status = e.reason === 'PLAN_NOT_FOUND' || e.reason === 'CONTEXT_SNAPSHOT_NOT_FOUND' ? 404 : 400;
+    return reply.code(status).send({ error: { code: e.reason, message: e.message }, reason: e.reason });
+  };
+  function outcomeReviewInputFrom(b: Record<string, unknown>): StrategicOutcomeReviewInput {
+    return {
+      contextSnapshotId: String(b['contextSnapshotId'] ?? ''),
+      founderOutcomeStatement: String(b['founderOutcomeStatement'] ?? ''),
+      observedOutcome: String(b['observedOutcome'] ?? '') as ObservedOutcome,
+      unknowns: Array.isArray(b['unknowns']) ? (b['unknowns'] as string[]) : [],
+      idempotencyKey: String(b['idempotencyKey'] ?? ''),
+    };
+  }
+
+  server.post('/strategy/plans/:planId/outcome-reviews', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const planId = (request.params as { planId: string }).planId; // the EXACT plan revision
+    const b = (request.body ?? {}) as Record<string, unknown>;
+    const input = outcomeReviewInputFrom(b);
+    const plan = await planRepo.getByRevisionId(founderId, planId, new Date()); // exact revision — no "latest"
+    if (!plan) { await reply.code(404).send({ error: { code: 'PLAN_NOT_FOUND', message: 'not found' }, reason: 'PLAN_NOT_FOUND' }); return; }
+    const snapshot = await snapshotRepo.getById(founderId, input.contextSnapshotId); // exact frozen snapshot — founder-owned only
+    if (!snapshot) { await reply.code(404).send({ error: { code: 'CONTEXT_SNAPSHOT_NOT_FOUND', message: 'context snapshot not found' }, reason: 'CONTEXT_SNAPSHOT_NOT_FOUND' }); return; }
+    const executionEffective = await executionRepo.getEffectiveForRevision(founderId, plan.id); // revision-scoped, frozen at review time
+    try {
+      const review = await outcomeReviewRepo.create(founderId, plan, executionEffective, snapshot, input, new Date());
+      await reply.code(201).send({ review: toOutcomeReviewView(review) });
+    } catch (e) { if (e instanceof OutcomeReviewError) { await outcomeReviewErr(reply, e); return; } throw e; }
+  });
+
+  server.get('/strategy/plans/:planId/outcome-reviews', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const planId = (request.params as { planId: string }).planId;
+    const owned = await planRepo.getByRevisionId(founderId, planId, new Date());
+    if (!owned) { await reply.code(404).send({ error: 'not found' }); return; }
+    await reply.send({ reviews: (await outcomeReviewRepo.listForRevision(founderId, planId)).map(toOutcomeReviewView) });
+  });
+
+  server.get('/strategy/outcome-reviews/:reviewId', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const review = await outcomeReviewRepo.getById(founderId, (request.params as { reviewId: string }).reviewId);
+    if (!review) { await reply.code(404).send({ error: 'not found' }); return; }
+    await reply.send({ review: toOutcomeReviewView(review) });
   });
 
   server.get('/strategy/plan-reviews/:reviewId', async (request: FastifyRequest, reply: FastifyReply) => {

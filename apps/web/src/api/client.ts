@@ -600,6 +600,35 @@ export async function getEffectiveExecution(planId: string): Promise<EffectiveEx
   return await request<EffectiveExecutionResponse>(`strategy/plans/${encodeURIComponent(planId)}/effective-execution`);
 }
 
+// ─── Strategic Outcome Review (ADR-016 — the boundary between Execution Report and Strategic Learning) ──
+// An immutable historical assessment of ONE exact Plan revision: intended vs founder-reported vs evidence vs observed
+// outcome + unknowns. Deterministic, content-hashed, reproducible. Answers NO "what next"; creates NO Learning; mutates
+// nothing; verifies/scores nothing. UNKNOWN is first-class.
+export type ObservedOutcome = 'AS_INTENDED' | 'PARTIALLY_AS_INTENDED' | 'NOT_AS_INTENDED' | 'UNKNOWN';
+export interface OutcomeReviewView {
+  reviewId: string; reviewSequence: number;
+  plan: { planId: string; logicalPlanId: string; revision: number };
+  contextSnapshotId: string; contextSnapshotHash: string;
+  observedOutcome: ObservedOutcome; observedOutcomeLabel: string;
+  founderOutcomeStatement: string; unknowns: string[];
+  assessment: {
+    intended: { planId: string; logicalPlanId: string; revision: number; title: string; strategicIntent: string; scope: string; milestones: Array<{ milestoneId: string; label: string; intendedState: string; sequence: number }> };
+    reported: Array<{ subjectType: 'MILESTONE' | 'PLAN'; subjectId: string; reportedState: string; headReportId: string | null; reportSequence: number; founderStatement: string | null; occurredAt: string | null }>;
+    evidence: { contextSnapshotId: string; contextSnapshotHash: string; contextSnapshotSchemaVersion: string; executionEvidence: Array<{ subjectId: string; type: string; value: string; label: string | null; verified: false }> };
+    observedOutcome: ObservedOutcome; founderOutcomeStatement: string; unknowns: string[];
+  };
+  reproducibility: { assessmentMethod: string; promptTemplateHash: string; modelConfiguration: Record<string, unknown>; reviewSchemaVersion: string; contentHash: string };
+  createdAt: string;
+  notVerified: true; productPerformedNothing: true; notAScore: true; describesNotDecides: true;
+}
+export interface OutcomeReviewInput { contextSnapshotId: string; founderOutcomeStatement: string; observedOutcome: ObservedOutcome; unknowns?: string[]; idempotencyKey: string }
+export async function addOutcomeReview(planId: string, input: OutcomeReviewInput): Promise<OutcomeReviewView> {
+  return (await request<{ review: OutcomeReviewView }>(`strategy/plans/${encodeURIComponent(planId)}/outcome-reviews`, { method: 'POST', body: JSON.stringify(input) })).review;
+}
+export async function listOutcomeReviews(planId: string): Promise<OutcomeReviewView[]> {
+  return (await request<{ reviews: OutcomeReviewView[] }>(`strategy/plans/${encodeURIComponent(planId)}/outcome-reviews`)).reviews;
+}
+
 // ─── Strategic Learning Record (ADR-011 cat 14 precursor — durable learning, NOT generic Strategic Memory) ──
 // A durable strategic understanding the founder EXPLICITLY decides to KEEP after a review (initial CREATE-only slice).
 // Most reviews create NO learning. Founder-authored; confidence bounded and never truth-inflating. Keeping one changes

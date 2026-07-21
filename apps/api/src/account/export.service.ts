@@ -46,6 +46,7 @@ export interface FounderExport {
   learningPromotions: unknown[];
   contextSnapshots: unknown[];
   executionReports: unknown[];
+  strategicOutcomeReviews: unknown[];
   meta: { note: string };
 }
 
@@ -177,6 +178,11 @@ export async function buildFounderExport(args: {
     .select(['id', 'subject_type', 'subject_id', 'plan_logical_id', 'plan_id', 'plan_revision', 'report_sequence', 'predecessor_report_id', 'report_kind', 'execution_state', 'founder_statement', 'occurred_at', 'reported_at', 'evidence_references', 'source', 'created_at'])
     // ADR-015 remediation: order by the EXACT plan revision (plan_id) first so each revision's chain is isolated in export.
     .where('founder_id', '=', founderId).orderBy('plan_id', 'asc').orderBy('subject_id', 'asc').orderBy('report_sequence', 'asc').execute()) as Array<Record<string, unknown>>;
+  // ADR-016 — Strategic Outcome Reviews: append-only immutable retrospectives of an EXACT plan revision (intended vs
+  // founder-reported vs evidence vs observed outcome + unknowns). Deterministic; content-hashed; reproducible forever.
+  const strategicOutcomeReviews = (await db.selectFrom('business.strategic_outcome_review')
+    .select(['id', 'plan_record_id', 'plan_logical_id', 'plan_revision', 'plan_schema_version', 'commitment_record_id', 'commitment_logical_id', 'context_snapshot_id', 'context_snapshot_hash', 'review_sequence', 'assessment', 'observed_outcome', 'founder_outcome_statement', 'unknowns', 'assessment_method', 'prompt_template_hash', 'model_configuration', 'review_schema_version', 'content_hash', 'created_at'])
+    .where('founder_id', '=', founderId).orderBy('plan_record_id', 'asc').orderBy('review_sequence', 'asc').execute()) as Array<Record<string, unknown>>;
   const learningPromotions = (await db.selectFrom('business.learning_promotion_event')
     .select(['id', 'target', 'logical_learning_id', 'learning_revision_id', 'revision_number', 'promotion_action', 'rationale', 'scope', 'created_at', 'promotion_sequence', 'predecessor_promotion_event_id'])
     // deterministic chain order (V080 lineage): by thread/target then explicit sequence — the complete promotion chain
@@ -274,6 +280,10 @@ export async function buildFounderExport(args: {
     executionReports: executionReports.map((e) => {
       const j = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : (v ?? []));
       return { id: String(e['id']), subjectType: String(e['subject_type']), subjectId: String(e['subject_id']), plan: { logicalPlanId: String(e['plan_logical_id']), planId: String(e['plan_id']), revision: Number(e['plan_revision']) }, reportSequence: Number(e['report_sequence']), predecessorReportId: e['predecessor_report_id'] ? String(e['predecessor_report_id']) : null, reportKind: String(e['report_kind']), executionState: String(e['execution_state']), founderStatement: String(e['founder_statement']), occurredAt: iso(e['occurred_at']), reportedAt: iso(e['reported_at']), evidenceReferences: j(e['evidence_references']), source: String(e['source']), createdAt: iso(e['created_at']), verificationStatus: e['report_kind'] === 'WITHDRAW' ? 'NONE' : 'UNVERIFIED_FOUNDER_REPORT', productExecutionStatus: 'NOT_PERFORMED_BY_PRODUCT', evidenceVerified: false };
+    }),
+    strategicOutcomeReviews: strategicOutcomeReviews.map((r) => {
+      const j = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : (v ?? null));
+      return { id: String(r['id']), plan: { planId: String(r['plan_record_id']), logicalPlanId: String(r['plan_logical_id']), revision: Number(r['plan_revision']), schemaVersion: String(r['plan_schema_version']) }, commitment: { recordId: String(r['commitment_record_id']), logicalId: String(r['commitment_logical_id']) }, contextSnapshotId: String(r['context_snapshot_id']), contextSnapshotHash: String(r['context_snapshot_hash']), reviewSequence: Number(r['review_sequence']), observedOutcome: String(r['observed_outcome']), founderOutcomeStatement: String(r['founder_outcome_statement']), unknowns: j(r['unknowns']) ?? [], assessment: j(r['assessment']), reproducibility: { assessmentMethod: String(r['assessment_method']), promptTemplateHash: String(r['prompt_template_hash']), modelConfiguration: j(r['model_configuration']) ?? {}, reviewSchemaVersion: String(r['review_schema_version']), contentHash: String(r['content_hash']) }, createdAt: iso(r['created_at']), notVerified: true, productPerformedNothing: true, notAScore: true };
     }),
     learningPromotions: learningPromotions.map((p) => ({
       id: String(p['id']), target: String(p['target']), promotionAction: String(p['promotion_action']), scope: String(p['scope']), rationale: String(p['rationale']),
