@@ -1,10 +1,15 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { sql } from 'kysely';
 import { createKyselyClient } from '@bb/infrastructure';
 import { generateId } from '@bb/shared';
 import { registerSessionRoutes } from '../../routes/session.routes';
 import { registerAuthCredentialRoutes } from '../../routes/auth-credentials.routes';
 import { PgStrategicSessionRepository } from '../../business-model/pg-strategic-session.repository';
+import { PgStrategicLearningRepository } from '../../business-model/pg-strategic-learning.repository';
+import { PgLearningPromotionRepository } from '../../business-model/pg-learning-promotion.repository';
+import { PgContextSnapshotRepository } from '../../business-model/pg-context-snapshot.repository';
+import { captureEffectiveContext } from '../../business-model/context-snapshot.capture';
 import { PgStrategicResponseRepository } from '../../business-model/pg-strategic-response.repository';
 import { PgFounderStrategicContextRepository } from '../../business-model/pg-founder-strategic-context.repository';
 import { PgUnderstandingRepository } from '../../business-model/pg-understanding.repository';
@@ -35,6 +40,7 @@ const prev = { node: process.env['NODE_ENV'], db: process.env['DATABASE_URL'] };
 async function purge(database: any): Promise<void> {
   const rows = await database.selectFrom('identity.founders').select('founder_id').where('email', 'in', [E1, E2]).execute();
   const ids = rows.map((r: { founder_id: string }) => r.founder_id);
+  if (ids.length) await database.transaction().execute(async (tx: any) => { await sql`SET LOCAL bb.allow_snapshot_delete = 'on'`.execute(tx); await tx.deleteFrom('business.context_snapshot').where('founder_id', 'in', ids).execute(); });
   if (ids.length) for (const t of ['business.strategic_decision_record', 'business.founder_strategic_context_item', 'business.strategic_response', 'business.strategic_session', 'business.conclusion_response', 'business.understanding', 'identity.sessions', 'identity.founder_credentials']) await database.deleteFrom(t).where('founder_id', 'in', ids).execute();
   await database.deleteFrom('identity.magic_link_tokens').where('email', 'in', [E1, E2]).execute();
   await database.deleteFrom('identity.founders').where('email', 'in', [E1, E2]).execute();
@@ -48,9 +54,9 @@ function assemblerDeps() {
   return { understanding: new PgUnderstandingRepository(db), conclusionResponses: new PgConclusionResponseRepository(db), entities: new PgMarketEntityRepository(db), findings: new PgMarketFindingRepository(db), findingResponses: new PgMarketFindingResponseRepository(db), reviews: new PgMarketReviewRepository(db), strategicContext: new PgFounderStrategicContextRepository(db) };
 }
 function stubModel(behavior: (ctx: StrategicContext) => StrategicOutcome | null): StrategyModel {
-  return { version: 'stub:strategy-4', modelId: 'stub', promptVersion: 'strategy-4', schemaVersion: 'strategy-recommendation-4', reason: async (ctx) => behavior(ctx) };
+  return { version: 'stub:strategy-4', modelId: 'stub', promptVersion: 'strategy-4', schemaVersion: 'strategy-recommendation-4', promptTemplateHash: 'stub-prompt-hash', modelConfiguration: { maxTokens: 4096 }, reason: async (ctx) => behavior(ctx) };
 }
-function deps(model: StrategyModel) { return { sessionRepo: new PgStrategicSessionRepository(db), assembler: assemblerDeps(), model, leaseMs: 5 * 60 * 1000, now: () => new Date() }; }
+function deps(model: StrategyModel) { return { sessionRepo: new PgStrategicSessionRepository(db), assembler: assemblerDeps(), model, leaseMs: 5 * 60 * 1000, now: () => new Date(), snapshotRepo: new PgContextSnapshotRepository(db) }; }
 async function seedBU(founderId: string): Promise<void> {
   await db.deleteFrom('business.conclusion_response').where('founder_id', '=', founderId).execute();
   await db.deleteFrom('business.understanding').where('founder_id', '=', founderId).execute();
@@ -62,7 +68,9 @@ function recOutcome(refs: Array<Record<string, unknown>>): StrategicOutcome {
 /** Create a real READY session for the founder citing their (real) FSC goal id. */
 async function readySession(founderId: string, question: string, goalRef: (c: StrategicContext) => Record<string, unknown>): Promise<StrategicSession> {
   const repo = new PgStrategicSessionRepository(db);
-  const created = await repo.create(founderId, { strategicJob: 'PRIORITY_DECISION', subtype: 'CHANNEL_PRIORITY', questionText: question, modelId: 'stub', promptVersion: 'strategy-4', schemaVersion: 'strategy-recommendation-4' }, new Date());
+  const _cap = await captureEffectiveContext(founderId, { assembler: assemblerDeps(), promotionRepo: new PgLearningPromotionRepository(db), learningRepo: new PgStrategicLearningRepository(db) });
+  const _snap = await new PgContextSnapshotRepository(db).create(founderId, _cap.businessUnderstanding, _cap.founderStrategicContext, _cap.publicPositioningContext, _cap.provenance, new Date());
+  const created = await repo.create(founderId, { strategicJob: 'PRIORITY_DECISION', subtype: 'CHANNEL_PRIORITY', questionText: question, modelId: 'stub', promptVersion: 'strategy-4', schemaVersion: 'strategy-recommendation-4' , contextSnapshotId: _snap.id }, new Date());
   const now = new Date();
   await db.updateTable('business.strategic_session').set({ status: 'PROCESSING', claimed_at: now.toISOString(), lease_expires_at: new Date(now.getTime() + 3e5).toISOString(), started_at: now.toISOString(), updated_at: now.toISOString() }).where('id', '=', created.id).where('status', '=', 'QUEUED').execute();
   const claimed = await repo.getById(founderId, created.id);

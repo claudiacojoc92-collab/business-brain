@@ -204,7 +204,7 @@ describe('strategy — founder-safe session view', () => {
     questionText: 'Instagram or LinkedIn?', decisionHorizon: '30 days', understandingVersion: 2, contextHealth: { missingAreas: [] },
     recommendation: normalizeStrategicOutput(rawRecommendation(), 'CHANNEL_PRIORITY') as StrategicRecommendation,
     insufficientReason: null, contextConflicts: null, provenanceValidation: null, provenanceManifest: null, failureCategory: 'MODEL_FAILED', founderSafeError: 'Something went wrong. Try again.',
-    contextSnapshotId: null, priorSuccessfulSessionId: null, modelId: 'claude-sonnet-5', promptVersion: 'strategy-1', schemaVersion: 'strategy-recommendation-1',
+    generationContractVersion: 0, generationProvenance: null, contextSnapshotId: null, priorSuccessfulSessionId: null, modelId: 'claude-sonnet-5', promptVersion: 'strategy-1', schemaVersion: 'strategy-recommendation-1',
     attemptCount: 1, maxAttempts: 3, claimedAt: null, leaseExpiresAt: 'lease-secret', startedAt: null, finishedAt: null,
     createdAt: '2026-07-20T00:00:00.000Z', updatedAt: '2026-07-20T00:00:00.000Z',
   };

@@ -66,7 +66,7 @@ function decisionHorizon(q: string): string {
 
 const UNKNOWN_TYPES: ReadonlySet<string> = new Set(['missing_information', 'strategic_question']);
 
-export async function assembleStrategicContext(founderId: string, rawQuestion: string, subtype: StrategicSubtype, deps: AssemblerDeps, asOf: Date = new Date(), frozen?: { businessUnderstanding: StrategicContext['businessUnderstanding']; founderContext: StrategicContext['founderContext'] }): Promise<StrategicContext> {
+export async function assembleStrategicContext(founderId: string, rawQuestion: string, subtype: StrategicSubtype, deps: AssemblerDeps, asOf: Date = new Date(), frozen?: { businessUnderstanding: StrategicContext['businessUnderstanding']; founderContext: StrategicContext['founderContext']; publicPositioningContext: StrategicContext['publicPositioningContext'] }): Promise<StrategicContext> {
   const missingAreas: string[] = []; const staleAreas: string[] = []; const contradictoryAreas: string[] = []; let truncated = false;
 
   // ── Business Understanding ────────────────────────────────────────────────────────────────────────────
@@ -102,25 +102,36 @@ export async function assembleStrategicContext(founderId: string, rawQuestion: s
     missingAreas.push('business_understanding');
   }
 
-  // ── Public Positioning Context (current eligible via effectiveMarketContext) ─────────────────────────
-  const ctx = await effectiveMarketContext(founderId, deps.entities, deps.findings, deps.findingResponses, deps.reviews);
-  let obs = [...ctx.observed].sort((a, b) => a.id.localeCompare(b.id));
-  let inf = [...ctx.inferences].sort((a, b) => a.id.localeCompare(b.id));
-  if (obs.length > CAP.observations) { obs = obs.slice(0, CAP.observations); truncated = true; }
-  if (inf.length > CAP.inferences) { inf = inf.slice(0, CAP.inferences); truncated = true; }
-  if (ctx.confirmedEntities.length === 0 && obs.length === 0 && inf.length === 0) missingAreas.push('public_positioning');
-  // inaccurate findings (accuracy=no are already excluded by eligibility); surface any partly-accurate as contradiction signal
-  if (obs.some((o) => o.accuracy === 'partly') || inf.some((i) => i.accuracy === 'partly')) contradictoryAreas.push('public_positioning_partial_accuracy');
-
-  // provenance for the referenced usable findings (from the finding rows)
-  const usableIds = new Set([...obs.map((o) => o.id), ...inf.map((i) => i.id)]);
-  const allFindings = await deps.findings.listByFounder(founderId);
-  const provenance = allFindings.filter((f) => usableIds.has(f.id)).sort((a, b) => a.id.localeCompare(b.id)).slice(0, CAP.provenance)
-    .map((f) => ({ findingId: f.id, reviewId: f.reviewId, adapter: f.retrievalAdapter, model: f.modelVersion, promptVersion: f.promptVersion }));
-
-  // stale website context → needs a fresh review
-  const entityViews = await listEntityViews(founderId, deps.entities, deps.reviews);
-  if (entityViews.some((e) => e.needsFreshReview)) staleAreas.push('public_positioning_website_changed');
+  // ── Public Positioning Context ────────────────────────────────────────────────────────────────────────
+  // ADR-014 remediation: when FROZEN, consume the snapshot's public-positioning verbatim — the live market-context reads
+  // (effectiveMarketContext / findings / entity views) are skipped entirely so a snapshot-bound generation reads nothing
+  // live. Otherwise the pre-existing live path runs unchanged.
+  let publicPositioningContext: StrategicContext['publicPositioningContext'];
+  if (frozen) {
+    publicPositioningContext = frozen.publicPositioningContext;
+    if (publicPositioningContext.entities.length === 0 && publicPositioningContext.observations.length === 0 && publicPositioningContext.inferences.length === 0) missingAreas.push('public_positioning');
+  } else {
+    const ctx = await effectiveMarketContext(founderId, deps.entities, deps.findings, deps.findingResponses, deps.reviews);
+    let obs = [...ctx.observed].sort((a, b) => a.id.localeCompare(b.id));
+    let inf = [...ctx.inferences].sort((a, b) => a.id.localeCompare(b.id));
+    if (obs.length > CAP.observations) { obs = obs.slice(0, CAP.observations); truncated = true; }
+    if (inf.length > CAP.inferences) { inf = inf.slice(0, CAP.inferences); truncated = true; }
+    if (ctx.confirmedEntities.length === 0 && obs.length === 0 && inf.length === 0) missingAreas.push('public_positioning');
+    if (obs.some((o) => o.accuracy === 'partly') || inf.some((i) => i.accuracy === 'partly')) contradictoryAreas.push('public_positioning_partial_accuracy');
+    const usableIds = new Set([...obs.map((o) => o.id), ...inf.map((i) => i.id)]);
+    const allFindings = await deps.findings.listByFounder(founderId);
+    const provenance = allFindings.filter((f) => usableIds.has(f.id)).sort((a, b) => a.id.localeCompare(b.id)).slice(0, CAP.provenance)
+      .map((f) => ({ findingId: f.id, reviewId: f.reviewId, adapter: f.retrievalAdapter, model: f.modelVersion, promptVersion: f.promptVersion }));
+    const entityViews = await listEntityViews(founderId, deps.entities, deps.reviews);
+    if (entityViews.some((e) => e.needsFreshReview)) staleAreas.push('public_positioning_website_changed');
+    publicPositioningContext = {
+      entities: ctx.confirmedEntities.map((e) => ({ id: e.id, name: e.name, entityType: e.entityType, websiteUrl: e.websiteUrl })),
+      observations: obs.map((o) => ({ findingId: o.id, entityId: o.entityId, sourceUrl: o.sourceUrl, text: o.observedText, accuracy: o.accuracy, relevance: o.relevance, relevanceQualification: o.relevanceQualification })),
+      inferences: inf.map((i) => ({ findingId: i.id, entityId: i.entityId, text: i.inferenceText, epistemicStatus: i.epistemicStatus, accuracy: i.accuracy, relevance: i.relevance })),
+      provisional: { observations: ctx.provisional.observed.length, inferences: ctx.provisional.inferences.length },
+      provenance,
+    };
+  }
 
   // ── Founder Strategic Context ─────────────────────────────────────────────────────────────────────────
   // Frozen path: consume the snapshot's founder context verbatim. Live path: the effective resolver (ACTIVE + not-future
@@ -142,13 +153,7 @@ export async function assembleStrategicContext(founderId: string, rawQuestion: s
 
   return {
     businessUnderstanding,
-    publicPositioningContext: {
-      entities: ctx.confirmedEntities.map((e) => ({ id: e.id, name: e.name, entityType: e.entityType, websiteUrl: e.websiteUrl })),
-      observations: obs.map((o) => ({ findingId: o.id, entityId: o.entityId, sourceUrl: o.sourceUrl, text: o.observedText, accuracy: o.accuracy, relevance: o.relevance, relevanceQualification: o.relevanceQualification })),
-      inferences: inf.map((i) => ({ findingId: i.id, entityId: i.entityId, text: i.inferenceText, epistemicStatus: i.epistemicStatus, accuracy: i.accuracy, relevance: i.relevance })),
-      provisional: { observations: ctx.provisional.observed.length, inferences: ctx.provisional.inferences.length },
-      provenance,
-    },
+    publicPositioningContext,
     founderContext,
     question: { rawText: rawQuestion.slice(0, 1000), normalizedStrategicJob: 'PRIORITY_DECISION', subtype, decisionHorizon: decisionHorizon(rawQuestion) },
     contextHealth: { missingAreas, staleAreas, contradictoryAreas, truncated },

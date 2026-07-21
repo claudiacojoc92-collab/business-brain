@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { sql } from 'kysely';
 import { createKyselyClient } from '@bb/infrastructure';
 import { generateId } from '@bb/shared';
 import { registerSessionRoutes } from '../../routes/session.routes';
@@ -30,6 +31,7 @@ const prev = { node: process.env['NODE_ENV'], db: process.env['DATABASE_URL'] };
 async function purge(database: any): Promise<void> {
   const rows = await database.selectFrom('identity.founders').select('founder_id').where('email', 'in', [E1, E2]).execute();
   const ids = rows.map((r: { founder_id: string }) => r.founder_id);
+  if (ids.length) await database.transaction().execute(async (tx: any) => { await sql`SET LOCAL bb.allow_snapshot_delete = 'on'`.execute(tx); await tx.deleteFrom('business.context_snapshot').where('founder_id', 'in', ids).execute(); });
   if (ids.length) for (const t of ['business.founder_strategic_context_item', 'business.strategic_response', 'business.strategic_session', 'business.conclusion_response', 'business.understanding', 'identity.sessions', 'identity.founder_credentials']) await database.deleteFrom(t).where('founder_id', 'in', ids).execute();
   await database.deleteFrom('identity.magic_link_tokens').where('email', 'in', [E1, E2]).execute();
   await database.deleteFrom('identity.founders').where('email', 'in', [E1, E2]).execute();

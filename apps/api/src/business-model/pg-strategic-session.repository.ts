@@ -6,6 +6,7 @@
  */
 import { generateId } from '@bb/shared';
 import { assertTransition, sessionRetryable, type StrategicSession, type StrategicSessionStatus, type StrategicJob, type StrategicSubtype, type StrategyFailureCategory, type StrategicRecommendation, type InsufficientStrategicEvidence, type SessionContextConflict, type SessionProvenanceValidation, type SerializedProvenanceManifestView } from './strategy';
+import type { GenerationProvenance } from './context-snapshot';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDB = any;
@@ -22,6 +23,9 @@ export class PgStrategicSessionRepository {
         id: generateId(), founder_id: founderId, status: 'QUEUED', strategic_job: input.strategicJob, subtype: input.subtype,
         question_text: input.questionText, model_id: input.modelId, prompt_version: input.promptVersion, schema_version: input.schemaVersion,
         context_snapshot_id: input.contextSnapshotId ?? null,
+        // ADR-014 remediation: a snapshot-bound session is governed (contract v1); unbound is legacy (v0). The DB CHECK
+        // (V082) enforces v1 ⇒ non-null snapshot. All current write paths pass a snapshot → v1.
+        generation_contract_version: input.contextSnapshotId ? 1 : 0,
         attempt_count: 1, max_attempts: maxAttempts, prior_successful_session_id: prior?.id ?? null, created_at: nowIso, updated_at: nowIso,
       }).returningAll().executeTakeFirst();
       return this.toDomain(row);
@@ -54,6 +58,15 @@ export class PgStrategicSessionRepository {
   /** Record the assembled context snapshot (which understanding version + context health + horizon the reasoning used). */
   async recordAssembly(id: string, snapshot: { understandingVersion: number | null; contextHealth: unknown; decisionHorizon: string | null }, now: Date): Promise<void> {
     await this.db.updateTable('business.strategic_session').set({ understanding_version: snapshot.understandingVersion, context_health: JSON.stringify(snapshot.contextHealth ?? null), decision_horizon: snapshot.decisionHorizon, updated_at: now.toISOString() }).where('id', '=', id).execute();
+  }
+
+  /** ADR-014 remediation: record the server-resolved GenerationProvenance for a governed (snapshot-bound) generation. */
+  async recordGeneration(id: string, p: GenerationProvenance): Promise<void> {
+    await this.db.updateTable('business.strategic_session').set({
+      snapshot_content_hash: p.contextSnapshotHash, snapshot_schema_version: p.contextSnapshotSchemaVersion,
+      strategist_version: p.strategistVersion, prompt_template_hash: p.promptTemplateHash, model_id: p.modelId,
+      model_configuration: JSON.stringify(p.modelConfiguration), objective_hash: p.objectiveHash, generated_at: p.generatedAt,
+    }).where('id', '=', id).execute();
   }
 
   async markReady(id: string, recommendation: StrategicRecommendation, now: Date, contextConflicts?: SessionContextConflict[], provenanceValidation?: SessionProvenanceValidation, provenanceManifest?: SerializedProvenanceManifestView, tx?: unknown): Promise<StrategicSession | null> {
@@ -90,6 +103,12 @@ export class PgStrategicSessionRepository {
       failureCategory: (r.failure_category as StrategyFailureCategory) ?? null, founderSafeError: r.founder_safe_error ?? null, priorSuccessfulSessionId: r.prior_successful_session_id ?? null,
       modelId: r.model_id ?? null, promptVersion: r.prompt_version ?? null, schemaVersion: r.schema_version ?? null,
       contextSnapshotId: r.context_snapshot_id ?? null,
+      generationContractVersion: Number(r.generation_contract_version ?? 0),
+      generationProvenance: r.snapshot_content_hash ? {
+        contextSnapshotId: r.context_snapshot_id, contextSnapshotHash: r.snapshot_content_hash, contextSnapshotSchemaVersion: r.snapshot_schema_version,
+        strategistVersion: r.strategist_version, promptTemplateHash: r.prompt_template_hash, modelId: r.model_id,
+        modelConfiguration: json(r.model_configuration) ?? {}, objectiveHash: r.objective_hash, generatedAt: iso(r.generated_at)!,
+      } : null,
       attemptCount: Number(r.attempt_count), maxAttempts: Number(r.max_attempts),
       claimedAt: iso(r.claimed_at), leaseExpiresAt: iso(r.lease_expires_at), startedAt: iso(r.started_at), finishedAt: iso(r.finished_at),
       createdAt: new Date(r.created_at).toISOString(), updatedAt: new Date(r.updated_at).toISOString(),

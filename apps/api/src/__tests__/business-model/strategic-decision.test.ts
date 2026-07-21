@@ -23,7 +23,7 @@ function session(over: Partial<StrategicSession> = {}): StrategicSession {
     insufficientReason: null, contextConflicts: null,
     provenanceValidation: { manifestVersion: 'pm-1', groundingStatus: 'GROUNDED', validatedCount: 1, rejectedCount: 0, rejected: [] },
     provenanceManifest: { manifestVersion: 'pm-1', understandingVersion: 3, entries: [{ space: 'CONCLUSION', id: 'concl-1', suppliedToModel: true }] },
-    failureCategory: null, founderSafeError: null, priorSuccessfulSessionId: null, contextSnapshotId: null,
+    failureCategory: null, founderSafeError: null, priorSuccessfulSessionId: null, contextSnapshotId: null, generationContractVersion: 0, generationProvenance: null,
     modelId: 'claude-sonnet-5', promptVersion: 'strategy-4', schemaVersion: 'strategy-recommendation-4',
     attemptCount: 1, maxAttempts: 3, claimedAt: null, leaseExpiresAt: null, startedAt: null, finishedAt: '2026-07-20T00:00:00.000Z',
     createdAt: '2026-07-20T00:00:00.000Z', updatedAt: '2026-07-20T00:00:00.000Z', ...over,

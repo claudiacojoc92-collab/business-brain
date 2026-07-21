@@ -49,7 +49,7 @@ const prev = { node: process.env['NODE_ENV'], db: process.env['DATABASE_URL'] };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function purge(database: any): Promise<void> {
-  const rows = await database.selectFrom('identity.founders').select('founder_id').where((eb) => eb.or([eb('email', 'like', 'consume.live.%'), eb('email', '=', E2)])).execute();
+  const rows = await database.selectFrom('identity.founders').select('founder_id').where((eb: any) => eb.or([eb('email', 'like', 'consume.live.%'), eb('email', '=', E2)])).execute();
   const ids = rows.map((r: { founder_id: string }) => r.founder_id);
   if (ids.length) await database.transaction().execute(async (tx: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     await sql`SET LOCAL bb.allow_learning_delete = 'on'`.execute(tx);
@@ -57,7 +57,7 @@ async function purge(database: any): Promise<void> {
     await sql`SET LOCAL bb.allow_snapshot_delete = 'on'`.execute(tx);
     for (const t of ['business.context_snapshot', 'business.learning_promotion_event', 'business.strategic_learning_record', 'business.strategic_plan_review_record', 'business.strategic_plan_record', 'business.strategic_commitment_record', 'business.strategic_decision_record', 'business.founder_strategic_context_item', 'business.strategic_response', 'business.strategic_session', 'business.conclusion_response', 'business.understanding', 'identity.sessions', 'identity.founder_credentials']) await tx.deleteFrom(t).where('founder_id', 'in', ids).execute();
   });
-  await database.deleteFrom('identity.founders').where((eb) => eb.or([eb('email', 'like', 'consume.live.%'), eb('email', '=', E2)])).execute();
+  await database.deleteFrom('identity.founders').where((eb: any) => eb.or([eb('email', 'like', 'consume.live.%'), eb('email', '=', E2)])).execute();
 }
 async function signIn(email: string): Promise<string> {
   let l = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { email, password: 'consumepass-12' } });
@@ -66,7 +66,7 @@ async function signIn(email: string): Promise<string> {
 }
 function assemblerDeps() { return { understanding: new PgUnderstandingRepository(db), conclusionResponses: new PgConclusionResponseRepository(db), entities: new PgMarketEntityRepository(db), findings: new PgMarketFindingRepository(db), findingResponses: new PgMarketFindingResponseRepository(db), reviews: new PgMarketReviewRepository(db), strategicContext: new PgFounderStrategicContextRepository(db) }; }
 // Stub model that ECHOES how many BU conclusions the (possibly frozen) context carried — proving what reasoning consumed.
-function echoModel(): StrategyModel { return { version: 'stub:consume-1', modelId: 'stub', promptVersion: 'strategy-4', schemaVersion: 'strategy-recommendation-4', reason: async (ctx: StrategicContext) => recOutcome(ctx.businessUnderstanding.conclusions.length, ctx) }; }
+function echoModel(): StrategyModel { return { version: 'stub:consume-1', modelId: 'stub', promptVersion: 'strategy-4', schemaVersion: 'strategy-recommendation-4', promptTemplateHash: 'stub-prompt-hash', modelConfiguration: { maxTokens: 4096 }, reason: async (ctx: StrategicContext) => recOutcome(ctx.businessUnderstanding.conclusions.length, ctx) }; }
 function deps(model: StrategyModel) { return { sessionRepo: new PgStrategicSessionRepository(db), assembler: assemblerDeps(), model, leaseMs: 3e5, now: () => new Date(), snapshotRepo: new PgContextSnapshotRepository(db) }; }
 async function seedBU(founderId: string): Promise<void> {
   await db.deleteFrom('business.conclusion_response').where('founder_id', '=', founderId).execute();
@@ -77,7 +77,8 @@ function recOutcome(buCount: number, c: StrategicContext): StrategicOutcome { re
 const goalRef = (c: StrategicContext) => ({ kind: 'FOUNDER_STRATEGIC_CONTEXT', statement: 'goal', refId: c.founderContext.goals[0]!.id, logicalItemId: c.founderContext.goals[0]!.logicalItemId, version: c.founderContext.goals[0]!.version });
 async function readySession(founderId: string, question: string): Promise<StrategicSession> {
   const repo = new PgStrategicSessionRepository(db);
-  const created = await repo.create(founderId, { strategicJob: 'PRIORITY_DECISION', subtype: 'CHANNEL_PRIORITY', questionText: question, modelId: 'stub', promptVersion: 'strategy-4', schemaVersion: 'strategy-recommendation-4' }, new Date());
+  const snap = await snapshotNow(founderId); // mandatory Consumption Gate — a snapshot is required for generation
+  const created = await repo.create(founderId, { strategicJob: 'PRIORITY_DECISION', subtype: 'CHANNEL_PRIORITY', questionText: question, modelId: 'stub', promptVersion: 'strategy-4', schemaVersion: 'strategy-recommendation-4', contextSnapshotId: snap.id }, new Date());
   const now = new Date();
   await db.updateTable('business.strategic_session').set({ status: 'PROCESSING', claimed_at: now.toISOString(), lease_expires_at: new Date(now.getTime() + 3e5).toISOString(), started_at: now.toISOString(), updated_at: now.toISOString() }).where('id', '=', created.id).where('status', '=', 'QUEUED').execute();
   return processSession((await repo.getById(founderId, created.id))!, deps(echoModel()));
@@ -94,7 +95,7 @@ function lrepo() { return new PgStrategicLearningRepository(db); }
 function prepo() { return new PgLearningPromotionRepository(db); }
 function srepo() { return new PgContextSnapshotRepository(db); }
 function captureDeps() { return { assembler: assemblerDeps(), promotionRepo: prepo(), learningRepo: lrepo() }; }
-async function snapshotNow(founderId: string) { const c = await captureEffectiveContext(founderId, captureDeps()); return srepo().create(founderId, c.businessUnderstanding, c.founderStrategicContext, c.provenance, new Date()); }
+async function snapshotNow(founderId: string) { const c = await captureEffectiveContext(founderId, captureDeps()); return srepo().create(founderId, c.businessUnderstanding, c.founderStrategicContext, c.publicPositioningContext, c.provenance, new Date()); }
 async function founderWithLearning(email: string) {
   const founderId = await signIn(email);
   await new PgFounderStrategicContextRepository(db).create(founderId, { kind: 'GOAL', statement: 'G', metadata: { priority: 'PRIMARY' } }, new Date());
@@ -177,14 +178,19 @@ describe('strategic learning consumption §LIVE', () => {
     expect((reread.recommendation as { recommendation: { title: string } }).recommendation.title).toBe('BU_CONCLUSIONS=2'); // unchanged
   });
 
-  it('D. the legacy live path (no snapshot) is unaffected — reasoning still reads live context', async (ctx) => {
+  it('D. NO live fallback — an unbound (no-snapshot) generation is REJECTED, never reasoned live (R2)', async (ctx) => {
     if (!dbUp) { ctx.skip(); return; }
-    const { founderId, learning } = await founderWithLearning(nextEmail());
-    await prepo().record(founderId, 'PROMOTE', learning, promoInput({ idempotencyKey: 'd-1' }), new Date());
-    // a live (non-snapshot) session sees only NATIVE BU (promoted learnings are NOT auto-consumed) → 1 conclusion
-    const live = await readySession(founderId, `qd-${generateId()}`);
-    expect(live.contextSnapshotId).toBeNull();
-    expect((live.recommendation as { recommendation: { title: string } }).recommendation.title).toBe('BU_CONCLUSIONS=1');
+    const { founderId } = await founderWithLearning(nextEmail());
+    const repo = new PgStrategicSessionRepository(db);
+    const created = await repo.create(founderId, { strategicJob: 'PRIORITY_DECISION', subtype: 'CHANNEL_PRIORITY', questionText: `qd-${generateId()}`, modelId: 'stub', promptVersion: 'strategy-4', schemaVersion: 'strategy-recommendation-4' }, new Date()); // no contextSnapshotId
+    expect(created.generationContractVersion).toBe(0); // unbound = legacy contract
+    const now = new Date();
+    await db.updateTable('business.strategic_session').set({ status: 'PROCESSING', claimed_at: now.toISOString(), lease_expires_at: new Date(now.getTime() + 3e5).toISOString(), started_at: now.toISOString(), updated_at: now.toISOString() }).where('id', '=', created.id).execute();
+    const done = await processSession((await repo.getById(founderId, created.id))!, deps(echoModel()));
+    expect(done.status).toBe('FAILED'); // the worker rejected it — no live-context reasoning
+    expect(done.recommendation).toBeNull();
+    const row = await db.selectFrom('business.strategic_session').select('internal_error_detail').where('id', '=', created.id).executeTakeFirst();
+    expect(String(row.internal_error_detail)).toContain('CONTEXT_SNAPSHOT_REQUIRED');
   });
 
   it('E. append-only (UPDATE + individual DELETE rejected); isolation; account-delete zero orphans', async (ctx) => {

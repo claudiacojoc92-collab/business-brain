@@ -34,3 +34,34 @@ Maps every acceptance criterion (ADR-014 / contract L1–L12 / prompt Parts 9–
 **Deferred by governance (ADR-014):** automatic recommendation regeneration/invalidation; background recomputation;
 freezing public-positioning/market context into the snapshot; Strategic Execution; agents; event-driven orchestration;
 memory; knowledge/relationship graphs; embeddings; semantic retrieval — none implemented.
+
+---
+
+## Remediation matrix (2026-07-21) — mandatory gate + full-input reproducibility
+
+New/changed impl: **dom** = `context-snapshot.ts` (SHA-256 + full payload); **cap** = `context-snapshot.capture.ts` (freezes
+public-positioning); **asm** = `strategic-context.assembler.ts` (`frozen` covers all three dimensions); **wrk** =
+`strategic-session.worker.ts` (mandatory + integrity + provenance); **repo** = `pg-strategic-session.repository.ts`
+(`generation_contract_version` + `recordGeneration`); **api** = `strategy.routes.ts` (require snapshot / gate legacy
+retry); **mig** = `V082__consumption_gate_mandatory.sql`; **ui** = `StrategyPage.tsx` (ask-gate + legacy label); **model** =
+`anthropic-strategy.model.ts` (`promptTemplateHash` + `modelConfiguration`). **det** = `context-snapshot.test.ts`; **live**
+= `context-snapshot.live.test.ts` (A–E); **e2e** = `strategic-learning-consumption-gate.spec.ts`.
+
+| # | Criterion | Impl | Test | Status |
+|---|---|---|---|---|
+| 1–5 | new generation without/with-null/foreign/missing snapshot rejected (API + domain + repo CHECK + worker) | api/repo/mig/wrk | live D (worker CONTEXT_SNAPSHOT_REQUIRED) · e2e (400 + disabled button) | COVERED |
+| 6/7 | foreign / nonexistent snapshot rejected | api/wrk | e2e (missing→400) · live E (isolation) | COVERED |
+| 8/9 | valid snapshot accepted; every new session non-null snapshot (contract v1) | repo/mig | live C · e2e (context_snapshot_id + contract=1) | COVERED |
+| 10/11 | no alternate endpoint / UI action bypasses the gate | api/ui | e2e (Generate disabled w/o snapshot) · route audit | COVERED |
+| 12–14 | legacy null-snapshot sessions readable; can't regenerate live; not mutated | api/ui | e2e (legacy badge + no-retry) · retry-route 400 | COVERED |
+| 15–20 | snapshot-bound generation performs no live BU/FSC/promotion/market/positioning read | asm/wrk | live C (frozen consumed) · det (frozen projections) | COVERED |
+| 21–26 | later BU/FSC/PROMOTE/REPLACE/REMOVE/refine does not change generation | dom/wrk | live A/B (snapshot frozen) · e2e (hash unchanged after REMOVE) | COVERED |
+| 27–35 | every consumed field frozen/pinned; provenance preserved; schema version recorded | cap/dom | det (public-positioning survives) · live C | COVERED |
+| 36–44 | SHA-256 64-hex, key-order-stable, array-sensitive, content-sensitive, client can't supply, recompute-verify, export-preserved | dom/api/exp | det (SHA-256 vectors + integrity) · e2e (64-hex) | COVERED |
+| 45–55 | session records snapshot id/hash/schema/strategist/prompt-hash/model/config/objective/generatedAt; client can't override | wrk/repo/model | live C · e2e (prompt_template_hash + provenance columns) | COVERED |
+| 56–61 | snapshot immutable; learning/promotion/BU/FSC/recommendation history unchanged (append-only) | mig | live E (UPDATE/DELETE rejected) · e2e (BU=1, learning=1) | COVERED |
+| 62–66 | no auto regeneration/invalidation; no Decision/…/task/memory writes | api/wrk | e2e (no session change on context change) · scope | COVERED |
+| 67 | account deletion zero orphans | del/mig | live E · orphan sweep (0) | COVERED |
+
+**Deferred (unchanged):** automatic regeneration/invalidation/recomputation, Strategic Execution, agents, memory, graphs,
+embeddings, semantic retrieval.

@@ -9,6 +9,7 @@ import { createAnthropicClient } from '@bb/infrastructure';
 import { strategyModelConfig } from './model-config';
 import { normalizeStrategicOutput, type StrategicOutcome } from './strategy';
 import type { StrategicContext } from './strategic-context.assembler';
+import { sha256Hex } from './context-snapshot';
 
 export const SYSTEM = [
   'You are Business Brain — a disciplined business and marketing strategist for founders who cannot yet build',
@@ -84,8 +85,13 @@ export const SYSTEM = [
 
 export interface StrategyModel {
   readonly version: string; readonly modelId: string; readonly promptVersion: string; readonly schemaVersion: string;
+  // ADR-014 remediation — reproducibility provenance the worker records on every governed generation (R5).
+  readonly promptTemplateHash: string;                 // SHA-256 of the SYSTEM prompt template
+  readonly modelConfiguration: Record<string, unknown>; // material config that affects output (e.g. max_tokens)
   reason(context: StrategicContext): Promise<StrategicOutcome | null>;
 }
+
+const MAX_TOKENS = 4096;
 
 function safeJson(t: string): unknown { try { const m = t.match(/\{[\s\S]*\}/); return m ? JSON.parse(m[0]) : null; } catch { return null; } }
 
@@ -95,6 +101,8 @@ export class AnthropicStrategyModel implements StrategyModel {
   readonly promptVersion = this.config.promptVersion;
   readonly schemaVersion = this.config.schemaVersion;
   readonly version = `${this.config.promptVersion}:${this.config.modelId}`;
+  readonly promptTemplateHash = sha256Hex(SYSTEM);
+  readonly modelConfiguration = { maxTokens: MAX_TOKENS };
   constructor(private readonly apiKey: string) {}
 
   async reason(context: StrategicContext): Promise<StrategicOutcome | null> {
@@ -112,7 +120,7 @@ export class AnthropicStrategyModel implements StrategyModel {
     // 4096 (not 2500): the full recommendation schema — supportingEvidence, declarations, assumptions, unknowns,
     // counter-evidence, conflicts, five confidence bands, alternatives, next step, change-conditions — occasionally
     // exceeded 2500 and truncated mid-JSON (eval: ~1/3 runs hit max_tokens → unparseable → a needless MODEL_FAILED).
-    const resp: any = await client.messages.create({ model: this.config.modelId, max_tokens: 4096, system: SYSTEM, messages: [{ role: 'user', content: user }] });
+    const resp: any = await client.messages.create({ model: this.config.modelId, max_tokens: MAX_TOKENS, system: SYSTEM, messages: [{ role: 'user', content: user }] });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const text = (resp.content ?? []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
     return normalizeStrategicOutput(safeJson(text), context.question.subtype);

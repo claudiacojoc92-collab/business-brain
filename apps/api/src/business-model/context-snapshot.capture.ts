@@ -9,7 +9,7 @@ import { assembleStrategicContext, type AssemblerDeps } from './strategic-contex
 import type { PgLearningPromotionRepository } from './pg-learning-promotion.repository';
 import type { PgStrategicLearningRepository } from './pg-strategic-learning.repository';
 import { deriveLifecycleStatus } from './strategic-learning';
-import type { FrozenBusinessUnderstanding, FrozenFounderContext, FrozenPromotedLearning, SnapshotProvenance } from './context-snapshot';
+import type { FrozenBusinessUnderstanding, FrozenFounderContext, FrozenPublicPositioning, FrozenPromotedLearning, SnapshotProvenance } from './context-snapshot';
 
 export interface CaptureDeps {
   assembler: AssemblerDeps;
@@ -18,7 +18,7 @@ export interface CaptureDeps {
 }
 
 /** Assemble the live native context, merge the effective promoted learnings, and return the frozen payload + provenance. */
-export async function captureEffectiveContext(founderId: string, deps: CaptureDeps): Promise<{ businessUnderstanding: FrozenBusinessUnderstanding; founderStrategicContext: FrozenFounderContext; provenance: SnapshotProvenance }> {
+export async function captureEffectiveContext(founderId: string, deps: CaptureDeps): Promise<{ businessUnderstanding: FrozenBusinessUnderstanding; founderStrategicContext: FrozenFounderContext; publicPositioningContext: FrozenPublicPositioning; provenance: SnapshotProvenance }> {
   // BU + founderContext are question-independent; a neutral placeholder question is fine for a capture.
   const live = await assembleStrategicContext(founderId, '(context snapshot capture)', 'GENERAL_30_DAY_PRIORITY', deps.assembler);
 
@@ -47,5 +47,8 @@ export async function captureEffectiveContext(founderId: string, deps: CaptureDe
   }
 
   const fsc: FrozenFounderContext = { ...live.founderContext, promotedLearnings };
-  return { businessUnderstanding: bu, founderStrategicContext: fsc, provenance: { businessUnderstanding: provBU, founderStrategicContext: provFSC } };
+  // Freeze public-positioning/market context verbatim (R4) — the strategist must never read it live for a bound generation.
+  const ppc: FrozenPublicPositioning = live.publicPositioningContext;
+  const provPP: SnapshotProvenance['publicPositioning'] = ppc.provenance.map((p) => ({ findingId: p.findingId, reviewId: p.reviewId, adapter: p.adapter, model: p.model, promptVersion: p.promptVersion }));
+  return { businessUnderstanding: bu, founderStrategicContext: fsc, publicPositioningContext: ppc, provenance: { businessUnderstanding: provBU, founderStrategicContext: provFSC, publicPositioning: provPP } };
 }

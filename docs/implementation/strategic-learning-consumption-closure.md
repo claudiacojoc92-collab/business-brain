@@ -71,3 +71,53 @@ Not deployed, not pushed, no prior commit amended.
 - **Automatic reaction** to context change (regeneration, invalidation, background recomputation) — future, separately
   governed. **Freezing public-positioning/market context** into the snapshot — documented future extension. Strategic
   **Execution**; agents; memory/graphs/embeddings/retrieval — future-only. **PI-1 / KA-2** unchanged.
+
+---
+
+## Remediation closure (2026-07-21) — mandatory gate + full-input reproducibility
+
+**Why optional binding was not a gate.** The initial slice (`4a6648c`) accepted an **optional** `contextSnapshotId` and kept
+a **live-context fallback** for unbound sessions — snapshot consumption was a capability, not a constitutional gate. The
+code-traced reasoning-input audit also found the strategist consuming **market/public-positioning context** and the
+**objective** live and unrecorded (class E), and the `SYSTEM` prompt + model config unrecorded (class C) — so the
+reproducibility claim was false.
+
+**Two remediation commits.** (1) governance clarification `24a310f` (docs — ADR-014 amendment + contract R1–R9 +
+architecture + audit); (2) implementation remediation (this record). Neither `619ec84` nor `4a6648c` amended.
+
+**Mandatory gate (enforced at every layer).** A new in-scope generation **requires** a founder-owned snapshot:
+`POST /strategy/sessions` → 400 `CONTEXT_SNAPSHOT_REQUIRED` (missing) / 404 (foreign/nonexistent); session-create sets
+`generation_contract_version = 1` and the **V082 CHECK** (`v0 OR context_snapshot_id NOT NULL`) enforces non-null; the
+**worker** requires the loaded snapshot, verifies its SHA-256 integrity, and **never falls back to live context**. Legacy
+(v0, null-snapshot) sessions stay readable but a retry rejects with `CONTEXT_SNAPSHOT_REQUIRED`.
+
+**Snapshot completeness.** The snapshot now freezes the **whole** consumed input: Effective BU (native + promoted),
+Effective FSC (native + promoted), **and public-positioning/market context** (V082 `public_positioning_context`), each with
+provenance. The assembler `frozen` override covers all three and skips **every** live read. The objective is pinned (hashed)
+in generation provenance.
+
+**SHA-256.** `computeContextSnapshotHash` = SHA-256 over `canonicalSerialize` (recursive key-sort, array-order-preserving,
+rejects undefined/NaN/functions), lowercase hex, server-side, `hash_algorithm='sha256'`, re-verifiable
+(`verifyContextSnapshotIntegrity`). Dev snapshot rows were all removable (0 persistent) → clean forward migration; FNV-1a
+retired, not relabelled.
+
+**Generation provenance (server-resolved).** Each governed session records `contextSnapshotId`, `snapshot_content_hash`,
+`snapshot_schema_version`, `strategist_version`, `prompt_template_hash` (SHA-256 of `SYSTEM`), `model_id`,
+`model_configuration`, `objective_hash`, `generated_at`. The client cannot submit any of these. Export + account-delete
+extended (snapshots + provenance; zero orphans).
+
+**UI.** The ask box gates generation behind a snapshot selector (Generate disabled with none). Legacy sessions are labelled
+"not snapshot-reproducible" with no live-regenerate control; governed sessions show their snapshot hash + strategist/model
+provenance and state that later context changes won't alter the recommendation.
+
+**Acceptance.** Deterministic `context-snapshot.test.ts` (SHA-256 vectors/canonicalisation/integrity + full-payload
+projections); live `context-snapshot.live.test.ts` A–E (freeze under promotion/refine; frozen consumption; **no live
+fallback** → unbound generation FAILS with CONTEXT_SNAPSHOT_REQUIRED; append-only + isolation + zero-orphan delete);
+Playwright `strategic-learning-consumption-gate.spec.ts` (Generate blocked w/o snapshot → create + inspect SHA-256 → select
+→ bound generation records provenance → context change leaves snapshot frozen, new snapshot differs → legacy label + no
+retry). Full **backend 1006 pass / 1 skip**; web build + **73** unit; API + web typechecks clean; consumption + promotion
+Playwright regression green; frozen strategist hashes byte-identical. Every consuming test helper is now snapshot-first;
+every session-touching purge cleans snapshots under the guard (zero orphans verified post-run).
+
+**Remaining debt.** Automatic reaction to context change (regeneration/invalidation/background recomputation) remains a
+future, separately-governed gate; Strategic Execution; agents; memory/graphs/embeddings/retrieval — future-only.

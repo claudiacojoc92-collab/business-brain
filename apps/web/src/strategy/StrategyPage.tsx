@@ -51,8 +51,19 @@ export function StrategyPage() {
   const [session, setSession] = useState<StrategySessionView | null>(null);
   const [history, setHistory] = useState<StrategySessionView[]>([]);
   const [busy, setBusy] = useState(false);
+  // ADR-014 remediation — the Consumption Gate is mandatory: a recommendation can only be generated FROM an immutable
+  // Context Snapshot. The ask box requires the founder to select one (created below); there is no live-context path.
+  const [snapshots, setSnapshots] = useState<SnapshotView[]>([]);
+  const [selectedSnapshot, setSelectedSnapshot] = useState<string>('');
 
   const on401 = useCallback((e: unknown) => { if (e instanceof ApiError && e.status === 401) navigate('/signin', { replace: true }); }, [navigate]);
+
+  const loadSnapshots = useCallback(async () => {
+    try { const snaps = await listContextSnapshots(); setSnapshots(snaps); setSelectedSnapshot((cur) => cur || (snaps[0]?.snapshotId ?? '')); }
+    catch (e) { on401(e); }
+  }, [on401]);
+  useEffect(() => { if (founderId) void loadSnapshots(); }, [founderId, loadSnapshots]);
+  useEffect(() => { const h = () => void loadSnapshots(); window.addEventListener('bb:snapshot-changed', h); return () => window.removeEventListener('bb:snapshot-changed', h); }, [loadSnapshots]);
 
   const poll = useCallback(async (id: string) => {
     for (let i = 0; i < 90; i++) {
@@ -86,10 +97,10 @@ export function StrategyPage() {
   if (!founderId) return <Navigate to="/signin" replace />;
 
   const ask = async () => {
-    if (!question.trim() || busy) return;
+    if (!question.trim() || busy || !selectedSnapshot) return; // mandatory Consumption Gate — a snapshot is required
     setBusy(true); setBoundary(null); setSession(null);
     try {
-      const res = await createStrategySession(question.trim());
+      const res = await createStrategySession(question.trim(), selectedSnapshot);
       if ('outOfScope' in res && res.outOfScope) { setBoundary(res.boundary); }
       else { const s = res as StrategySessionView; setSession(s); if (ACTIVE.has(s.status)) void poll(s.sessionId); }
     } catch (e) { on401(e); } finally { setBusy(false); }
@@ -122,7 +133,16 @@ export function StrategyPage() {
             placeholder="e.g. Should I prioritise LinkedIn or a newsletter for the next 30 days?"
             style={{ width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 'var(--r-2)', border: '1px solid var(--line-2)', fontFamily: 'var(--serif)', fontSize: 'var(--fs-4)', background: 'var(--surface)', color: 'var(--ink)', resize: 'vertical' }}
           />
-          <div style={{ marginTop: 'var(--sp-3)' }}><Button variant="primary" loading={busy} onClick={() => void ask()}>Reason it through</Button></div>
+          {/* ADR-014 remediation — mandatory Consumption Gate: reasoning runs ONLY from a frozen snapshot you select. */}
+          <div style={{ marginTop: 'var(--sp-3)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label style={{ ...meta }} htmlFor="snapshot-select">Reason from snapshot:</label>
+            <select id="snapshot-select" data-testid="ask-snapshot-select" value={selectedSnapshot} onChange={(e) => setSelectedSnapshot(e.target.value)} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', padding: '6px 8px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }}>
+              <option value="">— select a context snapshot —</option>
+              {snapshots.map((s) => <option key={s.snapshotId} value={s.snapshotId}>{new Date(s.createdAt).toLocaleString()} · {s.contentHash.slice(0, 12)}…</option>)}
+            </select>
+            <Button variant="primary" loading={busy} disabled={!selectedSnapshot || !question.trim()} onClick={() => void ask()}><span data-testid="ask-generate">Reason it through</span></Button>
+          </div>
+          {snapshots.length === 0 && <p data-testid="ask-no-snapshot" style={{ ...meta, marginTop: 6 }}>Create a context snapshot below first — recommendations reason only from a frozen snapshot, never live context.</p>}
         </div>
 
         {boundary && <BoundaryCard boundary={boundary} />}
@@ -138,12 +158,24 @@ export function StrategyPage() {
                 <p style={{ ...meta, marginTop: 6 }}>{c.strategicImpact}</p>
               </div>
             ))}
+            {/* ADR-014 remediation — snapshot binding + reproducibility provenance, or a legacy label for old sessions. */}
+            {session.isSnapshotReproducible && session.generationProvenance ? (
+              <div data-testid="session-snapshot-binding" style={{ ...meta, marginBottom: 'var(--sp-3)', paddingLeft: 8, borderLeft: '2px solid var(--line)' }}>
+                Reasoned from snapshot <span data-testid="session-snapshot-hash">{session.generationProvenance.contextSnapshotHash.slice(0, 12)}…</span> · strategist {session.generationProvenance.strategistVersion} · model {session.generationProvenance.modelId} · prompt {session.generationProvenance.promptTemplateHash.slice(0, 8)}… · later context changes will not alter this recommendation.
+              </div>
+            ) : (session.contextSnapshotId == null && session.status !== 'PROCESSING' && session.status !== 'QUEUED') ? (
+              <div data-testid="session-legacy-badge" style={{ ...meta, marginBottom: 'var(--sp-3)', paddingLeft: 8, borderLeft: '2px solid var(--warn-ink)' }}>
+                Legacy live-context session — <strong>not snapshot-reproducible</strong>. To get a reproducible answer, create a new context snapshot below and generate a new recommendation.
+              </div>
+            ) : null}
             {session.status === 'READY' && session.recommendation && <RecommendationView session={session} onResponded={onResponded} on401={on401} />}
             {session.status === 'INSUFFICIENT_EVIDENCE' && session.insufficient && <><InsufficientView data={session.insufficient} onAddContext={() => navigate('/understand')} /><div style={{ marginTop: 'var(--sp-4)' }}><DecisionPanel session={session} on401={on401} /></div></>}
             {session.status === 'FAILED' && (
               <div style={card}>
                 <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-4)', color: 'var(--ink-2)', margin: 0 }}>{session.message ?? 'Something went wrong. Nothing was lost.'}</p>
-                {session.retryable && <div style={{ marginTop: 'var(--sp-3)' }}><Button variant="secondary" onClick={() => void retry()}>Try again</Button></div>}
+                {/* Retry only for governed (snapshot-bound) sessions — a legacy session cannot regenerate live. */}
+                {session.retryable && session.contextSnapshotId && <div style={{ marginTop: 'var(--sp-3)' }}><Button variant="secondary" onClick={() => void retry()}>Try again</Button></div>}
+                {session.retryable && !session.contextSnapshotId && <p data-testid="legacy-no-retry" style={{ ...meta, marginTop: 8 }}>This legacy session can’t regenerate live — create a new snapshot below and generate a new recommendation.</p>}
               </div>
             )}
           </div>
@@ -1216,7 +1248,7 @@ function ContextSnapshots({ on401 }: { on401: (e: unknown) => void }) {
   useEffect(() => { void load(); }, [load]);
   const create = async () => {
     setBusy(true);
-    try { await createContextSnapshot(); await load(); }
+    try { await createContextSnapshot(); await load(); try { window.dispatchEvent(new Event('bb:snapshot-changed')); } catch { /* noop */ } }
     catch (e) { if (e instanceof ApiError && e.status === 401) on401(e); }
     finally { setBusy(false); }
   };

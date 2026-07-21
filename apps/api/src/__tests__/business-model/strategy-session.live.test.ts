@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { sql } from 'kysely';
 import { createKyselyClient } from '@bb/infrastructure';
 import { generateId } from '@bb/shared';
 import { registerSessionRoutes } from '../../routes/session.routes';
@@ -11,6 +12,10 @@ import { PgMarketEntityRepository, PgMarketFindingRepository } from '../../busin
 import { PgMarketFindingResponseRepository } from '../../business-model/pg-market-finding-response.repository';
 import { PgMarketReviewRepository } from '../../business-model/pg-market-review.repository';
 import { PgStrategicSessionRepository } from '../../business-model/pg-strategic-session.repository';
+import { PgContextSnapshotRepository } from '../../business-model/pg-context-snapshot.repository';
+import { captureEffectiveContext } from '../../business-model/context-snapshot.capture';
+import { PgLearningPromotionRepository } from '../../business-model/pg-learning-promotion.repository';
+import { PgStrategicLearningRepository } from '../../business-model/pg-strategic-learning.repository';
 import { PgStrategicResponseRepository } from '../../business-model/pg-strategic-response.repository';
 import { PgFounderStrategicContextRepository } from '../../business-model/pg-founder-strategic-context.repository';
 import { assembleStrategicContext, type AssemblerDeps } from '../../business-model/strategic-context.assembler';
@@ -35,6 +40,7 @@ const prev = { node: process.env['NODE_ENV'], db: process.env['DATABASE_URL'] };
 async function purge(database: any): Promise<void> {
   const rows = await database.selectFrom('identity.founders').select('founder_id').where('email', 'in', [E1, E2]).execute();
   const ids = rows.map((r: { founder_id: string }) => r.founder_id);
+  if (ids.length) await database.transaction().execute(async (tx: any) => { await sql`SET LOCAL bb.allow_snapshot_delete = 'on'`.execute(tx); await tx.deleteFrom('business.context_snapshot').where('founder_id', 'in', ids).execute(); });
   if (ids.length) for (const t of ['business.founder_strategic_context_item', 'business.strategic_response', 'business.strategic_session', 'business.market_review', 'business.market_finding_response', 'business.market_finding', 'business.market_entity', 'business.conclusion_response', 'business.understanding', 'identity.sessions']) await database.deleteFrom(t).where('founder_id', 'in', ids).execute();
   await database.deleteFrom('identity.magic_link_tokens').where('email', 'in', [E1, E2]).execute();
   await database.deleteFrom('identity.founders').where('email', 'in', [E1, E2]).execute();
@@ -56,7 +62,7 @@ function assemblerDeps(): AssemblerDeps {
 }
 // Stub model (no network): returns whatever the test wires; `behavior` may throw to exercise the fail-closed path.
 function stubModel(behavior: (ctx: StrategicContext) => StrategicOutcome | null): StrategyModel {
-  return { version: 'stub:strategy-1', modelId: 'stub', promptVersion: 'strategy-1', schemaVersion: 'strategy-recommendation-1', reason: async (ctx) => behavior(ctx) };
+  return { version: 'stub:strategy-1', modelId: 'stub', promptVersion: 'strategy-1', schemaVersion: 'strategy-recommendation-1', promptTemplateHash: 'stub-prompt-hash', modelConfiguration: { maxTokens: 4096 }, reason: async (ctx) => behavior(ctx) };
 }
 // Deterministically claim THIS exact session (PROCESSING) — never the global claimQueued/delete-other-queued dance,
 // which races with other live-test files running in parallel on the shared session table.
@@ -67,7 +73,11 @@ async function claimSpecific(repo: PgStrategicSessionRepository, founderId: stri
   return repo.getById(founderId, id);
 }
 function workerDeps(model: StrategyModel): StrategicWorkerDeps {
-  return { sessionRepo: new PgStrategicSessionRepository(db), assembler: assemblerDeps(), model, leaseMs: 5 * 60 * 1000, now: () => new Date() };
+  return { sessionRepo: new PgStrategicSessionRepository(db), assembler: assemblerDeps(), model, leaseMs: 5 * 60 * 1000, now: () => new Date(), snapshotRepo: new PgContextSnapshotRepository(db) };
+}
+async function snapOf(founderId: string): Promise<string> {
+  const cap = await captureEffectiveContext(founderId, { assembler: assemblerDeps(), promotionRepo: new PgLearningPromotionRepository(db), learningRepo: new PgStrategicLearningRepository(db) });
+  return (await new PgContextSnapshotRepository(db).create(founderId, cap.businessUnderstanding, cap.founderStrategicContext, cap.publicPositioningContext, cap.provenance, new Date())).id;
 }
 
 // Seed a fresh version-1 understanding with two conclusions; return the understanding id. Idempotent per founder
@@ -135,7 +145,7 @@ describe('strategy §LIVE — read-only assembler eligibility, isolation, proven
 describe('strategy §LIVE — durable worker: atomic publication, insufficient, retry & recovery', () => {
   async function queueAndClaim(founderId: string, question: string, subtype: string): Promise<{ repo: PgStrategicSessionRepository; id: string; claimed: NonNullable<Awaited<ReturnType<PgStrategicSessionRepository['claimQueued']>>> }> {
     const repo = new PgStrategicSessionRepository(db);
-    const created = await repo.create(founderId, { strategicJob: 'PRIORITY_DECISION', subtype: subtype as never, questionText: question, modelId: 'stub', promptVersion: 'strategy-1', schemaVersion: 'strategy-recommendation-1' }, new Date());
+    const created = await repo.create(founderId, { strategicJob: 'PRIORITY_DECISION', subtype: subtype as never, questionText: question, modelId: 'stub', promptVersion: 'strategy-1', schemaVersion: 'strategy-recommendation-1' , contextSnapshotId: await snapOf(founderId) }, new Date());
     const claimed = await claimSpecific(repo, founderId, created.id);
     expect(claimed?.id).toBe(created.id); expect(claimed?.status).toBe('PROCESSING');
     return { repo, id: created.id, claimed: claimed! };
@@ -209,13 +219,19 @@ describe('strategy §LIVE — routes end-to-end + append-only responses', () => 
     expect(oos.statusCode).toBe(200);
     expect(oos.json<{ outOfScope: boolean }>().outOfScope).toBe(true);
 
-    const created = await app.inject({ method: 'POST', url: '/api/strategy/sessions', headers: { cookie }, payload: { question: 'Should I prioritise Instagram or LinkedIn next?' } });
+    // ADR-014 remediation — a new in-scope generation REQUIRES a snapshot. Without one the API rejects (400).
+    const missing = await app.inject({ method: 'POST', url: '/api/strategy/sessions', headers: { cookie }, payload: { question: 'Should I prioritise Instagram or LinkedIn next?' } });
+    expect(missing.statusCode).toBe(400);
+    expect(missing.json<{ reason: string }>().reason).toBe('CONTEXT_SNAPSHOT_REQUIRED');
+    const snapId = (await app.inject({ method: 'POST', url: '/api/strategy/context-snapshots', headers: { cookie }, payload: {} })).json<{ snapshot: { snapshotId: string } }>().snapshot.snapshotId;
+
+    const created = await app.inject({ method: 'POST', url: '/api/strategy/sessions', headers: { cookie }, payload: { question: 'Should I prioritise Instagram or LinkedIn next?', contextSnapshotId: snapId } });
     expect(created.statusCode).toBe(202);
     const body = created.json<{ sessionId: string; status: string; subtype: string }>();
     expect(body.status).toBe('QUEUED'); expect(body.subtype).toBe('CHANNEL_PRIORITY');
 
     // idempotent — the same active question returns the same session, not a duplicate.
-    const again = await app.inject({ method: 'POST', url: '/api/strategy/sessions', headers: { cookie }, payload: { question: 'Should I prioritise Instagram or LinkedIn next?' } });
+    const again = await app.inject({ method: 'POST', url: '/api/strategy/sessions', headers: { cookie }, payload: { question: 'Should I prioritise Instagram or LinkedIn next?', contextSnapshotId: snapId } });
     expect(again.json<{ sessionId: string }>().sessionId).toBe(body.sessionId);
 
     // isolation — another founder cannot read this session.
@@ -230,7 +246,7 @@ describe('strategy §LIVE — routes end-to-end + append-only responses', () => 
     await seedUnderstanding(founderId);
     // drive a session to READY out-of-band (worker is off under test)
     const repo = new PgStrategicSessionRepository(db);
-    const created = await repo.create(founderId, { strategicJob: 'PRIORITY_DECISION', subtype: 'OFFER_PRIORITY', questionText: 'Which offer should I focus pricing on this quarter?', modelId: 'stub', promptVersion: 'strategy-1', schemaVersion: 'strategy-recommendation-1' }, new Date());
+    const created = await repo.create(founderId, { strategicJob: 'PRIORITY_DECISION', subtype: 'OFFER_PRIORITY', questionText: 'Which offer should I focus pricing on this quarter?', modelId: 'stub', promptVersion: 'strategy-1', schemaVersion: 'strategy-recommendation-1' , contextSnapshotId: await snapOf(founderId) }, new Date());
     const claimed = await claimSpecific(repo, founderId, created.id); // deterministic (no global claimQueued race)
     const rec = normalizeStrategicOutput({
       recommendation: { title: 'Lead with the audit offer', action: 'Make the audit the single homepage CTA', horizon: '30 days' },

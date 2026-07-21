@@ -352,6 +352,9 @@ export interface StrategySessionView {
   provenanceManifest?: { manifestVersion: string; understandingVersion: number | null; referenceCount: number } | null;
   failureCategory: string | null; retryable: boolean; message: string | null; attempt: number; maxAttempts: number;
   priorSuccessfulSessionId: string | null; provenance: { modelId: string | null; promptVersion: string | null; schemaVersion: string | null } | null;
+  // ADR-014 Consumption Gate remediation — snapshot binding + reproducibility provenance.
+  contextSnapshotId?: string | null; generationContractVersion?: number; isSnapshotReproducible?: boolean;
+  generationProvenance?: { contextSnapshotId: string; contextSnapshotHash: string; contextSnapshotSchemaVersion: string; strategistVersion: string; promptTemplateHash: string; modelId: string; modelConfiguration: unknown; objectiveHash: string; generatedAt: string } | null;
   createdAt: string; updatedAt: string; effectiveResponse?: StrategyResponseRecord | null;
 }
 export interface StrategyBoundary { kind: 'OUT_OF_SCOPE'; message: string; supported: string }

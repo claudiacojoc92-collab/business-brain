@@ -5,6 +5,7 @@
  * session state machine, the strict recommendation schema, the output normalizer, the retry policy, and the
  * founder-safe boundary message. No prompt logic lives here (that is the model adapter).
  */
+import type { GenerationProvenance } from './context-snapshot';
 
 // ── Bounded strategic job (this slice only) ────────────────────────────────────────────────────────────
 export type StrategicSubtype =
@@ -239,7 +240,9 @@ export interface StrategicSession {
   provenanceManifest: SerializedProvenanceManifestView | null; // immutable allowed-reference set at generation (pm-1)
   failureCategory: StrategyFailureCategory | null; founderSafeError: string | null; priorSuccessfulSessionId: string | null;
   modelId: string | null; promptVersion: string | null; schemaVersion: string | null;
-  contextSnapshotId: string | null; // ADR-014 Consumption Gate: the immutable snapshot this recommendation consumed (null = live path)
+  contextSnapshotId: string | null; // ADR-014 Consumption Gate: the immutable snapshot this recommendation consumed (null = legacy)
+  generationContractVersion: number; // 0 = legacy (live, read-only); 1 = governed (snapshot + provenance required)
+  generationProvenance: GenerationProvenance | null; // ADR-014 remediation: server-resolved reproducibility provenance
   attemptCount: number; maxAttempts: number;
   claimedAt: string | null; leaseExpiresAt: string | null; startedAt: string | null; finishedAt: string | null;
   createdAt: string; updatedAt: string;
@@ -258,7 +261,10 @@ export function toSessionView(s: StrategicSession) {
     failureCategory: s.status === 'FAILED' ? s.failureCategory : null,
     retryable: sessionRetryable(s.status, s.failureCategory, s.attemptCount, s.maxAttempts),
     message: s.founderSafeError, attempt: s.attemptCount, maxAttempts: s.maxAttempts,
-    contextSnapshotId: s.contextSnapshotId, // ADR-014: the immutable snapshot this recommendation consumed (null = live)
+    contextSnapshotId: s.contextSnapshotId, // ADR-014: the immutable snapshot this recommendation consumed (null = legacy)
+    generationContractVersion: s.generationContractVersion, // 0 = legacy live (not reproducible); 1 = governed snapshot-bound
+    isSnapshotReproducible: s.generationContractVersion >= 1 && !!s.contextSnapshotId,
+    generationProvenance: s.generationProvenance, // server-resolved reproducibility provenance (null for legacy)
     priorSuccessfulSessionId: s.priorSuccessfulSessionId,
     provenance: s.status === 'READY' ? { modelId: s.modelId, promptVersion: s.promptVersion, schemaVersion: s.schemaVersion } : null,
     // Founder-safe manifest summary (not raw internals as the main experience); full manifest is in export only.

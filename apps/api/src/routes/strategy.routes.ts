@@ -78,14 +78,13 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
     if (!question) { await reply.code(400).send({ error: 'a question is required' }); return; }
     const cls = classifyStrategicJob(question);
     if (cls.job === 'OUT_OF_SCOPE') { await reply.code(200).send({ outOfScope: true, boundary: boundaryResponse() }); return; }
-    // ADR-014 Consumption Gate: an optional contextSnapshotId binds this recommendation to an immutable frozen snapshot
-    // (explicit consumption). It must be an existing snapshot the founder owns; otherwise the legacy live path is used.
+    // ADR-014 remediation — MANDATORY Consumption Gate: every new in-scope recommendation generation REQUIRES a
+    // founder-owned immutable snapshot. Missing → 400 CONTEXT_SNAPSHOT_REQUIRED; foreign/nonexistent → 404. There is no
+    // live-context fallback. The client cannot supply snapshot content, hashes, or provenance — the server resolves them.
     const rawSnap = String((request.body as Record<string, unknown> | undefined)?.['contextSnapshotId'] ?? '').trim();
-    let contextSnapshotId: string | null = null;
-    if (rawSnap) {
-      if (!(await snapshotRepo.getById(founderId, rawSnap))) { await reply.code(404).send({ error: 'context snapshot not found' }); return; }
-      contextSnapshotId = rawSnap;
-    }
+    if (!rawSnap) { await reply.code(400).send({ error: { code: 'CONTEXT_SNAPSHOT_REQUIRED', message: 'Create a context snapshot and generate from it.' }, reason: 'CONTEXT_SNAPSHOT_REQUIRED' }); return; }
+    if (!(await snapshotRepo.getById(founderId, rawSnap))) { await reply.code(404).send({ error: { code: 'CONTEXT_SNAPSHOT_NOT_FOUND', message: 'context snapshot not found' }, reason: 'CONTEXT_SNAPSHOT_NOT_FOUND' }); return; }
+    const contextSnapshotId = rawSnap;
     const cfg = strategyModelConfig();
     const s = await sessionRepo.create(founderId, { strategicJob: cls.job, subtype: cls.subtype, questionText: question, modelId: cfg.modelId, promptVersion: cfg.promptVersion, schemaVersion: cfg.schemaVersion, contextSnapshotId }, new Date());
     await reply.code(202).send(toSessionView(s));
@@ -113,6 +112,12 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
   server.post('/strategy/sessions/:id/retry', async (request: FastifyRequest, reply: FastifyReply) => {
     const founderId = await sessionFounder(request);
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    // ADR-014 remediation: a legacy (contract v0, null-snapshot) session cannot regenerate live. It must not be re-queued;
+    // the founder must create a new snapshot and generate anew. Governed (v1) sessions retry against their bound snapshot.
+    const existing = await sessionRepo.getById(founderId, (request.params as { id: string }).id);
+    if (existing && (existing.generationContractVersion < 1 || !existing.contextSnapshotId)) {
+      await reply.code(400).send({ error: { code: 'CONTEXT_SNAPSHOT_REQUIRED', message: 'This is a legacy session with no snapshot — create a new snapshot and generate a new recommendation.' }, reason: 'CONTEXT_SNAPSHOT_REQUIRED' }); return;
+    }
     const s = await sessionRepo.retry(founderId, (request.params as { id: string }).id, new Date());
     if (!s) { await reply.code(409).send({ error: 'this result can’t be retried' }); return; }
     await reply.code(202).send(toSessionView(s));
@@ -644,7 +649,7 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
     const founderId = await sessionFounder(request);
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
     const captured = await captureEffectiveContext(founderId, { assembler, promotionRepo, learningRepo });
-    const snap = await snapshotRepo.create(founderId, captured.businessUnderstanding, captured.founderStrategicContext, captured.provenance, new Date());
+    const snap = await snapshotRepo.create(founderId, captured.businessUnderstanding, captured.founderStrategicContext, captured.publicPositioningContext, captured.provenance, new Date());
     await reply.code(201).send({ snapshot: toSnapshotView(snap) });
   });
   server.get('/strategy/context-snapshots', async (request: FastifyRequest, reply: FastifyReply) => {
