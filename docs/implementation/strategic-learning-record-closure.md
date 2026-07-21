@@ -4,7 +4,19 @@ Adds the ADR-011 **category 14 precursor**: a founder-governed **Strategic Learn
 understanding the founder *explicitly decides to keep* after a review. It is **not** journaling, notes, memory, or
 execution, and it is **not** generic Strategic Memory. *History records events. Learning records durable changes in
 understanding. Those are different objects.* Most reviews create **no** learning. Governance + architecture gate
-committed *before* implementation (`b3d8f2e`, atop the SPRR line `a083f18`).
+committed *before* implementation (`b3d8f2e`, atop the SPRR line `a083f18`); implementation `2aa9a23`.
+
+> **Remediation (2026-07-21).** The initial `2aa9a23` acceptance was **not** justified and is superseded by this record.
+> Corrections: (1) **genuine rendered-UI acceptance** via Playwright (the earlier "browser acceptance" drove the forms by
+> authenticated *fetch*, not the rendered controls — that only ever counted as an integration check); (2) the object is
+> **enriched** with before/after understanding, scope + broad-scope acknowledgement, a causal-claim guard, boundary
+> conditions, counterevidence, unresolved unknowns, and source-classified observations/evidence; (3) the epistemic
+> vocabulary drops truth-inflating `ESTABLISHED` for `PROVISIONAL | SUPPORTED | CONTESTED | INSUFFICIENT_INFORMATION`
+> (forward migration **V077**); (4) "**promotion**" is reserved for the future BU/FSC capability — creation from a review
+> is *create/keep/record*; (5) the **backend regression discrepancy** is explained (the earlier "656" was the `apps/api`
+> project alone — the shell was `cd`'d into `apps/api`; the true full `backend` workspace project is ~924); (6) the
+> lifecycle is documented honestly as **CREATE-only** (initial immutable creation slice). Full detail + criterion matrix:
+> [`strategic-learning-record-remediation.md`](../architecture/strategic-learning-record-remediation.md).
 
 ## Gate (committed first — `b3d8f2e`)
 
@@ -54,50 +66,66 @@ reviews won't"). On keeping, it states **"Durable strategic learning"**, **"It d
 
 ## Acceptance evidence
 
-- **Deterministic (Part 11):** `strategic-learning.test.ts` — 11 tests (admission gate: owned review required, statement
-  required, category from the fixed 11, confidence required and never absolute, idempotency key required; the confidence
-  set is exactly {CONDITIONAL, ESTABLISHED, TENTATIVE} and excludes CERTAIN/ABSOLUTE; build carries the exact review +
-  full lineage, founder-authored, not model-suggested, nullable lineage taken as-is; the view always reports it does not
-  modify BU/FSC and leaks no status/progress/score/completedAt field).
-- **Live DB (Part 11 A–D):** `strategic-learning.live.test.ts` — 4 tests: **(A)** recording a review creates **no**
-  learning (and no execution/task/progress/habit/reminder table exists); **(B)** an explicit promotion writes exactly one
-  learning, idempotent, with the exact review + full lineage, founder-authored, confidence preserved; **(C)** a learning
-  mutates **nothing** — the review, Business Understanding (Law 12), and Founder Strategic Context (Law 13) are byte-for-
-  byte unchanged and no new plan/commitment/decision revision appears; **(D)** append-only UPDATE rejected by the trigger,
-  no `memory.*` write, cross-founder create/read rejected, export lineage faithful, delete zero orphans (the source review
-  survives).
-- **Browser (Part 11 UI):** through the real signed-in browser session (vite proxy → API bundle → dev Postgres) the full
-  chain **decision → commitment → plan → review → learning** was exercised: decision `201` (`notACommitment:true`),
-  commitment/plan/review `201`, then `POST …/learnings` `201` returning the lineage plus
-  `doesNotModifyBusinessUnderstanding:true` / `doesNotModifyFounderStrategicContext:true`, `founderAuthored:true`,
-  `modelSuggested:false`, `confidence:"TENTATIVE"`; a repeat with the same idempotency key returned the **same**
-  learning id and the list stayed at **1**. DB verification confirmed exactly one learning with full lineage, the review
-  unchanged (still `MIXED_EVIDENCE`), **no** BU version and **no** FSC item written, no execution/task/progress/habit/
-  reminder table, and the `slr_no_update` append-only trigger present. The served UI bundle ships the exact `LearningPanel`
-  copy ("Keep a learning from this review", "Most reviews won't", "Durable strategic learning", "It does not modify
-  Business Understanding", "It does not modify Founder Strategic Context") and **no** progress/productivity/habit/task
-  vocabulary; the recommendation surface renders the decision act as explicitly separate from recommendation feedback.
-  (Tooling note: the in-app browser's `read_page` a11y tree would not build for this SPA, so the nested native `<select>`
-  review/learning forms were driven through the browser's authenticated fetch session rather than click-by-click; every
-  request went through the real cookie + vite proxy + API + DB path, and the persisted invariants were verified directly.)
-- **Regression:** backend **656 pass / 1 skip** (84 files); web build (tsc + vite) + **73** web tests green; API + web
-  typechecks clean; migrations through V076 present, V076 table + `slr_no_update` trigger live; frozen-engine hashes
-  byte-identical (`prompt a39ea88…`, `schema 79802e9…`, `index f9df116…`); the Decision/Commitment/Plan/Review chain and
-  provenance/conflict rules remain green.
+The four evidence kinds are kept distinct (they are not one "browser acceptance"):
+
+- **Deterministic domain tests** — `strategic-learning.test.ts` (19): the admission gate (owned review; statement;
+  before/after understanding + change statement all required; category from the fixed 11; **bounded** confidence rejecting
+  CERTAIN/ABSOLUTE/ESTABLISHED/PROVEN; scope required; **broad-scope acknowledgement** for broad scopes; **causal-claim
+  guard**; observation source validation; evidence references restricted to the review lineage with invented + duplicate
+  rejected; idempotency), the SYSTEM_DERIVED lineage, verbatim before/after/counterevidence/boundary/unknowns preservation,
+  founder-reported staying founder-reported, and the founder-safe view leaking no status/progress/score/streak field.
+- **Live DB tests** — `strategic-learning.live.test.ts` (8, Scenarios A–H): **A** review creates no learning (no execution/
+  task/progress/habit/reminder/score table); **B** explicit keep is exactly-once, idempotent, full lineage, and mutates
+  nothing (review/BU/FSC byte-identical, no new plan/commitment/decision revision, no `memory.*` write); **C** two distinct
+  learnings from one review, retry no-duplicate, no auto-merge; **D** increased uncertainty accepted (no forced positive);
+  **E** INSUFFICIENT_INFORMATION preserves unknowns without inventing a conclusion; **F** causal + founder-reported-only
+  blocked from SUPPORTED with **no partial row**; **G** immutable CREATE, direct UPDATE rejected by the trigger, lineage
+  read-back not recomputed; **H** cross-founder rejected, export faithful (all enriched fields), delete zero orphans, source
+  review survives.
+- **Genuine rendered-UI acceptance** — Playwright `apps/web/e2e/strategic-learning.spec.ts` (`npm run e2e -w apps/web`,
+  headless Chromium): signs in through the **rendered** form, then walks **decision → commitment → plan → review** through
+  the actual visible controls, opens **"Record a learning from this review"**, fills every field, selects category /
+  confidence / scope, observes **disabled-submit** validation while incomplete, triggers the **server-side causal-claim
+  guard** (a visible error), corrects it, clicks **Keep this learning**, and sees the saved panel state
+  ("Durable strategic learning" / "It does not modify Business Understanding" / "It does not modify Founder Strategic
+  Context"). After **page reload**, the persisted "Your durable strategic learnings" list still shows the learning **with
+  its source review**. DB assertions in the same test confirm exactly one learning, the review unchanged (`MIXED_EVIDENCE`),
+  **no** BU version, **no** FSC item, and `confidence = PROVISIONAL`. Visual evidence:
+  `apps/web/e2e/__evidence__/learning-saved.png`, `learnings-list-after-refresh.png`.
+- **Regression:** full **`backend` workspace project** (`vitest run --project backend`, from the repo root — `packages/*` +
+  `apps/api` + `apps/workers`): **924 pass / 1 skip / 0 fail** (132 files). Web build (tsc + vite) green; **73** web unit
+  tests green; API + web typechecks clean; migrations through **V077** present + applied (V076 table + `slr_no_update`
+  trigger + V077 enrichment columns live); frozen-engine hashes byte-identical (`prompt a39ea88…`, `schema 79802e9…`,
+  `index f9df116…`); the Decision/Commitment/Plan/Review chain, provenance, and conflict rules remain green. *(The one
+  real-network + real-inference `market-review-durable.live` test can time out under parallel load with a co-running API
+  bundle; it passes in isolation and on a contention-free run — environmental, unrelated to SLR.)*
+
+**Backend count discrepancy (resolved).** `2aa9a23` reported "656 pass / 1 skip (84 files)". The root `vitest.workspace.ts`
+defines a **`backend`** project (`packages/*/src/**` + `apps/api/src/**` + `apps/workers/src/**`) plus a separate `apps/web`
+(jsdom) project. 656 / 84 files is the **`apps/api` project alone** — the persistent shell was `cd`'d into `apps/api`, so
+`npx vitest run` resolved only that project and silently dropped `packages/*` + `apps/workers` (241 tests). The true full
+`backend` project is 924 (= the prior-slice 897 baseline + 27 SLR tests). Same runner/config/env; only the working directory
+(hence project resolution) differed.
+
+## Criterion-to-test matrix
+All 56 original deterministic criteria are mapped in
+[`strategic-learning-record-remediation.md`](../architecture/strategic-learning-record-remediation.md) — each COVERED by a
+named assertion, except the lifecycle-mutation criteria (44–47: REFINE/CONTEST/SUPERSEDE/RETIRE) which are
+**DEFERRED_BY_GOVERNANCE** (this is the CREATE-only initial slice; Law 10 + SLR-3).
 
 ## Scope discipline
 
 No Strategic Execution Record, task management, progress tracking, productivity metrics, habit tracking, reminders,
 scheduling, notifications, calendar integrations, autonomous agents, automatic context mutation, or generic Strategic
-Memory added; legacy `memory.*` (KA-2) not reconciled; the model cannot create or silently promote a learning; creating a
+Memory added; legacy `memory.*` (KA-2) not reconciled; the model cannot create or silently create a learning; creating a
 learning performs **no** Review/Plan/Commitment/Decision/Recommendation rewrite and **never** auto-modifies Business
-Understanding or Founder Strategic Context; the frozen strategist engine is untouched. Not deployed, not pushed, no prior
-commit amended.
+Understanding or Founder Strategic Context; the frozen strategist engine is untouched. Playwright + Chromium were added as a
+repo-native browser-automation harness (`apps/web` devDependency). Not deployed, not pushed, no prior commit amended.
 
 ## Remaining debt
-- **SLR-1** revision-based learning corrections (append another learning; currently one revision per logical learning);
-  **SLR-2** governed promotion of a learning into Founder Strategic Context / Business Understanding (a separate future
-  gate — Law 14); **SLR-3** broader learning provenance (linking specific evidence beyond the review lineage);
-  **SLR-4** model-assisted *suggestion* of candidate learnings (MODEL_PROPOSED + founder acceptance + evaluation).
+- **SLR-3** the append-only **lifecycle** (REFINE / CONTEST / SUPERSEDE / RETIRE), effective-state derivation, and a
+  historical-revision UI — a governed contradictory-learning relationship (this slice keeps CREATE-only immutable records).
+- **SLR-1 / SLR-2** governed **promotion into Business Understanding / Founder Strategic Context** (Law 14) — separate
+  future gates. **SLR-4** model-assisted *suggestion* of candidate learnings (MODEL_PROPOSED + founder acceptance + eval).
 - Strategic **Execution Record** remains future-only; task/progress tracking stays outside the architecture; generic
   Strategic **Memory** is conceptual; **PI-1** / **KA-2** unchanged.

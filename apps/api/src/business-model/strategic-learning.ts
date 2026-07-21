@@ -1,13 +1,16 @@
 /**
  * Wave 4 — Strategic Learning Record (ADR-011 cat 14 precursor — durable learning, NOT generic Strategic Memory). A
- * founder-EXPLICIT, APPEND-ONLY durable strategic understanding the founder decides to keep after a review, with the
- * full Review→Plan→Commitment→Decision→Recommendation→Evidence lineage. Governed by
+ * founder-EXPLICIT, APPEND-ONLY durable strategic understanding the founder decides to KEEP after a review — the initial
+ * immutable creation slice (CREATE-only; no REFINE/CONTEST/SUPERSEDE/RETIRE — see SLR-3). Governed by
  * docs/governance/strategic-learning-record-contract.md.
  *
- * FAIL CLOSED — the model NEVER silently creates learning (no model path this slice); creating a learning writes ONLY
- * the learning record and mutates NOTHING (never Review/Plan/Commitment/Decision/Recommendation; never auto-modifies
- * Business Understanding or Founder Strategic Context — Laws 4–8, 12–14). Learning preserves uncertainty; it is not
- * absolute truth. Not journaling, memory, execution, or the dead founder.belief_chains legacy table.
+ * "Create/keep/record a learning FROM a review." This is NOT "promotion" — promotion is the future, separately-gated
+ * flow that carries a learning INTO Business Understanding / Founder Strategic Context (Law 14).
+ *
+ * FAIL CLOSED — the model NEVER creates learning (no model path this slice); keeping a learning writes ONLY the learning
+ * record and mutates NOTHING (never Review/Plan/Commitment/Decision/Recommendation; never auto-modifies Business
+ * Understanding or Founder Strategic Context — Laws 4–8, 12–14). Learning preserves uncertainty and may INCREASE it; it
+ * is not absolute truth. Not journaling, memory, execution, or the dead founder.belief_chains legacy table.
  */
 import type { StrategicPlanReviewRecord } from './strategic-plan-review';
 
@@ -16,51 +19,113 @@ export const LEARNING_SCHEMA_VERSION = 'strategic-learning-1';
 // ── Enumerations ─────────────────────────────────────────────────────────────────────────────────────────
 export type LearningCategory = 'MARKET' | 'CUSTOMER' | 'POSITIONING' | 'OFFER' | 'EXECUTION' | 'DECISION_PROCESS' | 'RESOURCE' | 'RISK' | 'ASSUMPTION' | 'STRATEGY' | 'OTHER';
 export const LEARNING_CATEGORIES: ReadonlySet<string> = new Set(['MARKET', 'CUSTOMER', 'POSITIONING', 'OFFER', 'EXECUTION', 'DECISION_PROCESS', 'RESOURCE', 'RISK', 'ASSUMPTION', 'STRATEGY', 'OTHER']);
-export type LearningConfidence = 'ESTABLISHED' | 'TENTATIVE' | 'CONDITIONAL'; // never absolute (Law 9)
-export const LEARNING_CONFIDENCES: ReadonlySet<string> = new Set(['ESTABLISHED', 'TENTATIVE', 'CONDITIONAL']);
+
+// Confidence — bounded, never truth-inflating (Law 9). No ESTABLISHED/CERTAIN/ABSOLUTE: a learning is the founder's
+// interpretation, not objective/independently-verified/permanent truth. CONTESTED keeps mixed evidence visible;
+// INSUFFICIENT_INFORMATION records "cannot currently be justified"; a conditional learning is expressed via boundaryConditions.
+export type LearningConfidence = 'PROVISIONAL' | 'SUPPORTED' | 'CONTESTED' | 'INSUFFICIENT_INFORMATION';
+export const LEARNING_CONFIDENCES: ReadonlySet<string> = new Set(['PROVISIONAL', 'SUPPORTED', 'CONTESTED', 'INSUFFICIENT_INFORMATION']);
+
+// Applicability scope. Broad scopes generalize beyond the source review and require explicit founder acknowledgement.
+export type LearningScope = 'THIS_CHANNEL' | 'THIS_OFFER' | 'THIS_POSITIONING' | 'THIS_DECISION' | 'MULTIPLE_OFFERS' | 'MULTIPLE_MARKETS' | 'BUSINESS' | 'FOUNDER_STRATEGY' | 'OPERATING_MODEL' | 'OTHER';
+export const LEARNING_SCOPES: ReadonlySet<string> = new Set(['THIS_CHANNEL', 'THIS_OFFER', 'THIS_POSITIONING', 'THIS_DECISION', 'MULTIPLE_OFFERS', 'MULTIPLE_MARKETS', 'BUSINESS', 'FOUNDER_STRATEGY', 'OPERATING_MODEL', 'OTHER']);
+export const BROAD_SCOPES: ReadonlySet<string> = new Set(['MULTIPLE_OFFERS', 'MULTIPLE_MARKETS', 'BUSINESS', 'FOUNDER_STRATEGY', 'OPERATING_MODEL']);
+
+export type ObservationSource = 'FOUNDER_REPORTED' | 'BUSINESS_RECORD_REFERENCE' | 'PUBLIC_REFERENCE' | 'SYSTEM_DERIVED';
+export const OBSERVATION_SOURCES: ReadonlySet<string> = new Set(['FOUNDER_REPORTED', 'BUSINESS_RECORD_REFERENCE', 'PUBLIC_REFERENCE', 'SYSTEM_DERIVED']);
+
+export interface LearningObservation { statement: string; sourceType: ObservationSource; }
+export interface LearningEvidenceReference { space: string; id: string; }
 
 export interface StrategicLearningRecord {
   id: string; founderId: string; logicalLearningId: string; revision: number; schemaVersion: string;
-  // lineage (system-derived; the EXACT review promoted from + its immutable lineage — Law 11)
+  // lineage (system-derived; the EXACT review kept from + its immutable lineage — Law 11)
   reviewRecordId: string; reviewRevision: number; planRecordId: string; commitmentRecordId: string;
   decisionRecordId: string | null; recommendationSessionId: string | null; provenanceManifestVersion: string | null;
-  // founder-authored
+  // founder-authored — the durable change in understanding
   learningStatement: string; learningCategory: LearningCategory; confidence: LearningConfidence;
+  priorUnderstanding: string; revisedUnderstanding: string; changeStatement: string;
+  learningScope: LearningScope; broadScopeAcknowledged: boolean; isCausalHypothesis: boolean;
+  boundaryConditions: string[]; counterEvidence: string[]; unresolvedUnknowns: string[];
+  observations: LearningObservation[]; evidenceReferences: LearningEvidenceReference[];
   // authorship
   founderAuthored: boolean; modelSuggested: boolean; acceptedByFounder: boolean;
   idempotencyKey: string; createdAt: string;
 }
 
 export interface LearningInput {
-  learningStatement: string; learningCategory: LearningCategory; confidence: LearningConfidence; idempotencyKey: string;
+  learningStatement: string; learningCategory: LearningCategory; confidence: LearningConfidence;
+  priorUnderstanding: string; revisedUnderstanding: string; changeStatement: string;
+  learningScope: LearningScope; broadScopeAcknowledged?: boolean; isCausalHypothesis?: boolean;
+  boundaryConditions?: string[]; counterEvidence?: string[]; unresolvedUnknowns?: string[];
+  observations?: LearningObservation[]; evidenceReferences?: LearningEvidenceReference[];
+  idempotencyKey: string;
 }
 
 // ── Admission gate (deterministic; no model) ─────────────────────────────────────────────────────────────
-export type LearningRejection = 'REVIEW_NOT_READABLE' | 'STATEMENT_EMPTY' | 'CATEGORY_REQUIRED' | 'CONFIDENCE_REQUIRED' | 'IDEMPOTENCY_KEY_REQUIRED';
+export type LearningRejection =
+  | 'REVIEW_NOT_READABLE' | 'IDEMPOTENCY_KEY_REQUIRED' | 'STATEMENT_EMPTY'
+  | 'PRIOR_UNDERSTANDING_REQUIRED' | 'REVISED_UNDERSTANDING_REQUIRED' | 'CHANGE_STATEMENT_REQUIRED'
+  | 'CATEGORY_REQUIRED' | 'CONFIDENCE_REQUIRED' | 'SCOPE_REQUIRED'
+  | 'BROAD_SCOPE_NOT_ACKNOWLEDGED' | 'CAUSAL_CLAIM_UNSUPPORTED'
+  | 'OBSERVATION_INVALID' | 'EVIDENCE_NOT_IN_LINEAGE' | 'EVIDENCE_DUPLICATE';
 export class LearningValidationError extends Error {
   constructor(public readonly reason: LearningRejection, message: string) { super(message); this.name = 'LearningValidationError'; }
 }
 
-/** Deterministically assert a learning may be promoted from this EXACT owned review + input. Throws. No mutation. */
+/** The set of ids a learning's evidence references may point to — the review's own immutable lineage (Law 11). */
+export function reviewLineageIds(review: StrategicPlanReviewRecord): ReadonlySet<string> {
+  return new Set([review.id, review.planRecordId, review.commitmentRecordId, review.decisionRecordId, review.recommendationSessionId, review.provenanceManifestVersion].filter((x): x is string => typeof x === 'string' && x.length > 0));
+}
+
+/** Deterministically assert a learning may be created from this EXACT owned review + input. Throws. No mutation. */
 export function assertLearningAdmissible(review: StrategicPlanReviewRecord | null, input: LearningInput): void {
-  if (!review) throw new LearningValidationError('REVIEW_NOT_READABLE', 'A learning must be promoted from a review you own.');
+  if (!review) throw new LearningValidationError('REVIEW_NOT_READABLE', 'A learning must be kept from a review you own.');
   if (!input.idempotencyKey?.trim()) throw new LearningValidationError('IDEMPOTENCY_KEY_REQUIRED', 'A learning requires an idempotency key.');
   if (!input.learningStatement?.trim()) throw new LearningValidationError('STATEMENT_EMPTY', 'Say, in your words, what you’re keeping as a durable learning.');
+  if (!input.priorUnderstanding?.trim()) throw new LearningValidationError('PRIOR_UNDERSTANDING_REQUIRED', 'Say what you understood before this review.');
+  if (!input.revisedUnderstanding?.trim()) throw new LearningValidationError('REVISED_UNDERSTANDING_REQUIRED', 'Say what you understand now.');
+  if (!input.changeStatement?.trim()) throw new LearningValidationError('CHANGE_STATEMENT_REQUIRED', 'Say what actually changed in your understanding.');
   if (!input.learningCategory || !LEARNING_CATEGORIES.has(input.learningCategory)) throw new LearningValidationError('CATEGORY_REQUIRED', 'Choose what this learning is about.');
   if (!input.confidence || !LEARNING_CONFIDENCES.has(input.confidence)) throw new LearningValidationError('CONFIDENCE_REQUIRED', 'Choose how settled this learning is (never “certain”).');
+  if (!input.learningScope || !LEARNING_SCOPES.has(input.learningScope)) throw new LearningValidationError('SCOPE_REQUIRED', 'Choose how widely this learning applies.');
+  // Broad generalization beyond the source review must be explicitly acknowledged.
+  if (BROAD_SCOPES.has(input.learningScope) && input.broadScopeAcknowledged !== true) throw new LearningValidationError('BROAD_SCOPE_NOT_ACKNOWLEDGED', 'You’re generalizing beyond this review — confirm that’s intended.');
+  // Observations: founder-reported (or classified) statements; never silently marked verified.
+  for (const o of input.observations ?? []) {
+    if (!o || !o.statement?.trim() || !OBSERVATION_SOURCES.has(o.sourceType)) throw new LearningValidationError('OBSERVATION_INVALID', 'Each observation needs a statement and a valid source.');
+  }
+  // Evidence references may only point to the review's own lineage (no arbitrary/invented ids); no duplicates.
+  const lineage = reviewLineageIds(review); const seen = new Set<string>();
+  for (const e of input.evidenceReferences ?? []) {
+    if (!e || !e.id?.trim() || !lineage.has(e.id)) throw new LearningValidationError('EVIDENCE_NOT_IN_LINEAGE', 'An evidence reference must be part of this review’s own lineage.');
+    if (seen.has(e.id)) throw new LearningValidationError('EVIDENCE_DUPLICATE', 'That evidence reference is listed twice.');
+    seen.add(e.id);
+  }
+  // Causal-claim guard (deterministic; no LLM): a causal hypothesis supported only by founder-reported material may not
+  // claim SUPPORTED — governed lineage evidence is required for that. It may still be PROVISIONAL/CONTESTED/INSUFFICIENT.
+  if (input.isCausalHypothesis === true && input.confidence === 'SUPPORTED' && (input.evidenceReferences ?? []).length === 0) {
+    throw new LearningValidationError('CAUSAL_CLAIM_UNSUPPORTED', 'A causal claim from your own reports alone can’t be “supported” — cite governed evidence, or mark it provisional.');
+  }
 }
 
 const clip = (v: unknown, max = 4000): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+const clipList = (v: unknown, max = 40): string[] => (Array.isArray(v) ? v.map((x) => clip(x, 2000)).filter(Boolean).slice(0, max) : []);
 
 /** Build the immutable learning fields from an ADMITTED review + founder input. Lineage is SYSTEM_DERIVED from the
- *  immutable review (Law 11); the statement/category/confidence are FOUNDER_AUTHORED and explicitly accepted. */
+ *  immutable review (Law 11); the understanding/scope/confidence/etc. are FOUNDER_AUTHORED and explicitly accepted. */
 export function buildLearningFields(review: StrategicPlanReviewRecord, input: LearningInput): Omit<StrategicLearningRecord, 'id' | 'founderId' | 'logicalLearningId' | 'revision' | 'createdAt'> {
   return {
     schemaVersion: LEARNING_SCHEMA_VERSION,
     reviewRecordId: review.id, reviewRevision: review.revision, planRecordId: review.planRecordId, commitmentRecordId: review.commitmentRecordId,
     decisionRecordId: review.decisionRecordId, recommendationSessionId: review.recommendationSessionId, provenanceManifestVersion: review.provenanceManifestVersion,
     learningStatement: clip(input.learningStatement), learningCategory: input.learningCategory, confidence: input.confidence,
-    founderAuthored: true, modelSuggested: false, acceptedByFounder: true, // explicit founder promotion; no model this slice
+    priorUnderstanding: clip(input.priorUnderstanding), revisedUnderstanding: clip(input.revisedUnderstanding), changeStatement: clip(input.changeStatement),
+    learningScope: input.learningScope, broadScopeAcknowledged: input.broadScopeAcknowledged === true, isCausalHypothesis: input.isCausalHypothesis === true,
+    boundaryConditions: clipList(input.boundaryConditions), counterEvidence: clipList(input.counterEvidence), unresolvedUnknowns: clipList(input.unresolvedUnknowns),
+    observations: (input.observations ?? []).slice(0, 40).map((o) => ({ statement: clip(o.statement, 2000), sourceType: o.sourceType })),
+    evidenceReferences: (input.evidenceReferences ?? []).slice(0, 40).map((e) => ({ space: clip(e.space, 200), id: clip(e.id, 200) })),
+    founderAuthored: true, modelSuggested: false, acceptedByFounder: true, // explicit founder act; no model this slice
     idempotencyKey: clip(input.idempotencyKey, 200),
   };
 }
@@ -70,12 +135,16 @@ export function toLearningView(l: StrategicLearningRecord) {
   return {
     learningId: l.id, logicalLearningId: l.logicalLearningId, revision: l.revision,
     learningStatement: l.learningStatement, learningCategory: l.learningCategory, confidence: l.confidence,
+    priorUnderstanding: l.priorUnderstanding, revisedUnderstanding: l.revisedUnderstanding, changeStatement: l.changeStatement,
+    learningScope: l.learningScope, broadScopeAcknowledged: l.broadScopeAcknowledged, isCausalHypothesis: l.isCausalHypothesis,
+    boundaryConditions: l.boundaryConditions, counterEvidence: l.counterEvidence, unresolvedUnknowns: l.unresolvedUnknowns,
+    observations: l.observations, evidenceReferences: l.evidenceReferences,
     review: { recordId: l.reviewRecordId, revision: l.reviewRevision },
     plan: { recordId: l.planRecordId }, commitment: { recordId: l.commitmentRecordId },
     decisionRecordId: l.decisionRecordId, recommendationSessionId: l.recommendationSessionId, provenanceManifestVersion: l.provenanceManifestVersion,
     authorship: { founderAuthored: l.founderAuthored, modelSuggested: l.modelSuggested, acceptedByFounder: l.acceptedByFounder },
     createdAt: l.createdAt, learningSchemaVersion: LEARNING_SCHEMA_VERSION,
-    // constant reminders surfaced to the UI — a learning changes nothing else
+    // constant reminders surfaced to the UI — a learning changes nothing else, and does not carry itself into BU/FSC
     doesNotModifyBusinessUnderstanding: true, doesNotModifyFounderStrategicContext: true,
   };
 }

@@ -550,14 +550,21 @@ export async function listPlanReviews(logicalPlanId: string): Promise<PlanReview
 }
 
 // ─── Strategic Learning Record (ADR-011 cat 14 precursor — durable learning, NOT generic Strategic Memory) ──
-// A durable strategic understanding the founder EXPLICITLY decides to keep after a review. Most reviews create NO
-// learning. Founder-authored; confidence never absolute. Creating one changes NOTHING — it does not modify
-// Business Understanding or Founder Strategic Context, and never rewrites the Review/Plan/Commitment/Decision.
+// A durable strategic understanding the founder EXPLICITLY decides to KEEP after a review (initial CREATE-only slice).
+// Most reviews create NO learning. Founder-authored; confidence bounded and never truth-inflating. Keeping one changes
+// NOTHING — it does not modify Business Understanding or Founder Strategic Context, and never rewrites the Review/Plan/
+// Commitment/Decision. (This is creation, not "promotion" — promotion into BU/FSC is a separate future capability.)
 export type LearningCategory = 'MARKET' | 'CUSTOMER' | 'POSITIONING' | 'OFFER' | 'EXECUTION' | 'DECISION_PROCESS' | 'RESOURCE' | 'RISK' | 'ASSUMPTION' | 'STRATEGY' | 'OTHER';
-export type LearningConfidence = 'ESTABLISHED' | 'TENTATIVE' | 'CONDITIONAL';
+export type LearningConfidence = 'PROVISIONAL' | 'SUPPORTED' | 'CONTESTED' | 'INSUFFICIENT_INFORMATION';
+export type LearningScope = 'THIS_CHANNEL' | 'THIS_OFFER' | 'THIS_POSITIONING' | 'THIS_DECISION' | 'MULTIPLE_OFFERS' | 'MULTIPLE_MARKETS' | 'BUSINESS' | 'FOUNDER_STRATEGY' | 'OPERATING_MODEL' | 'OTHER';
+export type LearningObservationSource = 'FOUNDER_REPORTED' | 'BUSINESS_RECORD_REFERENCE' | 'PUBLIC_REFERENCE' | 'SYSTEM_DERIVED';
 export interface LearningView {
   learningId: string; logicalLearningId: string; revision: number;
   learningStatement: string; learningCategory: LearningCategory; confidence: LearningConfidence;
+  priorUnderstanding: string; revisedUnderstanding: string; changeStatement: string;
+  learningScope: LearningScope; broadScopeAcknowledged: boolean; isCausalHypothesis: boolean;
+  boundaryConditions: string[]; counterEvidence: string[]; unresolvedUnknowns: string[];
+  observations: Array<{ statement: string; sourceType: LearningObservationSource }>; evidenceReferences: Array<{ space: string; id: string }>;
   review: { recordId: string; revision: number }; plan: { recordId: string }; commitment: { recordId: string };
   decisionRecordId: string | null; recommendationSessionId: string | null; provenanceManifestVersion: string | null;
   authorship: { founderAuthored: boolean; modelSuggested: boolean; acceptedByFounder: boolean };
@@ -565,9 +572,14 @@ export interface LearningView {
   doesNotModifyBusinessUnderstanding: true; doesNotModifyFounderStrategicContext: true;
 }
 export interface CreateLearningInput {
-  learningStatement: string; learningCategory: LearningCategory; confidence: LearningConfidence; idempotencyKey: string;
+  learningStatement: string; learningCategory: LearningCategory; confidence: LearningConfidence;
+  priorUnderstanding: string; revisedUnderstanding: string; changeStatement: string;
+  learningScope: LearningScope; broadScopeAcknowledged?: boolean; isCausalHypothesis?: boolean;
+  boundaryConditions?: string[]; counterEvidence?: string[]; unresolvedUnknowns?: string[];
+  observations?: Array<{ statement: string; sourceType: LearningObservationSource }>; evidenceReferences?: Array<{ space: string; id: string }>;
+  idempotencyKey: string;
 }
-/** POST /strategy/plan-reviews/:reviewId/learnings — promote ONE durable learning from an exact owned review. */
+/** POST /strategy/plan-reviews/:reviewId/learnings — keep ONE durable learning from an exact owned review. */
 export async function createLearning(reviewId: string, input: CreateLearningInput): Promise<LearningView> {
   const { learning } = await request<{ learning: LearningView }>(`strategy/plan-reviews/${encodeURIComponent(reviewId)}/learnings`, { method: 'POST', body: JSON.stringify(input) });
   return learning;

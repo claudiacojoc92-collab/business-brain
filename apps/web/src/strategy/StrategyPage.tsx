@@ -2,14 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import {
-  createStrategySession, getStrategySession, listStrategySessions, retryStrategySession, respondToStrategy, createDecision, createCommitment, createPlan, createPlanReview, createLearning, ApiError,
+  createStrategySession, getStrategySession, listStrategySessions, retryStrategySession, respondToStrategy, createDecision, createCommitment, createPlan, createPlanReview, createLearning, listLearnings, ApiError,
   type StrategySessionView, type StrategyBoundary, type StrategicRecommendation, type InsufficientStrategicEvidence,
   type StrategyResponseType, type EpistemicKind, type Band, type EvidenceReference,
   type DecisionView, type DecisionAlternative, type ChosenOptionSource,
   type CommitmentView, type CommitmentScope, type Exclusivity,
   type PlanView, type PlanScope,
   type PlanReviewView, type ReviewConclusion, type ReviewDisposition, type AssumptionAssessment, type DependencyAssessment, type MilestoneAssessment,
-  type LearningView, type LearningCategory, type LearningConfidence,
+  type LearningView, type LearningCategory, type LearningConfidence, type LearningScope,
 } from '../api/client';
 import { AppShell, Button, Thinking } from '../system/ui';
 
@@ -145,6 +145,8 @@ export function StrategyPage() {
             )}
           </div>
         )}
+
+        <LearningsList on401={on401} />
 
         {history.length > 0 && (
           <div style={{ marginTop: 'var(--sp-7)', paddingTop: 'var(--sp-5)', borderTop: '1px solid var(--line)' }}>
@@ -800,10 +802,10 @@ function ReviewPanel({ plan, on401 }: { plan: PlanView; on401: (e: unknown) => v
           {/* conclusion + disposition kept visually separate */}
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 14 }}>
             <label style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)' }}>What do you conclude?<br />
-              <select value={conclusion} onChange={(e) => setConclusion(e.target.value as ReviewConclusion)} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', padding: '6px 8px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', marginTop: 4, maxWidth: 300 }}><option value="">Choose…</option>{CONCLUSIONS.map((c) => <option key={c.v} value={c.v}>{c.label}</option>)}</select>
+              <select aria-label="Review conclusion" value={conclusion} onChange={(e) => setConclusion(e.target.value as ReviewConclusion)} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', padding: '6px 8px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', marginTop: 4, maxWidth: 300 }}><option value="">Choose…</option>{CONCLUSIONS.map((c) => <option key={c.v} value={c.v}>{c.label}</option>)}</select>
             </label>
             <label style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)' }}>What do you intend to do?<br />
-              <select value={disposition} onChange={(e) => setDisposition(e.target.value as ReviewDisposition)} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', padding: '6px 8px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', marginTop: 4, maxWidth: 300 }}><option value="">Choose…</option>{DISPOSITIONS.map((d) => <option key={d.v} value={d.v}>{d.label}</option>)}</select>
+              <select aria-label="Review disposition" value={disposition} onChange={(e) => setDisposition(e.target.value as ReviewDisposition)} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', padding: '6px 8px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', marginTop: 4, maxWidth: 300 }}><option value="">Choose…</option>{DISPOSITIONS.map((d) => <option key={d.v} value={d.v}>{d.label}</option>)}</select>
             </label>
           </div>
 
@@ -826,43 +828,71 @@ const LEARNING_CATEGORIES: { v: LearningCategory; label: string }[] = [
   { v: 'STRATEGY', label: 'Strategy' }, { v: 'OTHER', label: 'Something else' },
 ];
 const LEARNING_CONFIDENCES: { v: LearningConfidence; label: string }[] = [
-  { v: 'ESTABLISHED', label: 'Established — I’m confident this holds' },
-  { v: 'TENTATIVE', label: 'Tentative — this looks true but isn’t settled' },
-  { v: 'CONDITIONAL', label: 'Conditional — true under specific conditions' },
+  { v: 'PROVISIONAL', label: 'Provisional — an early read, not yet settled' },
+  { v: 'SUPPORTED', label: 'Supported — evidence backs it (not proven)' },
+  { v: 'CONTESTED', label: 'Contested — the evidence is mixed' },
+  { v: 'INSUFFICIENT_INFORMATION', label: 'Insufficient information — can’t be justified yet' },
 ];
+const LEARNING_SCOPES: { v: LearningScope; label: string; broad?: boolean }[] = [
+  { v: 'THIS_CHANNEL', label: 'This channel' }, { v: 'THIS_OFFER', label: 'This offer' },
+  { v: 'THIS_POSITIONING', label: 'This positioning' }, { v: 'THIS_DECISION', label: 'This decision' },
+  { v: 'MULTIPLE_OFFERS', label: 'Multiple offers', broad: true }, { v: 'MULTIPLE_MARKETS', label: 'Multiple markets', broad: true },
+  { v: 'BUSINESS', label: 'The whole business', broad: true }, { v: 'FOUNDER_STRATEGY', label: 'My overall strategy', broad: true },
+  { v: 'OPERATING_MODEL', label: 'The operating model', broad: true }, { v: 'OTHER', label: 'Something else' },
+];
+const BROAD_SCOPE_VALUES = new Set(LEARNING_SCOPES.filter((s) => s.broad).map((s) => s.v));
+const lines = (s: string) => s.split('\n').map((x) => x.trim()).filter(Boolean);
+const taStyle = { width: '100%', boxSizing: 'border-box' as const, fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', marginTop: 4 };
+const selStyle = { fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', padding: '6px 8px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', marginTop: 4, maxWidth: 320 };
+const lblStyle = { fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', display: 'block' as const };
 
-// Strategic Learning Record — a founder-EXPLICIT promotion of durable understanding FROM a review. Most reviews create
-// NO learning; this is offered, never automatic. It changes nothing else: not the review, not Business Understanding,
-// not Founder Strategic Context. The model does not create learning here.
-function LearningPanel({ review, on401 }: { review: PlanReviewView; on401: (e: unknown) => void }) {
+// Strategic Learning Record — a founder-EXPLICIT decision to KEEP a durable understanding FROM a review (initial
+// CREATE-only slice). Most reviews create NO learning; this is offered, never automatic. It changes nothing else: not the
+// review, not Business Understanding, not Founder Strategic Context. The model does not create learning here. (This is
+// creation, not "promotion" — promotion into BU/FSC is a separate future capability.)
+function LearningPanel({ review, on401, onKept }: { review: PlanReviewView; on401: (e: unknown) => void; onKept?: () => void }) {
   const [open, setOpen] = useState(false);
   const [statement, setStatement] = useState('');
+  const [prior, setPrior] = useState('');
+  const [revised, setRevised] = useState('');
+  const [change, setChange] = useState('');
   const [category, setCategory] = useState<LearningCategory | ''>('');
   const [confidence, setConfidence] = useState<LearningConfidence | ''>('');
+  const [scope, setScope] = useState<LearningScope | ''>('');
+  const [broadAck, setBroadAck] = useState(false);
+  const [causal, setCausal] = useState(false);
+  const [boundary, setBoundary] = useState('');
+  const [counter, setCounter] = useState('');
+  const [unknowns, setUnknowns] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<LearningView | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const canPromote = !!statement.trim() && !!category && !!confidence;
+  const isBroad = !!scope && BROAD_SCOPE_VALUES.has(scope);
+  const canKeep = !!statement.trim() && !!prior.trim() && !!revised.trim() && !!change.trim() && !!category && !!confidence && !!scope && (!isBroad || broadAck);
 
-  const promote = async () => {
+  const keep = async () => {
     setSaving(true); setError(null);
     try {
       const l = await createLearning(review.reviewId, {
         learningStatement: statement.trim(), learningCategory: category as LearningCategory, confidence: confidence as LearningConfidence,
+        priorUnderstanding: prior.trim(), revisedUnderstanding: revised.trim(), changeStatement: change.trim(),
+        learningScope: scope as LearningScope, broadScopeAcknowledged: broadAck, isCausalHypothesis: causal,
+        boundaryConditions: lines(boundary), counterEvidence: lines(counter), unresolvedUnknowns: lines(unknowns),
         idempotencyKey: (globalThis.crypto?.randomUUID?.() ?? String(Date.now())),
       });
-      setSaved(l); setOpen(false);
+      setSaved(l); setOpen(false); onKept?.(); try { window.dispatchEvent(new Event('bb:learning-kept')); } catch { /* noop */ }
     } catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setError(e instanceof ApiError ? e.message : 'Could not keep this learning.'); }
     finally { setSaving(false); }
   };
 
   if (saved) {
     return (
-      <div style={{ marginTop: 'var(--sp-3)', paddingTop: 'var(--sp-2)', borderTop: '1px dotted var(--line-2)' }}>
+      <div data-testid="learning-saved" style={{ marginTop: 'var(--sp-3)', paddingTop: 'var(--sp-2)', borderTop: '1px dotted var(--line-2)' }}>
         <span style={sectionLabel}>Durable strategic learning</span>
         <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink-1)', marginTop: 4 }}>“{saved.learningStatement}”</p>
-        <p style={{ ...meta, marginTop: 4 }}>About: {nice(saved.learningCategory)} · How settled: {nice(saved.confidence)}</p>
+        <p style={{ ...meta, marginTop: 4 }}>Before: {saved.priorUnderstanding} · Now: {saved.revisedUnderstanding}</p>
+        <p style={{ ...meta, marginTop: 4 }}>About: {nice(saved.learningCategory)} · How settled: {nice(saved.confidence)} · Applies to: {nice(saved.learningScope)} · From review {saved.review.recordId}</p>
         <p style={{ ...meta, marginTop: 8, fontStyle: 'italic' }}>You chose to keep this as a durable learning. It does not modify Business Understanding. It does not modify Founder Strategic Context.</p>
       </div>
     );
@@ -872,34 +902,91 @@ function LearningPanel({ review, on401 }: { review: PlanReviewView; on401: (e: u
     <div style={{ marginTop: 'var(--sp-3)', paddingTop: 'var(--sp-2)', borderTop: '1px dotted var(--line-2)' }}>
       {!open ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <Button variant="ghost" onClick={() => setOpen(true)}>Keep a learning from this review</Button>
+          <Button variant="ghost" onClick={() => setOpen(true)} data-testid="open-learning">Record a learning from this review</Button>
           <span style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ink-3)' }}>Only if this review changed what you durably understand. Most reviews won’t.</span>
         </div>
       ) : (
-        <div>
-          <span style={sectionLabel}>Keep a durable learning</span>
+        <div data-testid="learning-form">
+          <span style={sectionLabel}>Record a durable learning</span>
           <p style={{ ...meta, marginTop: 2 }}>In your own words, what did this review durably change in how you understand your business? Leave this if nothing durable changed.</p>
 
-          <textarea value={statement} onChange={(e) => setStatement(e.target.value)} rows={2} placeholder="e.g. Founder-led outreach converts; paid ads at our stage don’t." style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', marginTop: 8 }} />
+          <label style={lblStyle}>What you’re keeping
+            <textarea data-testid="learning-statement" value={statement} onChange={(e) => setStatement(e.target.value)} rows={2} placeholder="e.g. Founder-led outreach converts; paid ads at our stage don’t." style={taStyle} /></label>
+          <label style={{ ...lblStyle, marginTop: 10 }}>What you understood before
+            <textarea data-testid="learning-prior" value={prior} onChange={(e) => setPrior(e.target.value)} rows={2} placeholder="What you believed going in." style={taStyle} /></label>
+          <label style={{ ...lblStyle, marginTop: 10 }}>What you understand now
+            <textarea data-testid="learning-revised" value={revised} onChange={(e) => setRevised(e.target.value)} rows={2} placeholder="What you understand after this review." style={taStyle} /></label>
+          <label style={{ ...lblStyle, marginTop: 10 }}>What changed
+            <textarea data-testid="learning-change" value={change} onChange={(e) => setChange(e.target.value)} rows={2} placeholder="How your understanding actually shifted." style={taStyle} /></label>
 
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12 }}>
-            <label style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)' }}>What is this learning about?<br />
-              <select value={category} onChange={(e) => setCategory(e.target.value as LearningCategory)} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', padding: '6px 8px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', marginTop: 4, maxWidth: 300 }}><option value="">Choose…</option>{LEARNING_CATEGORIES.map((c) => <option key={c.v} value={c.v}>{c.label}</option>)}</select>
-            </label>
-            <label style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)' }}>How settled is it?<br />
-              <select value={confidence} onChange={(e) => setConfidence(e.target.value as LearningConfidence)} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', padding: '6px 8px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', marginTop: 4, maxWidth: 320 }}><option value="">Choose…</option>{LEARNING_CONFIDENCES.map((c) => <option key={c.v} value={c.v}>{c.label}</option>)}</select>
-            </label>
+            <label style={lblStyle}>What is this learning about?<br />
+              <select data-testid="learning-category" aria-label="Learning category" value={category} onChange={(e) => setCategory(e.target.value as LearningCategory)} style={selStyle}><option value="">Choose…</option>{LEARNING_CATEGORIES.map((c) => <option key={c.v} value={c.v}>{c.label}</option>)}</select></label>
+            <label style={lblStyle}>How settled is it?<br />
+              <select data-testid="learning-confidence" aria-label="Learning confidence" value={confidence} onChange={(e) => setConfidence(e.target.value as LearningConfidence)} style={selStyle}><option value="">Choose…</option>{LEARNING_CONFIDENCES.map((c) => <option key={c.v} value={c.v}>{c.label}</option>)}</select></label>
+            <label style={lblStyle}>How widely does it apply?<br />
+              <select data-testid="learning-scope" aria-label="Learning scope" value={scope} onChange={(e) => { setScope(e.target.value as LearningScope); setBroadAck(false); }} style={selStyle}><option value="">Choose…</option>{LEARNING_SCOPES.map((c) => <option key={c.v} value={c.v}>{c.label}</option>)}</select></label>
           </div>
 
+          {isBroad && (
+            <label data-testid="broad-scope-ack" style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 12, fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={broadAck} onChange={(e) => setBroadAck(e.target.checked)} />
+              <span>I understand I’m generalizing this learning beyond the source review, and that’s intended.</span>
+            </label>
+          )}
+
+          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 12, fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', cursor: 'pointer' }}>
+            <input type="checkbox" data-testid="causal-flag" checked={causal} onChange={(e) => setCausal(e.target.checked)} />
+            <span>This is a claim that one thing <em>caused</em> another (a causal hypothesis).</span>
+          </label>
+
+          <label style={{ ...lblStyle, marginTop: 12 }}>When does it hold? (boundary conditions, one per line)
+            <textarea data-testid="learning-boundary" value={boundary} onChange={(e) => setBoundary(e.target.value)} rows={2} placeholder="e.g. Only while the founder can do outreach personally." style={taStyle} /></label>
+          <label style={{ ...lblStyle, marginTop: 10 }}>What cuts against it? (counter-evidence, one per line)
+            <textarea data-testid="learning-counter" value={counter} onChange={(e) => setCounter(e.target.value)} rows={2} placeholder="Evidence that complicates this learning." style={taStyle} /></label>
+          <label style={{ ...lblStyle, marginTop: 10 }}>What’s still unknown? (one per line)
+            <textarea data-testid="learning-unknowns" value={unknowns} onChange={(e) => setUnknowns(e.target.value)} rows={2} placeholder="Open questions this learning doesn’t settle." style={taStyle} /></label>
+
           <p style={{ ...meta, marginTop: 14, fontStyle: 'italic' }}>This creates a durable strategic learning. It does not modify Business Understanding. It does not modify Founder Strategic Context.</p>
-          {error && <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--danger-ink, #a33)', marginTop: 6 }}>{error}</p>}
+          {error && <p data-testid="learning-error" style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--danger-ink, #a33)', marginTop: 6 }}>{error}</p>}
           <div style={{ display: 'flex', gap: 10, marginTop: 'var(--sp-3)' }}>
-            <Button loading={saving} disabled={!canPromote} onClick={() => void promote()}>Keep this learning</Button>
+            <Button loading={saving} disabled={!canKeep} onClick={() => void keep()} data-testid="keep-learning">Keep this learning</Button>
             <Button variant="ghost" onClick={() => setOpen(false)}>Nothing to keep</Button>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+// Page-level, persisted list of the founder's durable learnings. Loads on mount (so a kept learning SURVIVES a refresh)
+// and refetches when a new learning is kept. Each entry shows its source review + the "changes nothing else" guarantee.
+function LearningsList({ on401 }: { on401: (e: unknown) => void }) {
+  const [learnings, setLearnings] = useState<LearningView[] | null>(null);
+  const load = useCallback(async () => {
+    try { setLearnings(await listLearnings()); }
+    catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setLearnings([]); }
+  }, [on401]);
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { const h = () => void load(); window.addEventListener('bb:learning-kept', h); return () => window.removeEventListener('bb:learning-kept', h); }, [load]);
+
+  if (!learnings || learnings.length === 0) return null;
+  return (
+    <section data-testid="learnings-list" style={{ marginTop: 'var(--sp-5)', paddingTop: 'var(--sp-4)', borderTop: '1px solid var(--line)' }}>
+      <span style={sectionLabel}>Your durable strategic learnings</span>
+      <p style={{ ...meta, marginTop: 2 }}>What you’ve explicitly decided to keep from your reviews. Each changes nothing else on its own.</p>
+      {learnings.map((l) => (
+        <div key={l.learningId} data-testid={`learning-${l.learningId}`} style={{ marginTop: 'var(--sp-3)', paddingTop: 'var(--sp-2)', borderTop: '1px dotted var(--line-2)' }}>
+          <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink-1)' }}>“{l.learningStatement}”</p>
+          <p style={{ ...meta, marginTop: 4 }}>Before: {l.priorUnderstanding} · Now: {l.revisedUnderstanding}</p>
+          <p style={{ ...meta, marginTop: 4 }}>About: {nice(l.learningCategory)} · How settled: {nice(l.confidence)} · Applies to: {nice(l.learningScope)}{l.isCausalHypothesis ? ' · causal hypothesis' : ''} · <span data-testid="learning-source-review">From review {l.review.recordId}</span></p>
+          {l.boundaryConditions.length > 0 && <p style={{ ...meta, marginTop: 4 }}>Holds when: {l.boundaryConditions.join('; ')}</p>}
+          {l.counterEvidence.length > 0 && <p style={{ ...meta, marginTop: 4 }}>Cuts against: {l.counterEvidence.join('; ')}</p>}
+          {l.unresolvedUnknowns.length > 0 && <p style={{ ...meta, marginTop: 4 }}>Still unknown: {l.unresolvedUnknowns.join('; ')}</p>}
+          <p style={{ ...meta, marginTop: 4, fontStyle: 'italic' }}>Does not modify Business Understanding. Does not modify Founder Strategic Context.</p>
+        </div>
+      ))}
+    </section>
   );
 }
 

@@ -20,7 +20,7 @@ import { assertDecisionAdmissible, toDecisionView, DecisionValidationError, type
 import { assertCommitmentAdmissible, toCommitmentView, linkedDecisionStatus, CommitmentValidationError, type CommitmentInput, type ResourceEnvelopeItem, type AcceptedCost } from '../business-model/strategic-commitment';
 import { assertPlanAdmissible, toPlanView, linkedCommitmentStatus, PlanValidationError, type PlanInput, type Milestone, type Assumption, type Dependency } from '../business-model/strategic-plan';
 import { assertReviewAdmissible, toReviewView, linkedCommitmentStatusForReview, ReviewValidationError, type PlanReviewInput, type ReviewObservation, type EvidenceReference, type ContextChange } from '../business-model/strategic-plan-review';
-import { assertLearningAdmissible, toLearningView, LearningValidationError, type LearningInput } from '../business-model/strategic-learning';
+import { assertLearningAdmissible, toLearningView, LearningValidationError, type LearningInput, type ObservationSource } from '../business-model/strategic-learning';
 import { AnthropicStrategyModel } from '../business-model/anthropic-strategy.model';
 import { strategyModelConfig } from '../business-model/model-config';
 import { startStrategicSessionWorker } from '../business-model/strategic-session.worker';
@@ -446,17 +446,33 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
     await reply.send({ review: toReviewView(review, { linkedCommitment: linked, newerPlanRevisionExists: !!effPlan && effPlan.revision > review.planRevision, planStatusNow: reviewedPlanStatusNow }) });
   });
 
-  // ── Strategic Learning Records (founder-explicit promotion from a review; append-only; mutates NOTHING else) ──
-  // Promote ONE durable strategic learning from an EXACT owned review. Writes only the learning; NEVER touches BU/FSC.
+  // ── Strategic Learning Records (founder-explicit; created/kept FROM a review; append-only; mutates NOTHING else) ──
+  // Keep ONE durable strategic learning from an EXACT owned review. Writes only the learning; NEVER touches BU/FSC.
+  // (This is creation, not "promotion" — promotion into BU/FSC is a separate future gate, Law 14.)
   server.post('/strategy/plan-reviews/:reviewId/learnings', async (request: FastifyRequest, reply: FastifyReply) => {
     const founderId = await sessionFounder(request);
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
     const review = await planReviewRepo.getById(founderId, (request.params as { reviewId: string }).reviewId); // founder-owned only → cross-founder = 404
     if (!review) { await reply.code(404).send({ error: 'not found' }); return; }
     const b = (request.body ?? {}) as Record<string, unknown>;
-    const input: LearningInput = { learningStatement: String(b['learningStatement'] ?? ''), learningCategory: String(b['learningCategory'] ?? '') as LearningInput['learningCategory'], confidence: String(b['confidence'] ?? '') as LearningInput['confidence'], idempotencyKey: String(b['idempotencyKey'] ?? '') };
+    const arr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []);
+    const input: LearningInput = {
+      learningStatement: String(b['learningStatement'] ?? ''),
+      learningCategory: String(b['learningCategory'] ?? '') as LearningInput['learningCategory'],
+      confidence: String(b['confidence'] ?? '') as LearningInput['confidence'],
+      priorUnderstanding: String(b['priorUnderstanding'] ?? ''),
+      revisedUnderstanding: String(b['revisedUnderstanding'] ?? ''),
+      changeStatement: String(b['changeStatement'] ?? ''),
+      learningScope: String(b['learningScope'] ?? '') as LearningInput['learningScope'],
+      broadScopeAcknowledged: b['broadScopeAcknowledged'] === true,
+      isCausalHypothesis: b['isCausalHypothesis'] === true,
+      boundaryConditions: arr(b['boundaryConditions']), counterEvidence: arr(b['counterEvidence']), unresolvedUnknowns: arr(b['unresolvedUnknowns']),
+      observations: Array.isArray(b['observations']) ? (b['observations'] as Array<Record<string, unknown>>).map((o) => ({ statement: String(o?.['statement'] ?? ''), sourceType: String(o?.['sourceType'] ?? 'FOUNDER_REPORTED') as ObservationSource })) : [],
+      evidenceReferences: Array.isArray(b['evidenceReferences']) ? (b['evidenceReferences'] as Array<Record<string, unknown>>).map((e) => ({ space: String(e?.['space'] ?? ''), id: String(e?.['id'] ?? '') })) : [],
+      idempotencyKey: String(b['idempotencyKey'] ?? ''),
+    };
     try { assertLearningAdmissible(review, input); }
-    catch (e) { if (e instanceof LearningValidationError) { await reply.code(400).send({ error: e.message, reason: e.reason }); return; } throw e; }
+    catch (e) { if (e instanceof LearningValidationError) { await reply.code(400).send({ error: { code: e.reason, message: e.message }, reason: e.reason }); return; } throw e; }
     const learning = await learningRepo.create(founderId, review, input, new Date());
     await reply.code(201).send({ learning: toLearningView(learning) });
   });
