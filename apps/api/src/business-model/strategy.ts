@@ -239,6 +239,7 @@ export interface StrategicSession {
   provenanceManifest: SerializedProvenanceManifestView | null; // immutable allowed-reference set at generation (pm-1)
   failureCategory: StrategyFailureCategory | null; founderSafeError: string | null; priorSuccessfulSessionId: string | null;
   modelId: string | null; promptVersion: string | null; schemaVersion: string | null;
+  contextSnapshotId: string | null; // ADR-014 Consumption Gate: the immutable snapshot this recommendation consumed (null = live path)
   attemptCount: number; maxAttempts: number;
   claimedAt: string | null; leaseExpiresAt: string | null; startedAt: string | null; finishedAt: string | null;
   createdAt: string; updatedAt: string;
@@ -257,6 +258,7 @@ export function toSessionView(s: StrategicSession) {
     failureCategory: s.status === 'FAILED' ? s.failureCategory : null,
     retryable: sessionRetryable(s.status, s.failureCategory, s.attemptCount, s.maxAttempts),
     message: s.founderSafeError, attempt: s.attemptCount, maxAttempts: s.maxAttempts,
+    contextSnapshotId: s.contextSnapshotId, // ADR-014: the immutable snapshot this recommendation consumed (null = live)
     priorSuccessfulSessionId: s.priorSuccessfulSessionId,
     provenance: s.status === 'READY' ? { modelId: s.modelId, promptVersion: s.promptVersion, schemaVersion: s.schemaVersion } : null,
     // Founder-safe manifest summary (not raw internals as the main experience); full manifest is in export only.

@@ -7,6 +7,8 @@
  */
 import type { PgStrategicSessionRepository } from './pg-strategic-session.repository';
 import { assembleStrategicContext, type AssemblerDeps, type StrategicContext } from './strategic-context.assembler';
+import type { PgContextSnapshotRepository } from './pg-context-snapshot.repository';
+import { snapshotToFrozenContext } from './context-snapshot';
 import type { StrategyModel } from './anthropic-strategy.model';
 import { STRATEGY_FAILURE_MESSAGE, type StrategicSession, type StrategicOutcome, type SessionContextConflict } from './strategy';
 import { detectNonNegotiableExcludesOnlyOption, effectiveNonNegotiables, optionExcludedBy, type BoundedOption } from './effective-strategic-context.resolver';
@@ -40,6 +42,7 @@ export interface StrategicWorkerDeps {
   model: StrategyModel;
   leaseMs: number;
   now: () => Date;
+  snapshotRepo?: PgContextSnapshotRepository; // ADR-014 Consumption Gate — resolves a session's frozen snapshot input
 }
 
 export async function processSession(session: StrategicSession, deps: StrategicWorkerDeps): Promise<StrategicSession> {
@@ -47,9 +50,18 @@ export async function processSession(session: StrategicSession, deps: StrategicW
   const failed = async (cat: 'MODEL_FAILED' | 'ASSEMBLY_FAILED', detail: string) =>
     (await sessionRepo.markFailed(session.id, cat, STRATEGY_FAILURE_MESSAGE[cat], detail, now())) ?? (await sessionRepo.getById(session.founderId, session.id))!;
 
-  // ASSEMBLE — current eligible context (outside any transaction).
+  // ASSEMBLE — ADR-014 Consumption Gate: if this session is bound to an immutable ContextSnapshot, reasoning consumes the
+  // FROZEN snapshot (BU + FSC) instead of live context; otherwise the pre-existing live path runs unchanged.
   let context;
-  try { context = await assembleStrategicContext(session.founderId, session.questionText, session.subtype, deps.assembler); }
+  try {
+    let frozen: { businessUnderstanding: StrategicContext['businessUnderstanding']; founderContext: StrategicContext['founderContext'] } | undefined;
+    if (session.contextSnapshotId && deps.snapshotRepo) {
+      const snap = await deps.snapshotRepo.getById(session.founderId, session.contextSnapshotId);
+      if (!snap) return failed('ASSEMBLY_FAILED', `context snapshot ${session.contextSnapshotId} not found`);
+      frozen = snapshotToFrozenContext(snap);
+    }
+    context = await assembleStrategicContext(session.founderId, session.questionText, session.subtype, deps.assembler, deps.now(), frozen);
+  }
   catch (e) { return failed('ASSEMBLY_FAILED', String((e as Error)?.message ?? e)); }
   await sessionRepo.recordAssembly(session.id, { understandingVersion: context.businessUnderstanding.version, contextHealth: context.contextHealth, decisionHorizon: context.question.decisionHorizon }, now());
 

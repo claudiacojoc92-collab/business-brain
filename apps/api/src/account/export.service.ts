@@ -44,6 +44,7 @@ export interface FounderExport {
   strategicPlanReviews: unknown[];
   strategicLearnings: unknown[];
   learningPromotions: unknown[];
+  contextSnapshots: unknown[];
   meta: { note: string };
 }
 
@@ -168,6 +169,9 @@ export async function buildFounderExport(args: {
 
   // ADR-013 — Strategic Learning Promotion events: append-only ledger of founder-explicit promotions of an EXACT
   // learning revision into BU/FSC. Full history preserved (Law 19). Writes to no other table.
+  const contextSnapshots = (await db.selectFrom('business.context_snapshot')
+    .select(['id', 'business_understanding', 'founder_strategic_context', 'provenance', 'content_hash', 'created_at'])
+    .where('founder_id', '=', founderId).orderBy('created_at', 'asc').orderBy('id', 'asc').execute()) as Array<Record<string, unknown>>;
   const learningPromotions = (await db.selectFrom('business.learning_promotion_event')
     .select(['id', 'target', 'logical_learning_id', 'learning_revision_id', 'revision_number', 'promotion_action', 'rationale', 'scope', 'created_at', 'promotion_sequence', 'predecessor_promotion_event_id'])
     // deterministic chain order (V080 lineage): by thread/target then explicit sequence — the complete promotion chain
@@ -257,6 +261,10 @@ export async function buildFounderExport(args: {
     strategicLearnings: strategicLearnings.map((l) => {
       const j = (v: unknown) => (v == null ? null : typeof v === 'string' ? JSON.parse(v) : v);
       return { id: String(l['id']), logicalLearningId: String(l['logical_learning_id']), revision: Number(l['revision']), lifecycleAction: String(l['lifecycle_action'] ?? 'CREATE'), lifecycleStatus: (l['lifecycle_action'] === 'CONTEST' ? 'CONTESTED' : l['lifecycle_action'] === 'RETIRE' ? 'RETIRED' : 'ACTIVE'), rootLearningId: String(l['root_learning_id'] ?? l['id']), predecessorLearningId: (l['predecessor_learning_id'] as string | null) ?? null, lifecycleReason: (l['lifecycle_reason'] as string | null) ?? null, replacementSummary: (l['replacement_summary'] as string | null) ?? null, retainedValidity: (l['retained_validity'] as string | null) ?? null, counterevidenceResolution: (l['counterevidence_resolution'] as string | null) ?? null, unknownsResolution: (l['unknowns_resolution'] as string | null) ?? null, review: { recordId: String(l['review_record_id']), revision: Number(l['review_revision']) }, plan: { recordId: String(l['plan_record_id']) }, commitment: { recordId: String(l['commitment_record_id']) }, decisionRecordId: (l['decision_record_id'] as string | null) ?? null, recommendationSessionId: (l['recommendation_session_id'] as string | null) ?? null, provenanceManifestVersion: (l['provenance_manifest_version'] as string | null) ?? null, learningStatement: String(l['learning_statement']), learningCategory: String(l['learning_category']), confidence: String(l['confidence']), priorUnderstanding: String(l['prior_understanding'] ?? ''), revisedUnderstanding: String(l['revised_understanding'] ?? ''), changeStatement: String(l['change_statement'] ?? ''), learningScope: String(l['learning_scope'] ?? ''), broadScopeAcknowledged: l['broad_scope_acknowledged'] === true, isCausalHypothesis: l['is_causal_hypothesis'] === true, boundaryConditions: j(l['boundary_conditions']), counterEvidence: j(l['counter_evidence']), unresolvedUnknowns: j(l['unresolved_unknowns']), observations: j(l['observations']), evidenceReferences: j(l['evidence_references']), authorship: { founderAuthored: l['founder_authored'] === true, modelSuggested: l['model_suggested'] === true, acceptedByFounder: l['accepted_by_founder'] === true }, createdAt: iso(l['created_at']), learningSchemaVersion: 'strategic-learning-1' };
+    }),
+    contextSnapshots: contextSnapshots.map((s) => {
+      const j = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v);
+      return { id: String(s['id']), contentHash: String(s['content_hash']), createdAt: iso(s['created_at']), businessUnderstanding: j(s['business_understanding']), founderStrategicContext: j(s['founder_strategic_context']), provenance: j(s['provenance']) };
     }),
     learningPromotions: learningPromotions.map((p) => ({
       id: String(p['id']), target: String(p['target']), promotionAction: String(p['promotion_action']), scope: String(p['scope']), rationale: String(p['rationale']),

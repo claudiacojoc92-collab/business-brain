@@ -32,6 +32,8 @@ export async function deleteFounderAccount(
     await sql`SET LOCAL bb.allow_learning_delete = 'on'`.execute(tx);
     await sql`SET LOCAL bb.allow_promotion_delete = 'on'`.execute(tx);
     await tx.deleteFrom('business.learning_promotion_event').where('founder_id', '=', founderId).execute(); // ADR-013 (V079) — promotion ledger
+    await sql`SET LOCAL bb.allow_snapshot_delete = 'on'`.execute(tx);
+    await tx.deleteFrom('business.context_snapshot').where('founder_id', '=', founderId).execute(); // ADR-014 (V081) — context snapshots
 
     await tx.deleteFrom('evidence.fragments').where('founder_id', '=', founderId).execute();
     await tx.deleteFrom('app.oauth_credentials').where('founder_id', '=', founderId).execute(); // destroys encrypted tokens

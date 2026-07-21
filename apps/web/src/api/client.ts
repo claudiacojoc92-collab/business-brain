@@ -357,9 +357,27 @@ export interface StrategySessionView {
 export interface StrategyBoundary { kind: 'OUT_OF_SCOPE'; message: string; supported: string }
 export type CreateStrategyResult = { outOfScope: true; boundary: StrategyBoundary } | ({ outOfScope?: false } & StrategySessionView);
 
-/** POST /strategy/sessions — classify + start a priority-decision job, OR a founder-safe boundary if out of scope. */
-export async function createStrategySession(question: string): Promise<CreateStrategyResult> {
-  return request<CreateStrategyResult>('strategy/sessions', { method: 'POST', body: JSON.stringify({ question }) });
+/** POST /strategy/sessions — classify + start a priority-decision job, OR a founder-safe boundary if out of scope. An
+ * optional contextSnapshotId binds the recommendation to a frozen snapshot it will consume (ADR-014 Consumption Gate). */
+export async function createStrategySession(question: string, contextSnapshotId?: string): Promise<CreateStrategyResult> {
+  return request<CreateStrategyResult>('strategy/sessions', { method: 'POST', body: JSON.stringify({ question, ...(contextSnapshotId ? { contextSnapshotId } : {}) }) });
+}
+
+// ─── CONTEXT SNAPSHOTS (ADR-014 Consumption Gate) — the ONLY reasoning input; an explicit immutable freeze ──────────
+export interface SnapshotView {
+  snapshotId: string; createdAt: string; contentHash: string;
+  businessUnderstanding: { version: number | null; conclusions: Array<{ id: string; type: string; statement: string; epistemicStatus: string }>; promotedCount: number };
+  founderStrategicContext: { nativeCounts: { goals: number; constraints: number; resources: number; strategicPreferences: number; decisionHorizons: number }; promotedLearnings: Array<{ statement: string; revision: number; scope: string; rationale: string | null; epistemicStatus: string }> };
+  provenance: unknown; doesNotModifyContext: true; doesNotModifyLearning: true; doesNotRegenerate: true;
+}
+export async function createContextSnapshot(): Promise<SnapshotView> {
+  return (await request<{ snapshot: SnapshotView }>('strategy/context-snapshots', { method: 'POST', body: '{}' })).snapshot;
+}
+export async function listContextSnapshots(): Promise<SnapshotView[]> {
+  return (await request<{ snapshots: SnapshotView[] }>('strategy/context-snapshots')).snapshots;
+}
+export async function getContextSnapshot(id: string): Promise<SnapshotView> {
+  return (await request<{ snapshot: SnapshotView }>(`strategy/context-snapshots/${encodeURIComponent(id)}`)).snapshot;
 }
 /** GET /strategy/sessions/:id — the founder-safe session view + the effective founder response. */
 export async function getStrategySession(id: string): Promise<StrategySessionView> {

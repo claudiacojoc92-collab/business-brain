@@ -12,6 +12,7 @@ import {
   type LearningView, type LearningCategory, type LearningConfidence, type LearningScope, type LearningThreadView,
   type PromotionTarget, type PromotionScope, type PromotionView,
   type EffectiveBusinessUnderstanding, type EffectiveFounderStrategicContext,
+  createContextSnapshot, listContextSnapshots, type SnapshotView,
 } from '../api/client';
 import { AppShell, Button, Thinking } from '../system/ui';
 
@@ -1202,6 +1203,57 @@ function CanonicalEffectiveContext({ on401 }: { on401: (e: unknown) => void }) {
   );
 }
 
+// CONSUMPTION GATE (ADR-014). A Context Snapshot is the ONLY reasoning input: an explicit, immutable freeze of the current
+// Effective BU + FSC. Creating one is a founder act; it mutates nothing and regenerates nothing. A recommendation may then
+// be generated FROM a snapshot (reasoning consumes the frozen snapshot, never live context) — a separate explicit act.
+function ContextSnapshots({ on401 }: { on401: (e: unknown) => void }) {
+  const [snaps, setSnaps] = useState<SnapshotView[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [generatedFrom, setGeneratedFrom] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try { setSnaps(await listContextSnapshots()); } catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setSnaps([]); }
+  }, [on401]);
+  useEffect(() => { void load(); }, [load]);
+  const create = async () => {
+    setBusy(true);
+    try { await createContextSnapshot(); await load(); }
+    catch (e) { if (e instanceof ApiError && e.status === 401) on401(e); }
+    finally { setBusy(false); }
+  };
+  const generate = async (snapshotId: string) => {
+    setBusy(true);
+    try { await createStrategySession('What should I prioritise for my main channel in the next 30 days?', snapshotId); setGeneratedFrom(snapshotId); }
+    catch (e) { if (e instanceof ApiError && e.status === 401) on401(e); }
+    finally { setBusy(false); }
+  };
+  if (!snaps) return null;
+  return (
+    <section data-testid="context-snapshots" style={{ marginTop: 'var(--sp-5)', paddingTop: 'var(--sp-4)', borderTop: '1px solid var(--line)' }}>
+      <span style={sectionLabel}>Context snapshots</span>
+      <p style={{ ...meta, marginTop: 2 }}>A snapshot freezes your current effective Business Understanding and Founder Strategic Context. Recommendations reason over a frozen snapshot — never live context. Creating a snapshot changes nothing and regenerates nothing.</p>
+      <button type="button" data-testid="create-snapshot" onClick={() => void create()} disabled={busy} style={{ ...lcBtn, marginTop: 8 }}>Create context snapshot</button>
+      {snaps.length === 0
+        ? <p data-testid="snapshots-empty" style={{ ...meta, marginTop: 8 }}>No snapshots yet.</p>
+        : <div data-testid="snapshot-list" style={{ marginTop: 8 }}>
+            {snaps.map((s) => (
+              <div key={s.snapshotId} data-testid={`snapshot-${s.snapshotId}`} style={{ marginTop: 10, paddingLeft: 8, borderLeft: '2px solid var(--line)' }}>
+                <p style={{ ...meta }}>
+                  <span data-testid={`snapshot-hash-${s.snapshotId}`}>Hash {s.contentHash}</span> · frozen {new Date(s.createdAt).toLocaleString()}
+                </p>
+                <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-1)', marginTop: 2 }}>
+                  <span data-testid={`snapshot-bu-count-${s.snapshotId}`}>Business Understanding: {s.businessUnderstanding.conclusions.length} conclusions ({s.businessUnderstanding.promotedCount} promoted)</span>
+                  {' · '}
+                  <span data-testid={`snapshot-fsc-promoted-${s.snapshotId}`}>{s.founderStrategicContext.promotedLearnings.length} promoted strategic-context learnings</span>
+                </p>
+                <button type="button" data-testid={`generate-from-snapshot-${s.snapshotId}`} onClick={() => void generate(s.snapshotId)} disabled={busy} style={{ ...lcBtn, marginTop: 4 }}>Generate recommendation from this snapshot</button>
+                {generatedFrom === s.snapshotId && <span data-testid={`generated-from-${s.snapshotId}`} style={{ ...meta, marginLeft: 8 }}>Recommendation generating from this frozen snapshot…</span>}
+              </div>
+            ))}
+          </div>}
+    </section>
+  );
+}
+
 // Page-level, persisted list of the founder's learning THREADS + the promotion ledger's effective sets. Survives refresh.
 function LearningsList({ on401 }: { on401: (e: unknown) => void }) {
   const [threads, setThreads] = useState<LearningThreadView[] | null>(null);
@@ -1228,6 +1280,8 @@ function LearningsList({ on401 }: { on401: (e: unknown) => void }) {
       {threads.map((t) => <ThreadCard key={t.logicalLearningId} thread={t} promoted={promotedFor(t.logicalLearningId)} on401={on401} />)}
       {/* CANONICAL authoritative effective context (native + promoted) — the single answer to "what is my current BU/FSC?" */}
       <CanonicalEffectiveContext on401={on401} />
+      {/* CONSUMPTION GATE — explicit immutable snapshots; the only reasoning input a recommendation may consume. */}
+      <ContextSnapshots on401={on401} />
       {/* Audit-only: the promotion history (ledger projection). Clearly separated from the canonical effective context. */}
       <div data-testid="promotion-history" style={{ marginTop: 'var(--sp-4)', paddingTop: 'var(--sp-3)', borderTop: '1px solid var(--line)' }}>
         <span style={sectionLabel}>Promotion history (Business Understanding)</span>

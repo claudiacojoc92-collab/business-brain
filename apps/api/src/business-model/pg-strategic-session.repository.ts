@@ -14,13 +14,14 @@ const ACTIVE = ['QUEUED', 'PROCESSING'];
 export class PgStrategicSessionRepository {
   constructor(private readonly db: AnyDB) {}
 
-  async create(founderId: string, input: { strategicJob: StrategicJob; subtype: StrategicSubtype; questionText: string; modelId: string; promptVersion: string; schemaVersion: string }, now: Date, maxAttempts = 3): Promise<StrategicSession> {
+  async create(founderId: string, input: { strategicJob: StrategicJob; subtype: StrategicSubtype; questionText: string; modelId: string; promptVersion: string; schemaVersion: string; contextSnapshotId?: string | null }, now: Date, maxAttempts = 3): Promise<StrategicSession> {
     const prior = await this.db.selectFrom('business.strategic_session').select('id').where('founder_id', '=', founderId).where('status', '=', 'READY').orderBy('created_at', 'desc').limit(1).executeTakeFirst();
     const nowIso = now.toISOString();
     try {
       const row = await this.db.insertInto('business.strategic_session').values({
         id: generateId(), founder_id: founderId, status: 'QUEUED', strategic_job: input.strategicJob, subtype: input.subtype,
         question_text: input.questionText, model_id: input.modelId, prompt_version: input.promptVersion, schema_version: input.schemaVersion,
+        context_snapshot_id: input.contextSnapshotId ?? null,
         attempt_count: 1, max_attempts: maxAttempts, prior_successful_session_id: prior?.id ?? null, created_at: nowIso, updated_at: nowIso,
       }).returningAll().executeTakeFirst();
       return this.toDomain(row);
@@ -88,6 +89,7 @@ export class PgStrategicSessionRepository {
       contextHealth: json(r.context_health), recommendation: json(r.recommendation), insufficientReason: json(r.insufficient_reason), contextConflicts: json(r.context_conflicts) ?? null, provenanceValidation: json(r.provenance_validation) ?? null, provenanceManifest: json(r.provenance_manifest) ?? null,
       failureCategory: (r.failure_category as StrategyFailureCategory) ?? null, founderSafeError: r.founder_safe_error ?? null, priorSuccessfulSessionId: r.prior_successful_session_id ?? null,
       modelId: r.model_id ?? null, promptVersion: r.prompt_version ?? null, schemaVersion: r.schema_version ?? null,
+      contextSnapshotId: r.context_snapshot_id ?? null,
       attemptCount: Number(r.attempt_count), maxAttempts: Number(r.max_attempts),
       claimedAt: iso(r.claimed_at), leaseExpiresAt: iso(r.lease_expires_at), startedAt: iso(r.started_at), finishedAt: iso(r.finished_at),
       createdAt: new Date(r.created_at).toISOString(), updatedAt: new Date(r.updated_at).toISOString(),

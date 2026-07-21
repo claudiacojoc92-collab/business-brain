@@ -223,10 +223,13 @@ smuggle them in without a superseding gate). Each category names what it is and,
   [ADR-012](ADR-012-strategic-learning-lifecycle.md) (dual-layer; inter-thread relationships deferred); CONTEST is a
   single-thread usability downgrade, not an inter-thread relationship. The **only** explicit path a learning influences
   Business Understanding or Founder Strategic Context is the **Promotion Gate** ([ADR-013](ADR-013-strategic-learning-promotion-gate.md),
-  V079): a founder promotes an EXACT learning revision via an append-only `PromotionEvent` ledger (effective set derived
-  from events, never the latest revision); promotion is governance, not evidence, writes to neither BU nor FSC content,
-  and regenerates nothing. It is **not** generic Strategic
-  Memory (that still requires the §8 admission + §10 gate).
+  V079/V080): a founder promotes an EXACT learning revision via an append-only `PromotionEvent` ledger (effective set
+  derived from an explicit sequence/predecessor chain, never the latest revision); promotion is governance, not evidence,
+  writes to neither BU nor FSC content, and regenerates nothing. The **only** way the Recommendation Engine *consumes*
+  Effective BU/FSC is the **Consumption Gate** ([ADR-014](ADR-014-strategic-learning-consumption-gate.md), V081): a founder
+  explicitly creates an immutable `ContextSnapshot` (freezing native + promoted Effective BU/FSC) and generates a
+  recommendation from it — reasoning reads the frozen snapshot, never live context; **availability ≠ consumption**;
+  nothing is consumed automatically. It is **not** generic Strategic Memory (that still requires the §8 admission + §10 gate).
 
 ### §2 — Canonical matrix
 

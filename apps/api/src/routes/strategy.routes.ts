@@ -25,6 +25,9 @@ import { LearningLifecycleError, type LifecycleTransitionInput } from '../busine
 import { PgLearningPromotionRepository } from '../business-model/pg-learning-promotion.repository';
 import { toPromotionView, PromotionValidationError, type PromotionInput, type PromotionAction, type PromotionTarget } from '../business-model/strategic-learning-promotion';
 import { composeEffectiveBusinessUnderstanding, composeEffectiveFounderStrategicContext, toPromotedLearningItem, type EffectiveContextItem } from '../business-model/effective-context';
+import { PgContextSnapshotRepository } from '../business-model/pg-context-snapshot.repository';
+import { captureEffectiveContext } from '../business-model/context-snapshot.capture';
+import { toSnapshotView } from '../business-model/context-snapshot';
 import { AnthropicStrategyModel } from '../business-model/anthropic-strategy.model';
 import { strategyModelConfig } from '../business-model/model-config';
 import { startStrategicSessionWorker } from '../business-model/strategic-session.worker';
@@ -47,6 +50,7 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
   const planReviewRepo = new PgStrategicPlanReviewRepository(db);
   const learningRepo = new PgStrategicLearningRepository(db);
   const promotionRepo = new PgLearningPromotionRepository(db);
+  const snapshotRepo = new PgContextSnapshotRepository(db);
   const assembler = {
     understanding: new PgUnderstandingRepository(db), conclusionResponses: new PgConclusionResponseRepository(db),
     entities: new PgMarketEntityRepository(db), findings: new PgMarketFindingRepository(db),
@@ -63,7 +67,7 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
 
   // Durable strategy worker (off under test; tests drive processSession). DB is authoritative.
   if (process.env['NODE_ENV'] !== 'test') {
-    startStrategicSessionWorker({ sessionRepo, assembler, model: new AnthropicStrategyModel(apiKey), leaseMs: LEASE_MS, now: () => new Date() });
+    startStrategicSessionWorker({ sessionRepo, assembler, model: new AnthropicStrategyModel(apiKey), leaseMs: LEASE_MS, now: () => new Date(), snapshotRepo });
   }
 
   // POST /strategy/sessions — classify; out-of-scope → 200 boundary (no job); in-scope → create (idempotent) 202.
@@ -74,8 +78,16 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
     if (!question) { await reply.code(400).send({ error: 'a question is required' }); return; }
     const cls = classifyStrategicJob(question);
     if (cls.job === 'OUT_OF_SCOPE') { await reply.code(200).send({ outOfScope: true, boundary: boundaryResponse() }); return; }
+    // ADR-014 Consumption Gate: an optional contextSnapshotId binds this recommendation to an immutable frozen snapshot
+    // (explicit consumption). It must be an existing snapshot the founder owns; otherwise the legacy live path is used.
+    const rawSnap = String((request.body as Record<string, unknown> | undefined)?.['contextSnapshotId'] ?? '').trim();
+    let contextSnapshotId: string | null = null;
+    if (rawSnap) {
+      if (!(await snapshotRepo.getById(founderId, rawSnap))) { await reply.code(404).send({ error: 'context snapshot not found' }); return; }
+      contextSnapshotId = rawSnap;
+    }
     const cfg = strategyModelConfig();
-    const s = await sessionRepo.create(founderId, { strategicJob: cls.job, subtype: cls.subtype, questionText: question, modelId: cfg.modelId, promptVersion: cfg.promptVersion, schemaVersion: cfg.schemaVersion }, new Date());
+    const s = await sessionRepo.create(founderId, { strategicJob: cls.job, subtype: cls.subtype, questionText: question, modelId: cfg.modelId, promptVersion: cfg.promptVersion, schemaVersion: cfg.schemaVersion, contextSnapshotId }, new Date());
     await reply.code(202).send(toSessionView(s));
   });
 
@@ -623,5 +635,28 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
     const nativeItems = await assembler.strategicContext.listActive(founderId);
     await reply.send({ effective: composeEffectiveFounderStrategicContext(nativeItems, await promotedItemsFor(founderId, 'FOUNDER_STRATEGIC_CONTEXT')) });
+  });
+
+  // CONSUMPTION GATE (ADR-014). A Context Snapshot is an explicit, immutable freeze of the current Effective BU + FSC that
+  // a recommendation may consume. Creating one is a founder act; it mutates nothing and regenerates nothing. Reasoning
+  // reads the frozen snapshot (bound via POST /strategy/sessions { contextSnapshotId }), never live context.
+  server.post('/strategy/context-snapshots', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const captured = await captureEffectiveContext(founderId, { assembler, promotionRepo, learningRepo });
+    const snap = await snapshotRepo.create(founderId, captured.businessUnderstanding, captured.founderStrategicContext, captured.provenance, new Date());
+    await reply.code(201).send({ snapshot: toSnapshotView(snap) });
+  });
+  server.get('/strategy/context-snapshots', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    await reply.send({ snapshots: (await snapshotRepo.list(founderId)).map(toSnapshotView) });
+  });
+  server.get('/strategy/context-snapshots/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const snap = await snapshotRepo.getById(founderId, (request.params as { id: string }).id);
+    if (!snap) { await reply.code(404).send({ error: 'not found' }); return; }
+    await reply.send({ snapshot: toSnapshotView(snap) });
   });
 }

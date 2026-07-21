@@ -16,6 +16,7 @@ import { groupOf, GROUP_ORDER, type ConclusionType, type EpistemicStatus } from 
 import type { StrategicSubtype } from './strategy';
 import type { PgFounderStrategicContextRepository } from './pg-founder-strategic-context.repository';
 import { resolveEffectiveStrategicContext, type EffectiveContextItem, type StrategicContextConflict, type ContextHealthItem, type MissingContextArea } from './effective-strategic-context.resolver';
+import type { FrozenPromotedLearning } from './context-snapshot';
 
 const CAP = { conclusions: 15, observations: 20, inferences: 20, provenance: 20 };
 
@@ -38,6 +39,9 @@ export interface StrategicContext {
     goals: EffectiveContextItem[]; constraints: EffectiveContextItem[]; resources: EffectiveContextItem[];
     strategicPreferences: EffectiveContextItem[]; decisionHorizons: EffectiveContextItem[];
     conflicts: StrategicContextConflict[]; staleItems: ContextHealthItem[]; missingCriticalAreas: MissingContextArea[];
+    // ADR-014 Consumption Gate: promoted learning revisions that a frozen snapshot carries into reasoning (additive;
+    // undefined on the live path). Kept distinct from native founder-declared context.
+    promotedLearnings?: FrozenPromotedLearning[];
   };
   question: { rawText: string; normalizedStrategicJob: 'PRIORITY_DECISION'; subtype: StrategicSubtype; decisionHorizon: string };
   contextHealth: { missingAreas: string[]; staleAreas: string[]; contradictoryAreas: string[]; truncated: boolean };
@@ -62,32 +66,40 @@ function decisionHorizon(q: string): string {
 
 const UNKNOWN_TYPES: ReadonlySet<string> = new Set(['missing_information', 'strategic_question']);
 
-export async function assembleStrategicContext(founderId: string, rawQuestion: string, subtype: StrategicSubtype, deps: AssemblerDeps, asOf: Date = new Date()): Promise<StrategicContext> {
+export async function assembleStrategicContext(founderId: string, rawQuestion: string, subtype: StrategicSubtype, deps: AssemblerDeps, asOf: Date = new Date(), frozen?: { businessUnderstanding: StrategicContext['businessUnderstanding']; founderContext: StrategicContext['founderContext'] }): Promise<StrategicContext> {
   const missingAreas: string[] = []; const staleAreas: string[] = []; const contradictoryAreas: string[] = []; let truncated = false;
 
-  // ── Business Understanding (latest version + EFFECTIVE responses) ──────────────────────────────────────
-  const u = await deps.understanding.latest(founderId);
-  const effResp = await deps.conclusionResponses.effectiveByConclusion(founderId);
-  const revised = await deps.conclusionResponses.revisedConclusionIds(founderId);
+  // ── Business Understanding ────────────────────────────────────────────────────────────────────────────
+  // ADR-014 Consumption Gate: when a FROZEN snapshot is supplied, reasoning consumes it verbatim — the live BU read is
+  // skipped entirely. Otherwise the pre-existing live path (latest version + EFFECTIVE responses) runs unchanged.
   const buConclusions: StrategicContext['businessUnderstanding']['conclusions'] = [];
   const founderResponses: StrategicContext['businessUnderstanding']['founderResponses'] = [];
   const conflicts: StrategicContext['businessUnderstanding']['conflicts'] = [];
   const unknowns: StrategicContext['businessUnderstanding']['unknowns'] = [];
-  if (!u || u.conclusions.length === 0) { missingAreas.push('business_understanding'); }
-  else {
-    // deterministic order: canonical group order, then stable id
-    const ordered = [...u.conclusions].sort((a, b) => (GROUP_ORDER.indexOf(groupOf(a.type, a.epistemicStatus)) - GROUP_ORDER.indexOf(groupOf(b.type, b.epistemicStatus))) || a.id.localeCompare(b.id));
-    for (const c of ordered) {
-      if (buConclusions.length >= CAP.conclusions) { truncated = true; break; }
-      buConclusions.push({ id: c.id, type: c.type, statement: c.statement, epistemicStatus: c.epistemicStatus, group: groupOf(c.type as ConclusionType, c.epistemicStatus as EpistemicStatus), evidenceCount: c.evidenceRefs.length });
-      const r = effResp.get(c.id);
-      if (r) {
-        founderResponses.push({ conclusionId: c.id, type: r.type, acceptedText: r.acceptedText, qualificationText: r.qualificationText, correctionText: r.correctionText, revisedEarlier: revised.has(c.id) });
-        if (r.type === 'corrected' && r.correctionText) conflicts.push({ conclusionId: c.id, observation: c.statement, founderCorrection: r.correctionText });
+  let buVersion: number | null = null;
+  if (!frozen) {
+    const u = await deps.understanding.latest(founderId);
+    buVersion = u?.version ?? null;
+    const effResp = await deps.conclusionResponses.effectiveByConclusion(founderId);
+    const revised = await deps.conclusionResponses.revisedConclusionIds(founderId);
+    if (!u || u.conclusions.length === 0) { missingAreas.push('business_understanding'); }
+    else {
+      // deterministic order: canonical group order, then stable id
+      const ordered = [...u.conclusions].sort((a, b) => (GROUP_ORDER.indexOf(groupOf(a.type, a.epistemicStatus)) - GROUP_ORDER.indexOf(groupOf(b.type, b.epistemicStatus))) || a.id.localeCompare(b.id));
+      for (const c of ordered) {
+        if (buConclusions.length >= CAP.conclusions) { truncated = true; break; }
+        buConclusions.push({ id: c.id, type: c.type, statement: c.statement, epistemicStatus: c.epistemicStatus, group: groupOf(c.type as ConclusionType, c.epistemicStatus as EpistemicStatus), evidenceCount: c.evidenceRefs.length });
+        const r = effResp.get(c.id);
+        if (r) {
+          founderResponses.push({ conclusionId: c.id, type: r.type, acceptedText: r.acceptedText, qualificationText: r.qualificationText, correctionText: r.correctionText, revisedEarlier: revised.has(c.id) });
+          if (r.type === 'corrected' && r.correctionText) conflicts.push({ conclusionId: c.id, observation: c.statement, founderCorrection: r.correctionText });
+        }
+        if (c.epistemicStatus === 'NEEDS_MORE_EVIDENCE' || UNKNOWN_TYPES.has(c.type)) unknowns.push({ conclusionId: c.id, statement: c.statement });
       }
-      if (c.epistemicStatus === 'NEEDS_MORE_EVIDENCE' || UNKNOWN_TYPES.has(c.type)) unknowns.push({ conclusionId: c.id, statement: c.statement });
+      if (conflicts.length) contradictoryAreas.push('business_understanding_corrections');
     }
-    if (conflicts.length) contradictoryAreas.push('business_understanding_corrections');
+  } else if (frozen.businessUnderstanding.conclusions.length === 0) {
+    missingAreas.push('business_understanding');
   }
 
   // ── Public Positioning Context (current eligible via effectiveMarketContext) ─────────────────────────
@@ -110,16 +122,26 @@ export async function assembleStrategicContext(founderId: string, rawQuestion: s
   const entityViews = await listEntityViews(founderId, deps.entities, deps.reviews);
   if (entityViews.some((e) => e.needsFreshReview)) staleAreas.push('public_positioning_website_changed');
 
-  // ── Founder Strategic Context (current eligible, as-of the session) ────────────────────────────────────
-  // Read-only via the effective resolver: ACTIVE + not-future + not-expired + latest-version only. 'ANY' scope —
-  // a priority decision is holistic, so all effective founder conditions inform it (expired/future/retired excluded).
-  const eff = resolveEffectiveStrategicContext(await deps.strategicContext.listActive(founderId), asOf, 'ANY');
-  if (eff.missingCriticalAreas.length > 0) missingAreas.push('founder_strategic_context_incomplete');
-  if (eff.conflicts.length > 0) contradictoryAreas.push('founder_strategic_context_conflicts');
-  if (eff.staleItems.some((s) => s.reason === 'EXPIRED' || s.reason === 'REVIEW_DUE')) staleAreas.push('founder_strategic_context_review_due');
+  // ── Founder Strategic Context ─────────────────────────────────────────────────────────────────────────
+  // Frozen path: consume the snapshot's founder context verbatim. Live path: the effective resolver (ACTIVE + not-future
+  // + not-expired + latest-version only; 'ANY' scope — a priority decision is holistic).
+  let founderContext: StrategicContext['founderContext'];
+  if (frozen) {
+    founderContext = frozen.founderContext;
+    if (founderContext.missingCriticalAreas.length > 0) missingAreas.push('founder_strategic_context_incomplete');
+    if (founderContext.conflicts.length > 0) contradictoryAreas.push('founder_strategic_context_conflicts');
+  } else {
+    const eff = resolveEffectiveStrategicContext(await deps.strategicContext.listActive(founderId), asOf, 'ANY');
+    if (eff.missingCriticalAreas.length > 0) missingAreas.push('founder_strategic_context_incomplete');
+    if (eff.conflicts.length > 0) contradictoryAreas.push('founder_strategic_context_conflicts');
+    if (eff.staleItems.some((s) => s.reason === 'EXPIRED' || s.reason === 'REVIEW_DUE')) staleAreas.push('founder_strategic_context_review_due');
+    founderContext = { goals: eff.goals, constraints: eff.constraints, resources: eff.resources, strategicPreferences: eff.strategicPreferences, decisionHorizons: eff.decisionHorizons, conflicts: eff.conflicts, staleItems: eff.staleItems, missingCriticalAreas: eff.missingCriticalAreas };
+  }
+
+  const businessUnderstanding = frozen ? frozen.businessUnderstanding : { version: buVersion, conclusions: buConclusions, founderResponses, conflicts, unknowns };
 
   return {
-    businessUnderstanding: { version: u?.version ?? null, conclusions: buConclusions, founderResponses, conflicts, unknowns },
+    businessUnderstanding,
     publicPositioningContext: {
       entities: ctx.confirmedEntities.map((e) => ({ id: e.id, name: e.name, entityType: e.entityType, websiteUrl: e.websiteUrl })),
       observations: obs.map((o) => ({ findingId: o.id, entityId: o.entityId, sourceUrl: o.sourceUrl, text: o.observedText, accuracy: o.accuracy, relevance: o.relevance, relevanceQualification: o.relevanceQualification })),
@@ -127,11 +149,7 @@ export async function assembleStrategicContext(founderId: string, rawQuestion: s
       provisional: { observations: ctx.provisional.observed.length, inferences: ctx.provisional.inferences.length },
       provenance,
     },
-    founderContext: {
-      goals: eff.goals, constraints: eff.constraints, resources: eff.resources,
-      strategicPreferences: eff.strategicPreferences, decisionHorizons: eff.decisionHorizons,
-      conflicts: eff.conflicts, staleItems: eff.staleItems, missingCriticalAreas: eff.missingCriticalAreas,
-    },
+    founderContext,
     question: { rawText: rawQuestion.slice(0, 1000), normalizedStrategicJob: 'PRIORITY_DECISION', subtype, decisionHorizon: decisionHorizon(rawQuestion) },
     contextHealth: { missingAreas, staleAreas, contradictoryAreas, truncated },
   };
