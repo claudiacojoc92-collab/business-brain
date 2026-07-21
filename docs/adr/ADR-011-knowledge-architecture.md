@@ -179,9 +179,16 @@ smuggle them in without a superseding gate). Each category names what it is and,
   + [`strategic-commitment-record-slice.md`](../architecture/strategic-commitment-record-slice.md); schema
   `strategic-commitment-1`, table `business.strategic_commitment_record` (V073), append-only; references an exact decision revision.
 
-#### 12. Plan — *conceptual only (not implemented)*
-- **Definition (future):** An explicit sequence of intended steps serving a commitment.
-- **What it is NOT:** not proof; not execution; not evidence.
+#### 12. Plan — *being implemented by the Strategic Plan Record slice*
+- **Definition:** A bounded translation of ONE effective Strategic Commitment into intended strategic moves, milestones,
+  review conditions, assumptions, and dependencies — append-only, founder-activated.
+- **Controller:** Founder only, by an explicit, dedicated activation on an effective ACTIVE commitment (never auto-derived).
+- **What it is NOT:** not a recommendation, decision, or commitment; not execution, tasks, a calendar, an autonomous
+  workflow, or proof of progress; not evidence; not generic memory. No `IN_PROGRESS`/`COMPLETED` states (execution is future).
+- **Governance + architecture:** [`strategic-plan-record-contract.md`](../governance/strategic-plan-record-contract.md)
+  + [`strategic-plan-record-slice.md`](../architecture/strategic-plan-record-slice.md); schema `strategic-plan-1`, table
+  `business.strategic_plan_record` (V074), append-only; references an exact commitment revision; the model does not draft
+  plans this slice.
 
 #### 13. Execution Record — *conceptual only (not implemented)*
 - **Definition (future):** A durable record of what the founder actually *did*, which becomes new `observed` Evidence and
