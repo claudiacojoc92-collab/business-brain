@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import {
-  createStrategySession, getStrategySession, listStrategySessions, retryStrategySession, respondToStrategy, createDecision, createCommitment, ApiError,
+  createStrategySession, getStrategySession, listStrategySessions, retryStrategySession, respondToStrategy, createDecision, createCommitment, createPlan, ApiError,
   type StrategySessionView, type StrategyBoundary, type StrategicRecommendation, type InsufficientStrategicEvidence,
   type StrategyResponseType, type EpistemicKind, type Band, type EvidenceReference,
   type DecisionView, type DecisionAlternative, type ChosenOptionSource,
   type CommitmentView, type CommitmentScope, type Exclusivity,
+  type PlanView, type PlanScope,
 } from '../api/client';
 import { AppShell, Button, Thinking } from '../system/ui';
 
@@ -492,6 +493,8 @@ function CommitmentPanel({ decision, on401 }: { decision: DecisionView; on401: (
         <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink)', margin: '4px 0 0' }}>{saved.statement}</p>
         <p style={{ ...meta, marginTop: 4 }}>Scope: {saved.scope === 'DECISION_SCOPE' ? decision.chosenOption.label : saved.scope} · {saved.exclusivity.replace(/_/g, ' ').toLowerCase()}{saved.reviewAt ? ` · review ${new Date(saved.reviewAt).toLocaleDateString()}` : ''}{saved.expiresAt ? ` · expires ${new Date(saved.expiresAt).toLocaleDateString()}` : ''}</p>
         <p style={{ ...meta, marginTop: 8, fontStyle: 'italic' }}>This is a strategic commitment. It does not create a plan or tasks. You can review, supersede, release, or retire it.</p>
+        {/* A plan is a SEPARATE, later act — a commitment does not become one automatically (Law 1). */}
+        <PlanPanel commitment={saved} on401={on401} />
       </div>
     );
   }
@@ -549,6 +552,117 @@ function CommitmentPanel({ decision, on401 }: { decision: DecisionView; on401: (
           {error && <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--danger-ink, #a33)', marginTop: 6 }}>{error}</p>}
           <div style={{ display: 'flex', gap: 10, marginTop: 'var(--sp-3)' }}>
             <Button loading={saving} disabled={!canConfirm} onClick={() => void confirm()}>Confirm this commitment</Button>
+            <Button variant="ghost" onClick={() => setOpen(false)}>Not now</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// A Strategic Plan — a SEPARATE, later founder act on an effective commitment. Bounded (milestones + review/exit),
+// with visible assumptions/dependencies/conflicts. It is NOT execution, tasks, or a calendar. Founder-activated.
+const PLAN_SCOPES: PlanScope[] = ['COMMITMENT_SCOPE', 'CHANNEL', 'OFFER', 'POSITIONING', 'MARKETING', 'STRATEGIC_JOB', 'BUSINESS'];
+const SEVERITY_LABEL: Record<string, string> = { BLOCKING: 'blocks activation', REVIEW_REQUIRED: 'needs review', NON_BLOCKING: 'noted', UNKNOWN: 'unknown' };
+function PlanPanel({ commitment, on401 }: { commitment: CommitmentView; on401: (e: unknown) => void }) {
+  const insufficient = commitment.alignmentAtCommitment === 'NO_RECOMMENDATION' || commitment.acknowledgedInsufficientEvidence || (commitment.groundingStatusAtCommitment != null && commitment.groundingStatusAtCommitment !== 'GROUNDED');
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [intent, setIntent] = useState('');
+  const [scope, setScope] = useState<PlanScope>('COMMITMENT_SCOPE');
+  const [milestones, setMilestones] = useState('');   // one per line
+  const [assumptions, setAssumptions] = useState(''); // one per line (all UNKNOWN unless founder edits later)
+  const [review, setReview] = useState('');
+  const [exit, setExit] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
+  const [ackInsufficient, setAckInsufficient] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<PlanView | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const milestoneLines = milestones.split('\n').map((s) => s.trim()).filter(Boolean);
+  const hasBoundary = !!review.trim() || !!exit.trim() || !!expiresAt;
+  const canActivate = title.trim().length > 0 && intent.trim().length > 0 && (milestoneLines.length > 0) && hasBoundary && (!insufficient || ackInsufficient);
+
+  const activate = async () => {
+    setSaving(true); setError(null);
+    try {
+      const p = await createPlan(commitment.logicalCommitmentId, {
+        title: title.trim(), strategicIntent: intent.trim(), scope,
+        milestones: milestoneLines.map((label, i) => ({ label, intendedState: '', sequence: i + 1 })),
+        assumptions: assumptions.split('\n').map((s) => s.trim()).filter(Boolean).map((statement) => ({ statement, status: 'UNKNOWN' as const })),
+        reviewConditions: review.trim() ? review.split('\n').map((s) => s.trim()).filter(Boolean) : [],
+        exitConditions: exit.trim() ? exit.split('\n').map((s) => s.trim()).filter(Boolean) : [],
+        expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+        acknowledgedInsufficientEvidence: insufficient ? ackInsufficient : undefined,
+        idempotencyKey: (globalThis.crypto?.randomUUID?.() ?? String(Date.now())),
+      });
+      setSaved(p); setOpen(false);
+    } catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setError(e instanceof ApiError ? e.message : 'Could not activate the plan.'); }
+    finally { setSaving(false); }
+  };
+
+  if (saved) {
+    return (
+      <div style={{ marginTop: 'var(--sp-4)', paddingTop: 'var(--sp-3)', borderTop: '1px dashed var(--line-2)' }}>
+        <span style={sectionLabel}>Your active plan</span>
+        <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink)', margin: '4px 0 0' }}>{saved.title}</p>
+        <ul style={ulReset}>{saved.milestones.map((m) => <li key={m.id} style={{ ...meta, marginTop: 2 }}>{m.sequence}. {m.label}</li>)}</ul>
+        {saved.conflicts.filter((c) => c.severity !== 'NON_BLOCKING').map((c, i) => <p key={i} style={{ ...meta, marginTop: 4, color: 'var(--warn-ink, var(--ink-3))' }}>· {c.description} ({SEVERITY_LABEL[c.severity]})</p>)}
+        <p style={{ ...meta, marginTop: 8, fontStyle: 'italic' }}>This plan is active. It does not execute work or create tasks. You can supersede, retire, or cancel it.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 'var(--sp-4)', paddingTop: 'var(--sp-3)', borderTop: '1px dashed var(--line-2)' }}>
+      {!open ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <Button variant="ghost" onClick={() => setOpen(true)}>Create a plan</Button>
+          <span style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ink-3)' }}>A plan lays out how you intend to act on this commitment. It’s a separate step — and it doesn’t execute anything.</span>
+        </div>
+      ) : (
+        <div>
+          <span style={sectionLabel}>Create a plan</span>
+          <p style={{ ...meta, marginTop: 2 }}>Your commitment: <strong style={{ color: 'var(--ink-2)' }}>{commitment.statement}</strong>. A plan translates it into intended moves — bounded, reviewable, and not execution.</p>
+
+          <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '12px 0 4px' }}>Plan title</p>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. 30-day LinkedIn cadence" style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }} />
+          <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '12px 0 4px' }}>What is this plan for, in your words?</p>
+          <textarea value={intent} onChange={(e) => setIntent(e.target.value)} rows={2} placeholder="How you intend to translate the commitment into coordinated action." style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }} />
+
+          <label style={{ display: 'block', fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', marginTop: 12 }}>Scope<br />
+            <select value={scope} onChange={(e) => setScope(e.target.value as PlanScope)} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', padding: '6px 8px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', marginTop: 4 }}>
+              {PLAN_SCOPES.map((s) => <option key={s} value={s}>{s === 'COMMITMENT_SCOPE' ? 'Same as the commitment' : s.toLowerCase()}</option>)}
+            </select>
+          </label>
+
+          <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '12px 0 4px' }}>Milestones — meaningful checkpoints, one per line (not tasks)</p>
+          <textarea value={milestones} onChange={(e) => setMilestones(e.target.value)} rows={3} placeholder={'Establish a 3x/week posting rhythm\nCapture inbound demo requests in one place'} style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }} />
+
+          <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '12px 0 4px' }}>Assumptions you’re making (optional, one per line — kept as unverified)</p>
+          <textarea value={assumptions} onChange={(e) => setAssumptions(e.target.value)} rows={2} placeholder="e.g. My posting cadence is sustainable for 30 days." style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }} />
+
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12 }}>
+            <label style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)' }}>Review on<br /><input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', padding: '5px 8px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', marginTop: 4 }} /></label>
+          </div>
+          <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '12px 0 4px' }}>Review conditions (one per line)</p>
+          <textarea value={review} onChange={(e) => setReview(e.target.value)} rows={2} placeholder="e.g. Review the plan at 30 days." style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }} />
+          <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: '12px 0 4px' }}>Exit conditions (one per line)</p>
+          <textarea value={exit} onChange={(e) => setExit(e.target.value)} rows={2} placeholder="e.g. Abandon if demo volume drops below 5/week for a month." style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }} />
+          {!hasBoundary && <p style={{ ...meta, marginTop: 4 }}>Add a review date, a review condition, or an exit condition — a plan has to be bounded.</p>}
+
+          {insufficient && (
+            <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 12, fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={ackInsufficient} onChange={(e) => setAckInsufficient(e.target.checked)} />
+              <span>This lineage was decided without enough evidence. I’m planning anyway, with that in mind.</span>
+            </label>
+          )}
+
+          <p style={{ ...meta, marginTop: 14, fontStyle: 'italic' }}>This activates a plan. It does not execute tasks or create calendar events.</p>
+          {error && <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--danger-ink, #a33)', marginTop: 6 }}>{error}</p>}
+          <div style={{ display: 'flex', gap: 10, marginTop: 'var(--sp-3)' }}>
+            <Button loading={saving} disabled={!canActivate} onClick={() => void activate()}>Activate this plan</Button>
             <Button variant="ghost" onClick={() => setOpen(false)}>Not now</Button>
           </div>
         </div>

@@ -100,7 +100,7 @@ describe('strategic decision §LIVE', () => {
     // and no commitment rows for this founder (the commitment table may exist, but nothing was written); no plan/task table at all
     const nc = await db.selectFrom('business.strategic_commitment_record').select(db.fn.countAll().as('c')).where('founder_id', '=', f).executeTakeFirst();
     expect(Number(nc.c)).toBe(0);
-    expect(await db.introspection.getTables().then((ts: Array<{ name: string }>) => ts.some((t) => /strategic_plan|strategic_task/i.test(t.name)))).toBe(false);
+    expect(await db.introspection.getTables().then((ts: Array<{ name: string }>) => ts.some((t) => /strategic_task|strategic_execution/i.test(t.name)))).toBe(false);
   });
 
   it('3,4,12,13,14. explicit create makes exactly one record, idempotent, linked to the exact session/schema/manifest', async (ctx) => {

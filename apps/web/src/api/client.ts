@@ -468,6 +468,49 @@ export async function getCommitment(logicalCommitmentId: string): Promise<{ comm
   return request(`strategy/commitments/${encodeURIComponent(logicalCommitmentId)}`);
 }
 
+// ─── Strategic Plan Record: a founder-EXPLICIT, bounded translation of a commitment into intended moves ─────
+// A plan is NOT a recommendation/decision/commitment, NOT execution/tasks/a calendar/an agent. It references an
+// exact commitment revision, is bounded (milestones + review/exit), append-only, and founder-activated.
+export type PlanStatus = 'ACTIVE' | 'SUPERSEDED' | 'RETIRED' | 'CANCELLED' | 'EXPIRED';
+export type PlanScope = 'BUSINESS' | 'MARKETING' | 'STRATEGIC_JOB' | 'CHANNEL' | 'OFFER' | 'POSITIONING' | 'COMMITMENT_SCOPE';
+export type ConflictSeverity = 'BLOCKING' | 'REVIEW_REQUIRED' | 'UNKNOWN' | 'NON_BLOCKING';
+export type LinkedCommitmentStatus = 'CURRENT' | 'COMMITMENT_SUPERSEDED' | 'COMMITMENT_RELEASED' | 'COMMITMENT_RETIRED' | 'COMMITMENT_EXPIRED';
+export interface Milestone { id: string; label: string; intendedState: string; sequence: number; confirmationCondition: string | null; targetWindow: string | null; dependencies: string[]; uncertainty: string | null; statusAtPlanning: 'PLANNED' }
+export interface Assumption { statement: string; status: 'GROUNDED' | 'FOUNDER_DECLARED' | 'MODEL_PROPOSED' | 'UNKNOWN' | 'CONTRADICTED' }
+export interface Dependency { statement: string; kind: 'COMMITMENT' | 'RESOURCE' | 'EVIDENCE' | 'EXTERNAL' | 'SEQUENCING'; availability: 'AVAILABLE' | 'UNAVAILABLE' | 'UNKNOWN' | 'EXCLUDED_BY_NON_NEGOTIABLE' }
+export interface PlanConflict { type: string; severity: ConflictSeverity; description: string }
+export interface PlanView {
+  planId: string; logicalPlanId: string; revision: number; status: PlanStatus; lifecycle: string;
+  title: string; strategicIntent: string; scope: PlanScope; planningHorizon: string | null;
+  milestones: Milestone[]; assumptions: Assumption[]; dependencies: Dependency[]; resourceConstraints: string[];
+  reviewConditions: string[]; exitConditions: string[]; noMilestoneRationale: string | null; acknowledgedInsufficientEvidence: boolean;
+  uncertaintyAtPlanning: { groundingStatus: string | null; unknowns: string[] }; conflicts: PlanConflict[];
+  commitment: { recordId: string; logicalId: string; revision: number; schemaVersion: string };
+  decisionRecordId: string | null; recommendationSessionId: string | null; provenanceManifestVersion: string | null;
+  alignmentAtPlanning: string; groundingStatusAtPlanning: string | null; authorship: Record<string, string>;
+  expiresAt: string | null; activatedAt: string; createdAt: string; planSchemaVersion: string; linkedCommitmentStatus?: LinkedCommitmentStatus; notExecution: true;
+}
+export interface CreatePlanInput {
+  title: string; strategicIntent: string; scope: PlanScope; planningHorizon?: string | null;
+  milestones?: Array<{ label: string; intendedState: string; sequence: number; confirmationCondition?: string | null; targetWindow?: string | null; dependencies?: string[]; uncertainty?: string | null }>;
+  assumptions?: Assumption[]; dependencies?: Dependency[]; resourceConstraints?: string[]; reviewConditions?: string[]; exitConditions?: string[];
+  noMilestoneRationale?: string | null; acknowledgedInsufficientEvidence?: boolean; expiresAt?: string | null; idempotencyKey: string;
+}
+/** POST /strategy/commitments/:logicalCommitmentId/plans — activate ONE founder plan from a commitment. */
+export async function createPlan(logicalCommitmentId: string, input: CreatePlanInput): Promise<PlanView> {
+  const { plan } = await request<{ plan: PlanView }>(`strategy/commitments/${encodeURIComponent(logicalCommitmentId)}/plans`, { method: 'POST', body: JSON.stringify(input) });
+  return plan;
+}
+/** GET /strategy/plans — the founder's effective plans, newest first. */
+export async function listPlans(): Promise<PlanView[]> {
+  const { plans } = await request<{ plans: PlanView[] }>('strategy/plans');
+  return plans;
+}
+/** GET /strategy/plans/:logicalPlanId — the plan + append-only history + linked-commitment status. */
+export async function getPlan(logicalPlanId: string): Promise<{ plan: PlanView; history: PlanView[] }> {
+  return request(`strategy/plans/${encodeURIComponent(logicalPlanId)}`);
+}
+
 // ─── Founder Strategic Context: founder-declared strategic operating conditions (Wave 4, slice 1) ──────────
 // Five kinds (GOAL/CONSTRAINT/RESOURCE/STRATEGIC_PREFERENCE/DECISION_HORIZON). Append-only, temporal, scoped.
 // Every write is an explicit founder action — nothing is inferred or persisted without confirmation.

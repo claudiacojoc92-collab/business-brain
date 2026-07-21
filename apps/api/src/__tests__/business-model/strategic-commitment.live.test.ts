@@ -108,7 +108,10 @@ describe('strategic commitment §LIVE', () => {
     await new PgStrategicResponseRepository(db).record({ founderId, sessionId: decision.recommendationSessionId!, responseType: 'ACCEPT', qualification: null, now: new Date() });
     const n = await db.selectFrom('business.strategic_commitment_record').select(db.fn.countAll().as('c')).where('founder_id', '=', founderId).executeTakeFirst();
     expect(Number(n.c)).toBe(0);
-    expect(await db.introspection.getTables().then((ts: Array<{ name: string }>) => ts.some((t) => /strategic_plan|strategic_task|_plan\b|_task\b/i.test(t.name)))).toBe(false);
+    // no commitment rows written; and no task/execution table exists (a plan table may exist but is not a commitment/task/execution object)
+    const np = await db.selectFrom('business.strategic_plan_record').select(db.fn.countAll().as('c')).where('founder_id', '=', founderId).executeTakeFirst();
+    expect(Number(np.c)).toBe(0);
+    expect(await db.introspection.getTables().then((ts: Array<{ name: string }>) => ts.some((t) => /strategic_task|strategic_execution/i.test(t.name)))).toBe(false);
   });
 
   it('3,4,19,21. explicit create makes exactly one record, idempotent, linked to the exact decision revision + manifest', async (ctx) => {
