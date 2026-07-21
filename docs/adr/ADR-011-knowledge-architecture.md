@@ -169,9 +169,15 @@ smuggle them in without a superseding gate). Each category names what it is and,
   + [`strategic-decision-record-slice.md`](../architecture/strategic-decision-record-slice.md); schema `strategic-decision-1`,
   table `business.strategic_decision_record` (V072), append-only.
 
-#### 11. Strategic Commitment — *conceptual only (not implemented)*
-- **Definition (future):** A decision the founder explicitly *binds to* for a period, with scope and validity.
-- **What it is NOT:** not a decision by itself; not a plan; not enforced by the system.
+#### 11. Strategic Commitment — *being implemented by the Strategic Commitment Record slice*
+- **Definition:** A durable, append-only declaration that a specific Strategic Decision will govern the founder's
+  strategic conduct for a **bounded** scope and period, subject to visible review, exit, and reconsideration conditions.
+- **Controller:** Founder only, by an explicit, dedicated action on a decision (never auto-derived from a decision).
+- **What it is NOT:** not a decision by itself; not a task, plan, calendar event, or execution record; not a guarantee, a
+  promise to Business Brain, a loyalty mechanism, an identity statement, a permanent restriction, or generic memory.
+- **Governance + architecture:** [`strategic-commitment-record-contract.md`](../governance/strategic-commitment-record-contract.md)
+  + [`strategic-commitment-record-slice.md`](../architecture/strategic-commitment-record-slice.md); schema
+  `strategic-commitment-1`, table `business.strategic_commitment_record` (V073), append-only; references an exact decision revision.
 
 #### 12. Plan — *conceptual only (not implemented)*
 - **Definition (future):** An explicit sequence of intended steps serving a commitment.
