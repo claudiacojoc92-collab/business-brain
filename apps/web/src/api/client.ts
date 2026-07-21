@@ -570,6 +570,36 @@ export async function listPlanReviews(logicalPlanId: string): Promise<PlanReview
   return reviews;
 }
 
+// ─── Strategic Execution Boundary (ADR-015) — FOUNDER TESTIMONY about execution; NOT a product-performed action ──────
+// The product performs and verifies NOTHING: every active report is UNVERIFIED_FOUNDER_REPORT / NOT_PERFORMED_BY_PRODUCT.
+export type ExecutionState = 'NOT_STARTED' | 'ATTEMPTED' | 'COMPLETED' | 'BLOCKED' | 'ABANDONED' | 'NOT_APPLICABLE';
+export type EvidenceType = 'NOTE' | 'URL' | 'FILE_REFERENCE' | 'METRIC_OBSERVATION' | 'EXTERNAL_REFERENCE';
+export interface ExecutionEvidenceReference { type: EvidenceType; value: string; label?: string | null }
+export interface ExecutionReportView {
+  reportId: string; subjectType: 'MILESTONE' | 'PLAN'; subjectId: string; reportKind: 'REPORT' | 'CORRECT' | 'WITHDRAW';
+  executionState: string; label: string; founderStatement: string; occurredAt: string | null; reportedAt: string;
+  evidenceReferences: ExecutionEvidenceReference[]; reportSequence: number; predecessorReportId: string | null;
+  verificationStatus: string; productExecutionStatus: string; evidenceVerified: false;
+}
+export interface EffectiveExecutionItem { subjectType: 'MILESTONE' | 'PLAN'; subjectId: string; reportedState: string; label: string; founderStatement: string | null; occurredAt: string | null; reportedAt: string | null; evidenceReferences: ExecutionEvidenceReference[]; headReportId: string | null; reportSequence: number; verificationStatus: string; productExecutionStatus: string; evidenceVerified: false }
+export interface EffectiveExecutionResponse { planIntention: { logicalPlanId: string; revision: number; status: string }; milestones: Array<{ milestoneId: string; label: string; execution: EffectiveExecutionItem }>; planLevel: EffectiveExecutionItem; notExecution: true; productExecutionStatus: string }
+export interface ExecutionReportInput { subjectType?: 'MILESTONE' | 'PLAN'; subjectId?: string; executionState?: ExecutionState; founderStatement: string; occurredAt?: string | null; evidenceReferences?: ExecutionEvidenceReference[]; idempotencyKey: string }
+export async function addExecutionReport(logicalPlanId: string, input: ExecutionReportInput): Promise<ExecutionReportView> {
+  return (await request<{ report: ExecutionReportView }>(`strategy/plans/${encodeURIComponent(logicalPlanId)}/execution-reports`, { method: 'POST', body: JSON.stringify(input) })).report;
+}
+export async function correctExecutionReport(logicalPlanId: string, reportId: string, input: ExecutionReportInput): Promise<ExecutionReportView> {
+  return (await request<{ report: ExecutionReportView }>(`strategy/plans/${encodeURIComponent(logicalPlanId)}/execution-reports/${encodeURIComponent(reportId)}/correct`, { method: 'POST', body: JSON.stringify(input) })).report;
+}
+export async function withdrawExecutionReport(logicalPlanId: string, reportId: string, idempotencyKey: string): Promise<ExecutionReportView> {
+  return (await request<{ report: ExecutionReportView }>(`strategy/plans/${encodeURIComponent(logicalPlanId)}/execution-reports/${encodeURIComponent(reportId)}/withdraw`, { method: 'POST', body: JSON.stringify({ founderStatement: 'Withdrawing this report.', idempotencyKey }) })).report;
+}
+export async function listExecutionReports(logicalPlanId: string): Promise<ExecutionReportView[]> {
+  return (await request<{ reports: ExecutionReportView[] }>(`strategy/plans/${encodeURIComponent(logicalPlanId)}/execution-reports`)).reports;
+}
+export async function getEffectiveExecution(logicalPlanId: string): Promise<EffectiveExecutionResponse> {
+  return await request<EffectiveExecutionResponse>(`strategy/plans/${encodeURIComponent(logicalPlanId)}/effective-execution`);
+}
+
 // ─── Strategic Learning Record (ADR-011 cat 14 precursor — durable learning, NOT generic Strategic Memory) ──
 // A durable strategic understanding the founder EXPLICITLY decides to KEEP after a review (initial CREATE-only slice).
 // Most reviews create NO learning. Founder-authored; confidence bounded and never truth-inflating. Keeping one changes

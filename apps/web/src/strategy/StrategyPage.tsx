@@ -13,6 +13,8 @@ import {
   type PromotionTarget, type PromotionScope, type PromotionView,
   type EffectiveBusinessUnderstanding, type EffectiveFounderStrategicContext,
   createContextSnapshot, listContextSnapshots, type SnapshotView,
+  listPlans, getEffectiveExecution, addExecutionReport, correctExecutionReport, withdrawExecutionReport, listExecutionReports,
+  type ExecutionState, type EffectiveExecutionResponse, type ExecutionReportView, type EvidenceType,
 } from '../api/client';
 import { AppShell, Button, Thinking } from '../system/ui';
 
@@ -181,6 +183,7 @@ export function StrategyPage() {
           </div>
         )}
 
+        <PlansPanel on401={on401} />
         <LearningsList on401={on401} />
 
         {history.length > 0 && (
@@ -1282,6 +1285,127 @@ function ContextSnapshots({ on401 }: { on401: (e: unknown) => void }) {
               </div>
             ))}
           </div>}
+    </section>
+  );
+}
+
+// EXECUTION BOUNDARY (ADR-015). A truthful, founder-reported execution-accounting section, kept structurally DISTINCT from
+// the Plan (intention). The product performs and verifies NOTHING: every report is founder testimony. No progress %, no
+// completion ring, no streaks/scores, no warning colours for non-reporting. States are shown as "Reported …" — never a
+// bare "Completed" — and evidence is "supplied — not verified".
+const EXEC_STATES: ExecutionState[] = ['NOT_STARTED', 'ATTEMPTED', 'COMPLETED', 'BLOCKED', 'ABANDONED', 'NOT_APPLICABLE'];
+const EVIDENCE_TYPES_UI: EvidenceType[] = ['NOTE', 'URL', 'FILE_REFERENCE', 'METRIC_OBSERVATION', 'EXTERNAL_REFERENCE'];
+function newKey(): string { return `exec-${Math.random().toString(36).slice(2)}-${Date.now()}`; }
+
+function ExecReportForm({ plan, milestoneId, mode, headReportId, onDone, onCancel, on401 }: { plan: PlanView; milestoneId: string; mode: 'report' | 'correct'; headReportId: string | null; onDone: () => void; onCancel: () => void; on401: (e: unknown) => void }) {
+  const [state, setState] = useState<ExecutionState>('ATTEMPTED');
+  const [statement, setStatement] = useState('');
+  const [evType, setEvType] = useState<EvidenceType>('NOTE');
+  const [evValue, setEvValue] = useState('');
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (!statement.trim() || busy) return;
+    setBusy(true);
+    const evidence = evValue.trim() ? [{ type: evType, value: evValue.trim(), label: null }] : [];
+    try {
+      const input = { subjectType: 'MILESTONE' as const, subjectId: milestoneId, executionState: state, founderStatement: statement.trim(), evidenceReferences: evidence, idempotencyKey: newKey() };
+      if (mode === 'report') await addExecutionReport(plan.logicalPlanId, input);
+      else await correctExecutionReport(plan.logicalPlanId, headReportId!, input);
+      onDone();
+    } catch (e) { if (e instanceof ApiError && e.status === 401) on401(e); } finally { setBusy(false); }
+  };
+  return (
+    <div data-testid={`exec-form-${milestoneId}`} style={{ marginTop: 8, padding: 10, border: '1px solid var(--line-2)', borderRadius: 'var(--r-1)' }}>
+      <p style={{ ...meta }}>This records <strong>your report</strong>. Business Brain has not independently verified this action.</p>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
+        <select data-testid="exec-report-state" value={state} onChange={(e) => setState(e.target.value as ExecutionState)} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', padding: '4px 6px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }}>{EXEC_STATES.map((s) => <option key={s} value={s}>{nice(s)}</option>)}</select>
+      </div>
+      <textarea data-testid="exec-report-statement" value={statement} onChange={(e) => setStatement(e.target.value)} rows={2} placeholder="In your words, what happened?" style={{ width: '100%', boxSizing: 'border-box', marginTop: 6, fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }} />
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
+        <span style={{ ...meta }}>Evidence (supplied — not verified):</span>
+        <select data-testid="exec-evidence-type" value={evType} onChange={(e) => setEvType(e.target.value as EvidenceType)} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', padding: '4px 6px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }}>{EVIDENCE_TYPES_UI.map((t) => <option key={t} value={t}>{nice(t)}</option>)}</select>
+        <input data-testid="exec-evidence-value" value={evValue} onChange={(e) => setEvValue(e.target.value)} placeholder="note / URL / reference" style={{ flex: 1, minWidth: 160, fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', padding: '4px 6px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }} />
+      </div>
+      <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+        <button type="button" data-testid="exec-report-submit" onClick={() => void submit()} disabled={busy || !statement.trim()} style={lcBtn}>{mode === 'report' ? 'Save report' : 'Save correction'}</button>
+        <button type="button" onClick={onCancel} style={lcBtn}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function ExecutionAccounting({ plan, on401 }: { plan: PlanView; on401: (e: unknown) => void }) {
+  const [eff, setEff] = useState<EffectiveExecutionResponse | null>(null);
+  const [form, setForm] = useState<{ milestoneId: string; mode: 'report' | 'correct'; head: string | null } | null>(null);
+  const [historyFor, setHistoryFor] = useState<string | null>(null);
+  const [history, setHistory] = useState<ExecutionReportView[]>([]);
+  const load = useCallback(async () => {
+    try { setEff(await getEffectiveExecution(plan.logicalPlanId)); } catch (e) { if (e instanceof ApiError && e.status === 401) on401(e); }
+  }, [plan.logicalPlanId, on401]);
+  useEffect(() => { void load(); }, [load]);
+  const openHistory = async (milestoneId: string) => {
+    // Always refetch the latest history for this subject and show it (clicking again refreshes, never shows stale events).
+    try { const all = await listExecutionReports(plan.logicalPlanId); setHistory(all.filter((r) => r.subjectId === milestoneId)); setHistoryFor(milestoneId); }
+    catch (e) { if (e instanceof ApiError && e.status === 401) on401(e); }
+  };
+  const withdraw = async (headReportId: string) => {
+    try { await withdrawExecutionReport(plan.logicalPlanId, headReportId, newKey()); await load(); }
+    catch (e) { if (e instanceof ApiError && e.status === 401) on401(e); }
+  };
+  if (!eff) return null;
+  return (
+    <section data-testid={`execution-accounting-${plan.logicalPlanId}`} style={{ marginTop: 'var(--sp-4)', paddingTop: 'var(--sp-3)', borderTop: '1px solid var(--line)' }}>
+      <span style={sectionLabel}>Founder-reported execution</span>
+      <p style={{ ...meta, marginTop: 2 }}>This is separate from the plan (your intention). It records what <strong>you report</strong> — Business Brain has not verified any of it, and <strong>performed no action</strong>. Leaving an item unreported is fine.</p>
+      {eff.milestones.length === 0 && <p style={{ ...meta, marginTop: 6 }}>This plan has no milestones to report on.</p>}
+      {eff.milestones.map((m) => {
+        const ex = m.execution;
+        const reported = ex.reportedState !== 'NOT_REPORTED';
+        return (
+          <div key={m.milestoneId} data-testid={`exec-item-${m.milestoneId}`} style={{ marginTop: 10, paddingLeft: 8, borderLeft: '2px solid var(--line)' }}>
+            <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink-1)' }}>{m.label}</p>
+            <p style={{ ...meta, marginTop: 2 }}>
+              <span data-testid={`exec-state-${m.milestoneId}`} style={{ color: reported ? 'var(--ink-1)' : 'var(--ink-3)' }}>{ex.label}</span>
+              {reported && <> · <span data-testid={`exec-unverified-${m.milestoneId}`}>Business Brain has not independently verified this action.</span> · <span>Not performed by Business Brain.</span></>}
+            </p>
+            {reported && ex.founderStatement && <p style={{ ...meta, marginTop: 2, fontStyle: 'italic' }}>“{ex.founderStatement}”</p>}
+            {reported && ex.evidenceReferences.length > 0 && <p data-testid={`exec-evidence-${m.milestoneId}`} style={{ ...meta, marginTop: 2 }}>Evidence supplied — not verified: {ex.evidenceReferences.map((r) => `${nice(r.type)}: ${r.value}`).join(' · ')}</p>}
+            <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+              {!reported && <button type="button" data-testid={`exec-add-${m.milestoneId}`} onClick={() => setForm({ milestoneId: m.milestoneId, mode: 'report', head: null })} style={lcBtn}>Add execution report</button>}
+              {reported && <button type="button" data-testid={`exec-correct-${m.milestoneId}`} onClick={() => setForm({ milestoneId: m.milestoneId, mode: 'correct', head: ex.headReportId })} style={lcBtn}>Correct latest report</button>}
+              {reported && <button type="button" data-testid={`exec-withdraw-${m.milestoneId}`} onClick={() => void withdraw(ex.headReportId!)} style={lcBtn}>Withdraw</button>}
+              <button type="button" data-testid={`exec-history-${m.milestoneId}`} onClick={() => void openHistory(m.milestoneId)} style={lcBtn}>Report history</button>
+            </div>
+            {form?.milestoneId === m.milestoneId && <ExecReportForm plan={plan} milestoneId={m.milestoneId} mode={form.mode} headReportId={form.head} onDone={() => { setForm(null); void load(); }} onCancel={() => setForm(null)} on401={on401} />}
+            {historyFor === m.milestoneId && <div data-testid={`exec-history-list-${m.milestoneId}`} style={{ marginTop: 6 }}>{history.map((h) => <p key={h.reportId} style={{ ...meta }}>#{h.reportSequence} {h.reportKind} — {h.label}{h.founderStatement ? ` · “${h.founderStatement}”` : ''}</p>)}</div>}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+// A lightweight list of the founder's plans (intention) — each carries its DISTINCT founder-reported execution accounting.
+function PlansPanel({ on401 }: { on401: (e: unknown) => void }) {
+  const [plans, setPlans] = useState<PlanView[] | null>(null);
+  const load = useCallback(async () => {
+    try { setPlans(await listPlans()); } catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setPlans([]); }
+  }, [on401]);
+  useEffect(() => { void load(); }, [load]);
+  if (!plans || plans.length === 0) return null;
+  const active = plans.filter((p) => p.status === 'ACTIVE' || p.status === 'EXPIRED');
+  if (active.length === 0) return null;
+  return (
+    <section data-testid="plans-panel" style={{ marginTop: 'var(--sp-5)', paddingTop: 'var(--sp-4)', borderTop: '1px solid var(--line)' }}>
+      <span style={sectionLabel}>Your plans</span>
+      <p style={{ ...meta, marginTop: 2 }}>A plan is your <strong>intention</strong>. It does not execute anything. Below each plan you can record what you actually did — clearly separated, and never verified by Business Brain.</p>
+      {active.map((p) => (
+        <div key={p.logicalPlanId} data-testid={`plan-${p.logicalPlanId}`} style={{ marginTop: 'var(--sp-3)', paddingTop: 'var(--sp-2)', borderTop: '1px dashed var(--line)' }}>
+          <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-4)', color: 'var(--ink)' }}>{p.title} <span style={{ ...meta }}>· {nice(p.status)} · revision {p.revision}</span></p>
+          <ul style={ulReset}>{p.milestones.map((m) => <li key={m.id} style={{ ...meta, marginTop: 2 }}>Planned: {m.label}</li>)}</ul>
+          <ExecutionAccounting plan={p} on401={on401} />
+        </div>
+      ))}
     </section>
   );
 }

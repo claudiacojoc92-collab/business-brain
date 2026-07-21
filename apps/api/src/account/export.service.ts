@@ -45,6 +45,7 @@ export interface FounderExport {
   strategicLearnings: unknown[];
   learningPromotions: unknown[];
   contextSnapshots: unknown[];
+  executionReports: unknown[];
   meta: { note: string };
 }
 
@@ -172,6 +173,9 @@ export async function buildFounderExport(args: {
   const contextSnapshots = (await db.selectFrom('business.context_snapshot')
     .select(['id', 'business_understanding', 'founder_strategic_context', 'public_positioning_context', 'provenance', 'content_hash', 'hash_algorithm', 'payload_schema_version', 'created_at'])
     .where('founder_id', '=', founderId).orderBy('created_at', 'asc').orderBy('id', 'asc').execute()) as Array<Record<string, unknown>>;
+  const executionReports = (await db.selectFrom('business.execution_report')
+    .select(['id', 'subject_type', 'subject_id', 'plan_logical_id', 'plan_id', 'plan_revision', 'report_sequence', 'predecessor_report_id', 'report_kind', 'execution_state', 'founder_statement', 'occurred_at', 'reported_at', 'evidence_references', 'source', 'created_at'])
+    .where('founder_id', '=', founderId).orderBy('plan_logical_id', 'asc').orderBy('subject_id', 'asc').orderBy('report_sequence', 'asc').execute()) as Array<Record<string, unknown>>;
   const learningPromotions = (await db.selectFrom('business.learning_promotion_event')
     .select(['id', 'target', 'logical_learning_id', 'learning_revision_id', 'revision_number', 'promotion_action', 'rationale', 'scope', 'created_at', 'promotion_sequence', 'predecessor_promotion_event_id'])
     // deterministic chain order (V080 lineage): by thread/target then explicit sequence — the complete promotion chain
@@ -265,6 +269,10 @@ export async function buildFounderExport(args: {
     contextSnapshots: contextSnapshots.map((s) => {
       const j = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v);
       return { id: String(s['id']), contentHash: String(s['content_hash']), hashAlgorithm: String(s['hash_algorithm']), payloadSchemaVersion: String(s['payload_schema_version']), createdAt: iso(s['created_at']), businessUnderstanding: j(s['business_understanding']), founderStrategicContext: j(s['founder_strategic_context']), publicPositioningContext: j(s['public_positioning_context']), provenance: j(s['provenance']) };
+    }),
+    executionReports: executionReports.map((e) => {
+      const j = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : (v ?? []));
+      return { id: String(e['id']), subjectType: String(e['subject_type']), subjectId: String(e['subject_id']), plan: { logicalPlanId: String(e['plan_logical_id']), planId: String(e['plan_id']), revision: Number(e['plan_revision']) }, reportSequence: Number(e['report_sequence']), predecessorReportId: e['predecessor_report_id'] ? String(e['predecessor_report_id']) : null, reportKind: String(e['report_kind']), executionState: String(e['execution_state']), founderStatement: String(e['founder_statement']), occurredAt: iso(e['occurred_at']), reportedAt: iso(e['reported_at']), evidenceReferences: j(e['evidence_references']), source: String(e['source']), createdAt: iso(e['created_at']), verificationStatus: e['report_kind'] === 'WITHDRAW' ? 'NONE' : 'UNVERIFIED_FOUNDER_REPORT', productExecutionStatus: 'NOT_PERFORMED_BY_PRODUCT', evidenceVerified: false };
     }),
     learningPromotions: learningPromotions.map((p) => ({
       id: String(p['id']), target: String(p['target']), promotionAction: String(p['promotion_action']), scope: String(p['scope']), rationale: String(p['rationale']),

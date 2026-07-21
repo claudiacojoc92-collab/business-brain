@@ -28,6 +28,8 @@ import { composeEffectiveBusinessUnderstanding, composeEffectiveFounderStrategic
 import { PgContextSnapshotRepository } from '../business-model/pg-context-snapshot.repository';
 import { captureEffectiveContext } from '../business-model/context-snapshot.capture';
 import { toSnapshotView } from '../business-model/context-snapshot';
+import { PgExecutionReportRepository } from '../business-model/pg-execution-report.repository';
+import { toExecutionReportView, toEffectiveExecutionView, effectiveFromHead, chainHead as executionChainHead, ExecutionReportError, type ExecutionReportInput, type ReportKind, type ExecutionSubjectType } from '../business-model/execution-report';
 import { AnthropicStrategyModel } from '../business-model/anthropic-strategy.model';
 import { strategyModelConfig } from '../business-model/model-config';
 import { startStrategicSessionWorker } from '../business-model/strategic-session.worker';
@@ -51,6 +53,7 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
   const learningRepo = new PgStrategicLearningRepository(db);
   const promotionRepo = new PgLearningPromotionRepository(db);
   const snapshotRepo = new PgContextSnapshotRepository(db);
+  const executionRepo = new PgExecutionReportRepository(db);
   const assembler = {
     understanding: new PgUnderstandingRepository(db), conclusionResponses: new PgConclusionResponseRepository(db),
     entities: new PgMarketEntityRepository(db), findings: new PgMarketFindingRepository(db),
@@ -451,6 +454,80 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
     const owned = await planRepo.getEffective(founderId, logicalPlanId, new Date());
     if (!owned) { await reply.code(404).send({ error: 'not found' }); return; }
     await reply.send({ reviews: (await planReviewRepo.listByPlan(founderId, logicalPlanId)).map((r) => toReviewView(r)) });
+  });
+
+  // EXECUTION BOUNDARY (ADR-015). Append-only ledger of FOUNDER TESTIMONY about execution against a plan milestone/plan.
+  // The product performs NOTHING and verifies NOTHING (UNVERIFIED_FOUNDER_REPORT / NOT_PERFORMED_BY_PRODUCT). No plan/
+  // decision/commitment/review mutation; no downstream artifacts; no external action. Evidence is stored, never fetched.
+  const execErr = (reply: FastifyReply, e: ExecutionReportError) => {
+    const code = e.reason === 'STALE_HEAD' ? 'EXECUTION_REPORT_STALE_HEAD' : (e.reason === 'ALREADY_ACTIVE' || e.reason === 'NO_ACTIVE_REPORT') ? 'EXECUTION_REPORT_INVALID_TRANSITION' : e.reason;
+    const status = e.reason === 'STALE_HEAD' || e.reason === 'ALREADY_ACTIVE' || e.reason === 'NO_ACTIVE_REPORT' ? 409 : 400;
+    return reply.code(status).send({ error: { code, message: e.message }, reason: e.reason });
+  };
+  // A founder-owned plan (its effective revision) + a valid subject (milestone id, or the plan itself).
+  async function resolveExecutionSubject(founderId: string, logicalPlanId: string, b: Record<string, unknown>) {
+    const plan = await planRepo.getEffective(founderId, logicalPlanId, new Date());
+    if (!plan) return { error: 'PLAN_NOT_FOUND' as const };
+    const subjectType = String(b['subjectType'] ?? 'MILESTONE') as ExecutionSubjectType;
+    const subjectId = subjectType === 'PLAN' ? plan.logicalPlanId : String(b['subjectId'] ?? '');
+    if (subjectType === 'MILESTONE' && !plan.milestones.some((m) => m.id === subjectId)) return { error: 'PLAN_ITEM_NOT_FOUND' as const };
+    return { plan, subjectType, subjectId };
+  }
+  function execInputFrom(b: Record<string, unknown>, subjectType: ExecutionSubjectType, subjectId: string): ExecutionReportInput {
+    return { subjectType, subjectId, executionState: String(b['executionState'] ?? '') as ExecutionReportInput['executionState'], founderStatement: String(b['founderStatement'] ?? ''), occurredAt: b['occurredAt'] ? String(b['occurredAt']) : null, evidenceReferences: Array.isArray(b['evidenceReferences']) ? (b['evidenceReferences'] as ExecutionReportInput['evidenceReferences']) : [], idempotencyKey: String(b['idempotencyKey'] ?? '') };
+  }
+
+  server.post('/strategy/plans/:logicalPlanId/execution-reports', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const b = (request.body ?? {}) as Record<string, unknown>;
+    const r = await resolveExecutionSubject(founderId, (request.params as { logicalPlanId: string }).logicalPlanId, b);
+    if ('error' in r) { await reply.code(404).send({ error: { code: r.error, message: 'not found' }, reason: r.error }); return; }
+    try {
+      const ev = await executionRepo.record(founderId, 'REPORT', r.plan, execInputFrom(b, r.subjectType, r.subjectId), new Date());
+      await reply.code(201).send({ report: toExecutionReportView(ev) });
+    } catch (e) { if (e instanceof ExecutionReportError) { await execErr(reply, e); return; } throw e; }
+  });
+
+  const executionTransition = (kind: Extract<ReportKind, 'CORRECT' | 'WITHDRAW'>) => async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const { logicalPlanId, reportId } = request.params as { logicalPlanId: string; reportId: string };
+    const b = (request.body ?? {}) as Record<string, unknown>;
+    const referenced = await executionRepo.getReportById(founderId, reportId); // founder-owned only
+    if (!referenced || referenced.planLogicalId !== logicalPlanId) { await reply.code(404).send({ error: { code: 'EXECUTION_REPORT_NOT_FOUND', message: 'not found' }, reason: 'EXECUTION_REPORT_NOT_FOUND' }); return; }
+    const plan = await planRepo.getEffective(founderId, logicalPlanId, new Date());
+    if (!plan) { await reply.code(404).send({ error: { code: 'PLAN_NOT_FOUND', message: 'not found' }, reason: 'PLAN_NOT_FOUND' }); return; }
+    const input = execInputFrom(b, referenced.subjectType, referenced.subjectId);
+    try {
+      const ev = await executionRepo.record(founderId, kind, plan, input, new Date(), referenced.id); // expectedHead = the referenced report
+      await reply.code(201).send({ report: toExecutionReportView(ev) });
+    } catch (e) { if (e instanceof ExecutionReportError) { await execErr(reply, e); return; } throw e; }
+  };
+  server.post('/strategy/plans/:logicalPlanId/execution-reports/:reportId/correct', executionTransition('CORRECT'));
+  server.post('/strategy/plans/:logicalPlanId/execution-reports/:reportId/withdraw', executionTransition('WITHDRAW'));
+
+  server.get('/strategy/plans/:logicalPlanId/execution-reports', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const logicalPlanId = (request.params as { logicalPlanId: string }).logicalPlanId;
+    const owned = await planRepo.getEffective(founderId, logicalPlanId, new Date());
+    if (!owned) { await reply.code(404).send({ error: 'not found' }); return; }
+    await reply.send({ reports: (await executionRepo.listForPlan(founderId, logicalPlanId)).map(toExecutionReportView) });
+  });
+
+  // Canonical effective founder-reported execution, composed per plan milestone (never flattened into the plan record).
+  server.get('/strategy/plans/:logicalPlanId/effective-execution', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const logicalPlanId = (request.params as { logicalPlanId: string }).logicalPlanId;
+    const plan = await planRepo.getEffective(founderId, logicalPlanId, new Date());
+    if (!plan) { await reply.code(404).send({ error: 'not found' }); return; }
+    const events = await executionRepo.listForPlan(founderId, logicalPlanId);
+    // one effective row per plan milestone (NOT_REPORTED where no chain exists) — kept structurally distinct from the plan
+    const milestones = plan.milestones.map((m) => ({ milestoneId: m.id, label: m.label, execution: toEffectiveExecutionView(effectiveFromHead(executionChainHead(events, 'MILESTONE', m.id), 'MILESTONE', m.id)) }));
+    const planLevel = toEffectiveExecutionView(effectiveFromHead(executionChainHead(events, 'PLAN', plan.logicalPlanId), 'PLAN', plan.logicalPlanId));
+    await reply.send({ planIntention: { logicalPlanId: plan.logicalPlanId, revision: plan.revision, status: plan.status }, milestones, planLevel, notExecution: true, productExecutionStatus: 'NOT_PERFORMED_BY_PRODUCT' });
   });
 
   server.get('/strategy/plan-reviews/:reviewId', async (request: FastifyRequest, reply: FastifyReply) => {
