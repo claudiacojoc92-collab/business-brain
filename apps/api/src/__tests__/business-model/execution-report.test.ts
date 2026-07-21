@@ -63,16 +63,16 @@ describe('execution report — build pins the exact plan revision; evidence is b
 
 describe('execution report — sequence/predecessor lineage (deterministic; never created_at)', () => {
   it('24/25/29/30. next lineage: REPORT→seq1/null; each event points at the exact chain head', () => {
-    expect(nextExecutionLineage([], 'MILESTONE', 'm1')).toEqual({ reportSequence: 1, predecessorReportId: null });
+    expect(nextExecutionLineage([], 'plan-rev-1', 'MILESTONE', 'm1')).toEqual({ reportSequence: 1, predecessorReportId: null });
     const e1 = ev({ id: 'e1', reportSequence: 1 });
-    expect(nextExecutionLineage([e1], 'MILESTONE', 'm1')).toEqual({ reportSequence: 2, predecessorReportId: 'e1' });
+    expect(nextExecutionLineage([e1], 'plan-rev-1', 'MILESTONE', 'm1')).toEqual({ reportSequence: 2, predecessorReportId: 'e1' });
     const e2 = ev({ id: 'e2', reportKind: 'CORRECT', reportSequence: 2, predecessorReportId: 'e1' });
-    expect(nextExecutionLineage([e1, e2], 'MILESTONE', 'm1')).toEqual({ reportSequence: 3, predecessorReportId: 'e2' });
+    expect(nextExecutionLineage([e1, e2], 'plan-rev-1', 'MILESTONE', 'm1')).toEqual({ reportSequence: 3, predecessorReportId: 'e2' });
   });
   it('50/51. head derives from sequence even with identical/out-of-order timestamps', () => {
     const same = '2026-07-21T00:00:00.000Z';
     const events = [ev({ id: 'e2', reportKind: 'CORRECT', executionState: 'BLOCKED', reportSequence: 2, predecessorReportId: 'e1', createdAt: same }), ev({ id: 'e1', reportSequence: 1, createdAt: same })];
-    expect(chainHead(events, 'MILESTONE', 'm1')!.id).toBe('e2');
+    expect(chainHead(events, 'plan-rev-1', 'MILESTONE', 'm1')!.id).toBe('e2');
   });
 });
 
@@ -92,7 +92,7 @@ describe('execution report — effective state (absence/withdraw → NOT_REPORTE
   it('47. WITHDRAW → NOT_REPORTED; history stays', () => {
     const eff = deriveEffectiveExecution([ev({ id: 'e1', executionState: 'COMPLETED' }), ev({ id: 'e2', reportKind: 'WITHDRAW', executionState: 'WITHDRAWN', reportSequence: 2, predecessorReportId: 'e1' })]);
     expect(eff[0]!.reportedState).toBe('NOT_REPORTED');
-    expect(isActivelyReported([ev({ id: 'e1' }), ev({ id: 'e2', reportKind: 'WITHDRAW', executionState: 'WITHDRAWN', reportSequence: 2, predecessorReportId: 'e1' })], 'MILESTONE', 'm1')).toBe(false);
+    expect(isActivelyReported([ev({ id: 'e1' }), ev({ id: 'e2', reportKind: 'WITHDRAW', executionState: 'WITHDRAWN', reportSequence: 2, predecessorReportId: 'e1' })], 'plan-rev-1', 'MILESTONE', 'm1')).toBe(false);
   });
   it('48/49. active claim → UNVERIFIED_FOUNDER_REPORT; product status always NOT_PERFORMED_BY_PRODUCT', () => {
     const eff = effectiveFromHead(ev({ executionState: 'COMPLETED' }));
@@ -115,5 +115,32 @@ describe('execution report — bounded claims: report language + no verified/pro
     const efv = toEffectiveExecutionView(effectiveFromHead(ev({ executionState: 'COMPLETED' })));
     expect(efv.productExecutionStatus).toBe('NOT_PERFORMED_BY_PRODUCT'); expect(efv.evidenceVerified).toBe(false);
     for (const forbidden of ['verified', 'productPerformed', 'performedByProduct', 'progressPercent', 'score']) { expect(Object.keys(rv)).not.toContain(forbidden); expect(Object.keys(efv)).not.toContain(forbidden); }
+  });
+});
+
+describe('execution report — REVISION-SCOPED identity (ADR-015 remediation)', () => {
+  it('1/5/6. a new plan revision starts an independent chain at sequence 1 (never continues Revision 1)', () => {
+    const rev1 = [ev({ id: 'r1e1', planId: 'plan-rev-1', reportSequence: 1 }), ev({ id: 'r1e2', planId: 'plan-rev-1', reportKind: 'CORRECT', reportSequence: 2, predecessorReportId: 'r1e1' })];
+    // Revision 2, SAME milestone id, no events → next lineage is sequence 1, predecessor null (independent)
+    expect(nextExecutionLineage(rev1, 'plan-rev-2', 'MILESTONE', 'm1')).toEqual({ reportSequence: 1, predecessorReportId: null });
+    // Revision 1's own next lineage is unaffected (seq 3)
+    expect(nextExecutionLineage(rev1, 'plan-rev-1', 'MILESTONE', 'm1')).toEqual({ reportSequence: 3, predecessorReportId: 'r1e2' });
+  });
+  it('7/8. chainHead is scoped to the exact revision — a Revision 2 event is never the head of Revision 1', () => {
+    const mixed = [ev({ id: 'r1', planId: 'plan-rev-1', reportSequence: 1 }), ev({ id: 'r2', planId: 'plan-rev-2', reportSequence: 1, executionState: 'COMPLETED' })];
+    expect(chainHead(mixed, 'plan-rev-1', 'MILESTONE', 'm1')!.id).toBe('r1');
+    expect(chainHead(mixed, 'plan-rev-2', 'MILESTONE', 'm1')!.id).toBe('r2');
+    expect(isActivelyReported(mixed, 'plan-rev-2', 'MILESTONE', 'm1')).toBe(true);
+  });
+  it('2/9. effective projection is isolated per revision (same milestone id, different state, unaffected)', () => {
+    const eff = deriveEffectiveExecution([
+      ev({ id: 'r1', planId: 'plan-rev-1', planRevision: 1, subjectId: 'm1', executionState: 'ATTEMPTED' }),
+      ev({ id: 'r2', planId: 'plan-rev-2', planRevision: 2, subjectId: 'm1', executionState: 'COMPLETED' }),
+    ]);
+    // two distinct effective rows keyed by (revision, subject) — not merged
+    expect(eff).toHaveLength(2);
+    const byPlan = new Map(eff.map((e) => [e.headReportId, e.reportedState]));
+    expect(byPlan.get('r1')).toBe('ATTEMPTED');
+    expect(byPlan.get('r2')).toBe('COMPLETED');
   });
 });

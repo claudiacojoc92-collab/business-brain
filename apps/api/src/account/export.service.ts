@@ -175,7 +175,8 @@ export async function buildFounderExport(args: {
     .where('founder_id', '=', founderId).orderBy('created_at', 'asc').orderBy('id', 'asc').execute()) as Array<Record<string, unknown>>;
   const executionReports = (await db.selectFrom('business.execution_report')
     .select(['id', 'subject_type', 'subject_id', 'plan_logical_id', 'plan_id', 'plan_revision', 'report_sequence', 'predecessor_report_id', 'report_kind', 'execution_state', 'founder_statement', 'occurred_at', 'reported_at', 'evidence_references', 'source', 'created_at'])
-    .where('founder_id', '=', founderId).orderBy('plan_logical_id', 'asc').orderBy('subject_id', 'asc').orderBy('report_sequence', 'asc').execute()) as Array<Record<string, unknown>>;
+    // ADR-015 remediation: order by the EXACT plan revision (plan_id) first so each revision's chain is isolated in export.
+    .where('founder_id', '=', founderId).orderBy('plan_id', 'asc').orderBy('subject_id', 'asc').orderBy('report_sequence', 'asc').execute()) as Array<Record<string, unknown>>;
   const learningPromotions = (await db.selectFrom('business.learning_promotion_event')
     .select(['id', 'target', 'logical_learning_id', 'learning_revision_id', 'revision_number', 'promotion_action', 'rationale', 'scope', 'created_at', 'promotion_sequence', 'predecessor_promotion_event_id'])
     // deterministic chain order (V080 lineage): by thread/target then explicit sequence — the complete promotion chain

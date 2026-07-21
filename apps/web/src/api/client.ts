@@ -582,22 +582,22 @@ export interface ExecutionReportView {
   verificationStatus: string; productExecutionStatus: string; evidenceVerified: false;
 }
 export interface EffectiveExecutionItem { subjectType: 'MILESTONE' | 'PLAN'; subjectId: string; reportedState: string; label: string; founderStatement: string | null; occurredAt: string | null; reportedAt: string | null; evidenceReferences: ExecutionEvidenceReference[]; headReportId: string | null; reportSequence: number; verificationStatus: string; productExecutionStatus: string; evidenceVerified: false }
-export interface EffectiveExecutionResponse { planIntention: { logicalPlanId: string; revision: number; status: string }; milestones: Array<{ milestoneId: string; label: string; execution: EffectiveExecutionItem }>; planLevel: EffectiveExecutionItem; notExecution: true; productExecutionStatus: string }
+export interface EffectiveExecutionResponse { planIntention: { planId: string; logicalPlanId: string; revision: number; status: string }; milestones: Array<{ milestoneId: string; label: string; execution: EffectiveExecutionItem }>; planLevel: EffectiveExecutionItem; notExecution: true; productExecutionStatus: string }
 export interface ExecutionReportInput { subjectType?: 'MILESTONE' | 'PLAN'; subjectId?: string; executionState?: ExecutionState; founderStatement: string; occurredAt?: string | null; evidenceReferences?: ExecutionEvidenceReference[]; idempotencyKey: string }
-export async function addExecutionReport(logicalPlanId: string, input: ExecutionReportInput): Promise<ExecutionReportView> {
-  return (await request<{ report: ExecutionReportView }>(`strategy/plans/${encodeURIComponent(logicalPlanId)}/execution-reports`, { method: 'POST', body: JSON.stringify(input) })).report;
+export async function addExecutionReport(planId: string, input: ExecutionReportInput): Promise<ExecutionReportView> {
+  return (await request<{ report: ExecutionReportView }>(`strategy/plans/${encodeURIComponent(planId)}/execution-reports`, { method: 'POST', body: JSON.stringify(input) })).report;
 }
-export async function correctExecutionReport(logicalPlanId: string, reportId: string, input: ExecutionReportInput): Promise<ExecutionReportView> {
-  return (await request<{ report: ExecutionReportView }>(`strategy/plans/${encodeURIComponent(logicalPlanId)}/execution-reports/${encodeURIComponent(reportId)}/correct`, { method: 'POST', body: JSON.stringify(input) })).report;
+export async function correctExecutionReport(planId: string, reportId: string, input: ExecutionReportInput): Promise<ExecutionReportView> {
+  return (await request<{ report: ExecutionReportView }>(`strategy/plans/${encodeURIComponent(planId)}/execution-reports/${encodeURIComponent(reportId)}/correct`, { method: 'POST', body: JSON.stringify(input) })).report;
 }
-export async function withdrawExecutionReport(logicalPlanId: string, reportId: string, idempotencyKey: string): Promise<ExecutionReportView> {
-  return (await request<{ report: ExecutionReportView }>(`strategy/plans/${encodeURIComponent(logicalPlanId)}/execution-reports/${encodeURIComponent(reportId)}/withdraw`, { method: 'POST', body: JSON.stringify({ founderStatement: 'Withdrawing this report.', idempotencyKey }) })).report;
+export async function withdrawExecutionReport(planId: string, reportId: string, idempotencyKey: string): Promise<ExecutionReportView> {
+  return (await request<{ report: ExecutionReportView }>(`strategy/plans/${encodeURIComponent(planId)}/execution-reports/${encodeURIComponent(reportId)}/withdraw`, { method: 'POST', body: JSON.stringify({ founderStatement: 'Withdrawing this report.', idempotencyKey }) })).report;
 }
-export async function listExecutionReports(logicalPlanId: string): Promise<ExecutionReportView[]> {
-  return (await request<{ reports: ExecutionReportView[] }>(`strategy/plans/${encodeURIComponent(logicalPlanId)}/execution-reports`)).reports;
+export async function listExecutionReports(planId: string): Promise<ExecutionReportView[]> {
+  return (await request<{ reports: ExecutionReportView[] }>(`strategy/plans/${encodeURIComponent(planId)}/execution-reports`)).reports;
 }
-export async function getEffectiveExecution(logicalPlanId: string): Promise<EffectiveExecutionResponse> {
-  return await request<EffectiveExecutionResponse>(`strategy/plans/${encodeURIComponent(logicalPlanId)}/effective-execution`);
+export async function getEffectiveExecution(planId: string): Promise<EffectiveExecutionResponse> {
+  return await request<EffectiveExecutionResponse>(`strategy/plans/${encodeURIComponent(planId)}/effective-execution`);
 }
 
 // ─── Strategic Learning Record (ADR-011 cat 14 precursor — durable learning, NOT generic Strategic Memory) ──

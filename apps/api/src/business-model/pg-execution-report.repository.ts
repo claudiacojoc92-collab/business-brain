@@ -26,16 +26,18 @@ export class PgExecutionReportRepository {
     const existing = await this.byIdempotencyKey(founderId, input.idempotencyKey);
     if (existing) return existing;
     return this.db.transaction().execute(async (tx: AnyDB) => {
-      await sql`SELECT pg_advisory_xact_lock(hashtext(${`${founderId}:${plan.logicalPlanId}:${input.subjectType}:${input.subjectId}`}))`.execute(tx);
-      const events = await this.listForPlanTx(tx, founderId, plan.logicalPlanId);
-      const active = isActivelyReported(events, input.subjectType, input.subjectId);
+      // ADR-015 remediation: execution identity is REVISION-SCOPED. Lock + chain + lineage are keyed on the EXACT plan
+      // revision (plan.id), so a report on another revision's identical milestone id can never join or move this chain.
+      await sql`SELECT pg_advisory_xact_lock(hashtext(${`${founderId}:${plan.id}:${input.subjectType}:${input.subjectId}`}))`.execute(tx);
+      const events = await this.listForRevisionTx(tx, founderId, plan.id);
+      const active = isActivelyReported(events, plan.id, input.subjectType, input.subjectId);
       assertExecutionReportAdmissible(active, kind, input);
       if (expectedHeadId !== undefined) {
-        const head = chainHead(events, input.subjectType, input.subjectId);
+        const head = chainHead(events, plan.id, input.subjectType, input.subjectId);
         if (!head || head.id !== expectedHeadId) throw new ExecutionReportError('STALE_HEAD', 'This report was already corrected or withdrawn — refresh and try again.');
       }
       const f = buildExecutionReportFields(plan, kind, input, now);
-      const lineage = nextExecutionLineage(events, input.subjectType, input.subjectId);
+      const lineage = nextExecutionLineage(events, plan.id, input.subjectType, input.subjectId);
       const values = {
         id: generateId(), founder_id: founderId, subject_type: f.subjectType, subject_id: f.subjectId,
         plan_logical_id: f.planLogicalId, plan_id: f.planId, plan_revision: f.planRevision,
@@ -56,20 +58,21 @@ export class PgExecutionReportRepository {
     const r = await this.db.selectFrom('business.execution_report').selectAll().where('founder_id', '=', founderId).where('id', '=', reportId).executeTakeFirst();
     return r ? this.toDomain(r) : null;
   }
-  async listForPlan(founderId: string, planLogicalId: string): Promise<ExecutionReport[]> {
-    const rows = await this.db.selectFrom('business.execution_report').selectAll().where('founder_id', '=', founderId).where('plan_logical_id', '=', planLogicalId).orderBy('report_sequence', 'asc').orderBy('created_at', 'asc').execute();
+  /** All reports for one EXACT plan revision (the revision-scoped chain domain). */
+  async listForRevision(founderId: string, planId: string): Promise<ExecutionReport[]> {
+    const rows = await this.db.selectFrom('business.execution_report').selectAll().where('founder_id', '=', founderId).where('plan_id', '=', planId).orderBy('report_sequence', 'asc').orderBy('created_at', 'asc').execute();
     return (rows as AnyDB[]).map((r) => this.toDomain(r));
   }
-  async listForSubject(founderId: string, planLogicalId: string, subjectType: ExecutionSubjectType, subjectId: string): Promise<ExecutionReport[]> {
-    return (await this.listForPlan(founderId, planLogicalId)).filter((e) => e.subjectType === subjectType && e.subjectId === subjectId);
+  async listForSubject(founderId: string, planId: string, subjectType: ExecutionSubjectType, subjectId: string): Promise<ExecutionReport[]> {
+    return (await this.listForRevision(founderId, planId)).filter((e) => e.subjectType === subjectType && e.subjectId === subjectId);
   }
-  /** Effective founder-reported state for every subject that has any report on this plan. */
-  async getEffectiveForPlan(founderId: string, planLogicalId: string): Promise<EffectiveExecution[]> {
-    return deriveEffectiveExecution(await this.listForPlan(founderId, planLogicalId));
+  /** Effective founder-reported state for every subject that has any report on this EXACT plan revision. */
+  async getEffectiveForRevision(founderId: string, planId: string): Promise<EffectiveExecution[]> {
+    return deriveEffectiveExecution(await this.listForRevision(founderId, planId));
   }
 
-  private async listForPlanTx(tx: AnyDB, founderId: string, planLogicalId: string): Promise<ExecutionReport[]> {
-    const rows = await tx.selectFrom('business.execution_report').selectAll().where('founder_id', '=', founderId).where('plan_logical_id', '=', planLogicalId).execute();
+  private async listForRevisionTx(tx: AnyDB, founderId: string, planId: string): Promise<ExecutionReport[]> {
+    const rows = await tx.selectFrom('business.execution_report').selectAll().where('founder_id', '=', founderId).where('plan_id', '=', planId).execute();
     return (rows as AnyDB[]).map((r) => this.toDomain(r));
   }
   private async byIdempotencyKey(founderId: string, key: string): Promise<ExecutionReport | null> {

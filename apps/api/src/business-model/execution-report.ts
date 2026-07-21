@@ -57,14 +57,18 @@ export function normalizeEvidence(refs: unknown): EvidenceReference[] {
   });
 }
 
-/** The chain head for one subject = the highest-`reportSequence` event (deterministic; never createdAt). */
-export function chainHead(events: ExecutionReport[], subjectType: ExecutionSubjectType, subjectId: string): ExecutionReport | null {
-  const chain = events.filter((e) => e.subjectType === subjectType && e.subjectId === subjectId);
+/**
+ * The chain head for one subject on one EXACT plan revision = the highest-`reportSequence` event (deterministic; never
+ * createdAt). Execution identity is REVISION-SCOPED (ADR-015 remediation): the chain is filtered by `planId` (the exact
+ * plan revision), so a report on another revision's identical milestone id can never be the head here.
+ */
+export function chainHead(events: ExecutionReport[], planId: string, subjectType: ExecutionSubjectType, subjectId: string): ExecutionReport | null {
+  const chain = events.filter((e) => e.planId === planId && e.subjectType === subjectType && e.subjectId === subjectId);
   return chain.length ? chain.reduce((hi, e) => (e.reportSequence > hi.reportSequence ? e : hi)) : null;
 }
-/** Is this subject currently under an active founder claim? (head exists and is not a WITHDRAW) */
-export function isActivelyReported(events: ExecutionReport[], subjectType: ExecutionSubjectType, subjectId: string): boolean {
-  const head = chainHead(events, subjectType, subjectId);
+/** Is this subject on this exact plan revision currently under an active founder claim? (head exists and is not WITHDRAW) */
+export function isActivelyReported(events: ExecutionReport[], planId: string, subjectType: ExecutionSubjectType, subjectId: string): boolean {
+  const head = chainHead(events, planId, subjectType, subjectId);
   return head != null && head.reportKind !== 'WITHDRAW';
 }
 
@@ -78,9 +82,10 @@ export function assertExecutionReportAdmissible(activelyReported: boolean, kind:
   if ((kind === 'CORRECT' || kind === 'WITHDRAW') && !activelyReported) throw new ExecutionReportError('NO_ACTIVE_REPORT', 'There is no active report to correct or withdraw.');
 }
 
-/** Lineage for the NEXT event on a subject's chain: seq = head.seq+1 (or 1); predecessor = head.id (or null at seq 1). */
-export function nextExecutionLineage(events: ExecutionReport[], subjectType: ExecutionSubjectType, subjectId: string): { reportSequence: number; predecessorReportId: string | null } {
-  const head = chainHead(events, subjectType, subjectId);
+/** Lineage for the NEXT event on a subject's chain FOR ONE EXACT REVISION: seq = head.seq+1 (or 1 — a new revision restarts
+ * at 1); predecessor = head.id (or null at seq 1). Revision-scoped, so a new revision's first report is always sequence 1. */
+export function nextExecutionLineage(events: ExecutionReport[], planId: string, subjectType: ExecutionSubjectType, subjectId: string): { reportSequence: number; predecessorReportId: string | null } {
+  const head = chainHead(events, planId, subjectType, subjectId);
   return head ? { reportSequence: head.reportSequence + 1, predecessorReportId: head.id } : { reportSequence: 1, predecessorReportId: null };
 }
 
@@ -106,11 +111,12 @@ export interface EffectiveExecution {
   productExecutionStatus: 'NOT_PERFORMED_BY_PRODUCT';
 }
 
-/** Derive effective founder-reported state per subject from the chain head (Law 8: absence/withdraw → NOT_REPORTED). */
+/** Derive effective founder-reported state per (EXACT plan revision, subject) from the chain head (Law 8 + revision-scope:
+ * absence/withdraw → NOT_REPORTED; a report on one revision never affects another's effective state). */
 export function deriveEffectiveExecution(events: ExecutionReport[]): EffectiveExecution[] {
   const heads = new Map<string, ExecutionReport>();
   for (const e of events) {
-    const key = `${e.subjectType}::${e.subjectId}`;
+    const key = `${e.planId}::${e.subjectType}::${e.subjectId}`; // revision-scoped identity
     const cur = heads.get(key);
     if (!cur || e.reportSequence > cur.reportSequence) heads.set(key, e);
   }

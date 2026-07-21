@@ -70,3 +70,40 @@ byte-identical. Not deployed, not pushed, no prior commit amended.
 - **Product-performed execution** (connectors, authorization, action receipts, failure/reversal semantics, security review)
   — a separate future constitutional capability. **Review integration** of execution testimony — deferred. Outcome
   attribution — out of scope. **PI-1 / KA-2** unchanged.
+
+---
+
+## Remediation closure (2026-07-21) — revision-scoped execution identity
+
+**Why the initial slice failed acceptance.** The execution chain was keyed on `(founder, logical_plan, subject)` — `plan_id`
+was stored only as metadata. The unique/no-fork indexes, the sequence, the predecessor lookup, the advisory lock, the
+effective-state resolver, the API subject resolution (`planRepo.getEffective`), the UI (`getEffectiveExecution(logicalPlanId)`),
+and the export ordering all operated on the *logical* plan — so a report on Revision 1's milestone and a report on Revision
+2's same milestone id continued **one** chain, and effective state resolved **across** revisions. Execution history bled
+between two different intentions.
+
+**Two remediation commits.** (1) governance clarification `dab9b33` (docs — ADR-015 amendment + contract R1–R7 +
+architecture). (2) implementation remediation (this record). Neither `045f228` nor `77a5b63` amended.
+
+**Now `(founder, plan_id, subject)` everywhere:**
+- **V084** re-keys `uniq_exr_chain_sequence` + `idx_exr_effective` on `plan_id` (the exact plan revision). No data migration
+  (0 rows).
+- **Domain** `chainHead`/`nextExecutionLineage`/`isActivelyReported` take `planId` and filter by it;
+  `deriveEffectiveExecution` groups by `(planId, subject)` — so a new revision restarts at sequence 1 and never inherits.
+- **Repository** locks + lists on `plan.id` (`listForRevision`/`getEffectiveForRevision`).
+- **API** takes the exact plan revision id (`:planId`, via `planRepo.getByRevisionId`); milestone validated against that
+  revision; a correction/withdrawal whose referenced report belongs to another revision is rejected (cross-revision guard).
+- **UI** `PlansPanel` lists **every** revision (via plan history), each with its own revision-scoped `ExecutionAccounting` —
+  a later revision shows "No execution report" even when an earlier revision was reported.
+- **Export** orders by `plan_id` so each revision's chain is isolated.
+
+**Acceptance.** Deterministic `execution-report.test.ts` **18** (+3 revision-isolation); live `execution-report.live.test.ts`
+**11** (+K/L reporting isolation, +E/F cross-revision rejection); Playwright drives Revision 1 (report → correct →
+"Reported completed" → history), then a Revision 2 appears with **No execution report** while Revision 1 is unchanged, and a
+Revision 2 report leaves Revision 1 untouched, with DB proof that the chains are independent (Rev 2 sequence restarts at 1;
+no predecessor crosses `plan_id`). Full **backend 1035 pass / 1 skip**; web build + 73 unit; typechecks clean; Consumption +
+Consumption-Gate + Promotion Playwright regression green; frozen strategist hashes byte-identical. Zero temp founders, zero
+orphans.
+
+**Remaining debt** unchanged: product-performed execution; Review integration of execution testimony; outcome attribution —
+all deferred.

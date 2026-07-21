@@ -464,9 +464,10 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
     const status = e.reason === 'STALE_HEAD' || e.reason === 'ALREADY_ACTIVE' || e.reason === 'NO_ACTIVE_REPORT' ? 409 : 400;
     return reply.code(status).send({ error: { code, message: e.message }, reason: e.reason });
   };
-  // A founder-owned plan (its effective revision) + a valid subject (milestone id, or the plan itself).
-  async function resolveExecutionSubject(founderId: string, logicalPlanId: string, b: Record<string, unknown>) {
-    const plan = await planRepo.getEffective(founderId, logicalPlanId, new Date());
+  // ADR-015 remediation: execution identity is the EXACT immutable Plan revision. The routes take `:planId` (the plan
+  // revision record id), NOT the logical plan — so each revision has an independent execution chain and effective state.
+  async function resolveExecutionSubject(founderId: string, planId: string, b: Record<string, unknown>) {
+    const plan = await planRepo.getByRevisionId(founderId, planId, new Date());
     if (!plan) return { error: 'PLAN_NOT_FOUND' as const };
     const subjectType = String(b['subjectType'] ?? 'MILESTONE') as ExecutionSubjectType;
     const subjectId = subjectType === 'PLAN' ? plan.logicalPlanId : String(b['subjectId'] ?? '');
@@ -477,11 +478,11 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
     return { subjectType, subjectId, executionState: String(b['executionState'] ?? '') as ExecutionReportInput['executionState'], founderStatement: String(b['founderStatement'] ?? ''), occurredAt: b['occurredAt'] ? String(b['occurredAt']) : null, evidenceReferences: Array.isArray(b['evidenceReferences']) ? (b['evidenceReferences'] as ExecutionReportInput['evidenceReferences']) : [], idempotencyKey: String(b['idempotencyKey'] ?? '') };
   }
 
-  server.post('/strategy/plans/:logicalPlanId/execution-reports', async (request: FastifyRequest, reply: FastifyReply) => {
+  server.post('/strategy/plans/:planId/execution-reports', async (request: FastifyRequest, reply: FastifyReply) => {
     const founderId = await sessionFounder(request);
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
     const b = (request.body ?? {}) as Record<string, unknown>;
-    const r = await resolveExecutionSubject(founderId, (request.params as { logicalPlanId: string }).logicalPlanId, b);
+    const r = await resolveExecutionSubject(founderId, (request.params as { planId: string }).planId, b);
     if ('error' in r) { await reply.code(404).send({ error: { code: r.error, message: 'not found' }, reason: r.error }); return; }
     try {
       const ev = await executionRepo.record(founderId, 'REPORT', r.plan, execInputFrom(b, r.subjectType, r.subjectId), new Date());
@@ -492,42 +493,43 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
   const executionTransition = (kind: Extract<ReportKind, 'CORRECT' | 'WITHDRAW'>) => async (request: FastifyRequest, reply: FastifyReply) => {
     const founderId = await sessionFounder(request);
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
-    const { logicalPlanId, reportId } = request.params as { logicalPlanId: string; reportId: string };
+    const { planId, reportId } = request.params as { planId: string; reportId: string };
     const b = (request.body ?? {}) as Record<string, unknown>;
-    const referenced = await executionRepo.getReportById(founderId, reportId); // founder-owned only
-    if (!referenced || referenced.planLogicalId !== logicalPlanId) { await reply.code(404).send({ error: { code: 'EXECUTION_REPORT_NOT_FOUND', message: 'not found' }, reason: 'EXECUTION_REPORT_NOT_FOUND' }); return; }
-    const plan = await planRepo.getEffective(founderId, logicalPlanId, new Date());
+    const plan = await planRepo.getByRevisionId(founderId, planId, new Date()); // the EXACT revision being acted on
     if (!plan) { await reply.code(404).send({ error: { code: 'PLAN_NOT_FOUND', message: 'not found' }, reason: 'PLAN_NOT_FOUND' }); return; }
+    const referenced = await executionRepo.getReportById(founderId, reportId); // founder-owned only
+    // The referenced report must belong to THIS EXACT plan revision — a cross-revision correction/withdrawal is rejected.
+    if (!referenced || referenced.planId !== planId) { await reply.code(404).send({ error: { code: 'EXECUTION_REPORT_NOT_FOUND', message: 'not found (or belongs to a different plan revision)' }, reason: 'EXECUTION_REPORT_NOT_FOUND' }); return; }
     const input = execInputFrom(b, referenced.subjectType, referenced.subjectId);
     try {
       const ev = await executionRepo.record(founderId, kind, plan, input, new Date(), referenced.id); // expectedHead = the referenced report
       await reply.code(201).send({ report: toExecutionReportView(ev) });
     } catch (e) { if (e instanceof ExecutionReportError) { await execErr(reply, e); return; } throw e; }
   };
-  server.post('/strategy/plans/:logicalPlanId/execution-reports/:reportId/correct', executionTransition('CORRECT'));
-  server.post('/strategy/plans/:logicalPlanId/execution-reports/:reportId/withdraw', executionTransition('WITHDRAW'));
+  server.post('/strategy/plans/:planId/execution-reports/:reportId/correct', executionTransition('CORRECT'));
+  server.post('/strategy/plans/:planId/execution-reports/:reportId/withdraw', executionTransition('WITHDRAW'));
 
-  server.get('/strategy/plans/:logicalPlanId/execution-reports', async (request: FastifyRequest, reply: FastifyReply) => {
+  server.get('/strategy/plans/:planId/execution-reports', async (request: FastifyRequest, reply: FastifyReply) => {
     const founderId = await sessionFounder(request);
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
-    const logicalPlanId = (request.params as { logicalPlanId: string }).logicalPlanId;
-    const owned = await planRepo.getEffective(founderId, logicalPlanId, new Date());
+    const planId = (request.params as { planId: string }).planId;
+    const owned = await planRepo.getByRevisionId(founderId, planId, new Date());
     if (!owned) { await reply.code(404).send({ error: 'not found' }); return; }
-    await reply.send({ reports: (await executionRepo.listForPlan(founderId, logicalPlanId)).map(toExecutionReportView) });
+    await reply.send({ reports: (await executionRepo.listForRevision(founderId, planId)).map(toExecutionReportView) });
   });
 
-  // Canonical effective founder-reported execution, composed per plan milestone (never flattened into the plan record).
-  server.get('/strategy/plans/:logicalPlanId/effective-execution', async (request: FastifyRequest, reply: FastifyReply) => {
+  // Canonical effective founder-reported execution for ONE EXACT plan revision, composed per milestone (never flattened
+  // into the plan record). A different revision's reports never appear here.
+  server.get('/strategy/plans/:planId/effective-execution', async (request: FastifyRequest, reply: FastifyReply) => {
     const founderId = await sessionFounder(request);
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
-    const logicalPlanId = (request.params as { logicalPlanId: string }).logicalPlanId;
-    const plan = await planRepo.getEffective(founderId, logicalPlanId, new Date());
+    const planId = (request.params as { planId: string }).planId;
+    const plan = await planRepo.getByRevisionId(founderId, planId, new Date());
     if (!plan) { await reply.code(404).send({ error: 'not found' }); return; }
-    const events = await executionRepo.listForPlan(founderId, logicalPlanId);
-    // one effective row per plan milestone (NOT_REPORTED where no chain exists) — kept structurally distinct from the plan
-    const milestones = plan.milestones.map((m) => ({ milestoneId: m.id, label: m.label, execution: toEffectiveExecutionView(effectiveFromHead(executionChainHead(events, 'MILESTONE', m.id), 'MILESTONE', m.id)) }));
-    const planLevel = toEffectiveExecutionView(effectiveFromHead(executionChainHead(events, 'PLAN', plan.logicalPlanId), 'PLAN', plan.logicalPlanId));
-    await reply.send({ planIntention: { logicalPlanId: plan.logicalPlanId, revision: plan.revision, status: plan.status }, milestones, planLevel, notExecution: true, productExecutionStatus: 'NOT_PERFORMED_BY_PRODUCT' });
+    const events = await executionRepo.listForRevision(founderId, planId); // ONLY this revision's events
+    const milestones = plan.milestones.map((m) => ({ milestoneId: m.id, label: m.label, execution: toEffectiveExecutionView(effectiveFromHead(executionChainHead(events, plan.id, 'MILESTONE', m.id), 'MILESTONE', m.id)) }));
+    const planLevel = toEffectiveExecutionView(effectiveFromHead(executionChainHead(events, plan.id, 'PLAN', plan.logicalPlanId), 'PLAN', plan.logicalPlanId));
+    await reply.send({ planIntention: { planId: plan.id, logicalPlanId: plan.logicalPlanId, revision: plan.revision, status: plan.status }, milestones, planLevel, notExecution: true, productExecutionStatus: 'NOT_PERFORMED_BY_PRODUCT' });
   });
 
   server.get('/strategy/plan-reviews/:reviewId', async (request: FastifyRequest, reply: FastifyReply) => {

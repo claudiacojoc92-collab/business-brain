@@ -88,6 +88,12 @@ export class PgStrategicPlanRepository {
     return cur ? this.toDomain(cur, cur.lifecycle as PlanLifecycle, now) : null;
   }
 
+  /** Fetch an EXACT plan revision by its immutable record id (ADR-015: execution identity is the plan revision). */
+  async getByRevisionId(founderId: string, planId: string, now: Date): Promise<StrategicPlanRecord | null> {
+    const r = await this.db.selectFrom('business.strategic_plan_record').selectAll().where('founder_id', '=', founderId).where('id', '=', planId).executeTakeFirst();
+    return r ? this.toDomain(r, r.lifecycle as PlanLifecycle, now) : null;
+  }
+
   private async latest(founderId: string, logicalPlanId: string): Promise<AnyDB | null> {
     return (await this.db.selectFrom('business.strategic_plan_record').selectAll().where('founder_id', '=', founderId).where('logical_plan_id', '=', logicalPlanId).orderBy('revision', 'desc').limit(1).executeTakeFirst()) ?? null;
   }

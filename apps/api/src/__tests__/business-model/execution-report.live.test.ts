@@ -115,8 +115,8 @@ describe('strategic execution boundary §LIVE', () => {
   it('A. intention is not execution — a plan exists with zero execution reports', async (ctx) => {
     if (!dbUp) { ctx.skip(); return; }
     const { founderId, plan } = await founderWithPlan(nextEmail());
-    expect(await erepo().listForPlan(founderId, plan.logicalPlanId)).toHaveLength(0);
-    expect(await erepo().getEffectiveForPlan(founderId, plan.logicalPlanId)).toHaveLength(0);
+    expect(await erepo().listForRevision(founderId, plan.id)).toHaveLength(0);
+    expect(await erepo().getEffectiveForRevision(founderId, plan.id)).toHaveLength(0);
   });
 
   it('B/C. founder report + evidence — effective Reported attempted, unverified, not-performed; plan unchanged', async (ctx) => {
@@ -125,7 +125,7 @@ describe('strategic execution boundary §LIVE', () => {
     const planBefore = JSON.stringify(await new PgStrategicPlanRepository(db).getEffective(founderId, plan.logicalPlanId, new Date()));
     const ev = await erepo().record(founderId, 'REPORT', plan, input({ founderStatement: 'Shipped twice.', evidenceReferences: [{ type: 'NOTE', value: 'went ok', label: null }, { type: 'URL', value: 'https://x.test/p', label: null }, { type: 'METRIC_OBSERVATION', value: '3 demos', label: null }] }), new Date());
     expect(ev.reportSequence).toBe(1); expect(ev.predecessorReportId).toBeNull(); expect(ev.evidenceReferences).toHaveLength(3);
-    const eff = (await erepo().getEffectiveForPlan(founderId, plan.logicalPlanId))[0]!;
+    const eff = (await erepo().getEffectiveForRevision(founderId, plan.id))[0]!;
     expect(eff.reportedState).toBe('ATTEMPTED'); expect(eff.verificationStatus).toBe('UNVERIFIED_FOUNDER_REPORT'); expect(eff.productExecutionStatus).toBe('NOT_PERFORMED_BY_PRODUCT');
     expect(JSON.stringify(await new PgStrategicPlanRepository(db).getEffective(founderId, plan.logicalPlanId, new Date()))).toBe(planBefore); // plan untouched
   });
@@ -137,7 +137,7 @@ describe('strategic execution boundary §LIVE', () => {
     const correction = await erepo().record(founderId, 'CORRECT', plan, input({ executionState: 'BLOCKED', idempotencyKey: 'd-2' }), new Date(), first.id);
     expect(correction.reportSequence).toBe(2); expect(correction.predecessorReportId).toBe(first.id);
     expect((await erepo().getReportById(founderId, first.id))!.executionState).toBe('COMPLETED'); // immutable
-    expect((await erepo().getEffectiveForPlan(founderId, plan.logicalPlanId))[0]!.reportedState).toBe('BLOCKED');
+    expect((await erepo().getEffectiveForRevision(founderId, plan.id))[0]!.reportedState).toBe('BLOCKED');
   });
 
   it('E. withdraw → NOT_REPORTED; history intact; a later REPORT continues the same contiguous chain', async (ctx) => {
@@ -146,11 +146,11 @@ describe('strategic execution boundary §LIVE', () => {
     const first = await erepo().record(founderId, 'REPORT', plan, input({ executionState: 'COMPLETED', idempotencyKey: 'e-1' }), new Date());
     const withdrawn = await erepo().record(founderId, 'WITHDRAW', plan, input({ idempotencyKey: 'e-2' }), new Date(), first.id);
     expect(withdrawn.reportSequence).toBe(2);
-    expect((await erepo().getEffectiveForPlan(founderId, plan.logicalPlanId))[0]!.reportedState).toBe('NOT_REPORTED');
-    expect(await erepo().listForSubject(founderId, plan.logicalPlanId, 'MILESTONE', 'ship-weekly')).toHaveLength(2); // history intact
+    expect((await erepo().getEffectiveForRevision(founderId, plan.id))[0]!.reportedState).toBe('NOT_REPORTED');
+    expect(await erepo().listForSubject(founderId, plan.id, 'MILESTONE', 'ship-weekly')).toHaveLength(2); // history intact
     const re = await erepo().record(founderId, 'REPORT', plan, input({ executionState: 'ATTEMPTED', idempotencyKey: 'e-3' }), new Date()); // allowed after withdraw
     expect(re.reportSequence).toBe(3); expect(re.predecessorReportId).toBe(withdrawn.id);
-    expect((await erepo().getEffectiveForPlan(founderId, plan.logicalPlanId))[0]!.reportedState).toBe('ATTEMPTED');
+    expect((await erepo().getEffectiveForRevision(founderId, plan.id))[0]!.reportedState).toBe('ATTEMPTED');
   });
 
   it('F. stale-head — a correction against a non-head report is rejected; no fork', async (ctx) => {
@@ -160,7 +160,7 @@ describe('strategic execution boundary §LIVE', () => {
     await erepo().record(founderId, 'CORRECT', plan, input({ executionState: 'COMPLETED', idempotencyKey: 'f-2' }), new Date(), first.id); // head moves to seq 2
     // a second correction still pointing at the OLD head (first) is stale
     await expect(erepo().record(founderId, 'CORRECT', plan, input({ executionState: 'BLOCKED', idempotencyKey: 'f-3' }), new Date(), first.id)).rejects.toMatchObject({ reason: 'STALE_HEAD' });
-    expect(await erepo().listForSubject(founderId, plan.logicalPlanId, 'MILESTONE', 'ship-weekly')).toHaveLength(2); // no fork
+    expect(await erepo().listForSubject(founderId, plan.id, 'MILESTONE', 'ship-weekly')).toHaveLength(2); // no fork
   });
 
   it('G/H. no downstream effects — report changes NOTHING (plan/decision/commitment/review; no learning/promotion/snapshot/session)', async (ctx) => {
@@ -193,7 +193,7 @@ describe('strategic execution boundary §LIVE', () => {
     await expect(db.updateTable('business.execution_report').set({ execution_state: 'COMPLETED' }).where('id', '=', ev.id).execute()).rejects.toThrow(/append-only|forbidden/i);
     await expect(db.deleteFrom('business.execution_report').where('id', '=', ev.id).execute()).rejects.toThrow(/append-only|forbidden|individual DELETE/i);
     await db.transaction().execute(async (tx: any) => { await sql`SET LOCAL bb.allow_execution_report_delete = 'on'`.execute(tx); await tx.deleteFrom('business.execution_report').where('founder_id', '=', founderId).execute(); }); // eslint-disable-line @typescript-eslint/no-explicit-any
-    expect(await erepo().listForPlan(founderId, plan.logicalPlanId)).toHaveLength(0);
+    expect(await erepo().listForRevision(founderId, plan.id)).toHaveLength(0);
   });
 
   it('J. idempotency + timestamp determinism — same key → same event; sequence (not created_at) governs the head', async (ctx) => {
@@ -203,10 +203,56 @@ describe('strategic execution boundary §LIVE', () => {
     const a = await erepo().record(founderId, 'REPORT', plan, i, new Date());
     const b = await erepo().record(founderId, 'REPORT', plan, i, new Date());
     expect(a.id).toBe(b.id); // idempotent
-    expect(await erepo().listForSubject(founderId, plan.logicalPlanId, 'MILESTONE', 'ship-weekly')).toHaveLength(1);
+    expect(await erepo().listForSubject(founderId, plan.id, 'MILESTONE', 'ship-weekly')).toHaveLength(1);
     // a correction sharing a timestamp with the report; the chain head is still the higher sequence (not createdAt)
     const corr = await erepo().record(founderId, 'CORRECT', plan, input({ executionState: 'BLOCKED', idempotencyKey: 'j-2' }), new Date(), a.id);
     expect(corr.reportSequence).toBe(2);
-    expect((await erepo().getEffectiveForPlan(founderId, plan.logicalPlanId))[0]!.reportedState).toBe('BLOCKED');
+    expect((await erepo().getEffectiveForRevision(founderId, plan.id))[0]!.reportedState).toBe('BLOCKED');
   });
+  // ── REVISION-SCOPED identity (ADR-015 remediation): execution belongs to the EXACT plan revision ──
+  async function supersedePlan(founderId: string, plan: { logicalPlanId: string; commitmentLogicalId: string }) {
+    const commitment = (await new PgStrategicCommitmentRepository(db).getEffective(founderId, plan.commitmentLogicalId, new Date()))!;
+    return (await new PgStrategicPlanRepository(db).supersede(founderId, plan.logicalPlanId, commitment, planInput(), [], new Date()))!;
+  }
+
+  it('K/A. a new plan revision has NO execution report even though Revision 1 was reported (stable milestone id)', async (ctx) => {
+    if (!dbUp) { ctx.skip(); return; }
+    const { founderId, plan } = await founderWithPlan(nextEmail());
+    await erepo().record(founderId, 'REPORT', plan, input({ executionState: 'ATTEMPTED', idempotencyKey: 'k-1' }), new Date());
+    const rev2 = await supersedePlan(founderId, plan);
+    expect(rev2.id).not.toBe(plan.id); expect(rev2.revision).toBe(2);
+    expect(rev2.milestones.some((m) => m.id === 'ship-weekly')).toBe(true); // SAME milestone id
+    // Revision 2 effective execution for that same milestone id is NOT_REPORTED (no inheritance)
+    expect(await erepo().getEffectiveForRevision(founderId, rev2.id)).toHaveLength(0);
+    // Revision 1 still shows the report
+    expect((await erepo().getEffectiveForRevision(founderId, plan.id))[0]!.reportedState).toBe('ATTEMPTED');
+  });
+
+  it('L/B/C/D. reporting/correcting/withdrawing on Revision 2 never changes Revision 1', async (ctx) => {
+    if (!dbUp) { ctx.skip(); return; }
+    const { founderId, plan } = await founderWithPlan(nextEmail());
+    const r1 = await erepo().record(founderId, 'REPORT', plan, input({ executionState: 'ATTEMPTED', idempotencyKey: 'l-1' }), new Date());
+    const rev2 = await supersedePlan(founderId, plan);
+    const r2 = await erepo().record(founderId, 'REPORT', rev2, input({ executionState: 'COMPLETED', idempotencyKey: 'l-2' }), new Date());
+    expect(r2.reportSequence).toBe(1); expect(r2.predecessorReportId).toBeNull(); // Revision 2 restarts at sequence 1
+    expect((await erepo().getEffectiveForRevision(founderId, plan.id))[0]!.reportedState).toBe('ATTEMPTED'); // Rev 1 unchanged
+    await erepo().record(founderId, 'CORRECT', rev2, input({ executionState: 'BLOCKED', idempotencyKey: 'l-3' }), new Date(), r2.id);
+    expect((await erepo().getEffectiveForRevision(founderId, rev2.id))[0]!.reportedState).toBe('BLOCKED');
+    expect((await erepo().getEffectiveForRevision(founderId, plan.id))[0]!.reportedState).toBe('ATTEMPTED'); // still unchanged
+    void r1;
+  });
+
+  it('E/F. a correction/withdrawal cannot cross revisions — a Revision-1 head referenced under Revision 2 is rejected', async (ctx) => {
+    if (!dbUp) { ctx.skip(); return; }
+    const { founderId, plan } = await founderWithPlan(nextEmail());
+    const r1 = await erepo().record(founderId, 'REPORT', plan, input({ executionState: 'ATTEMPTED', idempotencyKey: 'e-1' }), new Date());
+    const rev2 = await supersedePlan(founderId, plan);
+    // correcting Revision 1's head while acting on Revision 2 (empty chain) → rejected (no active report on Rev 2)
+    await expect(erepo().record(founderId, 'CORRECT', rev2, input({ executionState: 'BLOCKED', idempotencyKey: 'e-2' }), new Date(), r1.id)).rejects.toMatchObject({ name: 'ExecutionReportError' });
+    // withdrawing likewise
+    await expect(erepo().record(founderId, 'WITHDRAW', rev2, input({ idempotencyKey: 'e-3' }), new Date(), r1.id)).rejects.toMatchObject({ name: 'ExecutionReportError' });
+    // Revision 1's report is untouched
+    expect((await erepo().getEffectiveForRevision(founderId, plan.id))[0]!.reportedState).toBe('ATTEMPTED');
+  });
+
 });

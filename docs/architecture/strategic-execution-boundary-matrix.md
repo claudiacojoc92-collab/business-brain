@@ -26,3 +26,32 @@ Maps the Part 13 criteria to their covering tests. **det** = `apps/api/src/__tes
 
 **Deferred (unchanged):** product-performed execution; connectors/receipts; automatic lifecycle/Review integration; outcome
 inference; scoring/streaks/gamification; Strategic Memory; embeddings; semantic retrieval; knowledge graphs.
+
+---
+
+## Remediation matrix (2026-07-21) — revision-scoped execution identity
+
+Impl: **mig** = `V084__execution_report_revision_scoped.sql` (indexes on `plan_id`); **dom** = `execution-report.ts`
+(`chainHead`/`nextExecutionLineage`/`isActivelyReported`/`deriveEffectiveExecution` now `planId`-scoped); **repo** =
+`pg-execution-report.repository.ts` (`listForRevision`/`getEffectiveForRevision`, lock on `plan.id`); **api** =
+`strategy.routes.ts` (`:planId` = revision; `planRepo.getByRevisionId`; cross-revision rejected); **ui** = `StrategyPage.tsx`
+(`PlansPanel` renders every revision with its own `ExecutionAccounting` keyed on `plan.planId`); **exp** = export orders by
+`plan_id`. **det** = `execution-report.test.ts` (revision-isolation block); **live** = `execution-report.live.test.ts`
+(K/L/E-F); **e2e** = `strategic-execution-boundary.spec.ts`.
+
+| Part-11 # | Criterion | Impl | Test | Status |
+|---|---|---|---|---|
+| 1 | Rev 1 report, Rev 2 absent → Rev 2 NOT_REPORTED | dom/repo/api | det (1) · live K · e2e (Rev 2 "No execution report") | COVERED |
+| 2 | Rev 2 report → Rev 1 unchanged | dom | det (2) · live L · e2e (Rev 1 still "Reported completed") | COVERED |
+| 3 | correction cannot cross revisions | api/repo | live E/F · e2e DB (no cross-revision predecessor) | COVERED |
+| 4 | withdrawal cannot cross revisions | api/repo | live E/F | COVERED |
+| 5 | sequence resets to 1 for a new revision | dom/mig | det (1) · live L (seq 1) · e2e (min seq Rev 2 = 1) | COVERED |
+| 6 | Rev 1: 1→2→3 · Rev 2: 1→2 independent | dom/mig | det (1) · live L | COVERED |
+| 7 | no-fork enforced within a revision | mig/repo | live F (STALE_HEAD) · uniq_exr_predecessor | COVERED |
+| 8 | no-fork irrelevant across revisions (independent chains) | dom/mig | det (7/8) · uniq_exr_chain_sequence on plan_id | COVERED |
+| 9 | effective projection isolated per revision | dom | det (2/9) · live K/L · e2e | COVERED |
+| 10 | export isolated per revision (ordered by plan_id) | exp | export ordering by plan_id | COVERED |
+| 11 | UI isolated (each revision its own execution) | ui | e2e (Rev 1 + Rev 2 distinct blocks/state) | COVERED |
+| 12 | Playwright proves Rev 1 shows only Rev 1, Rev 2 only Rev 2 | ui | **e2e** (+ evidence exec-rev1/rev2 PNGs) | COVERED |
+
+**Invariant proved:** no chain / sequence / predecessor / effective projection / UI view / export spans two plan revisions.

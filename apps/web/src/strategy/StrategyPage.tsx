@@ -13,7 +13,7 @@ import {
   type PromotionTarget, type PromotionScope, type PromotionView,
   type EffectiveBusinessUnderstanding, type EffectiveFounderStrategicContext,
   createContextSnapshot, listContextSnapshots, type SnapshotView,
-  listPlans, getEffectiveExecution, addExecutionReport, correctExecutionReport, withdrawExecutionReport, listExecutionReports,
+  listPlans, getPlan, getEffectiveExecution, addExecutionReport, correctExecutionReport, withdrawExecutionReport, listExecutionReports,
   type ExecutionState, type EffectiveExecutionResponse, type ExecutionReportView, type EvidenceType,
 } from '../api/client';
 import { AppShell, Button, Thinking } from '../system/ui';
@@ -1309,8 +1309,8 @@ function ExecReportForm({ plan, milestoneId, mode, headReportId, onDone, onCance
     const evidence = evValue.trim() ? [{ type: evType, value: evValue.trim(), label: null }] : [];
     try {
       const input = { subjectType: 'MILESTONE' as const, subjectId: milestoneId, executionState: state, founderStatement: statement.trim(), evidenceReferences: evidence, idempotencyKey: newKey() };
-      if (mode === 'report') await addExecutionReport(plan.logicalPlanId, input);
-      else await correctExecutionReport(plan.logicalPlanId, headReportId!, input);
+      if (mode === 'report') await addExecutionReport(plan.planId, input);
+      else await correctExecutionReport(plan.planId, headReportId!, input);
       onDone();
     } catch (e) { if (e instanceof ApiError && e.status === 401) on401(e); } finally { setBusy(false); }
   };
@@ -1340,21 +1340,21 @@ function ExecutionAccounting({ plan, on401 }: { plan: PlanView; on401: (e: unkno
   const [historyFor, setHistoryFor] = useState<string | null>(null);
   const [history, setHistory] = useState<ExecutionReportView[]>([]);
   const load = useCallback(async () => {
-    try { setEff(await getEffectiveExecution(plan.logicalPlanId)); } catch (e) { if (e instanceof ApiError && e.status === 401) on401(e); }
-  }, [plan.logicalPlanId, on401]);
+    try { setEff(await getEffectiveExecution(plan.planId)); } catch (e) { if (e instanceof ApiError && e.status === 401) on401(e); }
+  }, [plan.planId, on401]);
   useEffect(() => { void load(); }, [load]);
   const openHistory = async (milestoneId: string) => {
     // Always refetch the latest history for this subject and show it (clicking again refreshes, never shows stale events).
-    try { const all = await listExecutionReports(plan.logicalPlanId); setHistory(all.filter((r) => r.subjectId === milestoneId)); setHistoryFor(milestoneId); }
+    try { const all = await listExecutionReports(plan.planId); setHistory(all.filter((r) => r.subjectId === milestoneId)); setHistoryFor(milestoneId); }
     catch (e) { if (e instanceof ApiError && e.status === 401) on401(e); }
   };
   const withdraw = async (headReportId: string) => {
-    try { await withdrawExecutionReport(plan.logicalPlanId, headReportId, newKey()); await load(); }
+    try { await withdrawExecutionReport(plan.planId, headReportId, newKey()); await load(); }
     catch (e) { if (e instanceof ApiError && e.status === 401) on401(e); }
   };
   if (!eff) return null;
   return (
-    <section data-testid={`execution-accounting-${plan.logicalPlanId}`} style={{ marginTop: 'var(--sp-4)', paddingTop: 'var(--sp-3)', borderTop: '1px solid var(--line)' }}>
+    <section data-testid={`execution-accounting-${plan.planId}`} style={{ marginTop: 'var(--sp-4)', paddingTop: 'var(--sp-3)', borderTop: '1px solid var(--line)' }}>
       <span style={sectionLabel}>Founder-reported execution</span>
       <p style={{ ...meta, marginTop: 2 }}>This is separate from the plan (your intention). It records what <strong>you report</strong> — Business Brain has not verified any of it, and <strong>performed no action</strong>. Leaving an item unreported is fine.</p>
       {eff.milestones.length === 0 && <p style={{ ...meta, marginTop: 6 }}>This plan has no milestones to report on.</p>}
@@ -1385,23 +1385,30 @@ function ExecutionAccounting({ plan, on401 }: { plan: PlanView; on401: (e: unkno
   );
 }
 
-// A lightweight list of the founder's plans (intention) — each carries its DISTINCT founder-reported execution accounting.
+// The founder's plans (intention). ADR-015 remediation: execution belongs to an EXACT plan revision, so EVERY revision is
+// listed as its own block with its OWN revision-scoped execution accounting. A later revision is a different intention and
+// starts with "No execution report" even if an earlier revision was reported — execution never migrates between revisions.
 function PlansPanel({ on401 }: { on401: (e: unknown) => void }) {
-  const [plans, setPlans] = useState<PlanView[] | null>(null);
+  const [revisions, setRevisions] = useState<PlanView[] | null>(null);
   const load = useCallback(async () => {
-    try { setPlans(await listPlans()); } catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setPlans([]); }
+    try {
+      const effective = await listPlans(); // one effective plan per logical plan
+      const logicalIds = [...new Set(effective.map((p) => p.logicalPlanId))];
+      const histories = await Promise.all(logicalIds.map((id) => getPlan(id).then((r) => r.history).catch(() => [] as PlanView[])));
+      // every revision across every plan, newest revision first
+      const all = histories.flat().sort((a, b) => (a.revision < b.revision ? 1 : -1));
+      setRevisions(all);
+    } catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setRevisions([]); }
   }, [on401]);
   useEffect(() => { void load(); }, [load]);
-  if (!plans || plans.length === 0) return null;
-  const active = plans.filter((p) => p.status === 'ACTIVE' || p.status === 'EXPIRED');
-  if (active.length === 0) return null;
+  if (!revisions || revisions.length === 0) return null;
   return (
     <section data-testid="plans-panel" style={{ marginTop: 'var(--sp-5)', paddingTop: 'var(--sp-4)', borderTop: '1px solid var(--line)' }}>
       <span style={sectionLabel}>Your plans</span>
-      <p style={{ ...meta, marginTop: 2 }}>A plan is your <strong>intention</strong>. It does not execute anything. Below each plan you can record what you actually did — clearly separated, and never verified by Business Brain.</p>
-      {active.map((p) => (
-        <div key={p.logicalPlanId} data-testid={`plan-${p.logicalPlanId}`} style={{ marginTop: 'var(--sp-3)', paddingTop: 'var(--sp-2)', borderTop: '1px dashed var(--line)' }}>
-          <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-4)', color: 'var(--ink)' }}>{p.title} <span style={{ ...meta }}>· {nice(p.status)} · revision {p.revision}</span></p>
+      <p style={{ ...meta, marginTop: 2 }}>A plan is your <strong>intention</strong>. It does not execute anything. Each <em>revision</em> is a distinct intention with its own execution accounting — a later revision never inherits an earlier one’s execution. Nothing here is verified by Business Brain.</p>
+      {revisions.map((p) => (
+        <div key={p.planId} data-testid={`plan-${p.planId}`} style={{ marginTop: 'var(--sp-3)', paddingTop: 'var(--sp-2)', borderTop: '1px dashed var(--line)' }}>
+          <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-4)', color: 'var(--ink)' }}>{p.title} <span data-testid={`plan-rev-label-${p.planId}`} style={{ ...meta }}>· revision {p.revision} · {nice(p.status)}</span></p>
           <ul style={ulReset}>{p.milestones.map((m) => <li key={m.id} style={{ ...meta, marginTop: 2 }}>Planned: {m.label}</li>)}</ul>
           <ExecutionAccounting plan={p} on401={on401} />
         </div>
