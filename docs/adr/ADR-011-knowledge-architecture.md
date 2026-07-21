@@ -189,6 +189,13 @@ smuggle them in without a superseding gate). Each category names what it is and,
   + [`strategic-plan-record-slice.md`](../architecture/strategic-plan-record-slice.md); schema `strategic-plan-1`, table
   `business.strategic_plan_record` (V074), append-only; references an exact commitment revision; the model does not draft
   plans this slice.
+- **Plan Review (sub-capability):** a founder-explicit, append-only **Strategic Plan Review Record** — an assessment of an
+  exact plan revision (observations + assumption/dependency/milestone assessments + context changes + a conclusion + an
+  intended disposition) that **never** mutates the plan/commitment/decision and creates no execution/task/score object.
+  Governed by [`strategic-plan-review-record-contract.md`](../governance/strategic-plan-review-record-contract.md) +
+  [`strategic-plan-review-record-slice.md`](../architecture/strategic-plan-review-record-slice.md); schema
+  `strategic-plan-review-1`, table `business.strategic_plan_review_record` (V075), append-only; no model role this slice.
+  It is **not** an Execution Record (category 13, still future).
 
 #### 13. Execution Record — *conceptual only (not implemented)*
 - **Definition (future):** A durable record of what the founder actually *did*, which becomes new `observed` Evidence and
