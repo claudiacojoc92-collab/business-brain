@@ -590,6 +590,41 @@ export async function listLearnings(): Promise<LearningView[]> {
   return learnings;
 }
 
+// ─── Strategic Learning Lifecycle (ADR-012, single-thread: REFINE/CONTEST/SUPERSEDE/RETIRE) ────────────────
+// Founder-directed change within ONE logical thread; each transition is an explicit immutable revision. CONTEST is a
+// single-thread usability downgrade — NOT a relationship. A genuinely distinct claim is a separate CREATE thread.
+export type LearningLifecycleAction = 'CREATE' | 'REFINE' | 'CONTEST' | 'SUPERSEDE' | 'RETIRE';
+export type LearningLifecycleStatus = 'ACTIVE' | 'CONTESTED' | 'SUPERSEDED' | 'RETIRED';
+export interface LearningThreadView extends LearningView {
+  lifecycleAction: LearningLifecycleAction; lifecycleStatus: LearningLifecycleStatus; rootLearningId: string; predecessorLearningId: string | null;
+  lifecycleReason: string | null; replacementSummary: string | null; retainedValidity: string | null;
+}
+export interface LifecycleActionInput {
+  sourceRevisionId: string; expectedRevision: number; idempotencyKey: string; lifecycleReason: string;
+  confirmSameLearning?: boolean; contestBasisExplanation?: string; replacementSummary?: string; retainedValidity?: string;
+  counterevidenceResolution?: string; unknownsResolution?: string;
+  learningStatement?: string; confidence?: LearningConfidence; revisedUnderstanding?: string;
+  learningScope?: LearningScope; broadScopeAcknowledged?: boolean; isCausalHypothesis?: boolean;
+  boundaryConditions?: string[]; counterEvidence?: string[]; unresolvedUnknowns?: string[];
+}
+/** GET /strategy/learning-threads — effective revision per thread, newest first. */
+export async function listLearningThreads(): Promise<LearningThreadView[]> {
+  const { threads } = await request<{ threads: LearningThreadView[] }>('strategy/learning-threads');
+  return threads;
+}
+/** GET /strategy/learning-threads/:logicalLearningId — effective + full ordered revision history. */
+export async function getLearningThread(logicalLearningId: string): Promise<{ effective: LearningThreadView; revisions: LearningThreadView[] }> {
+  return request(`strategy/learning-threads/${encodeURIComponent(logicalLearningId)}`);
+}
+async function lifecycleAction(verb: 'refine' | 'contest' | 'supersede' | 'retire', logicalLearningId: string, input: LifecycleActionInput): Promise<LearningThreadView> {
+  const { learning } = await request<{ learning: LearningThreadView }>(`strategy/learnings/${encodeURIComponent(logicalLearningId)}/${verb}`, { method: 'POST', body: JSON.stringify(input) });
+  return learning;
+}
+export const refineLearning = (id: string, i: LifecycleActionInput) => lifecycleAction('refine', id, i);
+export const contestLearning = (id: string, i: LifecycleActionInput) => lifecycleAction('contest', id, i);
+export const supersedeLearning = (id: string, i: LifecycleActionInput) => lifecycleAction('supersede', id, i);
+export const retireLearning = (id: string, i: LifecycleActionInput) => lifecycleAction('retire', id, i);
+
 // ─── Founder Strategic Context: founder-declared strategic operating conditions (Wave 4, slice 1) ──────────
 // Five kinds (GOAL/CONSTRAINT/RESOURCE/STRATEGIC_PREFERENCE/DECISION_HORIZON). Append-only, temporal, scoped.
 // Every write is an explicit founder action — nothing is inferred or persisted without confirmation.

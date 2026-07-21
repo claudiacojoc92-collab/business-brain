@@ -147,7 +147,7 @@ describe('strategic learning — build fields (lineage system-derived; founder a
 describe('strategic learning — founder view surfaces the “changes nothing else” guarantee + full object', () => {
   it('56. toLearningView reports it does not modify BU/FSC and leaks no status/progress/score field', () => {
     const l = buildLearningFields(review(), input({ confidence: 'SUPPORTED', boundaryConditions: ['b'], counterEvidence: ['c'], unresolvedUnknowns: ['u'] }));
-    const v = toLearningView({ id: 'l-1', founderId: 'f-1', logicalLearningId: 'l-1', revision: 1, createdAt: '2026-07-21T00:00:00.000Z', ...l });
+    const v = toLearningView({ id: 'l-1', founderId: 'f-1', logicalLearningId: 'l-1', revision: 1, rootLearningId: 'l-1', createdAt: '2026-07-21T00:00:00.000Z', ...l });
     expect(v.doesNotModifyBusinessUnderstanding).toBe(true);
     expect(v.doesNotModifyFounderStrategicContext).toBe(true);
     expect(v.priorUnderstanding).toBe('I believed paid ads would be the fastest channel.');

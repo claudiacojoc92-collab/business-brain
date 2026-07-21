@@ -19,6 +19,10 @@ export async function registerRateLimit(
       return user?.sub ?? request.ip;
     },
     max: (request) => {
+      // Opt-in override for local acceptance/e2e harnesses only (a single browser flow makes many same-IP requests).
+      // NEVER set in production; when unset the production limits below apply unchanged.
+      const override = Number(process.env['RATE_LIMIT_MAX_OVERRIDE']);
+      if (Number.isInteger(override) && override > 0) return override;
       if (request.method === 'GET') return 100;
       if (request.url.startsWith('/admin/')) return 200;
       return 20;

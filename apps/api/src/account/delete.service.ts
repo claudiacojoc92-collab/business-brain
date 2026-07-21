@@ -1,3 +1,4 @@
+import { sql } from 'kysely';
 import { FieldEncryptor } from '@bb/infrastructure';
 import { PgCredentialStore } from '../auth/pg-credential-store';
 import { GoogleConnector } from '../connectors/google/google.connector';
@@ -25,6 +26,10 @@ export async function deleteFounderAccount(
     const founder = await tx.selectFrom('identity.founders').select(['email']).where('founder_id', '=', founderId).executeTakeFirst();
     if (!founder) return { deleted: false }; // unknown / already-deleted → idempotent no-op success
     const email = founder.email as string;
+
+    // Strategic Learning revisions are append-only with a BEFORE-DELETE guard (V078). Founder-account deletion (Law 26)
+    // is the ONLY sanctioned removal path — opt in for this transaction so the bulk delete below is permitted.
+    await sql`SET LOCAL bb.allow_learning_delete = 'on'`.execute(tx);
 
     await tx.deleteFrom('evidence.fragments').where('founder_id', '=', founderId).execute();
     await tx.deleteFrom('app.oauth_credentials').where('founder_id', '=', founderId).execute(); // destroys encrypted tokens

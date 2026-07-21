@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { sql } from 'kysely';
 import { createKyselyClient } from '@bb/infrastructure';
 import { generateId } from '@bb/shared';
 import { registerSessionRoutes } from '../../routes/session.routes';
@@ -44,7 +45,10 @@ const prev = { node: process.env['NODE_ENV'], db: process.env['DATABASE_URL'] };
 async function purge(database: any): Promise<void> {
   const rows = await database.selectFrom('identity.founders').select('founder_id').where('email', 'in', [E1, E2]).execute();
   const ids = rows.map((r: { founder_id: string }) => r.founder_id);
-  if (ids.length) for (const t of ['business.strategic_learning_record', 'business.strategic_plan_review_record', 'business.strategic_plan_record', 'business.strategic_commitment_record', 'business.strategic_decision_record', 'business.founder_strategic_context_item', 'business.strategic_response', 'business.strategic_session', 'business.conclusion_response', 'business.understanding', 'identity.sessions', 'identity.founder_credentials']) await database.deleteFrom(t).where('founder_id', 'in', ids).execute();
+  if (ids.length) await database.transaction().execute(async (tx: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    await sql`SET LOCAL bb.allow_learning_delete = 'on'`.execute(tx); // V078 append-only DELETE guard: opt in for cleanup
+    for (const t of ['business.strategic_learning_record', 'business.strategic_plan_review_record', 'business.strategic_plan_record', 'business.strategic_commitment_record', 'business.strategic_decision_record', 'business.founder_strategic_context_item', 'business.strategic_response', 'business.strategic_session', 'business.conclusion_response', 'business.understanding', 'identity.sessions', 'identity.founder_credentials']) await tx.deleteFrom(t).where('founder_id', 'in', ids).execute();
+  });
   await database.deleteFrom('identity.magic_link_tokens').where('email', 'in', [E1, E2]).execute();
   await database.deleteFrom('identity.founders').where('email', 'in', [E1, E2]).execute();
 }
@@ -227,7 +231,7 @@ describe('strategic learning §LIVE', () => {
     expect(row.review_record_id).toBe(review.id); expect(row.confidence).toBe('CONTESTED');
     expect(row.learning_scope).toBe('BUSINESS'); expect(row.broad_scope_acknowledged).toBe(true);
     expect(row.founder_authored).toBe(true); expect(row.model_suggested).toBe(false);
-    await db.deleteFrom('business.strategic_learning_record').where('founder_id', '=', a).execute();
+    await db.transaction().execute(async (tx: any) => { await sql`SET LOCAL bb.allow_learning_delete = 'on'`.execute(tx); await tx.deleteFrom('business.strategic_learning_record').where('founder_id', '=', a).execute(); }); // eslint-disable-line @typescript-eslint/no-explicit-any
     expect(await db.selectFrom('business.strategic_learning_record').select('id').where('founder_id', '=', a).execute()).toHaveLength(0);
     expect(await db.selectFrom('business.strategic_plan_review_record').select('id').where('id', '=', review.id).executeTakeFirst()).toBeTruthy();
   });

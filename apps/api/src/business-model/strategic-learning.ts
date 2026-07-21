@@ -37,8 +37,17 @@ export const OBSERVATION_SOURCES: ReadonlySet<string> = new Set(['FOUNDER_REPORT
 export interface LearningObservation { statement: string; sourceType: ObservationSource; }
 export interface LearningEvidenceReference { space: string; id: string; }
 
+// Lifecycle (V078 / ADR-012 — single-thread lifecycle; distinct from epistemic `confidence`, Law 11).
+export type LearningLifecycleAction = 'CREATE' | 'REFINE' | 'CONTEST' | 'SUPERSEDE' | 'RETIRE';
+export const LEARNING_LIFECYCLE_ACTIONS: ReadonlySet<string> = new Set(['CREATE', 'REFINE', 'CONTEST', 'SUPERSEDE', 'RETIRE']);
+export type LearningLifecycleStatus = 'ACTIVE' | 'CONTESTED' | 'SUPERSEDED' | 'RETIRED';
+
 export interface StrategicLearningRecord {
   id: string; founderId: string; logicalLearningId: string; revision: number; schemaVersion: string;
+  // lifecycle metadata (Law 5 — copied, never inferred)
+  lifecycleAction: LearningLifecycleAction; rootLearningId: string; predecessorLearningId: string | null;
+  lifecycleReason: string | null; replacementSummary: string | null; retainedValidity: string | null;
+  counterevidenceResolution: string | null; unknownsResolution: string | null;
   // lineage (system-derived; the EXACT review kept from + its immutable lineage — Law 11)
   reviewRecordId: string; reviewRevision: number; planRecordId: string; commitmentRecordId: string;
   decisionRecordId: string | null; recommendationSessionId: string | null; provenanceManifestVersion: string | null;
@@ -51,6 +60,15 @@ export interface StrategicLearningRecord {
   // authorship
   founderAuthored: boolean; modelSuggested: boolean; acceptedByFounder: boolean;
   idempotencyKey: string; createdAt: string;
+}
+
+/** Effective lifecycle status derived ONLY from the action (Laws 10, 22). */
+export function deriveLifecycleStatus(action: LearningLifecycleAction): LearningLifecycleStatus {
+  switch (action) {
+    case 'CONTEST': return 'CONTESTED';
+    case 'RETIRE': return 'RETIRED';
+    default: return 'ACTIVE'; // CREATE | REFINE | SUPERSEDE
+  }
 }
 
 export interface LearningInput {
@@ -114,9 +132,11 @@ const clipList = (v: unknown, max = 40): string[] => (Array.isArray(v) ? v.map((
 
 /** Build the immutable learning fields from an ADMITTED review + founder input. Lineage is SYSTEM_DERIVED from the
  *  immutable review (Law 11); the understanding/scope/confidence/etc. are FOUNDER_AUTHORED and explicitly accepted. */
-export function buildLearningFields(review: StrategicPlanReviewRecord, input: LearningInput): Omit<StrategicLearningRecord, 'id' | 'founderId' | 'logicalLearningId' | 'revision' | 'createdAt'> {
+export function buildLearningFields(review: StrategicPlanReviewRecord, input: LearningInput): Omit<StrategicLearningRecord, 'id' | 'founderId' | 'logicalLearningId' | 'revision' | 'createdAt' | 'rootLearningId'> {
   return {
     schemaVersion: LEARNING_SCHEMA_VERSION,
+    lifecycleAction: 'CREATE', predecessorLearningId: null, lifecycleReason: null, replacementSummary: null, retainedValidity: null,
+    counterevidenceResolution: null, unknownsResolution: null,
     reviewRecordId: review.id, reviewRevision: review.revision, planRecordId: review.planRecordId, commitmentRecordId: review.commitmentRecordId,
     decisionRecordId: review.decisionRecordId, recommendationSessionId: review.recommendationSessionId, provenanceManifestVersion: review.provenanceManifestVersion,
     learningStatement: clip(input.learningStatement), learningCategory: input.learningCategory, confidence: input.confidence,
@@ -134,6 +154,10 @@ export function buildLearningFields(review: StrategicPlanReviewRecord, input: Le
 export function toLearningView(l: StrategicLearningRecord) {
   return {
     learningId: l.id, logicalLearningId: l.logicalLearningId, revision: l.revision,
+    lifecycleAction: l.lifecycleAction, lifecycleStatus: deriveLifecycleStatus(l.lifecycleAction),
+    rootLearningId: l.rootLearningId, predecessorLearningId: l.predecessorLearningId,
+    lifecycleReason: l.lifecycleReason, replacementSummary: l.replacementSummary, retainedValidity: l.retainedValidity,
+    counterevidenceResolution: l.counterevidenceResolution, unknownsResolution: l.unknownsResolution,
     learningStatement: l.learningStatement, learningCategory: l.learningCategory, confidence: l.confidence,
     priorUnderstanding: l.priorUnderstanding, revisedUnderstanding: l.revisedUnderstanding, changeStatement: l.changeStatement,
     learningScope: l.learningScope, broadScopeAcknowledged: l.broadScopeAcknowledged, isCausalHypothesis: l.isCausalHypothesis,

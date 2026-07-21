@@ -218,7 +218,10 @@ smuggle them in without a superseding gate). Each category names what it is and,
   promotion into BU/FSC is a separate future gate). This is the **initial CREATE-only** slice (no REFINE/CONTEST/SUPERSEDE/
   RETIRE). Governed by [`strategic-learning-record-contract.md`](../governance/strategic-learning-record-contract.md) +
   [`strategic-learning-record-slice.md`](../architecture/strategic-learning-record-slice.md); schema `strategic-learning-1`,
-  table `business.strategic_learning_record` (V076 + V077), append-only; no model role this slice. It is **not** generic Strategic
+  table `business.strategic_learning_record` (V076 + V077), append-only; no model role this slice. A founder-directed
+  **single-thread lifecycle** (`CREATE → REFINE/CONTEST/SUPERSEDE/RETIRE`, V078) is governed by
+  [ADR-012](ADR-012-strategic-learning-lifecycle.md) (dual-layer; inter-thread relationships deferred); CONTEST is a
+  single-thread usability downgrade, not an inter-thread relationship. It is **not** generic Strategic
   Memory (that still requires the §8 admission + §10 gate).
 
 ### §2 — Canonical matrix

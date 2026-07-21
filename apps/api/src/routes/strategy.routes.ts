@@ -20,7 +20,8 @@ import { assertDecisionAdmissible, toDecisionView, DecisionValidationError, type
 import { assertCommitmentAdmissible, toCommitmentView, linkedDecisionStatus, CommitmentValidationError, type CommitmentInput, type ResourceEnvelopeItem, type AcceptedCost } from '../business-model/strategic-commitment';
 import { assertPlanAdmissible, toPlanView, linkedCommitmentStatus, PlanValidationError, type PlanInput, type Milestone, type Assumption, type Dependency } from '../business-model/strategic-plan';
 import { assertReviewAdmissible, toReviewView, linkedCommitmentStatusForReview, ReviewValidationError, type PlanReviewInput, type ReviewObservation, type EvidenceReference, type ContextChange } from '../business-model/strategic-plan-review';
-import { assertLearningAdmissible, toLearningView, LearningValidationError, type LearningInput, type ObservationSource } from '../business-model/strategic-learning';
+import { assertLearningAdmissible, toLearningView, LearningValidationError, deriveLifecycleStatus, type LearningInput, type ObservationSource, type LearningLifecycleAction } from '../business-model/strategic-learning';
+import { LearningLifecycleError, type LifecycleTransitionInput } from '../business-model/strategic-learning-lifecycle';
 import { AnthropicStrategyModel } from '../business-model/anthropic-strategy.model';
 import { strategyModelConfig } from '../business-model/model-config';
 import { startStrategicSessionWorker } from '../business-model/strategic-session.worker';
@@ -486,8 +487,69 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
   server.get('/strategy/learnings/:logicalLearningId', async (request: FastifyRequest, reply: FastifyReply) => {
     const founderId = await sessionFounder(request);
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
-    const learning = await learningRepo.getById(founderId, (request.params as { logicalLearningId: string }).logicalLearningId);
-    if (!learning) { await reply.code(404).send({ error: 'not found' }); return; }
-    await reply.send({ learning: toLearningView(learning), history: [toLearningView(learning)] });
+    const revisions = await learningRepo.getThread(founderId, (request.params as { logicalLearningId: string }).logicalLearningId);
+    if (!revisions.length) { await reply.code(404).send({ error: 'not found' }); return; }
+    const effective = revisions[revisions.length - 1]!;
+    await reply.send({ learning: toLearningView(effective), history: revisions.map(toLearningView) });
+  });
+
+  // ── Strategic Learning Lifecycle (ADR-012, single-thread; NO inter-thread relationship) ──────────────────
+  // Founder-directed change within ONE logical thread: REFINE/CONTEST/SUPERSEDE/RETIRE, each an explicit immutable
+  // revision. Mutates NOTHING downstream (BU/FSC/review/plan/commitment/decision); creates no relationship object.
+  const lifecycleFlags = { doesNotModifyBusinessUnderstanding: true as const, doesNotModifyFounderStrategicContext: true as const, doesNotModifyReview: true as const, doesNotModifyPlan: true as const, doesNotModifyCommitment: true as const, doesNotModifyDecision: true as const, createsRecommendation: false as const, createsExecution: false as const, createsRelationship: false as const };
+  function lifecycleInput(b: Record<string, unknown>): LifecycleTransitionInput {
+    const arr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []);
+    return {
+      sourceRevisionId: String(b['sourceRevisionId'] ?? ''), expectedRevision: Number(b['expectedRevision'] ?? -1), idempotencyKey: String(b['idempotencyKey'] ?? ''),
+      lifecycleReason: String(b['lifecycleReason'] ?? ''), confirmSameLearning: b['confirmSameLearning'] === true,
+      learningStatement: b['learningStatement'] as string | undefined, learningCategory: b['learningCategory'] as LearningInput['learningCategory'] | undefined, confidence: b['confidence'] as LearningInput['confidence'] | undefined,
+      priorUnderstanding: b['priorUnderstanding'] as string | undefined, revisedUnderstanding: b['revisedUnderstanding'] as string | undefined, changeStatement: b['changeStatement'] as string | undefined,
+      learningScope: b['learningScope'] as LearningInput['learningScope'] | undefined, broadScopeAcknowledged: b['broadScopeAcknowledged'] === true ? true : (b['broadScopeAcknowledged'] === false ? false : undefined), isCausalHypothesis: b['isCausalHypothesis'] === true ? true : (b['isCausalHypothesis'] === false ? false : undefined),
+      boundaryConditions: b['boundaryConditions'] !== undefined ? arr(b['boundaryConditions']) : undefined, counterEvidence: b['counterEvidence'] !== undefined ? arr(b['counterEvidence']) : undefined, unresolvedUnknowns: b['unresolvedUnknowns'] !== undefined ? arr(b['unresolvedUnknowns']) : undefined,
+      observations: Array.isArray(b['observations']) ? (b['observations'] as Array<Record<string, unknown>>).map((o) => ({ statement: String(o?.['statement'] ?? ''), sourceType: String(o?.['sourceType'] ?? 'FOUNDER_REPORTED') as ObservationSource })) : undefined,
+      evidenceReferences: Array.isArray(b['evidenceReferences']) ? (b['evidenceReferences'] as Array<Record<string, unknown>>).map((e) => ({ space: String(e?.['space'] ?? ''), id: String(e?.['id'] ?? '') })) : undefined,
+      contestBasisExplanation: b['contestBasisExplanation'] as string | undefined,
+      replacementSummary: b['replacementSummary'] as string | undefined, retainedValidity: b['retainedValidity'] as string | undefined,
+      counterevidenceResolution: b['counterevidenceResolution'] as string | undefined, unknownsResolution: b['unknownsResolution'] as string | undefined,
+    };
+  }
+  const lifecycleHandler = (action: Exclude<LearningLifecycleAction, 'CREATE'>) => async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const logicalLearningId = (request.params as { learningId: string }).learningId;
+    const existingThread = await learningRepo.getThread(founderId, logicalLearningId);
+    if (!existingThread.length) { await reply.code(404).send({ error: 'not found' }); return; } // founder-owned only → cross-founder = 404
+    const input = lifecycleInput((request.body ?? {}) as Record<string, unknown>);
+    let revision;
+    try { revision = await learningRepo.appendRevision(founderId, logicalLearningId, action, input, new Date()); }
+    catch (e) {
+      if (e instanceof LearningLifecycleError) { await reply.code(e.conflict ? 409 : 400).send({ error: { code: e.reason, message: e.message }, reason: e.reason }); return; }
+      throw e;
+    }
+    await reply.code(201).send({ learning: toLearningView(revision), lifecycleStatus: deriveLifecycleStatus(revision.lifecycleAction), ...lifecycleFlags });
+  };
+  server.post('/strategy/learnings/:learningId/refine', lifecycleHandler('REFINE'));
+  server.post('/strategy/learnings/:learningId/contest', lifecycleHandler('CONTEST'));
+  server.post('/strategy/learnings/:learningId/supersede', lifecycleHandler('SUPERSEDE'));
+  server.post('/strategy/learnings/:learningId/retire', lifecycleHandler('RETIRE'));
+
+  server.get('/strategy/learning-threads', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    await reply.send({ threads: (await learningRepo.listThreads(founderId)).map(toLearningView) });
+  });
+  server.get('/strategy/learning-threads/:logicalLearningId', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const revisions = await learningRepo.getThread(founderId, (request.params as { logicalLearningId: string }).logicalLearningId);
+    if (!revisions.length) { await reply.code(404).send({ error: 'not found' }); return; }
+    await reply.send({ effective: toLearningView(revisions[revisions.length - 1]!), revisions: revisions.map(toLearningView) });
+  });
+  server.get('/strategy/learnings/revision/:revisionId', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const rev = await learningRepo.getRevisionById(founderId, (request.params as { revisionId: string }).revisionId);
+    if (!rev) { await reply.code(404).send({ error: 'not found' }); return; }
+    await reply.send({ learning: toLearningView(rev) });
   });
 }

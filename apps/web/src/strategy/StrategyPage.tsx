@@ -2,14 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import {
-  createStrategySession, getStrategySession, listStrategySessions, retryStrategySession, respondToStrategy, createDecision, createCommitment, createPlan, createPlanReview, createLearning, listLearnings, ApiError,
+  createStrategySession, getStrategySession, listStrategySessions, retryStrategySession, respondToStrategy, createDecision, createCommitment, createPlan, createPlanReview, createLearning, listLearningThreads, getLearningThread, refineLearning, contestLearning, supersedeLearning, retireLearning, ApiError,
   type StrategySessionView, type StrategyBoundary, type StrategicRecommendation, type InsufficientStrategicEvidence,
   type StrategyResponseType, type EpistemicKind, type Band, type EvidenceReference,
   type DecisionView, type DecisionAlternative, type ChosenOptionSource,
   type CommitmentView, type CommitmentScope, type Exclusivity,
   type PlanView, type PlanScope,
   type PlanReviewView, type ReviewConclusion, type ReviewDisposition, type AssumptionAssessment, type DependencyAssessment, type MilestoneAssessment,
-  type LearningView, type LearningCategory, type LearningConfidence, type LearningScope,
+  type LearningView, type LearningCategory, type LearningConfidence, type LearningScope, type LearningThreadView,
 } from '../api/client';
 import { AppShell, Button, Thinking } from '../system/ui';
 
@@ -959,33 +959,137 @@ function LearningPanel({ review, on401, onKept }: { review: PlanReviewView; on40
   );
 }
 
-// Page-level, persisted list of the founder's durable learnings. Loads on mount (so a kept learning SURVIVES a refresh)
-// and refetches when a new learning is kept. Each entry shows its source review + the "changes nothing else" guarantee.
+const lcBtn = { cursor: 'pointer', fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', padding: '4px 10px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', background: 'transparent', color: 'var(--ink-2)' };
+const DOES_NOT = 'This does not update Business Understanding. This does not update Founder Strategic Context. This does not change the source review, plan, commitment, or decision.';
+
+// A single lifecycle action form (Refine / Contest / Supersede / Retire) on one thread. Founder chooses; no model.
+function LifecycleForm({ thread, verb, onDone, onCancel, on401 }: { thread: LearningThreadView; verb: 'refine' | 'contest' | 'supersede' | 'retire'; onDone: () => void; onCancel: () => void; on401: (e: unknown) => void }) {
+  const [reason, setReason] = useState('');
+  const [statement, setStatement] = useState(verb === 'supersede' ? '' : thread.learningStatement);
+  const [position, setPosition] = useState(thread.revisedUnderstanding);
+  // pre-fill existing counterevidence / unknowns so contesting ADDS to them rather than silently dropping (Laws 14/15)
+  const [counter, setCounter] = useState(thread.counterEvidence.join('\n'));
+  const [unknowns, setUnknowns] = useState(thread.unresolvedUnknowns.join('\n'));
+  const [basis, setBasis] = useState('');
+  const [replacementSummary, setReplacementSummary] = useState('');
+  const [retained, setRetained] = useState('');
+  const [confirmSame, setConfirmSame] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const lines = (s: string) => s.split('\n').map((x) => x.trim()).filter(Boolean);
+  const base = () => ({ sourceRevisionId: thread.learningId, expectedRevision: thread.revision, idempotencyKey: (globalThis.crypto?.randomUUID?.() ?? String(Date.now())), lifecycleReason: reason.trim() });
+
+  const submit = async () => {
+    setSaving(true); setError(null);
+    try {
+      if (verb === 'refine') await refineLearning(thread.logicalLearningId, { ...base(), confirmSameLearning: confirmSame, learningStatement: statement.trim() });
+      else if (verb === 'contest') await contestLearning(thread.logicalLearningId, { ...base(), revisedUnderstanding: position.trim(), counterEvidence: lines(counter), unresolvedUnknowns: lines(unknowns), contestBasisExplanation: basis.trim() || undefined });
+      else if (verb === 'supersede') await supersedeLearning(thread.logicalLearningId, { ...base(), confirmSameLearning: confirmSame, learningStatement: statement.trim(), replacementSummary: replacementSummary.trim(), retainedValidity: retained.trim() });
+      else await retireLearning(thread.logicalLearningId, base());
+      try { window.dispatchEvent(new Event('bb:lifecycle-changed')); } catch { /* noop */ }
+      onDone();
+    } catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setError(e instanceof ApiError ? e.message : 'Could not save this change.'); }
+    finally { setSaving(false); }
+  };
+
+  const copy: Record<string, string[]> = {
+    refine: ['Clarify or bound this learning while preserving its history.', 'This creates a new revision. It does not rewrite the earlier learning.', 'This should still be the same underlying learning. Create a separate learning if the new statement is independently useful.'],
+    contest: ['Record that this learning should no longer be treated as straightforwardly usable.', 'Contesting preserves the learning, your reasons, and the unresolved disagreement.', 'No second learning or contradiction relationship is required.'],
+    supersede: ['Replace this learning for future use while preserving all earlier revisions.', 'Use this only when the replacement belongs to the same underlying learning.', 'Create a separate learning if it is a genuinely independent claim.'],
+    retire: ['Stop using this learning prospectively without replacing its history.', 'Retirement does not delete the learning.'],
+  };
+  return (
+    <div data-testid={`form-${verb}`} style={{ marginTop: 8, padding: 10, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)' }}>
+      <span style={sectionLabel}>{verb[0]!.toUpperCase() + verb.slice(1)}</span>
+      {copy[verb]!.map((c, i) => <p key={i} style={{ ...meta, marginTop: 2 }}>{c}</p>)}
+      {verb === 'supersede' && <label style={lblStyle}>Replacement learning statement<textarea data-testid={`${verb}-statement`} value={statement} onChange={(e) => setStatement(e.target.value)} rows={2} style={taStyle} /></label>}
+      {verb === 'refine' && <label style={lblStyle}>The learning (clarified)<textarea data-testid={`${verb}-statement`} value={statement} onChange={(e) => setStatement(e.target.value)} rows={2} style={taStyle} /></label>}
+      {verb === 'contest' && <label style={{ ...lblStyle, marginTop: 8 }}>Where you now stand<textarea data-testid="contest-position" value={position} onChange={(e) => setPosition(e.target.value)} rows={2} style={taStyle} /></label>}
+      {verb === 'contest' && <>
+        <label style={{ ...lblStyle, marginTop: 8 }}>Counter-evidence (one per line)<textarea data-testid="contest-counter" value={counter} onChange={(e) => setCounter(e.target.value)} rows={2} style={taStyle} /></label>
+        <label style={{ ...lblStyle, marginTop: 8 }}>Or unresolved unknowns (one per line)<textarea data-testid="contest-unknowns" value={unknowns} onChange={(e) => setUnknowns(e.target.value)} rows={2} style={taStyle} /></label>
+        <label style={{ ...lblStyle, marginTop: 8 }}>Or explain why neither can be stated yet<textarea data-testid="contest-basis" value={basis} onChange={(e) => setBasis(e.target.value)} rows={2} style={taStyle} /></label>
+      </>}
+      {verb === 'supersede' && <>
+        <label style={{ ...lblStyle, marginTop: 8 }}>What changed and why the replacement is appropriate<textarea data-testid="supersede-summary" value={replacementSummary} onChange={(e) => setReplacementSummary(e.target.value)} rows={2} style={taStyle} /></label>
+        <label style={{ ...lblStyle, marginTop: 8 }}>What remains valid from the previous version<textarea data-testid="supersede-retained" value={retained} onChange={(e) => setRetained(e.target.value)} rows={2} style={taStyle} /></label>
+      </>}
+      <label style={{ ...lblStyle, marginTop: 8 }}>{verb === 'retire' ? 'Reason for retiring' : verb === 'contest' ? 'Why you’re contesting it' : 'Why you’re making this change'}<textarea data-testid={`${verb}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} rows={2} style={taStyle} /></label>
+      {(verb === 'refine' || verb === 'supersede') && (
+        <label data-testid={`${verb}-confirm`} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 10, fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', cursor: 'pointer' }}>
+          <input type="checkbox" data-testid={`${verb}-confirm-input`} checked={confirmSame} onChange={(e) => setConfirmSame(e.target.checked)} />
+          <span>This is still the same underlying learning.</span>
+        </label>
+      )}
+      <p style={{ ...meta, marginTop: 10, fontStyle: 'italic' }}>{DOES_NOT}</p>
+      {error && <p data-testid={`${verb}-error`} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--danger-ink, #a33)', marginTop: 6 }}>{error}</p>}
+      <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+        <button type="button" data-testid={`${verb}-submit`} disabled={saving} onClick={() => void submit()} style={{ ...lcBtn, background: 'var(--ink)', color: 'var(--surface)', borderColor: 'var(--ink)' }}>{saving ? 'Saving…' : `${verb[0]!.toUpperCase() + verb.slice(1)} this learning`}</button>
+        <button type="button" onClick={onCancel} style={lcBtn}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function ThreadCard({ thread, on401 }: { thread: LearningThreadView; on401: (e: unknown) => void }) {
+  const [open, setOpen] = useState<null | 'refine' | 'contest' | 'supersede' | 'retire'>(null);
+  const [history, setHistory] = useState<LearningThreadView[] | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const loadHistory = async () => {
+    try { const { revisions } = await getLearningThread(thread.logicalLearningId); setHistory(revisions); setShowHistory(true); }
+    catch (e) { if (e instanceof ApiError && e.status === 401) on401(e); }
+  };
+  const retired = thread.lifecycleStatus === 'RETIRED';
+  return (
+    <div data-testid={`thread-${thread.logicalLearningId}`} style={{ marginTop: 'var(--sp-3)', paddingTop: 'var(--sp-2)', borderTop: '1px dotted var(--line-2)' }}>
+      <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink-1)' }}>“{thread.learningStatement}”</p>
+      <p style={{ ...meta, marginTop: 4 }}>Lifecycle: <strong data-testid="lifecycle-status" style={{ color: 'var(--ink-2)' }}>{nice(thread.lifecycleStatus)}</strong> · How settled: {nice(thread.confidence)} · Applies to: {nice(thread.learningScope)} · rev {thread.revision} · <span data-testid="thread-source-review">from review {thread.review.recordId}</span></p>
+      {thread.boundaryConditions.length > 0 && <p style={{ ...meta, marginTop: 4 }}>Holds when: {thread.boundaryConditions.join('; ')}</p>}
+      {thread.counterEvidence.length > 0 && <p style={{ ...meta, marginTop: 4 }}>Cuts against: {thread.counterEvidence.join('; ')}</p>}
+      {thread.unresolvedUnknowns.length > 0 && <p style={{ ...meta, marginTop: 4 }}>Still unknown: {thread.unresolvedUnknowns.join('; ')}</p>}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+        <button type="button" data-testid="toggle-history" onClick={() => (showHistory ? setShowHistory(false) : void loadHistory())} style={lcBtn}>{showHistory ? 'Hide history' : 'Show history'}</button>
+        {!retired && <>
+          <button type="button" data-testid="action-refine" onClick={() => setOpen('refine')} style={lcBtn}>Refine</button>
+          <button type="button" data-testid="action-contest" onClick={() => setOpen('contest')} style={lcBtn}>Contest</button>
+          <button type="button" data-testid="action-supersede" onClick={() => setOpen('supersede')} style={lcBtn}>Supersede</button>
+          <button type="button" data-testid="action-retire" onClick={() => setOpen('retire')} style={lcBtn}>Retire</button>
+        </>}
+        {retired && <span data-testid="retired-note" style={{ ...meta }}>Retired — no further lifecycle actions. Record a new learning instead.</span>}
+      </div>
+      {open && <LifecycleForm thread={thread} verb={open} onDone={() => setOpen(null)} onCancel={() => setOpen(null)} on401={on401} />}
+      {showHistory && history && (
+        <div data-testid="thread-history" style={{ marginTop: 10, paddingLeft: 10, borderLeft: '2px solid var(--line-2)' }}>
+          {history.map((r) => (
+            <div key={r.learningId} data-testid={`revision-${r.revision}`} style={{ marginTop: 6 }}>
+              <p style={{ ...meta }}>rev {r.revision} · {r.lifecycleAction} → {nice(r.lifecycleStatus)} · {nice(r.confidence)}{r.lifecycleReason ? ` · ${r.lifecycleReason}` : ''}</p>
+              <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-xs)', color: 'var(--ink-2)' }}>“{r.learningStatement}”</p>
+              {r.replacementSummary && <p style={{ ...meta }}>Replacement: {r.replacementSummary} · Retained: {r.retainedValidity}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Page-level, persisted list of the founder's learning THREADS (effective revision each). Survives refresh; refetches on
+// keep/lifecycle events. Each thread exposes its lifecycle status, revision history, and the four lifecycle actions.
 function LearningsList({ on401 }: { on401: (e: unknown) => void }) {
-  const [learnings, setLearnings] = useState<LearningView[] | null>(null);
+  const [threads, setThreads] = useState<LearningThreadView[] | null>(null);
   const load = useCallback(async () => {
-    try { setLearnings(await listLearnings()); }
-    catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setLearnings([]); }
+    try { setThreads(await listLearningThreads()); }
+    catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setThreads([]); }
   }, [on401]);
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => { const h = () => void load(); window.addEventListener('bb:learning-kept', h); return () => window.removeEventListener('bb:learning-kept', h); }, [load]);
+  useEffect(() => { const h = () => void load(); for (const ev of ['bb:learning-kept', 'bb:lifecycle-changed']) window.addEventListener(ev, h); return () => { for (const ev of ['bb:learning-kept', 'bb:lifecycle-changed']) window.removeEventListener(ev, h); }; }, [load]);
 
-  if (!learnings || learnings.length === 0) return null;
+  if (!threads || threads.length === 0) return null;
   return (
     <section data-testid="learnings-list" style={{ marginTop: 'var(--sp-5)', paddingTop: 'var(--sp-4)', borderTop: '1px solid var(--line)' }}>
       <span style={sectionLabel}>Your durable strategic learnings</span>
-      <p style={{ ...meta, marginTop: 2 }}>What you’ve explicitly decided to keep from your reviews. Each changes nothing else on its own.</p>
-      {learnings.map((l) => (
-        <div key={l.learningId} data-testid={`learning-${l.learningId}`} style={{ marginTop: 'var(--sp-3)', paddingTop: 'var(--sp-2)', borderTop: '1px dotted var(--line-2)' }}>
-          <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink-1)' }}>“{l.learningStatement}”</p>
-          <p style={{ ...meta, marginTop: 4 }}>Before: {l.priorUnderstanding} · Now: {l.revisedUnderstanding}</p>
-          <p style={{ ...meta, marginTop: 4 }}>About: {nice(l.learningCategory)} · How settled: {nice(l.confidence)} · Applies to: {nice(l.learningScope)}{l.isCausalHypothesis ? ' · causal hypothesis' : ''} · <span data-testid="learning-source-review">From review {l.review.recordId}</span></p>
-          {l.boundaryConditions.length > 0 && <p style={{ ...meta, marginTop: 4 }}>Holds when: {l.boundaryConditions.join('; ')}</p>}
-          {l.counterEvidence.length > 0 && <p style={{ ...meta, marginTop: 4 }}>Cuts against: {l.counterEvidence.join('; ')}</p>}
-          {l.unresolvedUnknowns.length > 0 && <p style={{ ...meta, marginTop: 4 }}>Still unknown: {l.unresolvedUnknowns.join('; ')}</p>}
-          <p style={{ ...meta, marginTop: 4, fontStyle: 'italic' }}>Does not modify Business Understanding. Does not modify Founder Strategic Context.</p>
-        </div>
-      ))}
+      <p style={{ ...meta, marginTop: 2 }}>What you’ve explicitly decided to keep from your reviews. You can refine, contest, supersede, or retire each — every change keeps the full history and changes nothing else.</p>
+      {threads.map((t) => <ThreadCard key={t.logicalLearningId} thread={t} on401={on401} />)}
     </section>
   );
 }
