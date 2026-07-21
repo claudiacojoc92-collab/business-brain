@@ -42,6 +42,7 @@ export interface FounderExport {
   strategicCommitments: unknown[];
   strategicPlans: unknown[];
   strategicPlanReviews: unknown[];
+  strategicLearnings: unknown[];
   meta: { note: string };
 }
 
@@ -158,6 +159,12 @@ export async function buildFounderExport(args: {
     .select(['id', 'logical_review_id', 'revision', 'schema_version', 'plan_record_id', 'plan_logical_id', 'plan_revision', 'plan_schema_version', 'commitment_record_id', 'commitment_logical_id', 'commitment_revision', 'decision_record_id', 'recommendation_session_id', 'provenance_manifest_version', 'grounding_status_at_planning', 'alignment_at_planning', 'review_statement', 'review_period_start', 'review_period_end', 'observations', 'evidence_references', 'assumption_assessments', 'dependency_assessments', 'milestone_assessments', 'context_changes', 'unresolved_unknowns', 'review_conclusion', 'selected_disposition', 'authorship', 'created_at'])
     .where('founder_id', '=', founderId).orderBy('created_at', 'asc').execute()) as Array<Record<string, unknown>>;
 
+  // ADR-011 cat 14 precursor — Strategic Learning Records: durable learnings promoted from reviews; full lineage;
+  // confidence never absolute. Founder-authored; no BU/FSC mutation.
+  const strategicLearnings = (await db.selectFrom('business.strategic_learning_record')
+    .select(['id', 'logical_learning_id', 'revision', 'schema_version', 'review_record_id', 'review_revision', 'plan_record_id', 'commitment_record_id', 'decision_record_id', 'recommendation_session_id', 'provenance_manifest_version', 'learning_statement', 'learning_category', 'confidence', 'founder_authored', 'model_suggested', 'accepted_by_founder', 'created_at'])
+    .where('founder_id', '=', founderId).orderBy('created_at', 'asc').execute()) as Array<Record<string, unknown>>;
+
   // Run history — founder-safe (error CATEGORY only; never the internal error_detail).
   const runs = (await db
     .selectFrom('business.understanding_run')
@@ -239,6 +246,7 @@ export async function buildFounderExport(args: {
       const j = (v: unknown) => (v == null ? null : typeof v === 'string' ? JSON.parse(v) : v);
       return { id: String(r['id']), logicalReviewId: String(r['logical_review_id']), revision: Number(r['revision']), plan: { recordId: String(r['plan_record_id']), logicalId: String(r['plan_logical_id']), revision: Number(r['plan_revision']), schemaVersion: String(r['plan_schema_version']) }, commitment: { recordId: String(r['commitment_record_id']), logicalId: String(r['commitment_logical_id']), revision: Number(r['commitment_revision']) }, decisionRecordId: (r['decision_record_id'] as string | null) ?? null, recommendationSessionId: (r['recommendation_session_id'] as string | null) ?? null, provenanceManifestVersion: (r['provenance_manifest_version'] as string | null) ?? null, groundingStatusAtPlanning: (r['grounding_status_at_planning'] as string | null) ?? null, alignmentAtPlanning: String(r['alignment_at_planning']), reviewStatement: (r['review_statement'] as string | null) ?? null, reviewPeriodStart: iso(r['review_period_start']), reviewPeriodEnd: iso(r['review_period_end']), observations: j(r['observations']), evidenceReferences: j(r['evidence_references']), assumptionAssessments: j(r['assumption_assessments']), dependencyAssessments: j(r['dependency_assessments']), milestoneAssessments: j(r['milestone_assessments']), contextChanges: j(r['context_changes']), unresolvedUnknowns: j(r['unresolved_unknowns']), reviewConclusion: String(r['review_conclusion']), selectedDisposition: String(r['selected_disposition']), authorship: j(r['authorship']), createdAt: iso(r['created_at']), reviewSchemaVersion: 'strategic-plan-review-1' };
     }),
+    strategicLearnings: strategicLearnings.map((l) => ({ id: String(l['id']), logicalLearningId: String(l['logical_learning_id']), revision: Number(l['revision']), review: { recordId: String(l['review_record_id']), revision: Number(l['review_revision']) }, plan: { recordId: String(l['plan_record_id']) }, commitment: { recordId: String(l['commitment_record_id']) }, decisionRecordId: (l['decision_record_id'] as string | null) ?? null, recommendationSessionId: (l['recommendation_session_id'] as string | null) ?? null, provenanceManifestVersion: (l['provenance_manifest_version'] as string | null) ?? null, learningStatement: String(l['learning_statement']), learningCategory: String(l['learning_category']), confidence: String(l['confidence']), authorship: { founderAuthored: l['founder_authored'] === true, modelSuggested: l['model_suggested'] === true, acceptedByFounder: l['accepted_by_founder'] === true }, createdAt: iso(l['created_at']), learningSchemaVersion: 'strategic-learning-1' })),
     understandingRuns: runs.map((r) => ({
       id: String(r['id']), sourceKey: String(r['source_key']), status: String(r['status']), attempts: Number(r['attempt_count']),
       errorCode: (r['error_code'] as string | null) ?? null, understandingVersion: r['understanding_version'] == null ? null : Number(r['understanding_version']),

@@ -2,13 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import {
-  createStrategySession, getStrategySession, listStrategySessions, retryStrategySession, respondToStrategy, createDecision, createCommitment, createPlan, createPlanReview, ApiError,
+  createStrategySession, getStrategySession, listStrategySessions, retryStrategySession, respondToStrategy, createDecision, createCommitment, createPlan, createPlanReview, createLearning, ApiError,
   type StrategySessionView, type StrategyBoundary, type StrategicRecommendation, type InsufficientStrategicEvidence,
   type StrategyResponseType, type EpistemicKind, type Band, type EvidenceReference,
   type DecisionView, type DecisionAlternative, type ChosenOptionSource,
   type CommitmentView, type CommitmentScope, type Exclusivity,
   type PlanView, type PlanScope,
   type PlanReviewView, type ReviewConclusion, type ReviewDisposition, type AssumptionAssessment, type DependencyAssessment, type MilestoneAssessment,
+  type LearningView, type LearningCategory, type LearningConfidence,
 } from '../api/client';
 import { AppShell, Button, Thinking } from '../system/ui';
 
@@ -740,6 +741,7 @@ function ReviewPanel({ plan, on401 }: { plan: PlanView; on401: (e: unknown) => v
         <span style={sectionLabel}>Your review on record</span>
         <p style={{ ...meta, marginTop: 4 }}>Conclusion: {nice(saved.reviewConclusion)} · You intend to: {nice(saved.selectedDisposition)}</p>
         <p style={{ ...meta, marginTop: 8, fontStyle: 'italic' }}>This recorded your review. It did not change the plan or commitment. Any next step is a separate, explicit action.</p>
+        <LearningPanel review={saved} on401={on401} />
       </div>
     );
   }
@@ -810,6 +812,90 @@ function ReviewPanel({ plan, on401 }: { plan: PlanView; on401: (e: unknown) => v
           <div style={{ display: 'flex', gap: 10, marginTop: 'var(--sp-3)' }}>
             <Button loading={saving} disabled={!canRecord} onClick={() => void record()}>Record this review</Button>
             <Button variant="ghost" onClick={() => setOpen(false)}>Not now</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const LEARNING_CATEGORIES: { v: LearningCategory; label: string }[] = [
+  { v: 'MARKET', label: 'The market' }, { v: 'CUSTOMER', label: 'Customers' }, { v: 'POSITIONING', label: 'Positioning' },
+  { v: 'OFFER', label: 'The offer' }, { v: 'EXECUTION', label: 'Execution' }, { v: 'DECISION_PROCESS', label: 'How you decide' },
+  { v: 'RESOURCE', label: 'Resources' }, { v: 'RISK', label: 'Risk' }, { v: 'ASSUMPTION', label: 'An assumption' },
+  { v: 'STRATEGY', label: 'Strategy' }, { v: 'OTHER', label: 'Something else' },
+];
+const LEARNING_CONFIDENCES: { v: LearningConfidence; label: string }[] = [
+  { v: 'ESTABLISHED', label: 'Established — I’m confident this holds' },
+  { v: 'TENTATIVE', label: 'Tentative — this looks true but isn’t settled' },
+  { v: 'CONDITIONAL', label: 'Conditional — true under specific conditions' },
+];
+
+// Strategic Learning Record — a founder-EXPLICIT promotion of durable understanding FROM a review. Most reviews create
+// NO learning; this is offered, never automatic. It changes nothing else: not the review, not Business Understanding,
+// not Founder Strategic Context. The model does not create learning here.
+function LearningPanel({ review, on401 }: { review: PlanReviewView; on401: (e: unknown) => void }) {
+  const [open, setOpen] = useState(false);
+  const [statement, setStatement] = useState('');
+  const [category, setCategory] = useState<LearningCategory | ''>('');
+  const [confidence, setConfidence] = useState<LearningConfidence | ''>('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<LearningView | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const canPromote = !!statement.trim() && !!category && !!confidence;
+
+  const promote = async () => {
+    setSaving(true); setError(null);
+    try {
+      const l = await createLearning(review.reviewId, {
+        learningStatement: statement.trim(), learningCategory: category as LearningCategory, confidence: confidence as LearningConfidence,
+        idempotencyKey: (globalThis.crypto?.randomUUID?.() ?? String(Date.now())),
+      });
+      setSaved(l); setOpen(false);
+    } catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setError(e instanceof ApiError ? e.message : 'Could not keep this learning.'); }
+    finally { setSaving(false); }
+  };
+
+  if (saved) {
+    return (
+      <div style={{ marginTop: 'var(--sp-3)', paddingTop: 'var(--sp-2)', borderTop: '1px dotted var(--line-2)' }}>
+        <span style={sectionLabel}>Durable strategic learning</span>
+        <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink-1)', marginTop: 4 }}>“{saved.learningStatement}”</p>
+        <p style={{ ...meta, marginTop: 4 }}>About: {nice(saved.learningCategory)} · How settled: {nice(saved.confidence)}</p>
+        <p style={{ ...meta, marginTop: 8, fontStyle: 'italic' }}>You chose to keep this as a durable learning. It does not modify Business Understanding. It does not modify Founder Strategic Context.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 'var(--sp-3)', paddingTop: 'var(--sp-2)', borderTop: '1px dotted var(--line-2)' }}>
+      {!open ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <Button variant="ghost" onClick={() => setOpen(true)}>Keep a learning from this review</Button>
+          <span style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ink-3)' }}>Only if this review changed what you durably understand. Most reviews won’t.</span>
+        </div>
+      ) : (
+        <div>
+          <span style={sectionLabel}>Keep a durable learning</span>
+          <p style={{ ...meta, marginTop: 2 }}>In your own words, what did this review durably change in how you understand your business? Leave this if nothing durable changed.</p>
+
+          <textarea value={statement} onChange={(e) => setStatement(e.target.value)} rows={2} placeholder="e.g. Founder-led outreach converts; paid ads at our stage don’t." style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', padding: 8, borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', marginTop: 8 }} />
+
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12 }}>
+            <label style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)' }}>What is this learning about?<br />
+              <select value={category} onChange={(e) => setCategory(e.target.value as LearningCategory)} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', padding: '6px 8px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', marginTop: 4, maxWidth: 300 }}><option value="">Choose…</option>{LEARNING_CATEGORIES.map((c) => <option key={c.v} value={c.v}>{c.label}</option>)}</select>
+            </label>
+            <label style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)' }}>How settled is it?<br />
+              <select value={confidence} onChange={(e) => setConfidence(e.target.value as LearningConfidence)} style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', padding: '6px 8px', borderRadius: 'var(--r-1)', border: '1px solid var(--line-2)', marginTop: 4, maxWidth: 320 }}><option value="">Choose…</option>{LEARNING_CONFIDENCES.map((c) => <option key={c.v} value={c.v}>{c.label}</option>)}</select>
+            </label>
+          </div>
+
+          <p style={{ ...meta, marginTop: 14, fontStyle: 'italic' }}>This creates a durable strategic learning. It does not modify Business Understanding. It does not modify Founder Strategic Context.</p>
+          {error && <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--danger-ink, #a33)', marginTop: 6 }}>{error}</p>}
+          <div style={{ display: 'flex', gap: 10, marginTop: 'var(--sp-3)' }}>
+            <Button loading={saving} disabled={!canPromote} onClick={() => void promote()}>Keep this learning</Button>
+            <Button variant="ghost" onClick={() => setOpen(false)}>Nothing to keep</Button>
           </div>
         </div>
       )}

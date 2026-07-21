@@ -549,6 +549,35 @@ export async function listPlanReviews(logicalPlanId: string): Promise<PlanReview
   return reviews;
 }
 
+// ─── Strategic Learning Record (ADR-011 cat 14 precursor — durable learning, NOT generic Strategic Memory) ──
+// A durable strategic understanding the founder EXPLICITLY decides to keep after a review. Most reviews create NO
+// learning. Founder-authored; confidence never absolute. Creating one changes NOTHING — it does not modify
+// Business Understanding or Founder Strategic Context, and never rewrites the Review/Plan/Commitment/Decision.
+export type LearningCategory = 'MARKET' | 'CUSTOMER' | 'POSITIONING' | 'OFFER' | 'EXECUTION' | 'DECISION_PROCESS' | 'RESOURCE' | 'RISK' | 'ASSUMPTION' | 'STRATEGY' | 'OTHER';
+export type LearningConfidence = 'ESTABLISHED' | 'TENTATIVE' | 'CONDITIONAL';
+export interface LearningView {
+  learningId: string; logicalLearningId: string; revision: number;
+  learningStatement: string; learningCategory: LearningCategory; confidence: LearningConfidence;
+  review: { recordId: string; revision: number }; plan: { recordId: string }; commitment: { recordId: string };
+  decisionRecordId: string | null; recommendationSessionId: string | null; provenanceManifestVersion: string | null;
+  authorship: { founderAuthored: boolean; modelSuggested: boolean; acceptedByFounder: boolean };
+  createdAt: string; learningSchemaVersion: string;
+  doesNotModifyBusinessUnderstanding: true; doesNotModifyFounderStrategicContext: true;
+}
+export interface CreateLearningInput {
+  learningStatement: string; learningCategory: LearningCategory; confidence: LearningConfidence; idempotencyKey: string;
+}
+/** POST /strategy/plan-reviews/:reviewId/learnings — promote ONE durable learning from an exact owned review. */
+export async function createLearning(reviewId: string, input: CreateLearningInput): Promise<LearningView> {
+  const { learning } = await request<{ learning: LearningView }>(`strategy/plan-reviews/${encodeURIComponent(reviewId)}/learnings`, { method: 'POST', body: JSON.stringify(input) });
+  return learning;
+}
+/** GET /strategy/learnings — all durable learnings for the founder, newest first. */
+export async function listLearnings(): Promise<LearningView[]> {
+  const { learnings } = await request<{ learnings: LearningView[] }>('strategy/learnings');
+  return learnings;
+}
+
 // ─── Founder Strategic Context: founder-declared strategic operating conditions (Wave 4, slice 1) ──────────
 // Five kinds (GOAL/CONSTRAINT/RESOURCE/STRATEGIC_PREFERENCE/DECISION_HORIZON). Append-only, temporal, scoped.
 // Every write is an explicit founder action — nothing is inferred or persisted without confirmation.
