@@ -192,10 +192,13 @@ export function StrategyPage() {
           <div style={{ marginTop: 'var(--sp-7)', paddingTop: 'var(--sp-5)', borderTop: '1px solid var(--line)' }}>
             <p style={meta}>Earlier priority questions</p>
             {history.map((h) => (
-              <button key={h.sessionId} type="button" onClick={() => void openHistory(h.sessionId)} style={historyRow}>
-                <span style={{ color: 'var(--ink-2)' }}>{h.question}</span>
-                <span style={{ color: 'var(--ink-3)', fontSize: 'var(--fs-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{statusLabel(h.status)}</span>
-              </button>
+              <div key={h.sessionId} style={{ borderBottom: '1px solid var(--line)' }}>
+                <button type="button" onClick={() => void openHistory(h.sessionId)} style={{ ...historyRow, borderBottom: 'none' }}>
+                  <span style={{ color: 'var(--ink-2)' }}>{h.question}</span>
+                  <span style={{ color: 'var(--ink-3)', fontSize: 'var(--fs-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{statusLabel(h.status)}</span>
+                </button>
+                <button type="button" data-testid="see-whole-thread" onClick={() => navigate(`/strategy/thread/${h.sessionId}`)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--gold)', padding: '0 0 10px' }}>See the whole thread →</button>
+              </div>
             ))}
           </div>
         )}

@@ -33,6 +33,7 @@ import { toExecutionReportView, toEffectiveExecutionView, effectiveFromHead, cha
 import { PgStrategicOutcomeReviewRepository } from '../business-model/pg-strategic-outcome-review.repository';
 import { toOutcomeReviewView, OutcomeReviewError, type ObservedOutcome, type StrategicOutcomeReviewInput } from '../business-model/strategic-outcome-review';
 import { PgLearningCandidateRepository } from '../business-model/pg-learning-candidate.repository';
+import { PgStrategyThreadProjection } from '../business-model/pg-strategic-thread.projection';
 import { toCandidateView, LearningCandidateError, type LearningCandidateInput, type CandidateVerdict } from '../business-model/learning-candidate';
 import { AnthropicStrategyModel } from '../business-model/anthropic-strategy.model';
 import { strategyModelConfig } from '../business-model/model-config';
@@ -60,6 +61,7 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
   const executionRepo = new PgExecutionReportRepository(db);
   const outcomeReviewRepo = new PgStrategicOutcomeReviewRepository(db);
   const learningCandidateRepo = new PgLearningCandidateRepository(db, learningRepo);
+  const threadProjection = new PgStrategyThreadProjection(db);
   const assembler = {
     understanding: new PgUnderstandingRepository(db), conclusionResponses: new PgConclusionResponseRepository(db),
     entities: new PgMarketEntityRepository(db), findings: new PgMarketFindingRepository(db),
@@ -680,6 +682,16 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
       await reply.code(201).send({ candidate: toCandidateView(thread[thread.length - 1]!, await learningCandidateRepo.decisionsForThread(founderId, decision.logicalCandidateId)), learning: learning ? toLearningView(learning) : null });
     } catch (e) { if (e instanceof LearningCandidateError) { await candidateErr(reply, e); return; } throw e; }
   };
+  // SHOW ME THE LOOP (product milestone). A NON-CANONICAL, deterministic read projection assembling the visible strategic
+  // thread from a root recommendation session. No mutation, no persistence, no model, no inferred links. Founder-isolated.
+  server.get('/strategy/threads/:rootSessionId', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const thread = await threadProjection.build(founderId, (request.params as { rootSessionId: string }).rootSessionId);
+    if (!thread) { await reply.code(404).send({ error: 'not found' }); return; }
+    await reply.send({ thread });
+  });
+
   server.post('/strategy/learning-candidates/:candidateId/adopt', candidateJudgment('ADOPT'));
   server.post('/strategy/learning-candidates/:candidateId/reject', candidateJudgment('REJECT'));
   server.post('/strategy/learning-candidates/:candidateId/defer', candidateJudgment('DEFER'));

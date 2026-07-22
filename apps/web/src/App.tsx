@@ -15,6 +15,7 @@ import { WelcomePage } from './arrival/WelcomePage';
 import { UnderstandPage } from './understand/UnderstandPage';
 import { MarketPage } from './market/MarketPage';
 import { StrategyPage } from './strategy/StrategyPage';
+import { StrategyThreadPage } from './strategy/StrategyThreadPage';
 import { StrategicContextPage } from './strategic-context/StrategicContextPage';
 import { ConnectPreviewPage } from './connect/ConnectPreviewPage';
 import { UploadPreviewPage } from './upload/UploadPreviewPage';
@@ -54,6 +55,8 @@ export function App() {
 
           {/* Wave 4 — Founder Strategy (bounded priority-decision reasoning over Waves 1–3 outputs). */}
           <Route path="/strategy" element={<StrategyPage />} />
+          {/* Show Me the Loop — the rendered Strategy Thread: one filmable Recommendation→…→Learning→Promotion→next journey. */}
+          <Route path="/strategy/thread/:rootSessionId" element={<StrategyThreadPage />} />
 
           {/* Wave 4 — Founder Strategic Context (explicit, founder-controlled strategy conditions). */}
           <Route path="/strategic-context" element={<StrategicContextPage />} />

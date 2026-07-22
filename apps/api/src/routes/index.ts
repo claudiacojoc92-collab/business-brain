@@ -8,6 +8,7 @@ import { registerGoogleDevRoutes }     from './google-dev.routes';
 import { registerDeclaredDevRoutes }   from './declared-dev.routes';
 import { registerMemoryDevRoutes }     from './memory-dev.routes';
 import { registerRecommendationDevRoutes } from './recommendation-dev.routes';
+import { registerStrategyLoopDemoRoutes } from './strategy-loop-demo.routes';
 import { registerAccountRoutes } from './account.routes';
 import { registerReadRoutes } from './read.routes';
 import { registerConnectRoutes } from './connect.routes';
@@ -69,6 +70,7 @@ export async function registerRoutes(
       registerDeclaredDevRoutes(nucleus);       // Capability B v1 — declared intent capture
       registerMemoryDevRoutes(nucleus);         // Business Memory v1 — the C→B response loop
       registerRecommendationDevRoutes(nucleus); // ADR-010 — Recommendation Product Primitive
+      registerStrategyLoopDemoRoutes(nucleus);   // Show Me the Loop — deterministic demo loop seed/reset (dev/test only)
     });
 
     // Google authenticated Source (OAuth lifecycle): its callback resolves the founder from the signed

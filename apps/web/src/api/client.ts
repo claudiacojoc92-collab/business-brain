@@ -406,6 +406,51 @@ export async function listStrategyResponses(id: string): Promise<StrategyRespons
   return responses;
 }
 
+// ─── Strategy Thread (Show Me the Loop) — a NON-CANONICAL, deterministic READ PROJECTION over accepted records ─────────
+// Recommendation → Decision → Commitment → Plan(s) → Execution → Outcome Review → Possible Learning → Strategic Learning →
+// Promotion → later Recommendation whose FROZEN snapshot included that promoted learning. Persists nothing, invents no link:
+// where an exact relationship is absent it is simply omitted (the UI renders SOURCE_UNAVAILABLE, never a fabricated edge).
+export interface ThreadRecommendation { sessionId: string; title: string; question: string; status: string; createdAt: string; snapshotId: string | null; snapshotHash: string | null }
+export interface ThreadDecision { id: string; logicalId: string; revision: number; statement: string; createdAt: string; fromRecommendationSessionId: string | null }
+export interface ThreadCommitment { id: string; logicalId: string; revision: number; statement: string; createdAt: string; fromDecisionId: string | null }
+export interface ThreadExecutionReport { subjectId: string; reportedState: string; statement: string | null; reportedAt: string | null }
+export interface ThreadPromotion { promotionEventId: string; target: string; action: string; learningRevisionId: string; at: string }
+export interface ThreadLearning {
+  learningId: string; logicalLearningId: string; origin: 'PLAN_REVIEW' | 'OUTCOME_REVIEW'; statement: string; scope: string; confidence: string; createdAt: string;
+  fromCandidateRevisionId: string | null; fromOutcomeReviewId: string | null; fromPlanReviewId: string | null;
+  promotions: ThreadPromotion[]; promoted: boolean;
+}
+export interface ThreadCandidate {
+  logicalCandidateId: string; headRevisionId: string; revision: number; statement: string; status: 'PROPOSED' | 'DEFERRED' | 'ADOPTED' | 'REJECTED' | 'WITHDRAWN';
+  unknowns: string[]; contradictions: string[]; createdAt: string; fromOutcomeReviewId: string; learningId: string | null;
+}
+export interface ThreadOutcomeReview {
+  reviewId: string; observedOutcome: string; statement: string; unknowns: string[]; createdAt: string; fromPlanRecordId: string; contextSnapshotId: string; candidates: ThreadCandidate[];
+}
+export interface ThreadPlan {
+  planId: string; logicalPlanId: string; revision: number; title: string; status: string; createdAt: string; fromCommitmentId: string | null;
+  executionReports: ThreadExecutionReport[]; outcomeReviews: ThreadOutcomeReview[];
+}
+export interface ThreadLaterRecommendation { sessionId: string; title: string; question: string; createdAt: string; includedLearningId: string; includedLogicalLearningId: string; includedLearningStatement: string; contextSnapshotId: string; disclosure: string }
+export interface StrategyThreadView {
+  rootSessionId: string;
+  recommendation: ThreadRecommendation | null;
+  decision: ThreadDecision | null;
+  commitment: ThreadCommitment | null;
+  plans: ThreadPlan[];
+  learnings: ThreadLearning[];
+  usedInLaterRecommendations: ThreadLaterRecommendation[];
+  provenanceAvailable: { decision: boolean; commitment: boolean; plan: boolean };
+  isProjectionNotCanonical: true;
+}
+/** Founder-facing copy for a relationship the projection could not resolve to an accepted record (never a fabricated edge). */
+export const SOURCE_UNAVAILABLE = 'Source relationship unavailable';
+/** GET /strategy/threads/:rootSessionId — the deterministic read projection of one strategic thread (404 if not owned/found). */
+export async function getStrategyThread(rootSessionId: string): Promise<StrategyThreadView> {
+  const { thread } = await request<{ thread: StrategyThreadView }>(`strategy/threads/${encodeURIComponent(rootSessionId)}`);
+  return thread;
+}
+
 // ─── Strategic Decision Record: a founder-EXPLICIT choice among understood alternatives (ADR-011 cat 10) ────
 // A decision is NOT recommendation feedback and NOT a commitment or plan. Only an explicit founder action here
 // creates one; it is append-only and preserves the decision-time state.
