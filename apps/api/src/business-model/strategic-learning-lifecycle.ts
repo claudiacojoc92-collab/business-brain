@@ -184,7 +184,8 @@ export function buildRevisionFields(action: Exclude<LearningLifecycleAction, 'CR
     retainedValidity: action === 'SUPERSEDE' ? s(input.retainedValidity) : null,
     counterevidenceResolution: s(input.counterevidenceResolution) || null,
     unknownsResolution: s(input.unknownsResolution) || null,
-    // lineage copied verbatim from the predecessor — never rebuilt (Law 5)
+    // origin + lineage copied verbatim from the predecessor — never rebuilt (Laws 5, 12/ADR-017)
+    learningOrigin: pred.learningOrigin, outcomeReviewId: pred.outcomeReviewId, learningCandidateId: pred.learningCandidateId,
     reviewRecordId: pred.reviewRecordId, reviewRevision: pred.reviewRevision, planRecordId: pred.planRecordId, commitmentRecordId: pred.commitmentRecordId,
     decisionRecordId: pred.decisionRecordId, recommendationSessionId: pred.recommendationSessionId, provenanceManifestVersion: pred.provenanceManifestVersion,
     learningStatement: m.learningStatement, learningCategory: m.learningCategory, confidence: m.confidence,

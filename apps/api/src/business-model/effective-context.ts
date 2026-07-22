@@ -31,7 +31,7 @@ export interface PromotedLearningProvenance {
   promotionSequence: number;
   epistemicStatus: string;            // from the PINNED revision (confidence) — not lifecycle
   lifecycleStatusAtRead: string;      // the thread's lifecycle status of the pinned revision, separately labelled
-  originalSourceLineage: { reviewRecordId: string; reviewRevision: number; recommendationSessionId: string | null };
+  originalSourceLineage: { reviewRecordId: string | null; reviewRevision: number | null; recommendationSessionId: string | null };
 }
 
 /** A canonical effective-context item. Native items and promoted-learning items are distinguished by `sourceType`. */

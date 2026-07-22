@@ -5,7 +5,7 @@
  * unique (founder, predecessor) index preventing forks. Founder-isolated. Idempotent on (founder, idempotency_key).
  */
 import { generateId } from '@bb/shared';
-import { buildLearningFields, LEARNING_SCHEMA_VERSION, type StrategicLearningRecord, type LearningInput } from './strategic-learning';
+import { buildLearningFields, buildLearningFieldsFromCandidate, LEARNING_SCHEMA_VERSION, type StrategicLearningRecord, type LearningInput, type CandidateLineage } from './strategic-learning';
 import { validateLifecycleTransition, buildRevisionFields, getEffectiveRevision, LearningLifecycleError, type LifecycleTransitionInput } from './strategic-learning-lifecycle';
 import type { LearningLifecycleAction } from './strategic-learning';
 import type { StrategicPlanReviewRecord } from './strategic-plan-review';
@@ -19,6 +19,7 @@ function rowValues(f: Omit<StrategicLearningRecord, 'id' | 'founderId' | 'logica
     lifecycle_action: f.lifecycleAction, predecessor_learning_id: f.predecessorLearningId, lifecycle_reason: f.lifecycleReason,
     replacement_summary: f.replacementSummary, retained_validity: f.retainedValidity,
     counterevidence_resolution: f.counterevidenceResolution, unknowns_resolution: f.unknownsResolution,
+    learning_origin: f.learningOrigin, outcome_review_id: f.outcomeReviewId, learning_candidate_id: f.learningCandidateId,
     review_record_id: f.reviewRecordId, review_revision: f.reviewRevision, plan_record_id: f.planRecordId, commitment_record_id: f.commitmentRecordId,
     decision_record_id: f.decisionRecordId, recommendation_session_id: f.recommendationSessionId, provenance_manifest_version: f.provenanceManifestVersion,
     learning_statement: f.learningStatement, learning_category: f.learningCategory, confidence: f.confidence,
@@ -43,6 +44,20 @@ export class PgStrategicLearningRepository {
     const values = { id, founder_id: founderId, logical_learning_id: id, revision: 1, root_learning_id: id, created_at: now.toISOString(), ...rowValues(f) };
     try { return this.toDomain(await this.db.insertInto('business.strategic_learning_record').values(values).returningAll().executeTakeFirst()); }
     catch (e) { const again = await this.byIdempotencyKey(founderId, input.idempotencyKey); if (again) return again; throw e; }
+  }
+
+  /** CREATE an OUTCOME_REVIEW-origin learning thread from an accepted Learning Candidate (ADR-017). Idempotent. */
+  async createFromCandidate(founderId: string, candidate: CandidateLineage, input: LearningInput, now: Date): Promise<StrategicLearningRecord> {
+    const existing = await this.byIdempotencyKey(founderId, input.idempotencyKey);
+    if (existing) return existing;
+    return this.createFromCandidateTx(this.db, founderId, candidate, input, now);
+  }
+  /** As createFromCandidate, but inside an existing transaction (used by the atomic candidate ACCEPT). */
+  async createFromCandidateTx(tx: AnyDB, founderId: string, candidate: CandidateLineage, input: LearningInput, now: Date): Promise<StrategicLearningRecord> {
+    const f = buildLearningFieldsFromCandidate(candidate, input);
+    const id = generateId();
+    const values = { id, founder_id: founderId, logical_learning_id: id, revision: 1, root_learning_id: id, created_at: now.toISOString(), ...rowValues(f) };
+    return this.toDomain(await tx.insertInto('business.strategic_learning_record').values(values).returningAll().executeTakeFirst());
   }
 
   /** Append a lifecycle revision (REFINE/CONTEST/SUPERSEDE/RETIRE) to a thread under a row lock. No-fork, idempotent. */
@@ -112,7 +127,8 @@ export class PgStrategicLearningRepository {
       lifecycleAction: r.lifecycle_action, rootLearningId: r.root_learning_id, predecessorLearningId: r.predecessor_learning_id ?? null,
       lifecycleReason: r.lifecycle_reason ?? null, replacementSummary: r.replacement_summary ?? null, retainedValidity: r.retained_validity ?? null,
       counterevidenceResolution: r.counterevidence_resolution ?? null, unknownsResolution: r.unknowns_resolution ?? null,
-      reviewRecordId: r.review_record_id, reviewRevision: Number(r.review_revision), planRecordId: r.plan_record_id, commitmentRecordId: r.commitment_record_id,
+      learningOrigin: r.learning_origin ?? 'PLAN_REVIEW', outcomeReviewId: r.outcome_review_id ?? null, learningCandidateId: r.learning_candidate_id ?? null,
+      reviewRecordId: r.review_record_id ?? null, reviewRevision: r.review_revision == null ? null : Number(r.review_revision), planRecordId: r.plan_record_id, commitmentRecordId: r.commitment_record_id,
       decisionRecordId: r.decision_record_id ?? null, recommendationSessionId: r.recommendation_session_id ?? null, provenanceManifestVersion: r.provenance_manifest_version ?? null,
       learningStatement: r.learning_statement, learningCategory: r.learning_category, confidence: r.confidence,
       priorUnderstanding: r.prior_understanding ?? '', revisedUnderstanding: r.revised_understanding ?? '', changeStatement: r.change_statement ?? '',

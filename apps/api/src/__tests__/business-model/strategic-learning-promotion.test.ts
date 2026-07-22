@@ -22,7 +22,7 @@ function rev(over: Partial<StrategicLearningRecord> = {}): StrategicLearningReco
     id: 'rev6', founderId: 'f-1', logicalLearningId: 'thread-1', revision: 6, schemaVersion: 'strategic-learning-1',
     lifecycleAction: 'REFINE', rootLearningId: 'rev1', predecessorLearningId: 'rev5', lifecycleReason: 'x',
     replacementSummary: null, retainedValidity: null, counterevidenceResolution: null, unknownsResolution: null,
-    reviewRecordId: 'review-1', reviewRevision: 1, planRecordId: 'plan-1', commitmentRecordId: 'com-1',
+    learningOrigin: 'PLAN_REVIEW', outcomeReviewId: null, learningCandidateId: null, reviewRecordId: 'review-1', reviewRevision: 1, planRecordId: 'plan-1', commitmentRecordId: 'com-1',
     decisionRecordId: 'dec-1', recommendationSessionId: 'sess-1', provenanceManifestVersion: 'pm-1',
     learningStatement: 'Founder-led outreach converts.', learningCategory: 'EXECUTION', confidence: 'SUPPORTED',
     priorUnderstanding: 'a', revisedUnderstanding: 'b', changeStatement: 'c', learningScope: 'THIS_CHANNEL',

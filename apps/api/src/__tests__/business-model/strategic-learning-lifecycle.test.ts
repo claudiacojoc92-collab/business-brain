@@ -16,7 +16,7 @@ function rec(over: Partial<StrategicLearningRecord> = {}): StrategicLearningReco
     id: 'rev-1', founderId: 'f-1', logicalLearningId: 'rev-1', revision: 1, schemaVersion: 'strategic-learning-1',
     lifecycleAction: 'CREATE', rootLearningId: 'rev-1', predecessorLearningId: null, lifecycleReason: null,
     replacementSummary: null, retainedValidity: null, counterevidenceResolution: null, unknownsResolution: null,
-    reviewRecordId: 'review-1', reviewRevision: 1, planRecordId: 'plan-1', commitmentRecordId: 'com-1',
+    learningOrigin: 'PLAN_REVIEW', outcomeReviewId: null, learningCandidateId: null, reviewRecordId: 'review-1', reviewRevision: 1, planRecordId: 'plan-1', commitmentRecordId: 'com-1',
     decisionRecordId: 'dec-1', recommendationSessionId: 'sess-1', provenanceManifestVersion: 'pm-1',
     learningStatement: 'Founder-led outreach converts at our stage.', learningCategory: 'EXECUTION', confidence: 'SUPPORTED',
     priorUnderstanding: 'I believed paid ads would be fastest.', revisedUnderstanding: 'Outreach is fastest now.', changeStatement: 'Moved to outreach-first.',

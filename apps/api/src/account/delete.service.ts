@@ -49,6 +49,9 @@ export async function deleteFounderAccount(
     await tx.deleteFrom('business.understanding_run').where('founder_id', '=', founderId).execute(); // Wave 2 (V059) — generation runs
     await tx.deleteFrom('business.conclusion_response').where('founder_id', '=', founderId).execute(); // Wave 2 (V060) — founder response history
     await tx.deleteFrom('business.founder_strategic_context_item').where('founder_id', '=', founderId).execute(); // Wave 4 (V067) — strategic context items (all versions)
+    await sql`SET LOCAL bb.allow_learning_candidate_delete = 'on'`.execute(tx);
+    await tx.deleteFrom('business.learning_candidate_decision').where('founder_id', '=', founderId).execute(); // ADR-017 (V087) — candidate decisions
+    await tx.deleteFrom('business.learning_candidate').where('founder_id', '=', founderId).execute();          // ADR-017 (V087) — learning candidates
     await tx.deleteFrom('business.strategic_learning_record').where('founder_id', '=', founderId).execute(); // Wave 4 (V076) — strategic learning records (promoted from reviews; delete first)
     await tx.deleteFrom('business.strategic_plan_review_record').where('founder_id', '=', founderId).execute(); // Wave 4 (V075) — strategic plan reviews
     await tx.deleteFrom('business.strategic_plan_record').where('founder_id', '=', founderId).execute(); // Wave 4 (V074) — strategic plan records (all revisions)

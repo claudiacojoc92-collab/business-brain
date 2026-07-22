@@ -629,6 +629,31 @@ export async function listOutcomeReviews(planId: string): Promise<OutcomeReviewV
   return (await request<{ reviews: OutcomeReviewView[] }>(`strategy/plans/${encodeURIComponent(planId)}/outcome-reviews`)).reviews;
 }
 
+// ─── Strategic Learning Origination Gate (ADR-017) — Outcome Review → Learning Candidate → explicit judgment → Learning ──
+// A candidate is a PROPOSAL: creating it makes no learning. It becomes a learning ONLY via an explicit ACCEPT (never a
+// promotion); the founder may DISMISS. No generic Review→Learning source; the Plan Review path is separate.
+export type CandidateStatus = 'PROPOSED' | 'ACCEPTED' | 'DISMISSED';
+export interface OutcomeLearningCandidateView {
+  candidateId: string; outcomeReviewId: string; outcomeReviewContentHash: string;
+  plan: { recordId: string; logicalId: string; revision: number };
+  sourceObservedOutcome: string; candidateStatement: string; candidateRationale: string | null;
+  status: CandidateStatus;
+  decision: { verdict: 'ACCEPT' | 'DISMISS'; founderJudgment: string; resultingLearningId: string | null; decidedAt: string } | null;
+  createdAt: string; isProposalNotLearning: true; createsNothingUntilAccepted: true; neverAutoPromotes: true;
+}
+export async function proposeLearningCandidate(reviewId: string, input: { candidateStatement: string; candidateRationale?: string | null; idempotencyKey: string }): Promise<OutcomeLearningCandidateView> {
+  return (await request<{ candidate: OutcomeLearningCandidateView }>(`strategy/outcome-reviews/${encodeURIComponent(reviewId)}/learning-candidates`, { method: 'POST', body: JSON.stringify(input) })).candidate;
+}
+export async function listLearningCandidates(reviewId: string): Promise<OutcomeLearningCandidateView[]> {
+  return (await request<{ candidates: OutcomeLearningCandidateView[] }>(`strategy/outcome-reviews/${encodeURIComponent(reviewId)}/learning-candidates`)).candidates;
+}
+export async function acceptLearningCandidate(candidateId: string, body: CreateLearningInput & { founderJudgment: string }): Promise<{ candidate: OutcomeLearningCandidateView; learning: LearningView | null }> {
+  return await request<{ candidate: OutcomeLearningCandidateView; learning: LearningView | null }>(`strategy/learning-candidates/${encodeURIComponent(candidateId)}/accept`, { method: 'POST', body: JSON.stringify(body) });
+}
+export async function dismissLearningCandidate(candidateId: string, founderJudgment: string, idempotencyKey: string): Promise<OutcomeLearningCandidateView> {
+  return (await request<{ candidate: OutcomeLearningCandidateView }>(`strategy/learning-candidates/${encodeURIComponent(candidateId)}/dismiss`, { method: 'POST', body: JSON.stringify({ founderJudgment, idempotencyKey }) })).candidate;
+}
+
 // ─── Strategic Learning Record (ADR-011 cat 14 precursor — durable learning, NOT generic Strategic Memory) ──
 // A durable strategic understanding the founder EXPLICITLY decides to KEEP after a review (initial CREATE-only slice).
 // Most reviews create NO learning. Founder-authored; confidence bounded and never truth-inflating. Keeping one changes
@@ -645,7 +670,8 @@ export interface LearningView {
   learningScope: LearningScope; broadScopeAcknowledged: boolean; isCausalHypothesis: boolean;
   boundaryConditions: string[]; counterEvidence: string[]; unresolvedUnknowns: string[];
   observations: Array<{ statement: string; sourceType: LearningObservationSource }>; evidenceReferences: Array<{ space: string; id: string }>;
-  review: { recordId: string; revision: number }; plan: { recordId: string }; commitment: { recordId: string };
+  origin: 'PLAN_REVIEW' | 'OUTCOME_REVIEW'; outcomeReviewId: string | null; learningCandidateId: string | null;
+  review: { recordId: string | null; revision: number | null }; plan: { recordId: string }; commitment: { recordId: string };
   decisionRecordId: string | null; recommendationSessionId: string | null; provenanceManifestVersion: string | null;
   authorship: { founderAuthored: boolean; modelSuggested: boolean; acceptedByFounder: boolean };
   createdAt: string; learningSchemaVersion: string;

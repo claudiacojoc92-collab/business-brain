@@ -16,6 +16,7 @@ import {
   listPlans, getPlan, getEffectiveExecution, addExecutionReport, correctExecutionReport, withdrawExecutionReport, listExecutionReports,
   type ExecutionState, type EffectiveExecutionResponse, type ExecutionReportView, type EvidenceType,
   addOutcomeReview, listOutcomeReviews, type OutcomeReviewView, type ObservedOutcome,
+  proposeLearningCandidate, listLearningCandidates, acceptLearningCandidate, dismissLearningCandidate, type OutcomeLearningCandidateView,
 } from '../api/client';
 import { AppShell, Button, Thinking } from '../system/ui';
 
@@ -1394,6 +1395,90 @@ const OUTCOME_OPTS: Array<{ v: ObservedOutcome; label: string }> = [
   { v: 'AS_INTENDED', label: 'As intended (as you report it)' }, { v: 'PARTIALLY_AS_INTENDED', label: 'Partially as intended' },
   { v: 'NOT_AS_INTENDED', label: 'Not as intended' }, { v: 'UNKNOWN', label: 'Unknown — not enough to say' },
 ];
+// ADR-017 — the Strategic Learning Origination Gate, surfaced UNDER each outcome review. A candidate is a PROPOSAL: it
+// creates no learning. It becomes a learning ONLY via an explicit Accept (which never promotes); the founder may Dismiss.
+function LearningCandidatesForReview({ reviewId, planId, seq, on401 }: { reviewId: string; planId: string; seq: number; on401: (e: unknown) => void }) {
+  const [cands, setCands] = useState<OutcomeLearningCandidateView[] | null>(null);
+  const [proposing, setProposing] = useState(false);
+  const [statement, setStatement] = useState('');
+  const [acceptFor, setAcceptFor] = useState<string | null>(null);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [ls, setLs] = useState(''); const [prior, setPrior] = useState(''); const [revised, setRevised] = useState(''); const [change, setChange] = useState('');
+  const [cat, setCat] = useState<LearningCategory | ''>(''); const [conf, setConf] = useState<LearningConfidence | ''>(''); const [scope, setScope] = useState<LearningScope | ''>(''); const [judgment, setJudgment] = useState('');
+  const tid = `${planId}-${seq}`;
+  const load = useCallback(async () => {
+    try { setCands(await listLearningCandidates(reviewId)); } catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setCands([]); }
+  }, [reviewId, on401]);
+  useEffect(() => { void load(); }, [load]);
+  const propose = async () => {
+    setErr(''); setBusy(true);
+    try { await proposeLearningCandidate(reviewId, { candidateStatement: statement.trim(), idempotencyKey: newKey() }); setProposing(false); setStatement(''); await load(); }
+    catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setErr(e instanceof ApiError ? e.message : 'Could not propose.'); } finally { setBusy(false); }
+  };
+  const accept = async (candidateId: string) => {
+    setErr(''); setBusy(true);
+    try {
+      await acceptLearningCandidate(candidateId, { learningStatement: ls.trim(), learningCategory: cat as LearningCategory, confidence: conf as LearningConfidence, priorUnderstanding: prior.trim(), revisedUnderstanding: revised.trim(), changeStatement: change.trim(), learningScope: scope as LearningScope, founderJudgment: judgment.trim() || 'Worth keeping.', idempotencyKey: newKey() });
+      setAcceptFor(null); setLs(''); setPrior(''); setRevised(''); setChange(''); setCat(''); setConf(''); setScope(''); setJudgment('');
+      await load(); try { window.dispatchEvent(new Event('bb:learning-kept')); } catch { /* noop */ }
+    } catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setErr(e instanceof ApiError ? e.message : 'Could not accept.'); } finally { setBusy(false); }
+  };
+  const dismiss = async (candidateId: string) => {
+    setBusy(true);
+    try { await dismissLearningCandidate(candidateId, 'Not a durable learning.', newKey()); await load(); }
+    catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setErr('Could not dismiss.'); } finally { setBusy(false); }
+  };
+  if (!cands) return null;
+  return (
+    <div data-testid={`candidates-${tid}`} style={{ marginTop: 8, paddingLeft: 8, borderLeft: '2px dotted var(--line-2)' }}>
+      <p style={{ ...meta }}>Retrospective learning is <strong>gated</strong>: a candidate here is a <em>proposal</em> — it becomes a durable learning only if you explicitly accept it, and accepting never promotes anything.</p>
+      {cands.length === 0 && <p data-testid={`candidates-none-${tid}`} style={{ ...meta, marginTop: 2 }}>No learning candidate proposed.</p>}
+      {cands.map((c) => (
+        <div key={c.candidateId} data-testid={`candidate-${c.candidateId}`} style={{ marginTop: 6 }}>
+          <p style={{ ...meta }}>“{c.candidateStatement}” · <span data-testid={`candidate-status-${c.candidateId}`}>{nice(c.status)}</span>{c.decision?.resultingLearningId ? ' → learning kept' : ''}</p>
+          {c.status === 'PROPOSED' && acceptFor !== c.candidateId && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              <button type="button" data-testid={`candidate-accept-open-${c.candidateId}`} onClick={() => setAcceptFor(c.candidateId)} style={lcBtn}>Accept as a learning</button>
+              <button type="button" data-testid={`candidate-dismiss-${c.candidateId}`} onClick={() => void dismiss(c.candidateId)} disabled={busy} style={lcBtn}>Dismiss</button>
+            </div>
+          )}
+          {acceptFor === c.candidateId && (
+            <div data-testid={`candidate-accept-form-${c.candidateId}`} style={{ marginTop: 6 }}>
+              <label style={{ ...meta, display: 'block' }}>The durable learning<textarea data-testid={`accept-statement-${c.candidateId}`} value={ls} onChange={(e) => setLs(e.target.value)} rows={2} style={taStyle} /></label>
+              <label style={{ ...meta, display: 'block', marginTop: 4 }}>Before<textarea data-testid={`accept-prior-${c.candidateId}`} value={prior} onChange={(e) => setPrior(e.target.value)} rows={1} style={taStyle} /></label>
+              <label style={{ ...meta, display: 'block', marginTop: 4 }}>Now<textarea data-testid={`accept-revised-${c.candidateId}`} value={revised} onChange={(e) => setRevised(e.target.value)} rows={1} style={taStyle} /></label>
+              <label style={{ ...meta, display: 'block', marginTop: 4 }}>What changed<textarea data-testid={`accept-change-${c.candidateId}`} value={change} onChange={(e) => setChange(e.target.value)} rows={1} style={taStyle} /></label>
+              <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                <select data-testid={`accept-category-${c.candidateId}`} aria-label="Category" value={cat} onChange={(e) => setCat(e.target.value as LearningCategory)} style={selStyle}><option value="">Category…</option>{LEARNING_CATEGORIES.map((x) => <option key={x.v} value={x.v}>{x.label}</option>)}</select>
+                <select data-testid={`accept-confidence-${c.candidateId}`} aria-label="Confidence" value={conf} onChange={(e) => setConf(e.target.value as LearningConfidence)} style={selStyle}><option value="">How settled…</option>{LEARNING_CONFIDENCES.map((x) => <option key={x.v} value={x.v}>{x.label}</option>)}</select>
+                <select data-testid={`accept-scope-${c.candidateId}`} aria-label="Scope" value={scope} onChange={(e) => setScope(e.target.value as LearningScope)} style={selStyle}><option value="">How widely…</option>{LEARNING_SCOPES.map((x) => <option key={x.v} value={x.v}>{x.label}</option>)}</select>
+              </div>
+              {err && <p data-testid={`candidate-error-${c.candidateId}`} style={{ ...meta, color: 'var(--warn-ink)', marginTop: 4 }}>{err}</p>}
+              <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                <Button variant="primary" loading={busy} disabled={!ls.trim() || !cat || !conf || !scope} onClick={() => void accept(c.candidateId)}><span data-testid={`candidate-accept-submit-${c.candidateId}`}>Keep this learning</span></Button>
+                <button type="button" data-testid={`candidate-accept-cancel-${c.candidateId}`} onClick={() => { setAcceptFor(null); setErr(''); }} style={lcBtn}>Cancel</button>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+      {!proposing && <button type="button" data-testid={`candidate-propose-open-${tid}`} onClick={() => setProposing(true)} style={{ ...lcBtn, marginTop: 6 }}>Propose a learning candidate</button>}
+      {proposing && (
+        <div data-testid={`candidate-propose-form-${tid}`} style={{ marginTop: 6 }}>
+          <label style={{ ...meta, display: 'block' }}>The learning this retrospective suggests (a proposal — creates nothing yet)
+            <textarea data-testid={`candidate-statement-${tid}`} value={statement} onChange={(e) => setStatement(e.target.value)} rows={2} style={taStyle} /></label>
+          {err && <p data-testid={`candidate-propose-error-${tid}`} style={{ ...meta, color: 'var(--warn-ink)', marginTop: 4 }}>{err}</p>}
+          <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+            <Button variant="primary" loading={busy} disabled={!statement.trim()} onClick={() => void propose()}><span data-testid={`candidate-propose-submit-${tid}`}>Propose</span></Button>
+            <button type="button" data-testid={`candidate-propose-cancel-${tid}`} onClick={() => { setProposing(false); setErr(''); }} style={lcBtn}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OutcomeReviewPanel({ plan, on401 }: { plan: PlanView; on401: (e: unknown) => void }) {
   const [reviews, setReviews] = useState<OutcomeReviewView[] | null>(null);
   const [snaps, setSnaps] = useState<SnapshotView[]>([]);
@@ -1438,6 +1523,7 @@ function OutcomeReviewPanel({ plan, on401 }: { plan: PlanView; on401: (e: unknow
           <p style={{ ...meta, marginTop: 2 }}>Evidence at review: snapshot {r.contextSnapshotHash.slice(0, 12)}… · {r.assessment.evidence.executionEvidence.length} founder-supplied reference(s), none verified</p>
           <p data-testid={`outcome-unknowns-${plan.planId}-${r.reviewSequence}`} style={{ ...meta, marginTop: 2 }}>Unknown: {r.unknowns.length ? r.unknowns.join(' · ') : (r.observedOutcome === 'UNKNOWN' ? 'outcome unknown — not enough to say' : 'none recorded')}</p>
           <p style={{ ...meta, marginTop: 2, color: 'var(--ink-3)' }}>Immutable · not verified by Business Brain · not a score · reproducible (hash {r.reproducibility.contentHash.slice(0, 12)}…)</p>
+          <LearningCandidatesForReview reviewId={r.reviewId} planId={plan.planId} seq={r.reviewSequence} on401={on401} />
         </div>
       ))}
       {!open && <button type="button" data-testid={`outcome-review-open-${plan.planId}`} onClick={() => setOpen(true)} style={{ ...lcBtn, marginTop: 8 }}>Record an outcome review</button>}
