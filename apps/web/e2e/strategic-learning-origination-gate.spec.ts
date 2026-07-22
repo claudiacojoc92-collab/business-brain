@@ -70,12 +70,11 @@ test('retrospective learning is gated through a revisioned candidate: propose �
   await plan(page).getByTestId('exec-report-submit').click();
   await expect(plan(page).getByTestId(`exec-state-${item}`)).toHaveText('Reported attempted');
 
-  // record an outcome review
+  // record an outcome review (the frozen context is minted automatically — no separate snapshot step)
   await plan(page).getByTestId(`outcome-review-open-${REV1}`).click();
-  await plan(page).getByTestId(`outcome-create-snapshot-${REV1}`).click();
-  await expect(plan(page).getByTestId(`outcome-snapshot-${REV1}`)).toBeVisible();
   await plan(page).getByTestId(`outcome-select-${REV1}`).selectOption('PARTIALLY_AS_INTENDED');
   await plan(page).getByTestId(`outcome-statement-${REV1}`).fill('We shipped for three weeks, then paused.');
+  await expect(plan(page).getByTestId(`outcome-submit-${REV1}`).locator('xpath=ancestor::button')).toBeEnabled(); // snapshot auto-minted
   await plan(page).getByTestId(`outcome-submit-${REV1}`).click();
   await expect(plan(page).getByTestId(`outcome-review-item-${REV1}-1`)).toBeVisible();
 
@@ -87,9 +86,9 @@ test('retrospective learning is gated through a revisioned candidate: propose �
   const lid = () => sql(`SELECT logical_candidate_id FROM business.learning_candidate WHERE founder_id='${founderId}' ORDER BY created_at DESC LIMIT 1;`);
   const L1 = lid();
   await expect(plan(page).getByTestId(`candidate-rev-${L1}`)).toHaveText('1');
-  await expect(plan(page).getByTestId(`candidate-status-${L1}`)).toHaveText(/proposed/i);
-  await expect(plan(page).getByTestId(`candidate-provenance-${L1}`)).toContainText('Whether it scales.'); // unknown disclosed
-  await expect(plan(page).getByTestId(`candidate-provenance-${L1}`)).toContainText('One week we paused.'); // contradiction disclosed
+  await expect(plan(page).getByTestId(`candidate-status-${L1}`)).toHaveText(/possible learning/i);
+  await expect(plan(page).getByTestId(`candidate-unknown-${L1}`)).toContainText('Whether it scales.'); // unknown disclosed (collapsed)
+  await expect(plan(page).getByTestId(`candidate-cuts-${L1}`)).toContainText('One week we paused.'); // contradiction disclosed (collapsed)
   expect(learnings()).toBe('0');
   await plan(page).getByTestId(`candidates-${tid}`).screenshot({ path: 'e2e/__evidence__/logate-candidate-proposed.png' }).catch(() => {});
 
@@ -104,12 +103,12 @@ test('retrospective learning is gated through a revisioned candidate: propose �
 
   // ── defer → NO learning; still eligible ──
   await plan(page).getByTestId(`candidate-defer-${L1}`).click();
-  await expect(plan(page).getByTestId(`candidate-status-${L1}`)).toHaveText(/deferred/i);
+  await expect(plan(page).getByTestId(`candidate-status-${L1}`)).toHaveText(/not yet/i);
   expect(learnings()).toBe('0');
 
   // ── adopt the latest revision → EXACTLY ONE OUTCOME_REVIEW learning; zero promotion ──
   await plan(page).getByTestId(`candidate-adopt-${L1}`).click();
-  await expect(plan(page).getByTestId(`candidate-status-${L1}`)).toHaveText(/adopted/i);
+  await expect(plan(page).getByTestId(`candidate-status-${L1}`)).toHaveText(/kept/i);
   await plan(page).getByTestId(`candidate-${L1}`).screenshot({ path: 'e2e/__evidence__/logate-candidate-adopted.png' }).catch(() => {});
   expect(learnings()).toBe('1');
   expect(sql(`SELECT learning_origin FROM business.strategic_learning_record WHERE founder_id='${founderId}';`)).toBe('OUTCOME_REVIEW');
@@ -126,7 +125,7 @@ test('retrospective learning is gated through a revisioned candidate: propose �
   await plan(page).getByTestId(`candidate-submit-${tid}`).click();
   const L2 = lid();
   await plan(page).getByTestId(`candidate-reject-${L2}`).click();
-  await expect(plan(page).getByTestId(`candidate-status-${L2}`)).toHaveText(/rejected/i);
+  await expect(plan(page).getByTestId(`candidate-status-${L2}`)).toHaveText(/discarded/i);
   await expect(plan(page).getByTestId(`candidate-${L2}`)).toBeVisible(); // rejected candidate stays visible
   expect(learnings()).toBe('1'); // still exactly one learning
 });

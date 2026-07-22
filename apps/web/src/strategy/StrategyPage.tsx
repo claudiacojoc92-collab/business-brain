@@ -1077,6 +1077,8 @@ const PROMOTION_SCOPES: { v: PromotionScope; label: string }[] = [
   { v: 'BUSINESS', label: 'The whole business' }, { v: 'FOUNDER', label: 'Founder strategy' }, { v: 'OTHER', label: 'Something else' },
 ];
 const TARGET_LABEL: Record<PromotionTarget, string> = { BUSINESS_UNDERSTANDING: 'Business Understanding', FOUNDER_STRATEGIC_CONTEXT: 'Founder Strategic Context' };
+// Founder-facing PURPOSE of promotion (the domain still calls this a promotion event into BU/FSC).
+const PROMOTE_PURPOSE: Record<PromotionTarget, string> = { BUSINESS_UNDERSTANDING: 'Let future decisions use this', FOUNDER_STRATEGIC_CONTEXT: 'Apply to your whole strategy' };
 
 // Promotion is governance, not evidence — an explicit founder act pinning an EXACT learning revision into BU/FSC. It
 // modifies nothing else and regenerates nothing.
@@ -1155,9 +1157,9 @@ function ThreadCard({ thread, promoted, on401 }: { thread: LearningThreadView; p
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
                 {targets.map((t) => {
                   const pinned = promoted[t];
-                  if (!pinned) return <button key={t} type="button" data-testid={`promote-${tkey(t)}-rev-${r.revision}`} onClick={() => setPromo({ revisionId: r.learningId, target: t, action: 'promote' })} style={lcBtn}>Promote to {TARGET_LABEL[t]}</button>;
-                  if (pinned === r.learningId) return <span key={t} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><span data-testid={`promoted-here-${tkey(t)}`} style={{ ...meta }}>✓ Promoted to {TARGET_LABEL[t]}</span><button type="button" data-testid={`remove-${tkey(t)}-rev-${r.revision}`} onClick={() => setPromo({ revisionId: r.learningId, target: t, action: 'remove' })} style={lcBtn}>Remove</button></span>;
-                  return <button key={t} type="button" data-testid={`replace-${tkey(t)}-rev-${r.revision}`} onClick={() => setPromo({ revisionId: r.learningId, target: t, action: 'replace' })} style={lcBtn}>Replace {TARGET_LABEL[t]} with this revision</button>;
+                  if (!pinned) return <button key={t} type="button" data-testid={`promote-${tkey(t)}-rev-${r.revision}`} onClick={() => setPromo({ revisionId: r.learningId, target: t, action: 'promote' })} style={lcBtn}>{PROMOTE_PURPOSE[t]}</button>;
+                  if (pinned === r.learningId) return <span key={t} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><span data-testid={`promoted-here-${tkey(t)}`} style={{ ...meta }}>✓ {PROMOTE_PURPOSE[t]}</span><button type="button" data-testid={`remove-${tkey(t)}-rev-${r.revision}`} onClick={() => setPromo({ revisionId: r.learningId, target: t, action: 'remove' })} style={lcBtn}>Stop using it</button></span>;
+                  return <button key={t} type="button" data-testid={`replace-${tkey(t)}-rev-${r.revision}`} onClick={() => setPromo({ revisionId: r.learningId, target: t, action: 'replace' })} style={lcBtn}>Use this version instead</button>;
                 })}
               </div>
             </div>
@@ -1406,7 +1408,10 @@ function LearningCandidatesForReview({ review, planId, seq, on401 }: { review: O
   const [mode, setMode] = useState<{ kind: 'propose' } | { kind: 'edit'; logicalId: string } | null>(null);
   const [f, setF] = useState<CandForm>(emptyForm());
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const tid = `${planId}-${seq}`;
+  // founder verbs for the internal statuses (domain keeps PROPOSED/DEFERRED/ADOPTED/REJECTED/WITHDRAWN)
+  const statusLabel = (st: string) => st === 'PROPOSED' ? 'Possible learning' : st === 'DEFERRED' ? 'Not yet' : st === 'ADOPTED' ? 'Kept' : 'Discarded';
   const reportedObs = review.assessment.reported.map((r) => ({ kind: 'REPORTED' as const, ref: r.subjectId, statement: `${r.subjectId}: ${r.reportedState}` }));
   const load = useCallback(async () => {
     try { setCands(await listLearningCandidates(reviewId)); } catch (e) { if (e instanceof ApiError && e.status === 401) { on401(e); return; } setCands([]); }
@@ -1456,25 +1461,33 @@ function LearningCandidatesForReview({ review, planId, seq, on401 }: { review: O
   );
   return (
     <div data-testid={`candidates-${tid}`} style={{ marginTop: 8, paddingLeft: 8, borderLeft: '2px dotted var(--line-2)' }}>
-      <p style={{ ...meta }}>Retrospective learning is <strong>gated</strong>: a candidate here is a <em>proposal</em> you can revise — it becomes a durable learning only if you explicitly <strong>adopt</strong> it, and adopting never promotes anything.</p>
-      {cands.length === 0 && <p data-testid={`candidates-none-${tid}`} style={{ ...meta, marginTop: 2 }}>No learning candidate proposed.</p>}
+      <p style={{ ...meta }}>A <strong>possible learning</strong> is just a suggestion from this retrospective — you can keep it, set it aside, or discard it. Keeping it never shares it with future decisions on its own.</p>
+      {cands.length === 0 && <p data-testid={`candidates-none-${tid}`} style={{ ...meta, marginTop: 2 }}>Nothing suggested yet.</p>}
       {cands.map((c) => (
         <div key={c.logicalCandidateId} data-testid={`candidate-${c.logicalCandidateId}`} style={{ marginTop: 6 }}>
-          <p style={{ ...meta }}>“{c.candidateStatement}” · rev <span data-testid={`candidate-rev-${c.logicalCandidateId}`}>{c.revision}</span> · <span data-testid={`candidate-status-${c.logicalCandidateId}`}>{nice(c.status)}</span>{c.terminalDecision?.resultingLearningId ? ' → learning kept' : ''}</p>
-          <p data-testid={`candidate-provenance-${c.logicalCandidateId}`} style={{ ...meta, color: 'var(--ink-3)' }}>From outcome review {c.source.outcomeReviewId.slice(0, 8)}… (rev {c.source.outcomeReviewRevision}) · snapshot {c.source.snapshotId.slice(0, 8)}… · unknown: {c.unknownMarkers.join('; ') || 'none'} · cuts against: {c.contradictionMarkers.join('; ') || 'none'} · a proposal, not a learning</p>
+          <p style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-sm)', color: 'var(--ink-1)' }}>“{c.candidateStatement}” <span style={{ ...meta }}>· <span data-testid={`candidate-status-${c.logicalCandidateId}`}>{statusLabel(c.status)}</span> · v<span data-testid={`candidate-rev-${c.logicalCandidateId}`}>{c.revision}</span></span></p>
+          <p style={{ ...meta, marginTop: 2 }}>Appears true when: {nice(c.applicabilityScope)}</p>
+          <p data-testid={`candidate-unknown-${c.logicalCandidateId}`} style={{ ...meta, marginTop: 2 }}>Still unknown: {c.unknownMarkers.join('; ') || 'nothing noted'}</p>
+          <p data-testid={`candidate-cuts-${c.logicalCandidateId}`} style={{ ...meta, marginTop: 2 }}>Cuts against it: {c.contradictionMarkers.join('; ') || 'nothing noted'}</p>
           {nonTerminal(c.status) && mode === null && (
             <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
-              <button type="button" data-testid={`candidate-adopt-${c.logicalCandidateId}`} onClick={() => void judge(c.candidateId, 'ADOPT')} disabled={busy} style={lcBtn}>Adopt (creates a learning; does not promote)</button>
-              <button type="button" data-testid={`candidate-reject-${c.logicalCandidateId}`} onClick={() => void judge(c.candidateId, 'REJECT')} disabled={busy} style={lcBtn}>Reject</button>
-              <button type="button" data-testid={`candidate-defer-${c.logicalCandidateId}`} onClick={() => void judge(c.candidateId, 'DEFER')} disabled={busy} style={lcBtn}>Defer</button>
-              <button type="button" data-testid={`candidate-withdraw-${c.logicalCandidateId}`} onClick={() => void judge(c.candidateId, 'WITHDRAW')} disabled={busy} style={lcBtn}>Withdraw</button>
-              <button type="button" data-testid={`candidate-edit-open-${c.logicalCandidateId}`} onClick={() => { setF({ statement: c.candidateStatement, founder: c.founderStatement, prior: c.priorUnderstanding, revised: c.revisedUnderstanding, change: c.changeStatement, cat: c.learningCategory as LearningCategory, scope: c.applicabilityScope as LearningScope, epi: c.epistemicStatus as LearningConfidence, unknowns: c.unknownMarkers.join('\n'), contradictions: c.contradictionMarkers.join('\n'), obs: Object.fromEntries(c.selectedObservations.map((o) => [o.ref, true])) }); setMode({ kind: 'edit', logicalId: c.logicalCandidateId }); }} style={lcBtn}>Edit</button>
+              <button type="button" data-testid={`candidate-adopt-${c.logicalCandidateId}`} onClick={() => void judge(c.candidateId, 'ADOPT')} disabled={busy} style={lcBtn}>Keep this learning</button>
+              <button type="button" data-testid={`candidate-defer-${c.logicalCandidateId}`} onClick={() => void judge(c.candidateId, 'DEFER')} disabled={busy} style={lcBtn}>Not yet</button>
+              <button type="button" data-testid={`candidate-reject-${c.logicalCandidateId}`} onClick={() => void judge(c.candidateId, 'REJECT')} disabled={busy} style={lcBtn}>Discard</button>
+              <button type="button" data-testid={`candidate-edit-open-${c.logicalCandidateId}`} onClick={() => { setF({ statement: c.candidateStatement, founder: c.founderStatement, prior: c.priorUnderstanding, revised: c.revisedUnderstanding, change: c.changeStatement, cat: c.learningCategory as LearningCategory, scope: c.applicabilityScope as LearningScope, epi: c.epistemicStatus as LearningConfidence, unknowns: c.unknownMarkers.join('\n'), contradictions: c.contradictionMarkers.join('\n'), obs: Object.fromEntries(c.selectedObservations.map((o) => [o.ref, true])) }); setMode({ kind: 'edit', logicalId: c.logicalCandidateId }); }} style={lcBtn}>Revise</button>
+              <button type="button" data-testid={`candidate-details-${c.logicalCandidateId}`} onClick={() => setExpanded((x) => ({ ...x, [c.logicalCandidateId]: !x[c.logicalCandidateId] }))} style={lcBtn}>{expanded[c.logicalCandidateId] ? 'Hide the full record' : 'Show the full record'}</button>
+            </div>
+          )}
+          {expanded[c.logicalCandidateId] && (
+            <div data-testid={`candidate-provenance-${c.logicalCandidateId}`} style={{ ...meta, marginTop: 4, color: 'var(--ink-3)', paddingLeft: 8, borderLeft: '2px solid var(--line-2)' }}>
+              From this outcome review · frozen context {c.source.snapshotId.slice(0, 8)}… · source {c.source.outcomeReviewId.slice(0, 8)}… (rev {c.source.outcomeReviewRevision}) · this edit’s record hash {c.contentHash.slice(0, 12)}… · unknown: {c.unknownMarkers.join('; ') || 'none'} · cuts against: {c.contradictionMarkers.join('; ') || 'none'} · observations from the review: {c.selectedObservations.map((o) => o.ref).join(', ') || 'none'} · immutable history — a proposal, not a learning.
+              {nonTerminal(c.status) && <> · <button type="button" data-testid={`candidate-withdraw-${c.logicalCandidateId}`} onClick={() => void judge(c.candidateId, 'WITHDRAW')} disabled={busy} style={lcBtn}>Discard permanently</button></>}
             </div>
           )}
           {mode?.kind === 'edit' && mode.logicalId === c.logicalCandidateId && formBlock(c.logicalCandidateId)}
         </div>
       ))}
-      {mode === null && <button type="button" data-testid={`candidate-propose-open-${tid}`} onClick={() => { setF(emptyForm()); setMode({ kind: 'propose' }); }} style={{ ...lcBtn, marginTop: 6 }}>Propose a learning candidate</button>}
+      {mode === null && <button type="button" data-testid={`candidate-propose-open-${tid}`} onClick={() => { setF(emptyForm()); setMode({ kind: 'propose' }); }} style={{ ...lcBtn, marginTop: 6 }}>See a possible learning</button>}
       {mode?.kind === 'propose' && formBlock(tid)}
     </div>
   );
@@ -1527,22 +1540,26 @@ function OutcomeReviewPanel({ plan, on401 }: { plan: PlanView; on401: (e: unknow
           <LearningCandidatesForReview review={r} planId={plan.planId} seq={r.reviewSequence} on401={on401} />
         </div>
       ))}
-      {!open && <button type="button" data-testid={`outcome-review-open-${plan.planId}`} onClick={() => setOpen(true)} style={{ ...lcBtn, marginTop: 8 }}>Record an outcome review</button>}
+      {!open && <button type="button" data-testid={`outcome-review-open-${plan.planId}`} onClick={() => { setOpen(true); if (snaps.length === 0) void makeSnapshot(); }} style={{ ...lcBtn, marginTop: 8 }}>Look back on this plan</button>}
       {open && (
         <div data-testid={`outcome-review-form-${plan.planId}`} style={{ marginTop: 10 }}>
-          {snaps.length === 0 && <p data-testid={`outcome-review-need-snapshot-${plan.planId}`} style={{ ...meta }}>Create a context snapshot first — a review freezes the exact context it was made against.</p>}
-          <button type="button" data-testid={`outcome-create-snapshot-${plan.planId}`} onClick={() => void makeSnapshot()} disabled={busy} style={{ ...lcBtn, marginTop: 6 }}>Create context snapshot</button>
-          <label style={{ ...meta, display: 'block', marginTop: 6 }}>Observed outcome
+          <p style={{ ...meta }}>A few quick questions — this just records what happened; it decides nothing and shares nothing.</p>
+          <label style={{ ...meta, display: 'block', marginTop: 6 }}>What actually happened, versus what you intended?
             <select data-testid={`outcome-select-${plan.planId}`} aria-label="Observed outcome" value={outcome} onChange={(e) => setOutcome(e.target.value as ObservedOutcome)} style={selStyle}><option value="">Choose…</option>{OUTCOME_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}</select></label>
-          <label style={{ ...meta, display: 'block', marginTop: 6 }}>What you observed (your account — not verified)
+          <label style={{ ...meta, display: 'block', marginTop: 6 }}>In your own words (not verified by Business Brain)
             <textarea data-testid={`outcome-statement-${plan.planId}`} value={statement} onChange={(e) => setStatement(e.target.value)} rows={2} placeholder="e.g. We shipped weekly for three weeks, then paused." style={taStyle} /></label>
-          <label style={{ ...meta, display: 'block', marginTop: 6 }}>What remains unknown (one per line)
+          <label style={{ ...meta, display: 'block', marginTop: 6 }}>What’s still unclear? (one per line)
             <textarea data-testid={`outcome-unknowns-input-${plan.planId}`} value={unknowns} onChange={(e) => setUnknowns(e.target.value)} rows={2} placeholder="e.g. Whether the cadence drove the signups." style={taStyle} /></label>
-          {snaps.length > 0 && <label style={{ ...meta, display: 'block', marginTop: 6 }}>Context snapshot
-            <select data-testid={`outcome-snapshot-${plan.planId}`} aria-label="Context snapshot" value={snapId} onChange={(e) => setSnapId(e.target.value)} style={selStyle}>{snaps.map((s) => <option key={s.snapshotId} value={s.snapshotId}>{s.snapshotId.slice(0, 12)}… ({s.contentHash.slice(0, 8)}…)</option>)}</select></label>}
+          {/* Progressive disclosure: the frozen context is minted for you; refresh or inspect it only if you want to. */}
+          <details style={{ ...meta, marginTop: 6 }}><summary style={{ cursor: 'pointer' }}>Advanced: the frozen context this review is tied to</summary>
+            {snaps.length === 0 && <p data-testid={`outcome-review-need-snapshot-${plan.planId}`} style={{ ...meta, marginTop: 4 }}>Freezing the current context…</p>}
+            <button type="button" data-testid={`outcome-create-snapshot-${plan.planId}`} onClick={() => void makeSnapshot()} disabled={busy} style={{ ...lcBtn, marginTop: 4 }}>Freeze a fresh view of your context</button>
+            {snaps.length > 0 && <label style={{ ...meta, display: 'block', marginTop: 6 }}>Frozen context
+              <select data-testid={`outcome-snapshot-${plan.planId}`} aria-label="Context snapshot" value={snapId} onChange={(e) => setSnapId(e.target.value)} style={selStyle}>{snaps.map((s) => <option key={s.snapshotId} value={s.snapshotId}>{s.snapshotId.slice(0, 12)}… ({s.contentHash.slice(0, 8)}…)</option>)}</select></label>}
+          </details>
           {err && <p data-testid={`outcome-review-error-${plan.planId}`} style={{ ...meta, color: 'var(--warn-ink)', marginTop: 6 }}>{err}</p>}
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <Button variant="primary" loading={busy} disabled={!outcome || !statement.trim() || !snapId} onClick={() => void submit()}><span data-testid={`outcome-submit-${plan.planId}`}>Record review</span></Button>
+            <Button variant="primary" loading={busy} disabled={!outcome || !statement.trim() || !snapId} onClick={() => void submit()}><span data-testid={`outcome-submit-${plan.planId}`}>Save this review</span></Button>
             <button type="button" data-testid={`outcome-cancel-${plan.planId}`} onClick={() => { setOpen(false); setErr(''); }} style={lcBtn}>Cancel</button>
           </div>
         </div>
@@ -1605,8 +1622,8 @@ function LearningsList({ on401 }: { on401: (e: unknown) => void }) {
   });
   return (
     <section data-testid="learnings-list" style={{ marginTop: 'var(--sp-5)', paddingTop: 'var(--sp-4)', borderTop: '1px solid var(--line)' }}>
-      <span style={sectionLabel}>Your durable strategic learnings</span>
-      <p style={{ ...meta, marginTop: 2 }}>Refine, contest, supersede, or retire each — every change keeps the full history. You can also promote a specific revision into your Business Understanding or Founder Strategic Context (rarely — that’s an explicit governance act).</p>
+      <span style={sectionLabel}>What you've chosen to remember</span>
+      <p style={{ ...meta, marginTop: 2 }}>Adjust or retire each — the full history is always kept. You can also choose to let future decisions use a learning; that stays your explicit choice.</p>
       {threads.map((t) => <ThreadCard key={t.logicalLearningId} thread={t} promoted={promotedFor(t.logicalLearningId)} on401={on401} />)}
       {/* CANONICAL authoritative effective context (native + promoted) — the single answer to "what is my current BU/FSC?" */}
       <CanonicalEffectiveContext on401={on401} />
@@ -1614,9 +1631,9 @@ function LearningsList({ on401 }: { on401: (e: unknown) => void }) {
       <ContextSnapshots on401={on401} />
       {/* Audit-only: the promotion history (ledger projection). Clearly separated from the canonical effective context. */}
       <div data-testid="promotion-history" style={{ marginTop: 'var(--sp-4)', paddingTop: 'var(--sp-3)', borderTop: '1px solid var(--line)' }}>
-        <span style={sectionLabel}>Promotion history (Business Understanding)</span>
+        <span style={sectionLabel}>What future decisions will use</span>
         <PromotedInto target="BUSINESS_UNDERSTANDING" items={bu} />
-        <div style={{ marginTop: 'var(--sp-3)' }}><span style={sectionLabel}>Promotion history (Founder Strategic Context)</span><PromotedInto target="FOUNDER_STRATEGIC_CONTEXT" items={fsc} /></div>
+        <div style={{ marginTop: 'var(--sp-3)' }}><span style={sectionLabel}>What shapes your whole strategy</span><PromotedInto target="FOUNDER_STRATEGIC_CONTEXT" items={fsc} /></div>
       </div>
     </section>
   );

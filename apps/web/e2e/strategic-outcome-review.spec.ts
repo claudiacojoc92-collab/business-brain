@@ -67,14 +67,11 @@ test('an outcome review is an immutable historical assessment — it describes, 
   await expect(plan(page).getByTestId(`outcome-review-none-${REV1}`)).toBeVisible();
   await plan(page).getByTestId(`outcome-review-open-${REV1}`).click();
 
-  // ── create a context snapshot from within the review flow (a review freezes the exact context) ──
-  await plan(page).getByTestId(`outcome-create-snapshot-${REV1}`).click();
-  await expect(plan(page).getByTestId(`outcome-snapshot-${REV1}`)).toBeVisible(); // snapshot now selectable
-
-  // ── record review #1 with observed outcome PARTIALLY + an explicit unknown ──
+  // ── record review #1 (the frozen context is minted automatically — no separate snapshot step) ──
   await plan(page).getByTestId(`outcome-select-${REV1}`).selectOption('PARTIALLY_AS_INTENDED');
   await plan(page).getByTestId(`outcome-statement-${REV1}`).fill('We shipped for three weeks, then paused.');
   await plan(page).getByTestId(`outcome-unknowns-input-${REV1}`).fill('Whether the cadence drove signups.');
+  await expect(plan(page).getByTestId(`outcome-submit-${REV1}`).locator('xpath=ancestor::button')).toBeEnabled(); // snapshot auto-minted
   await plan(page).getByTestId(`outcome-submit-${REV1}`).click();
 
   // ── review #1 is visible; describes; shows no score; shows the unknown ──
