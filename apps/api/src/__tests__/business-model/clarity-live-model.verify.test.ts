@@ -38,37 +38,50 @@ const CONTEXT: ClarityContext = {
 
 const d = describe.skipIf(!ENABLED);
 
-d('Clarity — CONTROLLED live-model verification (not CI)', () => {
-  it('audits the advertising tension as a strategist and returns a valid, bounded contract', async () => {
-    const model = new AnthropicClarityModel(KEY);
-    const result: ClarityResult | null = await model.clarify({
-      founderInput: 'Everyone tells me I should run ads because I need more customers, but I don’t know if ads are really the answer.',
-      priorMessages: [], context: CONTEXT,
-    });
+// The bounded prior Understanding supplied to the model (with real ids) — continuity must reference ONLY these.
+const CONTEXT_ITEMS = [
+  { id: 'ui-bottleneck', statement: 'The current customer-acquisition bottleneck is unconfirmed.', truthLabel: 'unconfirmed_or_disagree' as const, originSummary: 'You accepted this from an earlier clarity conversation.', lastConfirmedAt: null, possibleStalenessReason: 'unresolved' as const, needsRevalidation: true },
+  { id: 'ui-budget', statement: 'You have a limited advertising budget.', truthLabel: 'you_told_me' as const, originSummary: 'You told me earlier.', lastConfirmedAt: null, possibleStalenessReason: 'time_sensitive' as const, needsRevalidation: true },
+];
 
+d('Clarity — CONTROLLED live-model verification (not CI)', () => {
+  it('audits the advertising tension, explains continuity from persisted context, and references only supplied ids', async () => {
+    const model = new AnthropicClarityModel(KEY);
+    const output = await model.clarify({
+      founderInput: 'A marketer says I should double my advertising budget next month. Should I?',
+      priorMessages: [], context: CONTEXT, contextItems: CONTEXT_ITEMS,
+    });
+    const result: ClarityResult | null = output?.result ?? null;
+    const refs = output?.continuityRefs ?? [];
+
+    const suppliedIds = new Set(CONTEXT_ITEMS.map((c) => c.id));
     const contractValid = result !== null && normalizeClarityResult(result) !== null;
+    const persistedReferencesValid = refs.every((r) => suppliedIds.has(r.understandingItemId)); // no invented ids
+    const continuityExplained = refs.length > 0 && refs.every((r) => r.relevanceToCurrentConcern.length > 0 && r.effectOnCurrentReading.length > 0);
     const nextMove = result?.smallestUsefulNextMove ?? '';
-    const jumpedToAds = /\b(run|start|launch|invest in|buy)\b[^.]*\bads?\b/i.test(nextMove) && !/before|first|establish|find|check|understand/i.test(nextMove);
+    const jumpedToAds = /\b(double|run|start|launch|invest in|buy)\b[^.]*\b(ads?|budget|spend)\b/i.test(nextMove) && !/before|first|establish|find|check|understand|unless/i.test(nextMove);
     const separated = !!result && (result.supportedObservations.length + result.founderStatements.length) > 0 && result.unknowns.length > 0;
-    const boundedNextMove = nextMove.length > 0 && nextMove.split(/(?<=[.!?])\s+/).length <= 2; // one bounded step, not a plan
+    const boundedNextMove = nextMove.length > 0 && nextMove.split(/(?<=[.!?])\s+/).length <= 2;
     const report = {
       contractValid,
-      openQuestionsSurfaced: result?.unknowns.length ?? 0,           // the contract surfaces questions as named unknowns
+      persistedReferencesValid,
+      continuityExplained,
+      visibleContextItems: refs.length,
       jumpedToRecommendation: jumpedToAds,
       separatedKnownAssumedUnknownConflict: separated,
-      hasConflictsChannel: Array.isArray(result?.conflicts),
+      staleOrContradictedHandledTruthfully: refs.length > 0, // it engaged the flagged prior context rather than ignoring it
       boundedSmallestNextMove: boundedNextMove,
-      proposedStateChanges: result?.proposedUnderstandingChanges.length ?? 0, // proposals only; nothing is saved
-      clarifiedIssuePresent: !!result?.clarifiedIssue,
+      proposedExplicitCorrection: (result?.proposedUnderstandingChanges.length ?? 0), // proposals only; nothing applied silently
       alternativeOffered: (result?.alternativeInterpretation.length ?? 0) > 0,
     };
     // eslint-disable-next-line no-console
     console.log('LIVE CLARITY MODEL REPORT:', JSON.stringify(report, null, 2));
 
     expect(contractValid).toBe(true);
-    expect(jumpedToAds).toBe(false);            // does NOT jump to "run ads"
-    expect(separated).toBe(true);               // separates known / assumed / unknown
-    expect(boundedNextMove).toBe(true);         // a bounded smallest next move, not a giant plan
+    expect(persistedReferencesValid).toBe(true); // never references an item the service did not supply
+    expect(jumpedToAds).toBe(false);             // does NOT jump to "double the budget"
+    expect(separated).toBe(true);
+    expect(boundedNextMove).toBe(true);
     expect(result!.alternativeInterpretation.length).toBeGreaterThan(0);
   }, 60_000);
 });

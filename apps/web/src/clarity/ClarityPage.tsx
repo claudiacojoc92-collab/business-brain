@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import {
-  clarityTurn, getConcern, acceptProposedChange, rejectProposedChange, crystallizeConcern, ApiError,
-  TRUTH_LABEL_TEXT, type ClarityResult, type ClarityMessage, type ConcernDetail, type TruthLabel,
+  clarityTurn, getConcern, acceptProposedChange, rejectProposedChange, crystallizeConcern, revalidateInContext, ApiError,
+  TRUTH_LABEL_TEXT, type ClarityResult, type ClarityMessage, type ConcernDetail, type TruthLabel, type ContinuityItem,
 } from '../api/client';
 import { AppShell, Button, Thinking } from '../system/ui';
 
@@ -52,6 +52,11 @@ export function ClarityPage() {
     try { const { sessionId } = await crystallizeConcern(concernId, question); navigate(`/strategy?from=${sessionId}`); }
     catch { setError('Could not turn this into a strategic question just now.'); }
   };
+  const revalidate = async (item: ContinuityItem, outcome: 'confirmed' | 'unsure' | 'changed', newStatement?: string) => {
+    if (!concernId) return;
+    try { await revalidateInContext(concernId, { understandingItemId: item.understandingItemId, outcome, newStatement }); await load(concernId); }
+    catch { setError('Could not save that just now.'); }
+  };
 
   if (isLoading) return null;
   if (!founderId) return <Navigate to="/signin" replace />;
@@ -86,6 +91,7 @@ export function ClarityPage() {
         {retry && <div data-testid="clarity-retry" style={{ ...card, borderColor: 'var(--gold)', marginTop: 'var(--sp-4)' }}><p style={{ margin: 0, fontFamily: 'var(--serif)', color: 'var(--ink)' }}>{retry}</p></div>}
         {error && <p style={{ ...meta, color: 'var(--err-ink, #a3423c)', marginTop: 'var(--sp-3)' }}>{error}</p>}
 
+        {latest && latest.continuity.length > 0 && <ContinuityBuiltOn items={latest.continuity} onRevalidate={revalidate} />}
         {latest && <ClarityReading result={latest} />}
 
         {pending.length > 0 && (
@@ -153,6 +159,55 @@ function List({ testid, title, items }: { testid: string; title: string; items: 
     <div style={{ marginTop: 'var(--sp-3)' }}>
       <p style={sectionKind}>{title}</p>
       <ul style={ul} data-testid={testid}>{items.map((s, i) => <li key={i} style={li}>{s}</li>)}</ul>
+    </div>
+  );
+}
+
+const STALE_TEXT: Record<string, string> = {
+  contradicted: 'Your message suggests this may have changed.',
+  unresolved: 'This is still unresolved — worth confirming it hasn’t moved.',
+  time_sensitive: 'This can change over time — worth a quick check.',
+};
+function ContinuityBuiltOn({ items, onRevalidate }: { items: ContinuityItem[]; onRevalidate: (item: ContinuityItem, outcome: 'confirmed' | 'unsure' | 'changed', s?: string) => void }) {
+  return (
+    <section data-testid="continuity" style={{ ...card, marginTop: 'var(--sp-4)', borderColor: 'var(--line-2)' }}>
+      <p style={sectionKind}>What I’m building on</p>
+      <p style={quiet}>Prior understanding I’m using for this — and why it matters here. You can correct or confirm any of it without losing this conversation.</p>
+      {items.map((c) => <ContinuityRow key={c.understandingItemId} item={c} onRevalidate={onRevalidate} />)}
+    </section>
+  );
+}
+function ContinuityRow({ item, onRevalidate }: { item: ContinuityItem; onRevalidate: (item: ContinuityItem, outcome: 'confirmed' | 'unsure' | 'changed', s?: string) => void }) {
+  const [changing, setChanging] = useState(false);
+  const [draft, setDraft] = useState(item.statement);
+  return (
+    <div data-testid="continuity-item" style={{ borderTop: '1px solid var(--line)', paddingTop: 'var(--sp-3)', marginTop: 'var(--sp-3)' }}>
+      <p data-testid="continuity-label" style={labelTag(item.truthLabel)}>{TRUTH_LABEL_TEXT[item.truthLabel]}</p>
+      <p data-testid="continuity-statement" style={{ fontFamily: 'var(--serif)', fontSize: 'var(--fs-4)', color: 'var(--ink)', margin: '4px 0 0' }}>{item.statement}</p>
+      <p data-testid="continuity-why" style={{ ...quietBody, marginTop: 4 }}><strong>Why it matters here:</strong> {item.relevanceToCurrentConcern}</p>
+      {item.effectOnCurrentReading && <p style={quiet}>{item.effectOnCurrentReading}</p>}
+      <p style={quiet}>{item.originSummary}{item.lastConfirmedAt ? ` · last confirmed ${new Date(item.lastConfirmedAt).toLocaleDateString()}` : ''}</p>
+      {item.needsRevalidation && !changing && (
+        <div data-testid="revalidate" style={{ marginTop: 6 }}>
+          {item.possibleStalenessReason && <p style={{ ...quiet, color: 'var(--gold)' }} data-testid="may-need-checking">{STALE_TEXT[item.possibleStalenessReason]}</p>}
+          <p style={{ fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ink-3)', margin: '4px 0 2px' }}>Is this still true?</p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button type="button" data-testid="reval-yes" onClick={() => onRevalidate(item, 'confirmed')} style={smallBtn(false)}>Yes, continue</button>
+            <button type="button" data-testid="reval-changed" onClick={() => { setChanging(true); setDraft(item.statement); }} style={smallBtn(false)}>This has changed</button>
+            <button type="button" data-testid="reval-unsure" onClick={() => onRevalidate(item, 'unsure')} style={smallBtn(false)}>I’m not sure</button>
+          </div>
+        </div>
+      )}
+      {changing && (
+        <div style={{ marginTop: 6 }}>
+          <textarea data-testid="reval-input" value={draft} onChange={(e) => setDraft(e.target.value)} rows={2} style={textarea} />
+          <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+            <button type="button" data-testid="reval-save" onClick={() => { onRevalidate(item, 'changed', draft.trim()); setChanging(false); }} style={smallBtn(true)}>Save & re-read</button>
+            <button type="button" onClick={() => setChanging(false)} style={smallBtn(false)}>Cancel</button>
+          </div>
+          <p style={quiet}>Your correction supersedes the old statement (kept in history) and I’ll re-read this with the updated understanding.</p>
+        </div>
+      )}
     </div>
   );
 }

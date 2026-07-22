@@ -108,6 +108,34 @@ export function registerClarityRoutes(server: FastifyInstance): void {
     await reply.send({ rejected: true });
   });
 
+  // POST /clarity/concerns/:id/revalidate — the founder resolves a reused item's currency, in-context.
+  //  { understandingItemId, outcome: 'confirmed' | 'unsure' | 'changed', newStatement? }
+  //  confirmed → a lightweight event (no duplicate item); unsure → uncertainty preserved; changed → a founder correction
+  //  (supersession) AND the active reading is refreshed with the corrected context. Conversation alone commits nothing.
+  server.post('/clarity/concerns/:id/revalidate', async (request, reply) => {
+    const f = await need(request, reply); if (!f) return;
+    const concernId = (request.params as { id: string }).id;
+    const body = (request.body ?? {}) as { understandingItemId?: string; outcome?: string; newStatement?: string };
+    const itemId = (body.understandingItemId ?? '').trim();
+    if (!itemId) { await reply.code(400).send({ error: 'understandingItemId is required' }); return; }
+    if (body.outcome === 'confirmed' || body.outcome === 'unsure') {
+      const ok = await service.revalidate(f, itemId, body.outcome, concernId);
+      if (!ok) { await reply.code(409).send({ error: 'item not found' }); return; }
+      await reply.send({ revalidated: true, outcome: body.outcome });
+      return;
+    }
+    if (body.outcome === 'changed') {
+      const statement = (body.newStatement ?? '').trim();
+      if (statement.length < 2) { await reply.code(400).send({ error: 'a new statement is required' }); return; }
+      const corrected = await service.correctUnderstanding(f, { supersedesItemId: itemId, statement });
+      if (!corrected) { await reply.code(409).send({ error: 'nothing to correct or not owned' }); return; }
+      const refreshed = await service.refreshReading(f, concernId); // re-read with the corrected context
+      await reply.send({ corrected: corrected.id, refreshed });
+      return;
+    }
+    await reply.code(400).send({ error: 'outcome must be confirmed, unsure, or changed' });
+  });
+
   // POST /clarity/concerns/:id/crystallize — explicit founder action → a Strategy Thread. { question }
   server.post('/clarity/concerns/:id/crystallize', async (request, reply) => {
     const f = await need(request, reply); if (!f) return;

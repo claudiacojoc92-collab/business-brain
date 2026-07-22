@@ -79,3 +79,41 @@ Closes the loop: an accepted clarity proposal becomes a durable, founder-governe
 ## Known limitations (slice 2)
 - Correcting a *synthesized* conclusion is supported via `conclusionRef` but the surface exposes correction primarily on founder items; deeper inline correction of synthesized conclusions is a later refinement.
 - No Playwright spec for the Understanding surface yet (covered by 29 DB tests + browser verification).
+
+---
+
+# Slice 3 — Legible continuity + context revalidation
+
+Makes accumulated Understanding **legible and trustworthy at the moment Business Brain reasons with it**: the founder sees what prior Understanding is being used, where it came from, why it matters to the current concern, whether it may no longer be current, and can revalidate or correct it — without losing the conversation. Additive; frozen engine byte-identical.
+
+## What changed
+| Layer | Change |
+|---|---|
+| Schema | `V091__continuity_revalidation.sql` — append-only `clarity_context_use` (which items materially informed each clarity result — durable, never invented) + `understanding_revalidation` (founder 'confirmed'/'unsure' events; "changed" is a correction, not here). Both immutable. |
+| Selection | `context-selection.ts` — deterministic, bounded relevant-context selection (`MAX_CONTEXT_ITEMS=5`) + a truthful staleness model (no clock expiry): `contradicted` (the message implies change), `unresolved` (an `unconfirmed_or_disagree` condition), `time_sensitive` (a current-condition term, until revalidated). Distinguishes old/stale/contradicted/unknown/superseded. |
+| Contract | `clarity-result.ts` — `ContinuityRef` (model output: id + relevance + effect) and `ContinuityItem` (resolved: identity/label/origin/lastConfirmedAt/staleness from PERSISTED state + model relevance). `normalizeContinuityRefs` parses only the model's refs; the service resolves. |
+| Model | `clarity-model.ts` — `ClarityInput.contextItems` (the id-bearing selection); `clarify()` returns `{ result, continuityRefs }`. Prompt updated: reference only supplied ids, explain consequence not restatement, treat flagged items as possibly stale / unresolved as unresolved. Fixtures echo supplied ids. |
+| Service | `clarity.service.ts` — `produceReading` (select → audit → **resolveContinuity**: drop invented ids, always surface items that need checking); persist `clarity_context_use`. `revalidate` (confirmed/unsure), `refreshReading` (re-read with corrected context). `resolveContinuity` never trusts the model for identity/label/origin/timestamps. |
+| API | `POST /clarity/concerns/:id/revalidate` — `confirmed` (event, no dup) · `unsure` (uncertainty kept) · `changed` (founder correction/supersession + **refreshed** reading). |
+| Web | ClarityPage "What I'm building on" — per item: statement, truth label, why-it-matters, effect, origin + last-confirmed, and when flagged "May need checking" + "Is this still true?" → Yes / This has changed (→ correct & re-read) / I'm not sure. |
+| Tests | `clarity.live.test.ts` now **46** (adds V1–V18: exact-reference, no-invented-ids, superseded-excluded, corrections-outrank, bounded selection, UI fields, revalidate confirmed/unsure/changed, contradiction flag, stale-not-fact, isolation, clarity-immutable-after-revalidation, refresh-after-correction, advertising-budget + capacity-contradiction scenarios end-to-end, continue-without-resolving). |
+| Live verify | Extended: references valid (no invented ids), continuity explained, contradiction handled truthfully, explicit correction (not silent). |
+
+## Guarantees (slice 3)
+- **The AI cannot invent a reference** — identity/origin/label/timestamps come from persisted state; ids not in the supplied selection are dropped (V2); `clarity_context_use` records exactly the items used (V1).
+- **Bounded, not a dump** — selection ≤ 5, relevance-scored, superseded excluded, corrections outrank inferences (V3–V5, V18).
+- **Truthful staleness** — "may need checking", never "wrong"; contradiction detected from the message; unresolved stays unresolved; time-sensitive until revalidated (V10, V11, V16).
+- **Revalidation is explicit** — confirmed (no duplicate), unsure (uncertainty kept), changed (correction + refreshed reading); conversation alone commits nothing (V7–V9, V14).
+- **History immutable** — a revalidation never edits a prior clarity result; a correction supersedes without deleting (V8, V13).
+- **Founder-scoped** (V12); the session continues even with unresolved items (V17).
+
+## Verification
+- API + web typecheck clean; web build clean. `clarity.live.test.ts` **46/46**. Live-model verify **skips** in the default suite.
+- **Live Anthropic run** (`RUN_LIVE_MODEL=1`): contractValid, persistedReferencesValid (no invented ids), continuityExplained, 2 visible context items, jumpedToRecommendation false, staleOrContradictedHandledTruthfully, boundedNextMove, 1 explicit proposed correction, alternative offered.
+- **Rendered end-to-end** (`CLARITY_FIXTURE=1`): accept → new concern → "What I'm building on" shows the prior item, its label, why-it-matters, origin + last-confirmed, "still unresolved — worth confirming", and "Is this still true?" (Yes / changed / not sure).
+- Frozen engine hashes unchanged.
+
+## Known limitations (slice 3)
+- Continuity operates over founder-governed items (accepted/corrected); synthesized website conclusions remain background context (not revalidatable in-line).
+- Relevance selection is lexical + domain-signal (no embeddings); sufficient for the current scale, a future refinement for large item sets.
+- No Playwright spec yet (covered by 46 DB tests + live-model verify + browser verification).

@@ -102,6 +102,18 @@ export class PgClarityStore {
     return Number(res?.numUpdatedRows ?? 0) > 0;
   }
 
+  /** Append-only: record which Understanding items materially informed a clarity result (durable continuity linkage). */
+  async recordContextUse(founderId: string, clarityResultId: string, understandingItemIds: string[], now: Date, tx?: AnyDB): Promise<void> {
+    const exec = tx ?? this.db;
+    for (const itemId of [...new Set(understandingItemIds)]) {
+      await exec.insertInto('business.clarity_context_use').values({ id: generateId(), founder_id: founderId, clarity_result_id: clarityResultId, understanding_item_id: itemId, created_at: now.toISOString() }).onConflict((oc: AnyDB) => oc.columns(['clarity_result_id', 'understanding_item_id']).doNothing()).execute();
+    }
+  }
+  async listContextUse(founderId: string, clarityResultId: string): Promise<string[]> {
+    const rows = await this.db.selectFrom('business.clarity_context_use').select('understanding_item_id').where('founder_id', '=', founderId).where('clarity_result_id', '=', clarityResultId).execute();
+    return (rows as AnyDB[]).map((r) => r.understanding_item_id);
+  }
+
   private async maxSeq(table: string, concernId: string): Promise<number> {
     const r = await this.db.selectFrom(table).select((eb: AnyDB) => eb.fn.max('seq').as('m')).where('concern_id', '=', concernId).executeTakeFirst();
     return Number(r?.m ?? 0);

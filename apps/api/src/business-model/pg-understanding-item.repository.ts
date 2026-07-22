@@ -65,6 +65,18 @@ export class PgUnderstandingItemRepository {
     const r = await this.db.selectFrom('business.understanding_item').selectAll().where('founder_id', '=', founderId).where('id', '=', id).executeTakeFirst();
     return r ? toDomain(r) : null;
   }
+  /** Record a founder revalidation event ('confirmed' still-true, or 'unsure'). Append-only; never a duplicate item. */
+  async recordRevalidation(founderId: string, understandingItemId: string, outcome: 'confirmed' | 'unsure', sourceConcernId: string | null, now: Date): Promise<boolean> {
+    const item = await this.get(founderId, understandingItemId);
+    if (!item) return false; // not owned / not found
+    await this.db.insertInto('business.understanding_revalidation').values({ id: generateId(), founder_id: founderId, understanding_item_id: understandingItemId, outcome, source_concern_id: sourceConcernId, created_at: now.toISOString() }).execute();
+    return true;
+  }
+  async listRevalidations(founderId: string): Promise<Array<{ understandingItemId: string; outcome: 'confirmed' | 'unsure'; createdAt: string }>> {
+    const rows = await this.db.selectFrom('business.understanding_revalidation').selectAll().where('founder_id', '=', founderId).orderBy('created_at', 'asc').execute();
+    return (rows as AnyDB[]).map((r) => ({ understandingItemId: r.understanding_item_id, outcome: r.outcome, createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at) }));
+  }
+
   /** The full supersession chain that ends at `id` (oldest → newest), for founder-facing history. */
   async history(founderId: string, id: string): Promise<UnderstandingItem[]> {
     const all = await this.listAll(founderId);

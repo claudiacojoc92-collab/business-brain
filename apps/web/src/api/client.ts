@@ -457,6 +457,12 @@ export const TRUTH_LABEL_TEXT: Record<TruthLabel, string> = {
   observed_from_material: 'Observed from your material', you_told_me: 'You told me', my_reading: 'My reading',
   you_corrected_this: 'You corrected this', unconfirmed_or_disagree: 'Unconfirmed / we disagree',
 };
+export type StalenessReason = 'contradicted' | 'unresolved' | 'time_sensitive' | null;
+export interface ContinuityItem {
+  understandingItemId: string; statement: string; truthLabel: TruthLabel; originSummary: string;
+  relevanceToCurrentConcern: string; effectOnCurrentReading: string;
+  lastConfirmedAt: string | null; possibleStalenessReason: StalenessReason; needsRevalidation: boolean;
+}
 export interface ClarityResult {
   reflectedConcern: string;
   relevantContextUsed: Array<{ label: TruthLabel; statement: string }>;
@@ -466,6 +472,7 @@ export interface ClarityResult {
   whatWouldChangeThisReading: string[];
   proposedUnderstandingChanges: Array<{ changeType: 'ADD' | 'CORRECT'; statement: string; label: TruthLabel; explanation: string | null }>;
   possibleStrategicQuestion: string | null; evidenceLimitation: string;
+  continuity: ContinuityItem[];
 }
 export interface ProposedChange { id: string; changeType: 'ADD' | 'CORRECT'; statement: string; label: TruthLabel; explanation: string | null; status: 'pending' | 'accepted' | 'rejected'; createdAt: string; resolvedAt: string | null }
 export interface ConcernSummary { id: string; originalInput: string; clarifiedConcern: string | null; status: string; crystallizedSessionId: string | null; createdAt: string; updatedAt: string }
@@ -491,6 +498,11 @@ export async function rejectProposedChange(id: string): Promise<void> {
 }
 export async function crystallizeConcern(id: string, question: string): Promise<{ sessionId: string }> {
   return request<{ sessionId: string }>(`clarity/concerns/${encodeURIComponent(id)}/crystallize`, { method: 'POST', body: JSON.stringify({ question }) });
+}
+/** POST /clarity/concerns/:id/revalidate — resolve a reused item's currency in-context (confirmed / unsure / changed+refresh). */
+export interface RevalidateResponse { revalidated?: boolean; outcome?: string; corrected?: string; refreshed?: ClarityResult | null }
+export async function revalidateInContext(concernId: string, body: { understandingItemId: string; outcome: 'confirmed' | 'unsure' | 'changed'; newStatement?: string }): Promise<RevalidateResponse> {
+  return request<RevalidateResponse>(`clarity/concerns/${encodeURIComponent(concernId)}/revalidate`, { method: 'POST', body: JSON.stringify(body) });
 }
 
 // ─── Understanding surface — the founder-facing view of the accumulated, effective understanding ──────────────────────

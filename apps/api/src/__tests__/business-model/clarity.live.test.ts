@@ -20,9 +20,10 @@ import { PgClarityStore } from '../../business-model/pg-clarity.repository';
 import { PgUnderstandingItemRepository } from '../../business-model/pg-understanding-item.repository';
 import { composeEffectiveUnderstanding } from '../../business-model/effective-understanding';
 import { assembleClarityContext } from '../../business-model/clarity-context';
-import { ClarityService, crystallizeConcern } from '../../business-model/clarity.service';
+import { ClarityService, crystallizeConcern, resolveContinuity } from '../../business-model/clarity.service';
 import { FixtureClarityModel, ContextEchoClarityModel, advertisingScenarioResult, type ClarityModel } from '../../business-model/clarity-model';
-import { normalizeClarityResult, type ClarityResult } from '../../business-model/clarity-result';
+import { selectRelevantContext, MAX_CONTEXT_ITEMS, type SelectedContextItem } from '../../business-model/context-selection';
+import { normalizeClarityResult, type ClarityResult, type TruthLabel } from '../../business-model/clarity-result';
 
 /**
  * Clarity / Sensemaking §LIVE — proves the actual engine end-to-end against the real DB with a DETERMINISTIC fixture model.
@@ -31,25 +32,25 @@ import { normalizeClarityResult, type ClarityResult } from '../../business-model
  * confirmation. The confirmation boundary and founder isolation are enforced. Skip-guarded on a dev DB.
  */
 const DB_URL = process.env['GATE_DB_URL'] ?? 'postgresql://bbuser:bbpassword@localhost:5432/businessbrain';
-const EA = 'clarity.a@loop.test'; const EB = 'clarity.b@loop.test'; const EC = 'clarity.c@loop.test'; const ED = 'clarity.d@loop.test';
+const EA = 'clarity.a@loop.test'; const EB = 'clarity.b@loop.test'; const EC = 'clarity.c@loop.test'; const ED = 'clarity.d@loop.test'; const EE = 'clarity.e@loop.test'; const EF = 'clarity.f@loop.test';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDB = any;
 let db: AnyDB; let app: FastifyInstance; let dbUp = false;
 const prev = { node: process.env['NODE_ENV'], db: process.env['DATABASE_URL'] };
 
 async function purge(): Promise<void> {
-  const rows = await db.selectFrom('identity.founders').select('founder_id').where('email', 'in', [EA, EB, EC, ED]).execute();
+  const rows = await db.selectFrom('identity.founders').select('founder_id').where('email', 'in', [EA, EB, EC, ED, EE, EF]).execute();
   const ids = rows.map((r: { founder_id: string }) => r.founder_id);
   if (!ids.length) return;
   await db.transaction().execute(async (tx: AnyDB) => {
     await sql`SELECT set_config('bb.allow_concern_delete','on',true)`.execute(tx);
     await sql`SELECT set_config('bb.allow_snapshot_delete','on',true)`.execute(tx);
     await sql`SELECT set_config('bb.allow_understanding_item_delete','on',true)`.execute(tx);
-    for (const t of ['business.proposed_understanding_change', 'business.understanding_item', 'business.clarity_result', 'business.concern_message', 'business.concern', 'business.context_snapshot', 'business.strategic_session', 'business.founder_strategic_context_item', 'business.conclusion_response', 'business.understanding', 'identity.sessions', 'identity.founder_credentials']) {
+    for (const t of ['business.clarity_context_use', 'business.understanding_revalidation', 'business.proposed_understanding_change', 'business.understanding_item', 'business.clarity_result', 'business.concern_message', 'business.concern', 'business.context_snapshot', 'business.strategic_session', 'business.founder_strategic_context_item', 'business.conclusion_response', 'business.understanding', 'identity.sessions', 'identity.founder_credentials']) {
       await tx.deleteFrom(t).where('founder_id', 'in', ids).execute();
     }
   });
-  await db.deleteFrom('identity.founders').where('email', 'in', [EA, EB, EC, ED]).execute();
+  await db.deleteFrom('identity.founders').where('email', 'in', [EA, EB, EC, ED, EE, EF]).execute();
 }
 async function signup(email: string): Promise<string> {
   let l = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { email, password: 'claritypass-12' } });
@@ -339,7 +340,7 @@ d('Clarity → Confirmed Understanding → Reused Context (accumulation loop)', 
   });
   it('U13 a FAILED Understanding write does not leave the proposal accepted (atomic rollback)', async () => {
     // stub: reads (listCurrent, used by context retrieval) work; the WRITE (create) fails inside the acceptance tx.
-    const failing = { listCurrent: async () => [], create: async () => { throw new Error('boom: understanding write failed'); } } as unknown as PgUnderstandingItemRepository;
+    const failing = { listCurrent: async () => [], listRevalidations: async () => [], create: async () => { throw new Error('boom: understanding write failed'); } } as unknown as PgUnderstandingItemRepository;
     const svc = new ClarityService({ store: store(), model: new FixtureClarityModel(), understanding: new PgUnderstandingRepository(db), strategicContext: new PgFounderStrategicContextRepository(db), understandingItems: failing, db });
     const t = await svc.turn(A, 'this acceptance will fail to write', null);
     const changeId = t.proposedChanges[0]!.id;
@@ -356,6 +357,169 @@ d('Clarity → Confirmed Understanding → Reused Context (accumulation loop)', 
     await service().correctUnderstanding(A, { statement: 'A brand-new founder-declared fact.' });
     expect(await countRows(A, 'business.strategic_session')).toBe(sessions);
     expect(await countRows(A, 'business.strategic_decision_record')).toBe(decisions);
+  });
+});
+
+async function seedItems(email: string, specs: Array<{ statement: string; label: TruthLabel }>): Promise<{ founderId: string; ids: string[] }> {
+  const founderId = await signup(email);
+  // Fresh slate: EE/EF are reused across the continuity tests, so clear prior items/revalidations/readings first.
+  await db.transaction().execute(async (tx: AnyDB) => {
+    await sql`SELECT set_config('bb.allow_concern_delete','on',true)`.execute(tx);
+    await sql`SELECT set_config('bb.allow_understanding_item_delete','on',true)`.execute(tx);
+    for (const t of ['business.clarity_context_use', 'business.understanding_revalidation', 'business.proposed_understanding_change', 'business.understanding_item', 'business.clarity_result', 'business.concern_message', 'business.concern']) {
+      await tx.deleteFrom(t).where('founder_id', '=', founderId).execute();
+    }
+  });
+  const ids: string[] = [];
+  for (const s of specs) { const it = await itemRepo().create(founderId, { statement: s.statement, truthLabel: s.label, origin: 'clarity_acceptance' }, new Date()); ids.push(it.id); }
+  return { founderId, ids };
+}
+const BOTTLENECK = 'The current customer-acquisition bottleneck is unconfirmed.';
+const BUDGET = 'You have a limited advertising budget.';
+const CONVERT = 'Some prospects inquire but do not convert.';
+const AD_CONCERN = 'A marketer says I should double my advertising budget next month. Should I?';
+
+d('Legible continuity + context revalidation', () => {
+  it('V1 a later clarity result references the EXACT persisted items it used (and records context-use)', async () => {
+    const { founderId, ids } = await seedItems(EE, [{ statement: BOTTLENECK, label: 'unconfirmed_or_disagree' }, { statement: BUDGET, label: 'you_told_me' }]);
+    const t = await service(new ContextEchoClarityModel()).turn(founderId, AD_CONCERN, null);
+    const usedIds = t.result!.continuity.map((c) => c.understandingItemId);
+    expect(usedIds.length).toBeGreaterThan(0);
+    expect(usedIds.every((id) => ids.includes(id))).toBe(true);         // only real persisted ids
+    const cr = (await store().listClarityResults(founderId, t.concernId)).slice(-1)[0]!;
+    expect((await store().listContextUse(founderId, cr.id)).sort()).toEqual([...new Set(usedIds)].sort()); // durable linkage
+  });
+  it('V2 the AI cannot reference an Understanding item the service did not supply (invented ids dropped)', () => {
+    const sel: SelectedContextItem[] = [{ id: 'real-1', statement: BUDGET, truthLabel: 'you_told_me', originSummary: 'x', lastConfirmedAt: null, possibleStalenessReason: null, needsRevalidation: false }];
+    const out = resolveContinuity([{ understandingItemId: 'INVENTED', relevanceToCurrentConcern: 'r', effectOnCurrentReading: 'e' }, { understandingItemId: 'real-1', relevanceToCurrentConcern: 'r', effectOnCurrentReading: 'e' }], sel);
+    expect(out.map((c) => c.understandingItemId)).toEqual(['real-1']);   // invented id dropped
+  });
+  it('V3 superseded items are NOT selected as effective current context', async () => {
+    const { founderId, ids } = await seedItems(EE, [{ statement: 'Old: capacity is tight.', label: 'you_told_me' }]);
+    await service().correctUnderstanding(founderId, { supersedesItemId: ids[0]!, statement: 'New: capacity is fine now.' });
+    const sel = selectRelevantContext(await itemRepo().listCurrent(founderId), 'is capacity ok?', await itemRepo().listRevalidations(founderId));
+    expect(sel.some((s) => s.id === ids[0]!)).toBe(false);              // superseded excluded
+    expect(sel.some((s) => /capacity is fine now/i.test(s.statement))).toBe(true);
+  });
+  it('V4 founder corrections outrank prior inferences in selection', async () => {
+    const { founderId, ids } = await seedItems(EE, [{ statement: 'My reading: pricing is the issue.', label: 'my_reading' }]);
+    const corrected = await service().correctUnderstanding(founderId, { supersedesItemId: ids[0]!, statement: 'Actually pricing is fine; positioning is the issue.' });
+    const sel = selectRelevantContext(await itemRepo().listCurrent(founderId), 'what about positioning and pricing?', await itemRepo().listRevalidations(founderId));
+    const picked = sel.find((s) => s.id === corrected!.id);
+    expect(picked?.truthLabel).toBe('you_corrected_this');
+  });
+  it('V5/V18 selection is bounded — never a wholesale dump', async () => {
+    const specs = Array.from({ length: 8 }, (_v, i) => ({ statement: `Budget note ${i} about advertising spend and traffic.`, label: 'you_told_me' as TruthLabel }));
+    const { founderId } = await seedItems(EE, specs);
+    const sel = selectRelevantContext(await itemRepo().listCurrent(founderId), 'thoughts on my advertising budget and traffic?', await itemRepo().listRevalidations(founderId));
+    expect(sel.length).toBeLessThanOrEqual(MAX_CONTEXT_ITEMS);
+    const t = await service(new ContextEchoClarityModel()).turn(founderId, 'advertising budget and traffic?', null);
+    expect(t.result!.continuity.length).toBeLessThanOrEqual(MAX_CONTEXT_ITEMS);
+  });
+  it('V6 the UI receives statement + truth label + origin + relevance + revalidation state', async () => {
+    const { founderId } = await seedItems(EE, [{ statement: BOTTLENECK, label: 'unconfirmed_or_disagree' }]);
+    const t = await service(new ContextEchoClarityModel()).turn(founderId, AD_CONCERN, null);
+    const c = t.result!.continuity[0]!;
+    expect(c.statement.length).toBeGreaterThan(0); expect(c.truthLabel).toBe('unconfirmed_or_disagree');
+    expect(c.originSummary.length).toBeGreaterThan(0); expect(c.relevanceToCurrentConcern.length).toBeGreaterThan(0);
+    expect(c.effectOnCurrentReading.length).toBeGreaterThan(0); expect(typeof c.needsRevalidation).toBe('boolean');
+  });
+  it('V7 "Yes, still true" records a revalidation event but creates NO duplicate item', async () => {
+    const { founderId, ids } = await seedItems(EE, [{ statement: BUDGET, label: 'you_told_me' }]);
+    const before = await countRows(founderId, 'business.understanding_item');
+    expect(await service().revalidate(founderId, ids[0]!, 'confirmed', null)).toBe(true);
+    expect(await countRows(founderId, 'business.understanding_item')).toBe(before);        // no duplicate
+    const revs = await itemRepo().listRevalidations(founderId);
+    expect(revs.filter((r) => r.understandingItemId === ids[0]! && r.outcome === 'confirmed')).toHaveLength(1);
+    // a confirmed time-sensitive item is no longer flagged for checking
+    const sel = selectRelevantContext(await itemRepo().listCurrent(founderId), 'budget?', revs);
+    expect(sel.find((s) => s.id === ids[0]!)?.needsRevalidation).toBe(false);
+  });
+  it('V8 "This has changed" creates a superseding correction ONLY on explicit save; history preserved', async () => {
+    const { founderId, ids } = await seedItems(EE, [{ statement: BUDGET, label: 'you_told_me' }]);
+    const before = await countRows(founderId, 'business.understanding_item');
+    const corrected = await service().correctUnderstanding(founderId, { supersedesItemId: ids[0]!, statement: 'Budget doubled this month.' });
+    expect(await countRows(founderId, 'business.understanding_item')).toBe(before + 1);
+    const chain = await itemRepo().history(founderId, corrected!.id);
+    expect(chain.map((c) => c.id)).toContain(ids[0]!);
+  });
+  it('V9 "I\'m not sure" preserves uncertainty (event recorded, item unchanged, not confirmed)', async () => {
+    const { founderId, ids } = await seedItems(EE, [{ statement: BUDGET, label: 'you_told_me' }]);
+    const before = await countRows(founderId, 'business.understanding_item');
+    expect(await service().revalidate(founderId, ids[0]!, 'unsure', null)).toBe(true);
+    expect(await countRows(founderId, 'business.understanding_item')).toBe(before);
+    const revs = await itemRepo().listRevalidations(founderId);
+    expect(revs.some((r) => r.understandingItemId === ids[0]! && r.outcome === 'unsure')).toBe(true);
+    const sel = selectRelevantContext(await itemRepo().listCurrent(founderId), 'budget?', revs);
+    expect(sel.find((s) => s.id === ids[0]!)?.needsRevalidation).toBe(true); // still not treated as confirmed
+  });
+  it('V10 a contradiction in the current message flags the prior item for checking', async () => {
+    const { founderId } = await seedItems(EF, [{ statement: 'You have limited delivery capacity.', label: 'you_told_me' }]);
+    const sel = selectRelevantContext(await itemRepo().listCurrent(founderId), 'We hired two new people last month, so capacity is no longer the problem.', []);
+    const cap = sel.find((s) => /capacity/i.test(s.statement))!;
+    expect(cap.needsRevalidation).toBe(true);
+    expect(cap.possibleStalenessReason).toBe('contradicted');
+  });
+  it('V11 a potentially stale/unresolved item is surfaced needing checking, not asserted as current fact', async () => {
+    const { founderId } = await seedItems(EF, [{ statement: BOTTLENECK, label: 'unconfirmed_or_disagree' }]);
+    const t = await service(new ContextEchoClarityModel()).turn(founderId, AD_CONCERN, null);
+    const c = t.result!.continuity.find((x) => /bottleneck/i.test(x.statement))!;
+    expect(c.needsRevalidation).toBe(true);
+    expect(c.possibleStalenessReason).toBe('unresolved');
+  });
+  it('V12 revalidation + correction are founder-scoped (cross-founder safe)', async () => {
+    const { ids } = await seedItems(EF, [{ statement: BUDGET, label: 'you_told_me' }]);
+    expect(await service().revalidate(B, ids[0]!, 'confirmed', null)).toBe(false);     // B cannot revalidate EF's item
+    expect(await service().correctUnderstanding(B, { supersedesItemId: ids[0]!, statement: 'hijack' })).toBeNull();
+  });
+  it('V13 historical clarity results remain immutable after a revalidation', async () => {
+    const { founderId } = await seedItems(EF, [{ statement: BUDGET, label: 'you_told_me' }]);
+    const t = await service(new ContextEchoClarityModel()).turn(founderId, AD_CONCERN, null);
+    const cr = (await store().listClarityResults(founderId, t.concernId)).slice(-1)[0]!;
+    const beforeHash = await db.selectFrom('business.clarity_result').select('content_hash').where('id', '=', cr.id).executeTakeFirst();
+    await service().revalidate(founderId, t.result!.continuity[0]!.understandingItemId, 'confirmed', t.concernId);
+    const afterHash = await db.selectFrom('business.clarity_result').select('content_hash').where('id', '=', cr.id).executeTakeFirst();
+    expect(afterHash!.content_hash).toBe(beforeHash!.content_hash);      // the prior reading is untouched
+  });
+  it('V14 the active reading can be refreshed after a confirmed correction', async () => {
+    const { founderId, ids } = await seedItems(EF, [{ statement: BOTTLENECK, label: 'unconfirmed_or_disagree' }]);
+    const svc = service(new ContextEchoClarityModel());
+    const t = await svc.turn(founderId, AD_CONCERN, null);
+    const before = await countRows(founderId, 'business.clarity_result');
+    await svc.correctUnderstanding(founderId, { supersedesItemId: ids[0]!, statement: 'We established conversion is 8% of qualified traffic.' });
+    const refreshed = await svc.refreshReading(founderId, t.concernId);
+    expect(refreshed).not.toBeNull();
+    expect(await countRows(founderId, 'business.clarity_result')).toBe(before + 1); // a fresh reading appended
+  });
+  it('V15 advertising-budget scenario end-to-end — builds on the unconfirmed bottleneck; premature; not "ads are wrong"', async () => {
+    const { founderId } = await seedItems(EE, [{ statement: BOTTLENECK, label: 'unconfirmed_or_disagree' }, { statement: BUDGET, label: 'you_told_me' }, { statement: CONVERT, label: 'you_told_me' }]);
+    const t = await service(new ContextEchoClarityModel()).turn(founderId, AD_CONCERN, null);
+    const r = t.result!;
+    expect(r.continuity.some((c) => /bottleneck/i.test(c.statement))).toBe(true);
+    expect(r.clarifiedIssue).toMatch(/premature/i);
+    expect(r.clarifiedIssue!.toLowerCase()).not.toMatch(/ads are wrong|don’t run ads|do not run ads/);
+    expect(r.smallestUsefulNextMove).toMatch(/where prospects.*stop/i);
+  });
+  it('V16 capacity-contradiction scenario — flag, propose correction, keep old until confirmed, then supersede', async () => {
+    const { founderId, ids } = await seedItems(EF, [{ statement: 'You have limited delivery capacity.', label: 'you_told_me' }]);
+    const svc = service(new ContextEchoClarityModel());
+    const t = await svc.turn(founderId, 'We hired two new people last month, so capacity is no longer the problem.', null);
+    const flagged = t.result!.continuity.find((c) => /capacity/i.test(c.statement))!;
+    expect(flagged.needsRevalidation).toBe(true);
+    expect(flagged.possibleStalenessReason).toBe('contradicted');
+    // old item is still current until the founder explicitly confirms the change
+    expect((await itemRepo().listCurrent(founderId)).some((i) => i.id === ids[0]!)).toBe(true);
+    const corrected = await svc.correctUnderstanding(founderId, { supersedesItemId: ids[0]!, statement: 'Delivery capacity is sufficient after two new hires.' });
+    expect((await itemRepo().listCurrent(founderId)).some((i) => i.id === ids[0]!)).toBe(false); // now superseded
+    expect((await itemRepo().history(founderId, corrected!.id)).map((c) => c.id)).toContain(ids[0]!); // old preserved
+  });
+  it('V17 the founder can continue the session without resolving every uncertain item', async () => {
+    const { founderId } = await seedItems(EF, [{ statement: BOTTLENECK, label: 'unconfirmed_or_disagree' }]);
+    const svc = service(new ContextEchoClarityModel());
+    const t1 = await svc.turn(founderId, AD_CONCERN, null);
+    expect(t1.result!.continuity.some((c) => c.needsRevalidation)).toBe(true);
+    const t2 = await svc.turn(founderId, 'Actually, unrelated — should I write a newsletter?', t1.concernId); // no revalidation done
+    expect(t2.ok).toBe(true); // session continues fine
   });
 });
 

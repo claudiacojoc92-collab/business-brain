@@ -6,13 +6,14 @@
  */
 import { generateId } from '@bb/shared';
 import type { ClarityModel } from './clarity-model';
-import type { ClarityResult } from './clarity-result';
+import type { ClarityResult, ContinuityItem, ContinuityRef } from './clarity-result';
 import { assembleClarityContext, type ClarityContextDeps } from './clarity-context';
 import { PgClarityStore, type ProposedChangeRow } from './pg-clarity.repository';
 import type { PgStrategicSessionRepository } from './pg-strategic-session.repository';
 import type { PgContextSnapshotRepository } from './pg-context-snapshot.repository';
 import type { PgUnderstandingItemRepository, UnderstandingItem } from './pg-understanding-item.repository';
 import type { TruthLabel } from './clarity-result';
+import { selectRelevantContext, type SelectedContextItem } from './context-selection';
 import { classifyStrategicJob } from './strategy-classifier';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -45,23 +46,64 @@ export class ClarityService {
     const prior = await this.deps.store.listMessages(founderId, concern.id);
     await this.deps.store.addMessage(founderId, concern.id, 'FOUNDER', founderInput, now);
 
-    // 2) Retrieve confirmed context and audit.
-    const context = await assembleClarityContext(founderId, this.deps, now);
-    const result = await this.deps.model.clarify({ founderInput, priorMessages: prior.map((m) => ({ actor: m.actor, content: m.content })), context });
+    // 2) Read the reading (context + selection + audit + resolved continuity).
+    const reading = await this.produceReading(founderId, founderInput, prior.map((m) => ({ actor: m.actor, content: m.content })), now);
 
     // 3) Fail closed: no usable structured result → truthful retry; persist NO assistant turn, NO proposed state.
-    if (!result) return { ok: false, concernId: concern.id, result: null, proposedChanges: [], retry: true };
+    if (!reading) return { ok: false, concernId: concern.id, result: null, proposedChanges: [], retry: true };
 
-    // 4) Persist the assistant turn: a plain-language message + the immutable structured result + PENDING proposed changes.
+    // 4) Persist the assistant turn: a plain-language message + the immutable structured result + PENDING proposed changes +
+    //    the durable context-use linkage (which prior Understanding items materially informed this reading).
+    const result = reading.result;
     const assistantText = result.clarifiedIssue ?? result.reflectedConcern;
     const msg = await this.deps.store.addMessage(founderId, concern.id, 'BUSINESS_BRAIN', assistantText, now);
     const saved = await this.deps.store.saveClarityResult(founderId, concern.id, msg.id, result, now);
+    if (result.continuity.length) await this.deps.store.recordContextUse(founderId, saved.id, result.continuity.map((c) => c.understandingItemId), now);
     const proposedChanges = result.proposedUnderstandingChanges.length
       ? await this.deps.store.saveProposedChanges(founderId, concern.id, saved.id, result.proposedUnderstandingChanges, now)
       : [];
     await this.deps.store.updateConcern(founderId, concern.id, { clarifiedConcern: result.clarifiedIssue, status: result.clarifiedIssue ? 'clarified' : 'open' }, now);
 
     return { ok: true, concernId: concern.id, result, proposedChanges, retry: false };
+  }
+
+  /**
+   * Produce a reading for one message: retrieve confirmed background context, SELECT the bounded relevant prior Understanding
+   * (with derived staleness), audit via the model, then RESOLVE continuity — merging the model's relevance/effect text with
+   * persisted identity/label/origin/timestamps. Invented ids are dropped; any item derived as needing revalidation is always
+   * surfaced even if the model didn't reference it. Returns null (fail closed) when the model output is unusable.
+   */
+  private async produceReading(founderId: string, founderInput: string, priorMessages: Array<{ actor: 'FOUNDER' | 'BUSINESS_BRAIN'; content: string }>, now: Date): Promise<{ result: ClarityResult } | null> {
+    const context = await assembleClarityContext(founderId, this.deps, now);
+    const [currentItems, revalidations] = await Promise.all([this.deps.understandingItems.listCurrent(founderId), this.deps.understandingItems.listRevalidations(founderId)]);
+    const selection = selectRelevantContext(currentItems, founderInput, revalidations);
+    const output = await this.deps.model.clarify({ founderInput, priorMessages, context, contextItems: selection });
+    if (!output) return null;
+    const result = { ...output.result, continuity: resolveContinuity(output.continuityRefs, selection) };
+    return { result };
+  }
+
+  /** Re-run the reading for a concern using the CURRENT (e.g. just-corrected) context, appending a fresh clarity result. */
+  async refreshReading(founderId: string, concernId: string, now: Date = new Date()): Promise<ClarityResult | null> {
+    const concern = await this.deps.store.getConcern(founderId, concernId);
+    if (!concern) return null;
+    const messages = await this.deps.store.listMessages(founderId, concernId);
+    const lastFounder = [...messages].reverse().find((m) => m.actor === 'FOUNDER');
+    if (!lastFounder) return null;
+    const reading = await this.produceReading(founderId, lastFounder.content, messages.map((m) => ({ actor: m.actor, content: m.content })), now);
+    if (!reading) return null;
+    const result = reading.result;
+    const msg = await this.deps.store.addMessage(founderId, concernId, 'BUSINESS_BRAIN', result.clarifiedIssue ?? result.reflectedConcern, now);
+    const saved = await this.deps.store.saveClarityResult(founderId, concernId, msg.id, result, now);
+    if (result.continuity.length) await this.deps.store.recordContextUse(founderId, saved.id, result.continuity.map((c) => c.understandingItemId), now);
+    await this.deps.store.updateConcern(founderId, concernId, { clarifiedConcern: result.clarifiedIssue }, now);
+    return result;
+  }
+
+  /** Record a founder revalidation of a reused item. 'confirmed' → no duplicate item, just an event; 'unsure' → uncertainty
+   *  preserved. ("This has changed" is handled by correctUnderstanding, not here.) Founder-scoped. */
+  async revalidate(founderId: string, understandingItemId: string, outcome: 'confirmed' | 'unsure', sourceConcernId: string | null, now: Date = new Date()): Promise<boolean> {
+    return this.deps.understandingItems.recordRevalidation(founderId, understandingItemId, outcome, sourceConcernId, now);
   }
 
   /**
@@ -116,6 +158,37 @@ export class ClarityService {
   async confirmedFromClarity(founderId: string, concernId: string): Promise<ProposedChangeRow[]> {
     return (await this.deps.store.listProposedChanges(founderId, concernId)).filter((c) => c.status === 'accepted');
   }
+}
+
+/**
+ * Merge the model's continuity references with persisted selection into founder-facing continuity items. IDENTITY, LABEL,
+ * ORIGIN, TIMESTAMPS and STALENESS always come from persisted state (`selection`) — never the model. Model ids not in the
+ * supplied selection are DROPPED (the AI cannot reference or invent an item the service didn't provide). Any selected item
+ * that the service derived as needing revalidation is included even if the model didn't cite it (so a likely contradiction
+ * or unresolved condition is never silently dropped).
+ */
+export function resolveContinuity(refs: ContinuityRef[], selection: SelectedContextItem[]): ContinuityItem[] {
+  const byId = new Map(selection.map((s) => [s.id, s]));
+  const out: ContinuityItem[] = [];
+  const seen = new Set<string>();
+  const build = (s: SelectedContextItem, relevance: string, effect: string): ContinuityItem => ({
+    understandingItemId: s.id, statement: s.statement, truthLabel: s.truthLabel, originSummary: s.originSummary,
+    relevanceToCurrentConcern: relevance, effectOnCurrentReading: effect,
+    lastConfirmedAt: s.lastConfirmedAt, possibleStalenessReason: s.possibleStalenessReason, needsRevalidation: s.needsRevalidation,
+  });
+  for (const ref of refs) {
+    const s = byId.get(ref.understandingItemId);
+    if (!s || seen.has(s.id)) continue;              // drop invented / duplicate ids
+    seen.add(s.id);
+    out.push(build(s, ref.relevanceToCurrentConcern, ref.effectOnCurrentReading));
+  }
+  // Ensure every item that materially needs checking is surfaced, even if the model didn't reference it.
+  for (const s of selection) {
+    if (seen.has(s.id) || !s.needsRevalidation) continue;
+    seen.add(s.id);
+    out.push(build(s, s.possibleStalenessReason === 'contradicted' ? 'Your message suggests this may have changed.' : 'This is a load-bearing condition for the current reading.', s.possibleStalenessReason === 'unresolved' ? 'It bounds the reading: it remains unresolved.' : 'It may no longer be current.'));
+  }
+  return out;
 }
 
 export interface CrystallizeDeps {
