@@ -71,6 +71,40 @@ export class FixtureClarityModel implements ClarityModel {
   async clarify(_input: ClarityInput): Promise<ClarityResult | null> { return this.result; }
 }
 
+/**
+ * A deterministic fixture that REFLECTS the retrieved context back — used to prove continuity: when the founder's accepted
+ * understanding ("the acquisition bottleneck is unconfirmed") is in context, the reading remembers it, does not start from
+ * zero, does not claim ads are wrong, and explains that doubling spend is premature until qualified-traffic shortage is
+ * established. `relevantContextUsed` echoes exactly what was drawn on, so disclosure is truthful.
+ */
+export class ContextEchoClarityModel implements ClarityModel {
+  readonly version = 'clarity-1:context-echo';
+  readonly promptTemplateHash = 'fixture';
+  async clarify(input: ClarityInput): Promise<ClarityResult | null> {
+    const usedBottleneck = input.context.conclusions.some((c) => /bottleneck is unconfirmed|acquisition bottleneck/i.test(c.statement));
+    return {
+      reflectedConcern: 'A marketer is recommending you double your ad budget, and you’re unsure whether to.',
+      relevantContextUsed: input.context.conclusions.map((c) => ({ label: c.label, statement: c.statement })),
+      supportedObservations: ['You already receive some inquiries.'],
+      founderStatements: input.context.conclusions.filter((c) => c.label === 'you_told_me' || c.label === 'unconfirmed_or_disagree' || c.label === 'you_corrected_this').map((c) => c.statement),
+      interpretations: [usedBottleneck
+        ? 'You have already established that the acquisition bottleneck is unconfirmed, so more spend may not help until where prospects stop is known.'
+        : 'Without prior context, more spend could equally help or be wasted.'],
+      unknowns: ['Whether the constraint is a shortage of qualified traffic.', 'Where prospects currently stop.'],
+      conflicts: [],
+      clarifiedIssue: usedBottleneck
+        ? 'Doubling ad spend is premature: your understanding already records that the acquisition bottleneck is unconfirmed, so more traffic may amplify an unresolved conversion problem rather than fix it.'
+        : 'It is not yet possible to say whether doubling spend helps.',
+      alternativeInterpretation: 'Doubling spend is appropriate if you first establish that conversion is healthy and the constraint is genuinely a shortage of qualified traffic.',
+      smallestUsefulNextMove: 'Establish where prospects currently stop before increasing ad spend.',
+      whatWouldChangeThisReading: ['Evidence that qualified traffic is the binding constraint.'],
+      proposedUnderstandingChanges: [],
+      possibleStrategicQuestion: null,
+      evidenceLimitation: 'Based on your current understanding, including what you have already confirmed; where prospects stop is still unestablished.',
+    };
+  }
+}
+
 /** The canned, product-truthful clarity result for the advertising tension (acceptance scenario, Phase 12). */
 export function advertisingScenarioResult(): ClarityResult {
   return {

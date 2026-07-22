@@ -11,7 +11,12 @@ import { assembleClarityContext, type ClarityContextDeps } from './clarity-conte
 import { PgClarityStore, type ProposedChangeRow } from './pg-clarity.repository';
 import type { PgStrategicSessionRepository } from './pg-strategic-session.repository';
 import type { PgContextSnapshotRepository } from './pg-context-snapshot.repository';
+import type { PgUnderstandingItemRepository, UnderstandingItem } from './pg-understanding-item.repository';
+import type { TruthLabel } from './clarity-result';
 import { classifyStrategicJob } from './strategy-classifier';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyDB = any;
 
 export interface ClarityTurnResult {
   ok: boolean;                       // false → the model output was unusable; nothing new persisted; founder text preserved
@@ -24,6 +29,8 @@ export interface ClarityTurnResult {
 export interface ClarityServiceDeps extends ClarityContextDeps {
   store: PgClarityStore;
   model: ClarityModel;
+  db: AnyDB;                                   // for the transactional acceptance (item + resolution, atomic)
+  understandingItems: PgUnderstandingItemRepository;
 }
 
 export class ClarityService {
@@ -57,13 +64,46 @@ export class ClarityService {
     return { ok: true, concernId: concern.id, result, proposedChanges, retry: false };
   }
 
-  /** Explicit founder action — accept a pending proposal. It becomes a founder-confirmed Understanding item (its truth label
-   *  keeps it distinct from Business Brain inference). Confirmed only through THIS action; conversation never writes it. */
-  async acceptProposedChange(founderId: string, changeId: string, now: Date = new Date()): Promise<boolean> {
+  /**
+   * Explicit founder action — accept a pending proposal. ATOMICALLY: create a durable founder-governed Understanding item
+   * AND mark the proposal accepted, in one transaction (both succeed or neither — a proposal is never accepted while its
+   * Understanding write fails). The item carries a truth label that keeps it distinct from a Business Brain inference and
+   * does NOT convert uncertainty into fact (an "unconfirmed / we disagree" proposal stays a disagreement). Returns the new
+   * item, or null if the proposal isn't pending/owned. Confirmed only through THIS action; conversation never writes it.
+   */
+  async acceptProposedChange(founderId: string, changeId: string, now: Date = new Date()): Promise<UnderstandingItem | null> {
     const change = await this.deps.store.getProposedChange(founderId, changeId);
-    if (!change || change.status !== 'pending') return false;
-    // resultingReference = the change's own id: the accepted proposal IS the durable founder-confirmed understanding item.
-    return this.deps.store.resolveProposedChange(founderId, changeId, 'accepted', changeId, now);
+    if (!change || change.status !== 'pending') return null;
+    // A CORRECT-type proposal supersedes a prior inference → "you corrected this"; otherwise keep the proposed label
+    // (typically "you told me" for a founder affirmation, or "unconfirmed / we disagree" for an unresolved condition).
+    const label: TruthLabel = change.changeType === 'CORRECT' ? 'you_corrected_this' : change.label;
+    return this.deps.db.transaction().execute(async (tx: AnyDB) => {
+      const item = await this.deps.understandingItems.create(founderId, {
+        statement: change.statement, truthLabel: label, origin: 'clarity_acceptance',
+        originConcernId: change.concernId, originClarityResultId: change.clarityResultId, originProposedChangeId: change.id,
+      }, now, tx);
+      const ok = await this.deps.store.resolveProposedChange(founderId, changeId, 'accepted', item.id, now, tx, item.id);
+      if (!ok) throw new Error('proposal is no longer pending'); // rolls back the item insert — atomic
+      return item;
+    });
+  }
+
+  /**
+   * Explicit founder action — correct a current Understanding item OR a synthesized conclusion. Appends a founder-authored
+   * "you corrected this" item that SUPERSEDES the prior representation without deleting it (history preserved). Never alters
+   * historical clarity results, recommendations, or decisions. Requires this explicit call; conversation alone cannot do it.
+   */
+  async correctUnderstanding(founderId: string, input: { supersedesItemId?: string; conclusionRef?: string; statement: string }, now: Date = new Date()): Promise<UnderstandingItem | null> {
+    const statement = input.statement.trim();
+    if (statement.length < 2) return null;
+    if (input.supersedesItemId) {
+      const prior = await this.deps.understandingItems.get(founderId, input.supersedesItemId);
+      if (!prior) return null; // not owned / not found
+    }
+    return this.deps.understandingItems.create(founderId, {
+      statement, truthLabel: 'you_corrected_this', origin: 'founder_correction',
+      supersedesItemId: input.supersedesItemId ?? null, originConclusionRef: input.conclusionRef ?? null,
+    }, now);
   }
   /** Explicit founder action — reject a pending proposal. Confirmed Understanding is left entirely unchanged. */
   async rejectProposedChange(founderId: string, changeId: string, now: Date = new Date()): Promise<boolean> {

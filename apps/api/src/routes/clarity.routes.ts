@@ -15,6 +15,8 @@ import { PgStrategicLearningRepository } from '../business-model/pg-strategic-le
 import { PgLearningPromotionRepository } from '../business-model/pg-learning-promotion.repository';
 import { captureEffectiveContext } from '../business-model/context-snapshot.capture';
 import { PgClarityStore } from '../business-model/pg-clarity.repository';
+import { PgUnderstandingItemRepository } from '../business-model/pg-understanding-item.repository';
+import { composeEffectiveUnderstanding } from '../business-model/effective-understanding';
 import { ClarityService, crystallizeConcern } from '../business-model/clarity.service';
 import { AnthropicClarityModel, FixtureClarityModel } from '../business-model/clarity-model';
 
@@ -28,6 +30,7 @@ export function registerClarityRoutes(server: FastifyInstance): void {
   const identity = new PgIdentityRepository(db);
   const store = new PgClarityStore(db);
   const understanding = new PgUnderstandingRepository(db);
+  const understandingItems = new PgUnderstandingItemRepository(db);
   const strategicContext = new PgFounderStrategicContextRepository(db);
   const learningRepo = new PgStrategicLearningRepository(db);
   const promotionRepo = new PgLearningPromotionRepository(db);
@@ -44,7 +47,7 @@ export function registerClarityRoutes(server: FastifyInstance): void {
   const model = process.env['CLARITY_FIXTURE'] === '1' && process.env['NODE_ENV'] !== 'production'
     ? new FixtureClarityModel()
     : new AnthropicClarityModel(process.env['ANTHROPIC_API_KEY'] ?? '');
-  const service = new ClarityService({ store, model, understanding, strategicContext });
+  const service = new ClarityService({ store, model, understanding, strategicContext, understandingItems, db });
 
   async function founder(request: FastifyRequest): Promise<string | null> {
     const sid = readCookie(request.headers['cookie'], SESSION_COOKIE);
@@ -89,12 +92,12 @@ export function registerClarityRoutes(server: FastifyInstance): void {
     await reply.send({ concern, messages, clarity, proposedChanges });
   });
 
-  // POST /clarity/changes/:id/accept — explicit founder confirmation of a proposed Understanding update.
+  // POST /clarity/changes/:id/accept — explicit founder confirmation. Atomically creates a founder-governed Understanding item.
   server.post('/clarity/changes/:id/accept', async (request, reply) => {
     const f = await need(request, reply); if (!f) return;
-    const ok = await service.acceptProposedChange(f, (request.params as { id: string }).id);
-    if (!ok) { await reply.code(409).send({ error: 'not pending or not found' }); return; }
-    await reply.send({ accepted: true });
+    const item = await service.acceptProposedChange(f, (request.params as { id: string }).id);
+    if (!item) { await reply.code(409).send({ error: 'not pending or not found' }); return; }
+    await reply.send({ accepted: true, understandingItemId: item.id });
   });
 
   // POST /clarity/changes/:id/reject — the founder declines; confirmed Understanding is left unchanged.
@@ -117,5 +120,32 @@ export function registerClarityRoutes(server: FastifyInstance): void {
     });
     if (!sessionId) { await reply.code(409).send({ error: 'concern not found or already crystallized' }); return; }
     await reply.code(201).send({ sessionId });
+  });
+
+  // ── Understanding surface — the founder-facing view of the accumulated, effective understanding ──────────────────
+  // GET /understanding/effective — current items (with truth labels) + open unknowns + disagreements + recently accepted.
+  server.get('/understanding/effective', async (request, reply) => {
+    const f = await need(request, reply); if (!f) return;
+    const [u, items] = await Promise.all([understanding.latest(f), understandingItems.listAll(f)]);
+    await reply.send(composeEffectiveUnderstanding(u, items));
+  });
+
+  // GET /understanding/items/:id/history — the founder-facing supersession chain (oldest → newest) for one item.
+  server.get('/understanding/items/:id/history', async (request, reply) => {
+    const f = await need(request, reply); if (!f) return;
+    const chain = await understandingItems.history(f, (request.params as { id: string }).id);
+    if (!chain.length) { await reply.code(404).send({ error: 'not found' }); return; }
+    await reply.send({ history: chain });
+  });
+
+  // POST /understanding/correct — explicit founder correction; supersedes a current item or a synthesized conclusion.
+  server.post('/understanding/correct', async (request, reply) => {
+    const f = await need(request, reply); if (!f) return;
+    const body = (request.body ?? {}) as { supersedesItemId?: string; conclusionRef?: string; statement?: string };
+    const statement = (body.statement ?? '').trim();
+    if (statement.length < 2) { await reply.code(400).send({ error: 'a corrected statement is required' }); return; }
+    const item = await service.correctUnderstanding(f, { supersedesItemId: body.supersedesItemId, conclusionRef: body.conclusionRef, statement });
+    if (!item) { await reply.code(409).send({ error: 'nothing to correct or not owned' }); return; }
+    await reply.code(201).send({ understandingItemId: item.id });
   });
 }

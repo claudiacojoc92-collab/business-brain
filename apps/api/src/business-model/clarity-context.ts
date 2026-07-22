@@ -8,6 +8,7 @@ import type { TruthLabel } from './clarity-result';
 import type { Understanding, Conclusion } from './understanding';
 import { PgUnderstandingRepository } from './pg-understanding.repository';
 import { PgFounderStrategicContextRepository } from './pg-founder-strategic-context.repository';
+import { PgUnderstandingItemRepository } from './pg-understanding-item.repository';
 import { resolveEffectiveStrategicContext } from './effective-strategic-context.resolver';
 
 /** Map a confirmed conclusion to the founder-facing truth label (no technical jargon leaves this layer). */
@@ -27,16 +28,22 @@ function statementOf(c: Conclusion): string {
 export interface ClarityContextDeps {
   understanding: PgUnderstandingRepository;
   strategicContext: PgFounderStrategicContextRepository;
+  understandingItems: PgUnderstandingItemRepository;
 }
 
-/** Assemble the confirmed context for a clarity audit. Empty-but-valid when the founder has no Understanding yet. */
+/** Assemble the confirmed context for a clarity audit — synthesized conclusions PLUS current founder-governed items (accepted
+ *  clarity changes + corrections), so a later sensemaking session starts from the accumulated understanding, not from zero.
+ *  Empty-but-valid when the founder has no Understanding yet. */
 export async function assembleClarityContext(founderId: string, deps: ClarityContextDeps, asOf: Date = new Date()): Promise<ClarityContext> {
   const u: Understanding | null = await deps.understanding.latest(founderId);
-  const conclusions = u
+  const synthesized = u
     ? u.conclusions
-        .filter((c) => c.confirmationState !== 'rejected')
+        .filter((c) => c.confirmationState !== 'rejected' && c.type !== 'missing_information')
         .map((c) => ({ statement: statementOf(c), label: labelOfConclusion(c) }))
     : [];
+  // Current founder-governed items are first-class context — this is how continuity happens across sessions.
+  const founderItems = (await deps.understandingItems.listCurrent(founderId)).map((i) => ({ statement: i.statement, label: i.truthLabel }));
+  const conclusions = [...synthesized, ...founderItems];
   const unknowns = u ? u.conclusions.filter((c) => c.epistemicStatus === 'NEEDS_MORE_EVIDENCE' || c.type === 'missing_information').map((c) => statementOf(c)) : [];
 
   const items = await deps.strategicContext.listActive(founderId);

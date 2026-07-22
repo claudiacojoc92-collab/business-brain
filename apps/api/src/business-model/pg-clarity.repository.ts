@@ -92,10 +92,12 @@ export class PgClarityStore {
     const r = await this.db.selectFrom('business.proposed_understanding_change').selectAll().where('founder_id', '=', founderId).where('id', '=', id).executeTakeFirst();
     return r ? this.toChange(r) : null;
   }
-  /** Resolve a PENDING proposal one-way. The DB trigger guarantees content is untouched and prevents re-resolution. */
-  async resolveProposedChange(founderId: string, id: string, status: 'accepted' | 'rejected', resultingReference: string | null, now: Date): Promise<boolean> {
-    const res = await this.db.updateTable('business.proposed_understanding_change')
-      .set({ status, resulting_reference: resultingReference, resolved_at: now.toISOString() })
+  /** Resolve a PENDING proposal one-way. The DB trigger guarantees content is untouched and prevents re-resolution. Accepts an
+   *  optional transaction (so acceptance is atomic with the Understanding write) and the resulting Understanding item id. */
+  async resolveProposedChange(founderId: string, id: string, status: 'accepted' | 'rejected', resultingReference: string | null, now: Date, tx?: AnyDB, resultingUnderstandingItemId?: string | null): Promise<boolean> {
+    const exec = tx ?? this.db;
+    const res = await exec.updateTable('business.proposed_understanding_change')
+      .set({ status, resulting_reference: resultingReference, resulting_understanding_item_id: resultingUnderstandingItemId ?? null, resolved_at: now.toISOString() })
       .where('founder_id', '=', founderId).where('id', '=', id).where('status', '=', 'pending').executeTakeFirst();
     return Number(res?.numUpdatedRows ?? 0) > 0;
   }

@@ -35,10 +35,47 @@ The first functional slice of the cognitive entry point: a founder brings a tens
 - Rendered end-to-end in the browser (real API + persisted DB, `CLARITY_FIXTURE=1`): the advertising tension → full audit (does NOT recommend ads) → truth-labelled context → known/assumed/unknown separation → core issue → smallest next move → alternative → what-would-change → pending "only if you agree" proposal → **accept** (pending→accepted, 200) → persists across a fresh navigation. Concern ended `clarified` (no forced thread).
 - Frozen strategist hashes unchanged.
 
-## Known limitations (this slice)
+## Known limitations (slice 1)
 
 - V1 scopes by `founder_id` as the single Business (no `Business` table — justified variation; future-compatible).
-- Accepted proposals are surfaced as founder-confirmed clarity items; they are intentionally **not** merged into the website-synthesis Understanding versioning (kept separate to avoid disturbing that path).
 - The live `AnthropicClarityModel` is wired but exercised deterministically via the fixture in tests/verification.
 - Home is the existing `/welcome` hub with a clarity entry; a full stateful Home (Phase 7) is a later slice.
-- No Playwright spec yet for the rendered flow (covered by the 15 service/DB tests + manual browser verification).
+- No Playwright spec yet for the rendered flow (covered by the DB tests + manual browser verification).
+
+---
+
+# Slice 2 — Clarity → Confirmed Understanding → Reused Context (the accumulation loop)
+
+Closes the loop: an accepted clarity proposal becomes a durable, founder-governed **Understanding item** that joins the effective current Understanding, is visible + labelled, is retrieved by later clarity sessions, and can be corrected/superseded **without rewriting history**. Additive; frozen engine byte-identical.
+
+## What changed
+| Layer | Change |
+|---|---|
+| Schema | `V090__understanding_item.sql` — append-only `business.understanding_item` (founder-governed items: clarity acceptances + corrections; supersession links; clarity-origin refs) + `resulting_understanding_item_id` on `proposed_understanding_change` (bidirectional link). Immutable (no UPDATE) + one-successor-per-item invariant. |
+| Repo | `pg-understanding-item.repository.ts` — `create`/`listCurrent` (current = not-superseded, derived)/`history` (supersession chain)/`get`; tx-aware. |
+| Bridge | `clarity.service.ts` — **transactional accept**: item insert + proposal resolution in ONE tx (both or neither; a proposal is never accepted while its Understanding write fails). `correctUnderstanding` supersession. `resolveProposedChange` made tx-aware + records the resulting item id. |
+| Composer | `effective-understanding.ts` — composes the effective view at read time: synthesized conclusions (minus founder-corrected ones) + current founder items; open unknowns (minus resolved); disagreements; recently-accepted. Never mutates either source. |
+| Context reuse | `clarity-context.ts` now includes current founder-governed items → later sessions start from accumulated understanding, and disclose it in "What I'm drawing on". |
+| API | `GET /understanding/effective`, `GET /understanding/items/:id/history`, `POST /understanding/correct`. |
+| Web | `understanding/UnderstandingSurfacePage.tsx` (`/understanding`): current items + truth labels, open unknowns, unresolved disagreements, recently-accepted, expandable origin/history, correct action, "Talk something through". Welcome hub link "What I understand". |
+| Tests | +14 continuity tests (U1–U15) in `clarity.live.test.ts` → **29/29**. Context-echo fixture for two-session continuity. |
+| Live verify | `clarity-live-model.verify.test.ts` — controlled, skip-guarded (`RUN_LIVE_MODEL=1`), self-loads the key in-process (never printed), writes no confirmed Understanding. |
+
+## Guarantees (slice 2)
+- **Atomic acceptance** (U2, U13): item + resolution in one tx; a forced write-failure leaves the proposal *pending* with no item.
+- **Uncertainty stays uncertainty** (U5, U6): an accepted "unconfirmed / we disagree" item is surfaced as a disagreement, never asserted as fact.
+- **Unknown preserved** (U7): the original "where prospects stop" unknown remains visible after acceptance.
+- **History preserved** (U8, U9): corrections supersede via a new append-only row; the superseded item stays in history; no in-place UPDATE (DB-enforced).
+- **Effective selection** (U4, U5, U10): the surface + later context use the *current* effective item, not the superseded one.
+- **Two-session continuity** (U11/U15): a second concern visibly draws on the accepted item — remembers the bottleneck is unconfirmed, does not start from zero, does not claim ads are wrong, calls doubling spend premature.
+- **Isolation** (U12) and **strategy immutability** (U14, T11): cross-founder access impossible; existing strategy sessions/decisions unchanged by Understanding updates.
+
+## Verification
+- API + web typecheck clean; web build clean. `clarity.live.test.ts` **29/29**. Live-model verify test **skips** in the default suite.
+- **Live Anthropic run** (`RUN_LIVE_MODEL=1`): contract valid; `jumpedToRecommendation: false`; separated known/assumed/unknown; bounded next move; 1 proposal (nothing saved); alternative offered. (Live quality is NOT claimed from fixtures — this is a real call.)
+- **Rendered end-to-end** (`CLARITY_FIXTURE=1`): clarity → accept → `/understanding` shows the accepted item under "What we currently understand", "Still unresolved / where we disagree", and "Recently added from a clarity conversation", with Correct / history actions.
+- Frozen engine hashes unchanged.
+
+## Known limitations (slice 2)
+- Correcting a *synthesized* conclusion is supported via `conclusionRef` but the surface exposes correction primarily on founder items; deeper inline correction of synthesized conclusions is a later refinement.
+- No Playwright spec for the Understanding surface yet (covered by 29 DB tests + browser verification).

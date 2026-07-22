@@ -17,6 +17,7 @@ import { MarketPage } from './market/MarketPage';
 import { StrategyPage } from './strategy/StrategyPage';
 import { StrategyThreadPage } from './strategy/StrategyThreadPage';
 import { ClarityPage } from './clarity/ClarityPage';
+import { UnderstandingSurfacePage } from './understanding/UnderstandingSurfacePage';
 import { StrategicContextPage } from './strategic-context/StrategicContextPage';
 import { ConnectPreviewPage } from './connect/ConnectPreviewPage';
 import { UploadPreviewPage } from './upload/UploadPreviewPage';
@@ -58,6 +59,8 @@ export function App() {
           {/* Clarity / Sensemaking — the tension→clarity entry point BEFORE a Strategy Thread. */}
           <Route path="/clarity" element={<ClarityPage />} />
           <Route path="/clarity/:concernId" element={<ClarityPage />} />
+          {/* The founder-facing effective Understanding surface (accumulated + reusable). */}
+          <Route path="/understanding" element={<UnderstandingSurfacePage />} />
 
           <Route path="/strategy" element={<StrategyPage />} />
           {/* Show Me the Loop — the rendered Strategy Thread: one filmable Recommendation→…→Learning→Promotion→next journey. */}

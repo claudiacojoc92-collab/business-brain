@@ -17,8 +17,11 @@ import { PgMarketFindingResponseRepository } from '../../business-model/pg-marke
 import { PgMarketReviewRepository } from '../../business-model/pg-market-review.repository';
 import { captureEffectiveContext } from '../../business-model/context-snapshot.capture';
 import { PgClarityStore } from '../../business-model/pg-clarity.repository';
+import { PgUnderstandingItemRepository } from '../../business-model/pg-understanding-item.repository';
+import { composeEffectiveUnderstanding } from '../../business-model/effective-understanding';
+import { assembleClarityContext } from '../../business-model/clarity-context';
 import { ClarityService, crystallizeConcern } from '../../business-model/clarity.service';
-import { FixtureClarityModel, advertisingScenarioResult } from '../../business-model/clarity-model';
+import { FixtureClarityModel, ContextEchoClarityModel, advertisingScenarioResult, type ClarityModel } from '../../business-model/clarity-model';
 import { normalizeClarityResult, type ClarityResult } from '../../business-model/clarity-result';
 
 /**
@@ -28,24 +31,25 @@ import { normalizeClarityResult, type ClarityResult } from '../../business-model
  * confirmation. The confirmation boundary and founder isolation are enforced. Skip-guarded on a dev DB.
  */
 const DB_URL = process.env['GATE_DB_URL'] ?? 'postgresql://bbuser:bbpassword@localhost:5432/businessbrain';
-const EA = 'clarity.a@loop.test'; const EB = 'clarity.b@loop.test';
+const EA = 'clarity.a@loop.test'; const EB = 'clarity.b@loop.test'; const EC = 'clarity.c@loop.test'; const ED = 'clarity.d@loop.test';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDB = any;
 let db: AnyDB; let app: FastifyInstance; let dbUp = false;
 const prev = { node: process.env['NODE_ENV'], db: process.env['DATABASE_URL'] };
 
 async function purge(): Promise<void> {
-  const rows = await db.selectFrom('identity.founders').select('founder_id').where('email', 'in', [EA, EB]).execute();
+  const rows = await db.selectFrom('identity.founders').select('founder_id').where('email', 'in', [EA, EB, EC, ED]).execute();
   const ids = rows.map((r: { founder_id: string }) => r.founder_id);
   if (!ids.length) return;
   await db.transaction().execute(async (tx: AnyDB) => {
     await sql`SELECT set_config('bb.allow_concern_delete','on',true)`.execute(tx);
     await sql`SELECT set_config('bb.allow_snapshot_delete','on',true)`.execute(tx);
-    for (const t of ['business.proposed_understanding_change', 'business.clarity_result', 'business.concern_message', 'business.concern', 'business.context_snapshot', 'business.strategic_session', 'business.founder_strategic_context_item', 'business.conclusion_response', 'business.understanding', 'identity.sessions', 'identity.founder_credentials']) {
+    await sql`SELECT set_config('bb.allow_understanding_item_delete','on',true)`.execute(tx);
+    for (const t of ['business.proposed_understanding_change', 'business.understanding_item', 'business.clarity_result', 'business.concern_message', 'business.concern', 'business.context_snapshot', 'business.strategic_session', 'business.founder_strategic_context_item', 'business.conclusion_response', 'business.understanding', 'identity.sessions', 'identity.founder_credentials']) {
       await tx.deleteFrom(t).where('founder_id', 'in', ids).execute();
     }
   });
-  await db.deleteFrom('identity.founders').where('email', 'in', [EA, EB]).execute();
+  await db.deleteFrom('identity.founders').where('email', 'in', [EA, EB, EC, ED]).execute();
 }
 async function signup(email: string): Promise<string> {
   let l = await app.inject({ method: 'POST', url: '/api/auth/signup', payload: { email, password: 'claritypass-12' } });
@@ -63,8 +67,9 @@ async function seedUnderstanding(founderId: string): Promise<void> {
   });
 }
 function store(): PgClarityStore { return new PgClarityStore(db); }
-function service(model = new FixtureClarityModel()): ClarityService {
-  return new ClarityService({ store: store(), model, understanding: new PgUnderstandingRepository(db), strategicContext: new PgFounderStrategicContextRepository(db) });
+function itemRepo(): PgUnderstandingItemRepository { return new PgUnderstandingItemRepository(db); }
+function service(model: ClarityModel = new FixtureClarityModel()): ClarityService {
+  return new ClarityService({ store: store(), model, understanding: new PgUnderstandingRepository(db), strategicContext: new PgFounderStrategicContextRepository(db), understandingItems: itemRepo(), db });
 }
 async function countRows(founderId: string, table: string): Promise<number> {
   return (await db.selectFrom(table).select('id').where('founder_id', '=', founderId).execute()).length;
@@ -139,11 +144,11 @@ d('Clarity — the constitutional boundaries', () => {
     const svc = service();
     const t = await svc.turn(A, 'is it really a traffic problem?', null);
     const beforeU = await understandingFingerprint(A);
-    const ok = await svc.acceptProposedChange(A, t.proposedChanges[0]!.id);
-    expect(ok).toBe(true);
+    const item = await svc.acceptProposedChange(A, t.proposedChanges[0]!.id);
+    expect(item).not.toBeNull();
+    expect(item!.truthLabel).toBe('unconfirmed_or_disagree'); // carries a truth label, distinct from a Business-Brain inference
     const acc = (await svc.confirmedFromClarity(A, t.concernId));
     expect(acc).toHaveLength(1);
-    expect(acc[0]!.label).toBe('unconfirmed_or_disagree'); // carries a truth label, distinct from a Business-Brain inference
     // the synthesized Understanding version + conclusions are untouched — accepted clarity items live separately
     expect(await understandingFingerprint(A)).toEqual(beforeU);
   });
@@ -191,7 +196,7 @@ d('Clarity — ending, crystallization, and immutability', () => {
     expect(r.alternativeInterpretation.length).toBeGreaterThan(0);
     expect(r.possibleStrategicQuestion).toBeTruthy(); // a question is offered, not a verdict
   });
-  it('T11 accepting a proposed change writes ONLY to the proposal store — sessions/decisions untouched', async () => {
+  it('T11 accepting a proposed change leaves strategy sessions/decisions untouched (only Understanding is affected)', async () => {
     const svc = service();
     const sessionsBefore = await countRows(A, 'business.strategic_session');
     const decisionsBefore = await countRows(A, 'business.strategic_decision_record');
@@ -230,6 +235,133 @@ d('Clarity — founder isolation + fail-closed contract', () => {
     expect(ok!.clarifiedIssue).toBeTruthy();
   });
 });
+
+d('Clarity → Confirmed Understanding → Reused Context (accumulation loop)', () => {
+  async function acceptOnce(founderId: string): Promise<{ concernId: string; itemId: string }> {
+    const svc = service();
+    const t = await svc.turn(founderId, 'ads pressure — is that the real issue?', null);
+    const item = await svc.acceptProposedChange(founderId, t.proposedChanges[0]!.id);
+    return { concernId: t.concernId, itemId: item!.id };
+  }
+
+  it('U1 accepting a proposal creates a durable, founder-governed Understanding item', async () => {
+    const { itemId } = await acceptOnce(A);
+    const item = await itemRepo().get(A, itemId);
+    expect(item).toBeTruthy();
+    expect(item!.origin).toBe('clarity_acceptance');
+    expect(item!.statement).toMatch(/bottleneck is unconfirmed/i);
+  });
+  it('U2 acceptance is atomic — the proposal is accepted AND the item exists, linked both ways', async () => {
+    const svc = service();
+    const t = await svc.turn(A, 'atomic accept check', null);
+    const changeId = t.proposedChanges[0]!.id;
+    const item = await svc.acceptProposedChange(A, changeId);
+    const change = await store().getProposedChange(A, changeId);
+    expect(change!.status).toBe('accepted');
+    expect((item)!.originProposedChangeId).toBe(changeId);   // item → proposal
+    // proposal → item (resulting_understanding_item_id)
+    const linked = await db.selectFrom('business.proposed_understanding_change').select('resulting_understanding_item_id').where('id', '=', changeId).executeTakeFirst();
+    expect(linked!.resulting_understanding_item_id).toBe(item!.id);
+  });
+  it('U3 rejection creates NO Understanding item', async () => {
+    const svc = service();
+    const before = await countRows(A, 'business.understanding_item');
+    const t = await svc.turn(A, 'reject this one', null);
+    await svc.rejectProposedChange(A, t.proposedChanges[0]!.id);
+    expect(await countRows(A, 'business.understanding_item')).toBe(before);
+  });
+  it('U4 the accepted item appears in the effective current Understanding', async () => {
+    const { itemId } = await acceptOnce(A);
+    const eff = composeEffectiveUnderstanding(await new PgUnderstandingRepository(db).latest(A), await itemRepo().listAll(A));
+    expect(eff.current.some((i) => i.id === itemId)).toBe(true);
+  });
+  it('U5 the effective item carries the correct founder-facing truth label', async () => {
+    const { itemId } = await acceptOnce(A);
+    const eff = composeEffectiveUnderstanding(await new PgUnderstandingRepository(db).latest(A), await itemRepo().listAll(A));
+    expect(eff.current.find((i) => i.id === itemId)!.label).toBe('unconfirmed_or_disagree');
+  });
+  it('U6 an accepted UNRESOLVED statement stays a disagreement — acceptance does not convert it to fact', async () => {
+    const { itemId } = await acceptOnce(A);
+    const eff = composeEffectiveUnderstanding(await new PgUnderstandingRepository(db).latest(A), await itemRepo().listAll(A));
+    expect(eff.disagreements.some((i) => i.id === itemId)).toBe(true); // surfaced as unresolved, not asserted truth
+  });
+  it('U7 the original unknown ("where prospects stop") remains visible after acceptance', async () => {
+    await acceptOnce(A);
+    const eff = composeEffectiveUnderstanding(await new PgUnderstandingRepository(db).latest(A), await itemRepo().listAll(A));
+    expect(eff.unknowns.some((u) => /where prospects.*(drop|stop)/i.test(u))).toBe(true);
+  });
+  it('U8 a founder correction supersedes a prior item WITHOUT deleting it (both in history)', async () => {
+    const { itemId } = await acceptOnce(A);
+    const svc = service();
+    const corrected = await svc.correctUnderstanding(A, { supersedesItemId: itemId, statement: 'On reflection: inquiries clearly stall at the proposal stage.' });
+    expect(corrected!.truthLabel).toBe('you_corrected_this');
+    const chain = await itemRepo().history(A, corrected!.id);
+    expect(chain.map((c) => c.id)).toContain(itemId);     // the superseded original is preserved in history
+    expect(chain[chain.length - 1]!.id).toBe(corrected!.id);
+    // the superseded item is no longer current; the correction is
+    const current = await itemRepo().listCurrent(A);
+    expect(current.some((i) => i.id === itemId)).toBe(false);
+    expect(current.some((i) => i.id === corrected!.id)).toBe(true);
+  });
+  it('U9 historical Understanding items are immutable (append-only; no in-place UPDATE)', async () => {
+    const { itemId } = await acceptOnce(A);
+    await expect(db.updateTable('business.understanding_item').set({ statement: 'tampered' }).where('id', '=', itemId).execute())
+      .rejects.toThrow(/append-only/i);
+  });
+  it('U10 later context retrieval uses the CORRECTED effective item, not the superseded one', async () => {
+    const D = await signup(ED); await seedUnderstanding(D);   // fresh founder — clean, uncontaminated context
+    const { itemId } = await acceptOnce(D);
+    await service().correctUnderstanding(D, { supersedesItemId: itemId, statement: 'Corrected: the bottleneck is at the proposal stage.' });
+    const ctx = await assembleClarityContextForTest(D);
+    expect(ctx.conclusions.some((c) => /proposal stage/i.test(c.statement))).toBe(true);
+    expect(ctx.conclusions.some((c) => c.statement === 'The current acquisition bottleneck is unconfirmed.')).toBe(false);
+  });
+  it('U11/U15 TWO-SESSION CONTINUITY — a second concern visibly draws on the accepted item from the first', async () => {
+    const C = await signup(EC); await seedUnderstanding(C);
+    // Session 1 — founder accepts "the acquisition bottleneck is unconfirmed"
+    const s1 = service();
+    const t1 = await s1.turn(C, 'Everyone says I need ads, but I don’t know whether ads are really the answer.', null);
+    await s1.acceptProposedChange(C, t1.proposedChanges[0]!.id);
+    // Session 2 — a marketer says double the ad budget; the model reflects the retrieved accepted understanding
+    const s2 = service(new ContextEchoClarityModel());
+    const t2 = await s2.turn(C, 'A marketer is now recommending that I double my ad budget. Should I?', null);
+    const r = t2.result!;
+    expect(r.relevantContextUsed.some((c) => /acquisition bottleneck is unconfirmed/i.test(c.statement))).toBe(true); // does not start from zero
+    expect(r.clarifiedIssue).toMatch(/premature/i);            // doubling spend is premature
+    expect(r.clarifiedIssue!.toLowerCase()).not.toMatch(/ads are wrong|don’t run ads|do not run ads/); // never claims ads are wrong
+    expect(r.smallestUsefulNextMove).toMatch(/where prospects.*stop/i);
+  });
+  it('U12 cross-founder isolation for Understanding items + history', async () => {
+    const { itemId } = await acceptOnce(A);
+    expect(await itemRepo().get(B, itemId)).toBeNull();
+    expect(await itemRepo().history(B, itemId)).toHaveLength(0);
+    expect((await itemRepo().listCurrent(B)).some((i) => i.id === itemId)).toBe(false);
+  });
+  it('U13 a FAILED Understanding write does not leave the proposal accepted (atomic rollback)', async () => {
+    // stub: reads (listCurrent, used by context retrieval) work; the WRITE (create) fails inside the acceptance tx.
+    const failing = { listCurrent: async () => [], create: async () => { throw new Error('boom: understanding write failed'); } } as unknown as PgUnderstandingItemRepository;
+    const svc = new ClarityService({ store: store(), model: new FixtureClarityModel(), understanding: new PgUnderstandingRepository(db), strategicContext: new PgFounderStrategicContextRepository(db), understandingItems: failing, db });
+    const t = await svc.turn(A, 'this acceptance will fail to write', null);
+    const changeId = t.proposedChanges[0]!.id;
+    const itemsBefore = await countRows(A, 'business.understanding_item');
+    await expect(svc.acceptProposedChange(A, changeId)).rejects.toThrow(/boom/);
+    const change = await store().getProposedChange(A, changeId);
+    expect(change!.status).toBe('pending');                     // proposal NOT accepted
+    expect(await countRows(A, 'business.understanding_item')).toBe(itemsBefore); // no item created
+  });
+  it('U14 later Understanding updates do not change existing strategy sessions/decisions', async () => {
+    const sessions = await countRows(A, 'business.strategic_session');
+    const decisions = await countRows(A, 'business.strategic_decision_record');
+    await acceptOnce(A);
+    await service().correctUnderstanding(A, { statement: 'A brand-new founder-declared fact.' });
+    expect(await countRows(A, 'business.strategic_session')).toBe(sessions);
+    expect(await countRows(A, 'business.strategic_decision_record')).toBe(decisions);
+  });
+});
+
+function assembleClarityContextForTest(founderId: string) {
+  return assembleClarityContext(founderId, { understanding: new PgUnderstandingRepository(db), strategicContext: new PgFounderStrategicContextRepository(db), understandingItems: itemRepo() });
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function assemblerDeps(): any {

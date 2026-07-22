@@ -493,6 +493,24 @@ export async function crystallizeConcern(id: string, question: string): Promise<
   return request<{ sessionId: string }>(`clarity/concerns/${encodeURIComponent(id)}/crystallize`, { method: 'POST', body: JSON.stringify({ question }) });
 }
 
+// ─── Understanding surface — the founder-facing view of the accumulated, effective understanding ──────────────────────
+export interface EffectiveUnderstandingItem { id: string; statement: string; label: TruthLabel; source: 'observed' | 'founder'; origin: 'synthesis' | 'clarity_acceptance' | 'founder_correction'; createdAt: string | null }
+export interface EffectiveUnderstanding { current: EffectiveUnderstandingItem[]; unknowns: string[]; disagreements: EffectiveUnderstandingItem[]; recentlyAccepted: EffectiveUnderstandingItem[] }
+export interface UnderstandingItemHistory { id: string; statement: string; truthLabel: TruthLabel; origin: string; createdAt: string }
+
+/** GET /understanding/effective — the current effective understanding (synthesized + founder-governed), composed at read time. */
+export async function getEffectiveUnderstanding(): Promise<EffectiveUnderstanding> {
+  return request<EffectiveUnderstanding>('understanding/effective');
+}
+/** GET /understanding/items/:id/history — the supersession chain (oldest → newest) for one founder-governed item. */
+export async function getUnderstandingItemHistory(id: string): Promise<UnderstandingItemHistory[]> {
+  return (await request<{ history: UnderstandingItemHistory[] }>(`understanding/items/${encodeURIComponent(id)}/history`)).history;
+}
+/** POST /understanding/correct — explicit founder correction; supersedes a current item without rewriting history. */
+export async function correctUnderstanding(body: { supersedesItemId?: string; conclusionRef?: string; statement: string }): Promise<{ understandingItemId: string }> {
+  return request<{ understandingItemId: string }>('understanding/correct', { method: 'POST', body: JSON.stringify(body) });
+}
+
 // ─── Strategic Decision Record: a founder-EXPLICIT choice among understood alternatives (ADR-011 cat 10) ────
 // A decision is NOT recommendation feedback and NOT a commitment or plan. Only an explicit founder action here
 // creates one; it is append-only and preserves the decision-time state.
