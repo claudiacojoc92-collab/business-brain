@@ -2,17 +2,17 @@ import { test, expect, type Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 
 /**
- * GENUINE rendered-UI acceptance for the Strategic Learning Origination Gate (ADR-017). Retrospective learning is created
- * ONLY via: Outcome Review → Learning Candidate (a PROPOSAL — creates nothing) → explicit founder ACCEPT → Strategic
- * Learning (origin=OUTCOME_REVIEW). Proving: proposing a candidate creates NO learning; DISMISS creates nothing; ACCEPT
- * creates a learning with origin OUTCOME_REVIEW and NEVER a promotion. No direct fetch for the flow. Requires dev DB +
- * API :3000 + vite.
+ * GENUINE rendered-UI acceptance for the Strategic Learning Origination Gate completion (ADR-017 V088). Retrospective
+ * learning is gated: Outcome Review → Learning Candidate (an append-only REVISIONED proposal — creates nothing) → explicit
+ * founder judgment (ADOPT/REJECT/DEFER/WITHDRAW) → Strategic Learning (origin=OUTCOME_REVIEW). Drives: propose (no learning)
+ * → edit (rev 2; rev 1 immutable) → defer (no learning) → adopt (exactly one OUTCOME_REVIEW learning, zero promotion,
+ * unknown+contradiction disclosed) → propose another → reject (rejected history visible). No direct fetch for the flow.
  */
-const EMAIL = `logate.e2e.${Date.now()}@understand.test`;
-const PASSWORD = 'logatee2e-12';
+const EMAIL = `logate3.e2e.${Date.now()}@understand.test`;
+const PASSWORD = 'logate3e2e-12';
 const PSQL = ['exec', '-i', 'bb-postgres', 'psql', '-U', 'bbuser', '-d', 'businessbrain'];
 function sql(q: string): string { return execFileSync('docker', [...PSQL, '-t', '-A', '-c', q], { encoding: 'utf8' }).trim(); }
-const REV1 = 'LOGATEPLAN00000000000000000000001';
+const REV1 = 'LOGATE3PLAN0000000000000000000001';
 let founderId = '';
 const item = 'ship-weekly';
 const MILESTONES = JSON.stringify([{ id: 'ship-weekly', label: 'Ship weekly', intendedState: 'live', sequence: 1, confirmationCondition: null, targetWindow: null, dependencies: [], uncertainty: null, statusAtPlanning: 'PLANNED' }]).replace(/'/g, "''");
@@ -22,12 +22,13 @@ function planRow(id: string): string {
 function cleanup(): void {
   sql(`SET bb.allow_execution_report_delete='on'; SET bb.allow_strategic_review_delete='on'; SET bb.allow_snapshot_delete='on'; SET bb.allow_learning_delete='on'; SET bb.allow_learning_candidate_delete='on'; DELETE FROM business.learning_candidate_decision WHERE founder_id='${founderId}'; DELETE FROM business.learning_candidate WHERE founder_id='${founderId}'; DELETE FROM business.strategic_learning_record WHERE founder_id='${founderId}'; DELETE FROM business.strategic_outcome_review WHERE founder_id='${founderId}'; DELETE FROM business.execution_report WHERE founder_id='${founderId}'; DELETE FROM business.context_snapshot WHERE founder_id='${founderId}'; DELETE FROM business.strategic_plan_record WHERE founder_id='${founderId}'; DELETE FROM business.understanding WHERE founder_id='${founderId}';`);
 }
+const learnings = () => sql(`SELECT count(*) FROM business.strategic_learning_record WHERE founder_id='${founderId}';`);
 
 test.beforeAll(async ({ request }) => {
   founderId = sql(`SELECT founder_id FROM identity.founders WHERE email='${EMAIL}';`);
   if (!founderId) { const res = await request.post('/api/auth/signup', { data: { email: EMAIL, password: PASSWORD } }); founderId = (await res.json()).founder_id as string; }
   cleanup();
-  sql(`INSERT INTO business.understanding (id, founder_id, version, supersedes_id, model_version, source_fragment_ids, conclusions, created_at) VALUES ('BU-LOGATE','${founderId}',1,NULL,'logate-seed','["f"]'::jsonb,'[{"id":"concl-a","type":"what_it_is","statement":"A SaaS.","epistemicStatus":"OBSERVED","evidenceRefs":["f"],"confidence":"high","confirmationState":"confirmed","founderCorrection":null}]'::jsonb, now());`);
+  sql(`INSERT INTO business.understanding (id, founder_id, version, supersedes_id, model_version, source_fragment_ids, conclusions, created_at) VALUES ('BU-LG3','${founderId}',1,NULL,'lg3-seed','["f"]'::jsonb,'[{"id":"concl-a","type":"what_it_is","statement":"A SaaS.","epistemicStatus":"OBSERVED","evidenceRefs":["f"],"confidence":"high","confirmationState":"confirmed","founderCorrection":null}]'::jsonb, now());`);
   sql(planRow(REV1));
 });
 test.afterAll(async () => { if (founderId) cleanup(); });
@@ -36,29 +37,40 @@ async function signIn(page: Page) {
   await page.goto('/signin');
   await page.getByRole('textbox').first().fill(EMAIL);
   await page.locator('input[type="password"]').fill(PASSWORD);
-  const [resp] = await Promise.all([
-    page.waitForResponse((r) => r.url().includes('/api/auth/signin') && r.request().method() === 'POST'),
-    page.getByRole('button', { name: 'Sign in' }).click(),
-  ]);
+  const [resp] = await Promise.all([page.waitForResponse((r) => r.url().includes('/api/auth/signin') && r.request().method() === 'POST'), page.getByRole('button', { name: 'Sign in' }).click()]);
   expect(resp.status()).toBe(200);
   await page.waitForURL((u) => !u.pathname.includes('/signin'), { timeout: 15_000 });
   await page.goto('/strategy');
   await expect(page.getByTestId(`plan-${REV1}`)).toBeVisible();
 }
 const plan = (p: Page) => p.getByTestId(`plan-${REV1}`);
-const tid = `${REV1}-1`; // planId-seq for the first outcome review
+const tid = `${REV1}-1`;
 
-test('retrospective learning is gated: propose a candidate (no learning), dismiss, then accept → an OUTCOME_REVIEW learning, never a promotion', async ({ page }) => {
+async function fillForm(page: Page, idp: string, statement: string) {
+  await plan(page).getByTestId(`cand-statement-${idp}`).fill(statement);
+  await plan(page).getByTestId(`cand-founder-${idp}`).fill('In our words: outreach worked.');
+  await plan(page).getByTestId(`cand-prior-${idp}`).fill('Ads fastest.');
+  await plan(page).getByTestId(`cand-revised-${idp}`).fill('Outreach fastest.');
+  await plan(page).getByTestId(`cand-change-${idp}`).fill('Moved to outreach.');
+  await plan(page).getByTestId(`cand-unknowns-${idp}`).fill('Whether it scales.');
+  await plan(page).getByTestId(`cand-contradictions-${idp}`).fill('One week we paused.');
+  await plan(page).getByTestId(`cand-obs-${idp}-${item}`).check();
+  await plan(page).getByTestId(`cand-category-${idp}`).selectOption('EXECUTION');
+  await plan(page).getByTestId(`cand-scope-${idp}`).selectOption('THIS_CHANNEL');
+  await plan(page).getByTestId(`cand-epistemic-${idp}`).selectOption('PROVISIONAL');
+}
+
+test('retrospective learning is gated through a revisioned candidate: propose → edit → defer → adopt (one OUTCOME_REVIEW learning, never a promotion); reject leaves history', async ({ page }) => {
   await signIn(page);
 
-  // report execution so the review describes something
+  // report execution (gives the outcome review a selectable observation)
   await plan(page).getByTestId(`exec-add-${item}`).click();
   await plan(page).getByTestId('exec-report-state').selectOption('ATTEMPTED');
   await plan(page).getByTestId('exec-report-statement').fill('Shipped twice.');
   await plan(page).getByTestId('exec-report-submit').click();
   await expect(plan(page).getByTestId(`exec-state-${item}`)).toHaveText('Reported attempted');
 
-  // record an outcome review (creates its own snapshot)
+  // record an outcome review
   await plan(page).getByTestId(`outcome-review-open-${REV1}`).click();
   await plan(page).getByTestId(`outcome-create-snapshot-${REV1}`).click();
   await expect(plan(page).getByTestId(`outcome-snapshot-${REV1}`)).toBeVisible();
@@ -67,47 +79,54 @@ test('retrospective learning is gated: propose a candidate (no learning), dismis
   await plan(page).getByTestId(`outcome-submit-${REV1}`).click();
   await expect(plan(page).getByTestId(`outcome-review-item-${REV1}-1`)).toBeVisible();
 
-  // ── the gate: no candidate yet, and NO learning ──
+  // ── propose a candidate → NO learning ──
   await expect(plan(page).getByTestId(`candidates-none-${tid}`)).toBeVisible();
-  expect(sql(`SELECT count(*) FROM business.strategic_learning_record WHERE founder_id='${founderId}';`)).toBe('0');
-
-  // ── propose a candidate → still NO learning (it is a proposal) ──
   await plan(page).getByTestId(`candidate-propose-open-${tid}`).click();
-  await plan(page).getByTestId(`candidate-statement-${tid}`).fill('Outreach cadence may be our durable channel.');
-  await plan(page).getByTestId(`candidate-propose-submit-${tid}`).click();
-  const candId = () => sql(`SELECT id FROM business.learning_candidate WHERE founder_id='${founderId}' ORDER BY created_at DESC LIMIT 1;`);
-  await expect(plan(page).getByTestId(`candidate-status-${candId()}`)).toHaveText(/proposed/i);
-  expect(sql(`SELECT count(*) FROM business.strategic_learning_record WHERE founder_id='${founderId}';`)).toBe('0'); // proposal created NO learning
+  await fillForm(page, tid, 'Outreach cadence may be our durable channel.');
+  await plan(page).getByTestId(`candidate-submit-${tid}`).click();
+  const lid = () => sql(`SELECT logical_candidate_id FROM business.learning_candidate WHERE founder_id='${founderId}' ORDER BY created_at DESC LIMIT 1;`);
+  const L1 = lid();
+  await expect(plan(page).getByTestId(`candidate-rev-${L1}`)).toHaveText('1');
+  await expect(plan(page).getByTestId(`candidate-status-${L1}`)).toHaveText(/proposed/i);
+  await expect(plan(page).getByTestId(`candidate-provenance-${L1}`)).toContainText('Whether it scales.'); // unknown disclosed
+  await expect(plan(page).getByTestId(`candidate-provenance-${L1}`)).toContainText('One week we paused.'); // contradiction disclosed
+  expect(learnings()).toBe('0');
   await plan(page).getByTestId(`candidates-${tid}`).screenshot({ path: 'e2e/__evidence__/logate-candidate-proposed.png' }).catch(() => {});
 
-  // ── dismiss it → still NO learning ──
-  const c1 = candId();
-  await plan(page).getByTestId(`candidate-dismiss-${c1}`).click();
-  await expect(plan(page).getByTestId(`candidate-status-${c1}`)).toHaveText(/dismissed/i);
-  expect(sql(`SELECT count(*) FROM business.strategic_learning_record WHERE founder_id='${founderId}';`)).toBe('0');
+  // ── edit → revision 2; revision 1 stays immutable in the DB ──
+  await plan(page).getByTestId(`candidate-edit-open-${L1}`).click();
+  await plan(page).getByTestId(`cand-statement-${L1}`).fill('Founder-led outreach converts at our stage.');
+  await plan(page).getByTestId(`candidate-submit-${L1}`).click();
+  await expect(plan(page).getByTestId(`candidate-rev-${L1}`)).toHaveText('2');
+  expect(sql(`SELECT count(*) FROM business.learning_candidate WHERE founder_id='${founderId}' AND logical_candidate_id='${L1}';`)).toBe('2');
+  expect(sql(`SELECT candidate_statement FROM business.learning_candidate WHERE founder_id='${founderId}' AND logical_candidate_id='${L1}' AND revision=1;`)).toBe('Outreach cadence may be our durable channel.'); // rev1 immutable
+  expect(learnings()).toBe('0');
 
-  // ── propose again, then ACCEPT with an explicit learning judgment → creates an OUTCOME_REVIEW learning ──
-  await plan(page).getByTestId(`candidate-propose-open-${tid}`).click();
-  await plan(page).getByTestId(`candidate-statement-${tid}`).fill('Founder-led outreach converts at our stage.');
-  await plan(page).getByTestId(`candidate-propose-submit-${tid}`).click();
-  const c2 = candId();
-  await plan(page).getByTestId(`candidate-accept-open-${c2}`).click();
-  await plan(page).getByTestId(`accept-statement-${c2}`).fill('Founder-led outreach converts; ads at our stage don’t.');
-  await plan(page).getByTestId(`accept-prior-${c2}`).fill('I believed ads were fastest.');
-  await plan(page).getByTestId(`accept-revised-${c2}`).fill('Outreach is our fastest channel now.');
-  await plan(page).getByTestId(`accept-change-${c2}`).fill('Moved from ads-first to outreach-first.');
-  await plan(page).getByTestId(`accept-category-${c2}`).selectOption('EXECUTION');
-  await plan(page).getByTestId(`accept-confidence-${c2}`).selectOption('PROVISIONAL');
-  await plan(page).getByTestId(`accept-scope-${c2}`).selectOption('THIS_CHANNEL');
-  await plan(page).getByTestId(`candidate-accept-submit-${c2}`).click();
-  await expect(plan(page).getByTestId(`candidate-status-${c2}`)).toHaveText(/accepted/i);
-  await plan(page).getByTestId(`candidates-${tid}`).screenshot({ path: 'e2e/__evidence__/logate-candidate-accepted.png' }).catch(() => {});
+  // ── defer → NO learning; still eligible ──
+  await plan(page).getByTestId(`candidate-defer-${L1}`).click();
+  await expect(plan(page).getByTestId(`candidate-status-${L1}`)).toHaveText(/deferred/i);
+  expect(learnings()).toBe('0');
 
-  // ── DB invariants: exactly one learning, origin OUTCOME_REVIEW, bound to the review + candidate, and ZERO promotions ──
-  expect(sql(`SELECT count(*) FROM business.strategic_learning_record WHERE founder_id='${founderId}';`)).toBe('1');
+  // ── adopt the latest revision → EXACTLY ONE OUTCOME_REVIEW learning; zero promotion ──
+  await plan(page).getByTestId(`candidate-adopt-${L1}`).click();
+  await expect(plan(page).getByTestId(`candidate-status-${L1}`)).toHaveText(/adopted/i);
+  await plan(page).getByTestId(`candidate-${L1}`).screenshot({ path: 'e2e/__evidence__/logate-candidate-adopted.png' }).catch(() => {});
+  expect(learnings()).toBe('1');
   expect(sql(`SELECT learning_origin FROM business.strategic_learning_record WHERE founder_id='${founderId}';`)).toBe('OUTCOME_REVIEW');
-  expect(sql(`SELECT (outcome_review_id IS NOT NULL AND learning_candidate_id='${c2}' AND review_record_id IS NULL) FROM business.strategic_learning_record WHERE founder_id='${founderId}';`)).toBe('t');
-  expect(sql(`SELECT count(*) FROM business.learning_promotion_event WHERE founder_id='${founderId}';`)).toBe('0'); // ACCEPT never promotes
-  // the decision is recorded exactly once with the resulting learning
-  expect(sql(`SELECT verdict FROM business.learning_candidate_decision WHERE founder_id='${founderId}' AND candidate_id='${c2}';`)).toBe('ACCEPT');
+  expect(sql(`SELECT (learning_candidate_id IS NOT NULL AND outcome_review_id IS NOT NULL AND review_record_id IS NULL) FROM business.strategic_learning_record WHERE founder_id='${founderId}';`)).toBe('t');
+  // adopted learning PRESERVES the candidate's unknowns + contradictions
+  expect(sql(`SELECT unresolved_unknowns::text FROM business.strategic_learning_record WHERE founder_id='${founderId}';`)).toContain('Whether it scales.');
+  expect(sql(`SELECT counter_evidence::text FROM business.strategic_learning_record WHERE founder_id='${founderId}';`)).toContain('One week we paused.');
+  expect(sql(`SELECT count(*) FROM business.learning_promotion_event WHERE founder_id='${founderId}';`)).toBe('0'); // NEVER promotes
+  expect(sql(`SELECT count(*) FROM business.founder_strategic_context_item WHERE founder_id='${founderId}';`)).toBe('0'); // no effective-context change
+
+  // ── propose a SECOND candidate and REJECT it → no new learning; rejected history remains visible ──
+  await plan(page).getByTestId(`candidate-propose-open-${tid}`).click();
+  await fillForm(page, tid, 'Weekly demos are the leading signal.');
+  await plan(page).getByTestId(`candidate-submit-${tid}`).click();
+  const L2 = lid();
+  await plan(page).getByTestId(`candidate-reject-${L2}`).click();
+  await expect(plan(page).getByTestId(`candidate-status-${L2}`)).toHaveText(/rejected/i);
+  await expect(plan(page).getByTestId(`candidate-${L2}`)).toBeVisible(); // rejected candidate stays visible
+  expect(learnings()).toBe('1'); // still exactly one learning
 });

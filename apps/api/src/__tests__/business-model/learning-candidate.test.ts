@@ -1,91 +1,108 @@
 import { describe, it, expect } from 'vitest';
 import {
-  assertCandidateAdmissible, assertDecisionAdmissible, buildCandidateFields, deriveCandidateStatus, toCandidateView,
+  assertCandidateAdmissible, assertJudgmentAdmissible, buildCandidateFields, buildCandidateRevisionFields,
+  buildLearningInputFromCandidate, computeCandidateContentHash, deriveCandidateStatus, toCandidateView,
   LearningCandidateError, type LearningCandidateInput, type LearningCandidate, type LearningCandidateDecision,
 } from '../../business-model/learning-candidate';
-import { buildLearningFields, buildLearningFieldsFromCandidate, assertLearningAdmissible, assertLearningFromCandidateAdmissible, LearningValidationError, type LearningInput } from '../../business-model/strategic-learning';
 import type { StrategicOutcomeReview } from '../../business-model/strategic-outcome-review';
 
 /**
- * Wave 4 §DET — Strategic Learning Origination Gate (ADR-017). The candidate proposal, the explicit one-time judgment, and
- * the origin discriminator on the resulting learning. No DB.
+ * Wave 4 §DET — Strategic Learning Origination Gate completion (ADR-017 V088). The REVISIONED candidate, its frozen
+ * epistemic content + SHA-256 hash, source-freeze fail-closed, the four-way judgment, status derivation, and deterministic
+ * learning derivation that preserves unknowns/contradictions/scope/epistemics. No DB.
  */
 function sor(over: Partial<StrategicOutcomeReview> = {}): StrategicOutcomeReview {
   return {
     id: 'sor-1', founderId: 'F', planRecordId: 'plan-rev-1', planLogicalId: 'LOG', planRevision: 1, planSchemaVersion: 'strategic-plan-1',
-    commitmentRecordId: 'com-1', commitmentLogicalId: 'comlog', contextSnapshotId: 'snap-1', contextSnapshotHash: 'deadbeef', reviewSequence: 1,
-    assessment: {} as StrategicOutcomeReview['assessment'], observedOutcome: 'PARTIALLY_AS_INTENDED', founderOutcomeStatement: 'x', unknowns: [],
-    assessmentMethod: 'DETERMINISTIC_COMPOSITION', promptTemplateHash: 'h', modelConfiguration: {}, reviewSchemaVersion: 'strategic-outcome-review-1', contentHash: 'abc123', idempotencyKey: 'k', createdAt: new Date('2026-07-11').toISOString(), ...over,
+    commitmentRecordId: 'com-1', commitmentLogicalId: 'comlog', contextSnapshotId: 'snap-9', contextSnapshotHash: 'deadbeef', reviewSequence: 1,
+    assessment: { intended: {} as never, reported: [{ subjectType: 'MILESTONE', subjectId: 'ship-weekly', reportedState: 'ATTEMPTED', headReportId: 'r1', reportSequence: 1, founderStatement: 'shipped', occurredAt: null }], evidence: { contextSnapshotId: 'snap-9', contextSnapshotHash: 'deadbeef', contextSnapshotSchemaVersion: 'context-snapshot-2', executionEvidence: [{ subjectId: 'ship-weekly', type: 'URL', value: 'https://x.test/p', label: null, verified: false }] }, observedOutcome: 'PARTIALLY_AS_INTENDED', founderOutcomeStatement: 'x', unknowns: [] } as unknown as StrategicOutcomeReview['assessment'],
+    observedOutcome: 'PARTIALLY_AS_INTENDED', founderOutcomeStatement: 'x', unknowns: [], assessmentMethod: 'DETERMINISTIC_COMPOSITION', promptTemplateHash: 'h', modelConfiguration: {}, reviewSchemaVersion: 'strategic-outcome-review-1', contentHash: 'deadbeef', idempotencyKey: 'k', createdAt: new Date('2026-07-11').toISOString(), ...over,
   };
 }
-function candInput(over: Partial<LearningCandidateInput> = {}): LearningCandidateInput { return { candidateStatement: 'Outreach converts at our stage.', candidateRationale: 'Three weeks of shipping suggested it.', idempotencyKey: 'c1', ...over }; }
-function learningInput(over: Partial<LearningInput> = {}): LearningInput {
-  return { learningStatement: 'Founder-led outreach converts.', learningCategory: 'EXECUTION', confidence: 'PROVISIONAL', priorUnderstanding: 'Ads fastest.', revisedUnderstanding: 'Outreach fastest.', changeStatement: 'Moved to outreach.', learningScope: 'THIS_CHANNEL', broadScopeAcknowledged: false, isCausalHypothesis: false, boundaryConditions: [], counterEvidence: [], unresolvedUnknowns: [], observations: [], evidenceReferences: [], idempotencyKey: 'l1', ...over };
+function input(over: Partial<LearningCandidateInput> = {}): LearningCandidateInput {
+  return { candidateStatement: 'Outreach converts.', founderStatement: 'We saw outreach convert.', priorUnderstanding: 'Ads fastest.', revisedUnderstanding: 'Outreach fastest.', changeStatement: 'Moved to outreach.', learningCategory: 'EXECUTION', applicabilityScope: 'THIS_CHANNEL', epistemicStatus: 'PROVISIONAL', isCausalHypothesis: false, broadScopeAcknowledged: false, selectedObservations: [{ kind: 'REPORTED', ref: 'ship-weekly', statement: 'shipped twice' }], unknownMarkers: ['Whether it scales.'], contradictionMarkers: ['One week we paused.'], candidateRationale: null, idempotencyKey: 'c1', ...over };
 }
-const candidate = (over: Partial<LearningCandidate> = {}): LearningCandidate => ({ id: 'cand-1', founderId: 'F', outcomeReviewId: 'sor-1', outcomeReviewContentHash: 'abc123', planRecordId: 'plan-rev-1', planLogicalId: 'LOG', planRevision: 1, commitmentRecordId: 'com-1', sourceObservedOutcome: 'PARTIALLY_AS_INTENDED', candidateStatement: 'Outreach converts.', candidateRationale: null, schemaVersion: 'learning-candidate-1', idempotencyKey: 'c1', createdAt: new Date('2026-07-12').toISOString(), ...over });
-const decision = (verdict: 'ACCEPT' | 'DISMISS', over: Partial<LearningCandidateDecision> = {}): LearningCandidateDecision => ({ id: 'dec-1', founderId: 'F', candidateId: 'cand-1', verdict, founderJudgment: 'Keeping it.', resultingLearningId: verdict === 'ACCEPT' ? 'learn-1' : null, idempotencyKey: 'd1', createdAt: new Date('2026-07-13').toISOString(), ...over });
+const rev1 = (): LearningCandidate => ({ ...buildCandidateFields(sor(), input(), 'LC1'), id: 'cand-1', founderId: 'F', idempotencyKey: 'c1', createdAt: new Date('2026-07-12').toISOString() });
+const dec = (verdict: 'ADOPT' | 'REJECT' | 'DEFER' | 'WITHDRAW', over: Partial<LearningCandidateDecision> = {}): LearningCandidateDecision => ({ id: 'd', founderId: 'F', logicalCandidateId: 'LC1', candidateRevisionId: 'cand-1', verdict, founderJudgment: 'because', resultingLearningId: verdict === 'ADOPT' ? 'learn-1' : null, idempotencyKey: 'k', createdAt: new Date('2026-07-13').toISOString(), ...over });
 
-describe('strategic learning origination gate §DET', () => {
-  it('candidate admission requires an owned outcome review, idempotency key, and a statement', () => {
-    expect(() => assertCandidateAdmissible(null, candInput())).toThrow(/outcome review/i);
-    expect(() => assertCandidateAdmissible(sor(), candInput({ idempotencyKey: '' }))).toThrow(LearningCandidateError);
-    expect(() => assertCandidateAdmissible(sor(), candInput({ candidateStatement: ' ' }))).toThrow(/proposal/i);
-    expect(() => assertCandidateAdmissible(sor(), candInput())).not.toThrow();
+describe('learning origination gate completion §DET', () => {
+  it('admission requires source review, statement, founder wording, narrative, category, scope, epistemic status, key', () => {
+    expect(() => assertCandidateAdmissible(null, input())).toThrow(/outcome review/i);
+    expect(() => assertCandidateAdmissible(sor(), input({ candidateStatement: ' ' }))).toThrow(/proposal|learning/i);
+    expect(() => assertCandidateAdmissible(sor(), input({ founderStatement: '' }))).toThrow(/own words/i);
+    expect(() => assertCandidateAdmissible(sor(), input({ changeStatement: '' }))).toThrow(/before|now|changed/i);
+    expect(() => assertCandidateAdmissible(sor(), input({ applicabilityScope: '' as never }))).toThrow(/widely/i);
+    expect(() => assertCandidateAdmissible(sor(), input({ epistemicStatus: '' as never }))).toThrow(/settled/i);
+    expect(() => assertCandidateAdmissible(sor(), input({ idempotencyKey: '' }))).toThrow(LearningCandidateError);
+    expect(() => assertCandidateAdmissible(sor(), input())).not.toThrow();
   });
 
-  it('a candidate freezes the exact outcome-review provenance + plan lineage (a proposal, not a learning)', () => {
-    const f = buildCandidateFields(sor({ observedOutcome: 'UNKNOWN', contentHash: 'HASH9' }), candInput());
-    expect(f.outcomeReviewId).toBe('sor-1');
-    expect(f.outcomeReviewContentHash).toBe('HASH9');
-    expect(f.planRecordId).toBe('plan-rev-1'); expect(f.commitmentRecordId).toBe('com-1');
-    expect(f.sourceObservedOutcome).toBe('UNKNOWN');
-    expect(f.schemaVersion).toBe('learning-candidate-1');
+  it('source freeze fails closed on a content-hash mismatch', () => {
+    expect(() => assertCandidateAdmissible(sor({ contentHash: 'NEW' }), input({ expectedSourceHash: 'deadbeef' }))).toThrow(/changed/i);
+    expect(() => assertCandidateAdmissible(sor(), input({ expectedSourceHash: 'deadbeef' }))).not.toThrow();
   });
 
-  it('the judgment is explicit and exactly-once — verdict bounded, judgment required, second decision rejected', () => {
-    expect(() => assertDecisionAdmissible(null, 'MAYBE', 'x', 'd1')).toThrow(/accept or dismiss/i);
-    expect(() => assertDecisionAdmissible(null, 'ACCEPT', '', 'd1')).toThrow(/why/i);
-    expect(() => assertDecisionAdmissible(null, 'ACCEPT', 'ok', '')).toThrow(/idempotency/i);
-    expect(() => assertDecisionAdmissible(null, 'ACCEPT', 'ok', 'd1')).not.toThrow();
-    expect(() => assertDecisionAdmissible(decision('ACCEPT'), 'DISMISS', 'ok', 'd2')).toThrow(/already decided/i);
+  it('broad scope requires acknowledgement; a SUPPORTED causal claim needs a selected observation', () => {
+    expect(() => assertCandidateAdmissible(sor(), input({ applicabilityScope: 'BUSINESS' }))).toThrow(/generalizing/i);
+    expect(() => assertCandidateAdmissible(sor(), input({ applicabilityScope: 'BUSINESS', broadScopeAcknowledged: true }))).not.toThrow();
+    expect(() => assertCandidateAdmissible(sor(), input({ isCausalHypothesis: true, epistemicStatus: 'SUPPORTED', selectedObservations: [] }))).toThrow(/causal/i);
   });
 
-  it('candidate status derives from its at-most-one decision', () => {
-    expect(deriveCandidateStatus(null)).toBe('PROPOSED');
-    expect(deriveCandidateStatus(decision('ACCEPT'))).toBe('ACCEPTED');
-    expect(deriveCandidateStatus(decision('DISMISS'))).toBe('DISMISSED');
+  it('a selected observation must exist in the source outcome review', () => {
+    expect(() => assertCandidateAdmissible(sor(), input({ selectedObservations: [{ kind: 'REPORTED', ref: 'not-a-subject', statement: 'x' }] }))).toThrow(/observation/i);
+    expect(() => assertCandidateAdmissible(sor(), input({ selectedObservations: [{ kind: 'EVIDENCE', ref: 'https://x.test/p', statement: 'x' }] }))).not.toThrow();
   });
 
-  it('the candidate view is explicit that it creates nothing until accepted and never auto-promotes', () => {
-    const v = toCandidateView(candidate(), null);
-    expect(v.status).toBe('PROPOSED');
-    expect(v.isProposalNotLearning).toBe(true); expect(v.createsNothingUntilAccepted).toBe(true); expect(v.neverAutoPromotes).toBe(true);
-    expect(v.decision).toBeNull();
-    const va = toCandidateView(candidate(), decision('ACCEPT'));
-    expect(va.status).toBe('ACCEPTED'); expect(va.decision?.resultingLearningId).toBe('learn-1');
+  it('revision 1 freezes source identity + epistemic content + a SHA-256 hash; no predecessor', () => {
+    const f = buildCandidateFields(sor(), input(), 'LC1');
+    expect(f.revision).toBe(1); expect(f.predecessorCandidateId).toBeNull();
+    expect(f.outcomeReviewId).toBe('sor-1'); expect(f.sourceOutcomeReviewRevision).toBe(1); expect(f.sourceSnapshotId).toBe('snap-9'); expect(f.outcomeReviewContentHash).toBe('deadbeef');
+    expect(f.applicabilityScope).toBe('THIS_CHANNEL'); expect(f.epistemicStatus).toBe('PROVISIONAL');
+    expect(f.selectedObservations).toHaveLength(1); expect(f.unknownMarkers).toEqual(['Whether it scales.']); expect(f.contradictionMarkers).toEqual(['One week we paused.']);
+    expect(f.founderStatement).toBe('We saw outreach convert.'); expect(f.candidateStatement).toBe('Outreach converts.'); // founder wording kept distinct
+    expect(f.contentHash).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it('a PLAN_REVIEW learning and an OUTCOME_REVIEW learning carry DISTINCT, non-generic origins', () => {
-    // Plan Review path (unchanged): origin PLAN_REVIEW, no outcome/candidate refs, review ref present
-    const planReview = { id: 'review-1', revision: 2, planRecordId: 'plan-rev-1', commitmentRecordId: 'com-1', decisionRecordId: null, recommendationSessionId: null, provenanceManifestVersion: null } as never;
-    const pf = buildLearningFields(planReview, learningInput());
-    expect(pf.learningOrigin).toBe('PLAN_REVIEW'); expect(pf.outcomeReviewId).toBeNull(); expect(pf.learningCandidateId).toBeNull(); expect(pf.reviewRecordId).toBe('review-1');
-    // Outcome Review path (gated): origin OUTCOME_REVIEW, ids set, no review ref
-    const cf = buildLearningFieldsFromCandidate(candidate(), learningInput());
-    expect(cf.learningOrigin).toBe('OUTCOME_REVIEW'); expect(cf.outcomeReviewId).toBe('sor-1'); expect(cf.learningCandidateId).toBe('cand-1');
-    expect(cf.reviewRecordId).toBeNull(); expect(cf.reviewRevision).toBeNull();
-    expect(cf.planRecordId).toBe('plan-rev-1'); expect(cf.commitmentRecordId).toBe('com-1');
+  it('editing builds revision 2 pointing at the predecessor; a content change changes the hash', () => {
+    const r1 = rev1();
+    const f2 = buildCandidateRevisionFields(sor(), input({ candidateStatement: 'Outreach converts, refined.' }), r1);
+    expect(f2.revision).toBe(2); expect(f2.predecessorCandidateId).toBe('cand-1'); expect(f2.logicalCandidateId).toBe('LC1');
+    expect(f2.contentHash).not.toBe(r1.contentHash);
+    // same content → same hash (reproducible, order-independent)
+    expect(computeCandidateContentHash(buildCandidateFields(sor(), input(), 'LC1'))).toBe(computeCandidateContentHash(buildCandidateFields(sor(), input(), 'LC1')));
   });
 
-  it('candidate-origin admissibility validates the same bounded epistemics + its own lineage for evidence refs', () => {
-    expect(() => assertLearningFromCandidateAdmissible(null, learningInput())).toThrow(/candidate/i);
-    // causal-claim guard still applies
-    expect(() => assertLearningFromCandidateAdmissible(candidate(), learningInput({ isCausalHypothesis: true, confidence: 'SUPPORTED', evidenceReferences: [] }))).toThrow(/causal/i);
-    // an evidence ref must be in the candidate's own lineage (outcome review / candidate / plan / commitment)
-    expect(() => assertLearningFromCandidateAdmissible(candidate(), learningInput({ evidenceReferences: [{ space: 'X', id: 'not-in-lineage' }] }))).toThrow(/lineage/i);
-    expect(() => assertLearningFromCandidateAdmissible(candidate(), learningInput({ evidenceReferences: [{ space: 'STRATEGIC_OUTCOME_REVIEW', id: 'sor-1' }] }))).not.toThrow();
-    // the Plan Review path is untouched and still works
-    const planReview = { id: 'review-1', revision: 1, planRecordId: 'plan-1', commitmentRecordId: 'com-1', decisionRecordId: null, recommendationSessionId: null, provenanceManifestVersion: null } as never;
-    expect(() => assertLearningAdmissible(planReview, learningInput())).not.toThrow();
+  it('the judgment is bounded, requires words, and allows exactly one terminal (ADOPT/REJECT/WITHDRAW)', () => {
+    expect(() => assertJudgmentAdmissible(null, 'MAYBE', 'x', 'k')).toThrow(/adopt|reject|defer|withdraw/i);
+    expect(() => assertJudgmentAdmissible(null, 'ADOPT', '', 'k')).toThrow(/why/i);
+    expect(() => assertJudgmentAdmissible(null, 'DEFER', 'later', 'k')).not.toThrow();
+    expect(() => assertJudgmentAdmissible(dec('REJECT'), 'ADOPT', 'x', 'k2')).toThrow(/already/i); // terminal-once
+    expect(() => assertJudgmentAdmissible(null, 'ADOPT', 'keep', 'k')).not.toThrow();
+  });
+
+  it('status derives from the judgment log — terminal wins; DEFER is non-terminal', () => {
+    expect(deriveCandidateStatus([])).toBe('PROPOSED');
+    expect(deriveCandidateStatus([dec('DEFER')])).toBe('DEFERRED');
+    expect(deriveCandidateStatus([dec('DEFER'), dec('ADOPT')])).toBe('ADOPTED');
+    expect(deriveCandidateStatus([dec('REJECT')])).toBe('REJECTED');
+    expect(deriveCandidateStatus([dec('WITHDRAW')])).toBe('WITHDRAWN');
+  });
+
+  it('the adopted learning is derived deterministically and PRESERVES unknowns, contradictions, scope, epistemics', () => {
+    const li = buildLearningInputFromCandidate(rev1(), 'idem-1');
+    expect(li.learningScope).toBe('THIS_CHANNEL'); expect(li.confidence).toBe('PROVISIONAL');
+    expect(li.unresolvedUnknowns).toEqual(['Whether it scales.']);       // unknowns preserved
+    expect(li.counterEvidence).toEqual(['One week we paused.']);          // contradictions preserved
+    expect(li.learningStatement).toBe('Outreach converts.'); expect(li.learningCategory).toBe('EXECUTION');
+    expect(li.observations).toHaveLength(1);                              // selected observation carried
+  });
+
+  it('the view shows the candidate is a proposal, its revision + source provenance, and never auto-promotes', () => {
+    const v = toCandidateView(rev1(), []);
+    expect(v.status).toBe('PROPOSED'); expect(v.revision).toBe(1);
+    expect(v.source.outcomeReviewId).toBe('sor-1'); expect(v.source.snapshotId).toBe('snap-9');
+    expect(v.isProposalNotLearning).toBe(true); expect(v.neverAutoPromotes).toBe(true);
+    const va = toCandidateView(rev1(), [dec('DEFER'), dec('ADOPT')]);
+    expect(va.status).toBe('ADOPTED'); expect(va.terminalDecision?.resultingLearningId).toBe('learn-1'); expect(va.judgments).toHaveLength(2);
   });
 });

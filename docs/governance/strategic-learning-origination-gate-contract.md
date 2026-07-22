@@ -53,3 +53,35 @@ behalf.
 An OUTCOME_REVIEW-origin learning is a normal Strategic Learning: same thread/lifecycle (refine/contest/supersede/retire)
 and the same separate promotion gate. `learning_origin` / `outcome_review_id` / `learning_candidate_id` are carried forward
 verbatim through every lifecycle revision.
+
+---
+
+## Completion laws (2026-07-22, V088) — revisioned candidate + four-way judgment
+
+**Law 13 — Candidate revisions are append-only.** A Learning Candidate is a revisioned thread. Editing appends a new
+revision; historical revisions are immutable. A predecessor must be the immediately-preceding revision of the SAME founder
++ logical candidate + source Outcome Review (DB-enforced: no fork, no cross-founder/cross-source/non-adjacent predecessor).
+Each revision has a SHA-256 content hash.
+
+**Law 14 — Admission targets one EXACT revision.** ADOPT applies to a specific candidate revision and the resulting
+learning retains that exact revision (`learning_candidate_id`). A stale (non-head) revision cannot be adopted.
+
+**Law 15 — Epistemic content is preserved.** A revision freezes the selected source observations (which must exist in the
+source review), unknown markers, contradiction markers, applicability scope, epistemic status, and the founder's own
+wording (distinct from the proposed learning). ADOPT derives the learning deterministically so these are never silently
+dropped or strengthened; no unqualified causation.
+
+**Law 16 — Four-way judgment.** The founder judgment is ADOPT / REJECT / DEFER / WITHDRAW, append-only, targeting an exact
+revision. At most one TERMINAL judgment (ADOPT/REJECT/WITHDRAW) per thread; DEFER is non-terminal (the candidate stays
+eligible). ADOPT → exactly one learning; the others create nothing.
+
+**Law 17 — Adoption is idempotent.** An identical ADOPT (same idempotency key) returns the same learning (one row); a
+conflicting second terminal returns a stable domain error, not a raw constraint violation.
+
+**Law 18 — Source is frozen.** A candidate records the exact Outcome Review id + revision (immutable id = revision 1) +
+snapshot id + content hash. Candidate creation fails closed on a source-hash mismatch; later source records never rewrite
+an existing candidate.
+
+**Law 19 — Origin consistency is database-enforced.** `slr_origin_consistency` guarantees a PLAN_REVIEW learning has its
+plan review reference and no outcome/candidate refs, and an OUTCOME_REVIEW learning has both refs and no plan review
+reference. No consumer assumes every learning has a Plan Review.

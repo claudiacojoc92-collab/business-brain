@@ -629,29 +629,44 @@ export async function listOutcomeReviews(planId: string): Promise<OutcomeReviewV
   return (await request<{ reviews: OutcomeReviewView[] }>(`strategy/plans/${encodeURIComponent(planId)}/outcome-reviews`)).reviews;
 }
 
-// ─── Strategic Learning Origination Gate (ADR-017) — Outcome Review → Learning Candidate → explicit judgment → Learning ──
-// A candidate is a PROPOSAL: creating it makes no learning. It becomes a learning ONLY via an explicit ACCEPT (never a
-// promotion); the founder may DISMISS. No generic Review→Learning source; the Plan Review path is separate.
-export type CandidateStatus = 'PROPOSED' | 'ACCEPTED' | 'DISMISSED';
-export interface OutcomeLearningCandidateView {
-  candidateId: string; outcomeReviewId: string; outcomeReviewContentHash: string;
-  plan: { recordId: string; logicalId: string; revision: number };
-  sourceObservedOutcome: string; candidateStatement: string; candidateRationale: string | null;
-  status: CandidateStatus;
-  decision: { verdict: 'ACCEPT' | 'DISMISS'; founderJudgment: string; resultingLearningId: string | null; decidedAt: string } | null;
-  createdAt: string; isProposalNotLearning: true; createsNothingUntilAccepted: true; neverAutoPromotes: true;
+// ─── Strategic Learning Origination Gate (ADR-017 + V088 completion) ──
+// Outcome Review → Learning Candidate (a REVISIONED proposal — creates nothing) → explicit judgment
+// (ADOPT/REJECT/DEFER/WITHDRAW) → Strategic Learning (origin=OUTCOME_REVIEW). ADOPT never promotes. No generic source.
+export type CandidateStatus = 'PROPOSED' | 'DEFERRED' | 'ADOPTED' | 'REJECTED' | 'WITHDRAWN';
+export type CandidateVerdict = 'ADOPT' | 'REJECT' | 'DEFER' | 'WITHDRAW';
+export interface CandidateInput {
+  candidateStatement: string; founderStatement: string;
+  priorUnderstanding: string; revisedUnderstanding: string; changeStatement: string;
+  learningCategory: LearningCategory; applicabilityScope: LearningScope; epistemicStatus: LearningConfidence;
+  isCausalHypothesis?: boolean; broadScopeAcknowledged?: boolean;
+  selectedObservations?: Array<{ kind: 'REPORTED' | 'EVIDENCE'; ref: string; statement: string }>;
+  unknownMarkers?: string[]; contradictionMarkers?: string[]; candidateRationale?: string | null;
+  expectedSourceHash?: string; idempotencyKey: string;
 }
-export async function proposeLearningCandidate(reviewId: string, input: { candidateStatement: string; candidateRationale?: string | null; idempotencyKey: string }): Promise<OutcomeLearningCandidateView> {
+export interface OutcomeLearningCandidateView {
+  candidateId: string; logicalCandidateId: string; revision: number; predecessorCandidateId: string | null;
+  source: { outcomeReviewId: string; outcomeReviewRevision: number; snapshotId: string; contentHash: string };
+  plan: { recordId: string; logicalId: string; revision: number };
+  sourceObservedOutcome: string; candidateStatement: string; founderStatement: string; candidateRationale: string | null;
+  priorUnderstanding: string; revisedUnderstanding: string; changeStatement: string;
+  learningCategory: string; applicabilityScope: string; epistemicStatus: string; isCausalHypothesis: boolean;
+  selectedObservations: Array<{ kind: 'REPORTED' | 'EVIDENCE'; ref: string; statement: string }>; unknownMarkers: string[]; contradictionMarkers: string[];
+  contentHash: string; createdAt: string; status: CandidateStatus;
+  judgments: Array<{ verdict: CandidateVerdict; founderJudgment: string; resultingLearningId: string | null; decidedAt: string; revisionJudged: string }>;
+  terminalDecision: { verdict: CandidateVerdict; resultingLearningId: string | null } | null;
+  isProposalNotLearning: true; createsNothingUntilAdopted: true; neverAutoPromotes: true;
+}
+export async function proposeLearningCandidate(reviewId: string, input: CandidateInput): Promise<OutcomeLearningCandidateView> {
   return (await request<{ candidate: OutcomeLearningCandidateView }>(`strategy/outcome-reviews/${encodeURIComponent(reviewId)}/learning-candidates`, { method: 'POST', body: JSON.stringify(input) })).candidate;
+}
+export async function reviseLearningCandidate(logicalId: string, input: CandidateInput): Promise<OutcomeLearningCandidateView> {
+  return (await request<{ candidate: OutcomeLearningCandidateView }>(`strategy/learning-candidates/${encodeURIComponent(logicalId)}/revisions`, { method: 'POST', body: JSON.stringify(input) })).candidate;
 }
 export async function listLearningCandidates(reviewId: string): Promise<OutcomeLearningCandidateView[]> {
   return (await request<{ candidates: OutcomeLearningCandidateView[] }>(`strategy/outcome-reviews/${encodeURIComponent(reviewId)}/learning-candidates`)).candidates;
 }
-export async function acceptLearningCandidate(candidateId: string, body: CreateLearningInput & { founderJudgment: string }): Promise<{ candidate: OutcomeLearningCandidateView; learning: LearningView | null }> {
-  return await request<{ candidate: OutcomeLearningCandidateView; learning: LearningView | null }>(`strategy/learning-candidates/${encodeURIComponent(candidateId)}/accept`, { method: 'POST', body: JSON.stringify(body) });
-}
-export async function dismissLearningCandidate(candidateId: string, founderJudgment: string, idempotencyKey: string): Promise<OutcomeLearningCandidateView> {
-  return (await request<{ candidate: OutcomeLearningCandidateView }>(`strategy/learning-candidates/${encodeURIComponent(candidateId)}/dismiss`, { method: 'POST', body: JSON.stringify({ founderJudgment, idempotencyKey }) })).candidate;
+export async function judgeLearningCandidate(candidateRevisionId: string, verdict: CandidateVerdict, founderJudgment: string, idempotencyKey: string): Promise<{ candidate: OutcomeLearningCandidateView; learning: LearningView | null }> {
+  return await request<{ candidate: OutcomeLearningCandidateView; learning: LearningView | null }>(`strategy/learning-candidates/${encodeURIComponent(candidateRevisionId)}/${verdict.toLowerCase()}`, { method: 'POST', body: JSON.stringify({ founderJudgment, idempotencyKey }) });
 }
 
 // ─── Strategic Learning Record (ADR-011 cat 14 precursor — durable learning, NOT generic Strategic Memory) ──
@@ -759,7 +774,7 @@ export async function getPromotedInto(target: 'business-understanding' | 'founde
 // preserved (NATIVE_* vs PROMOTED_LEARNING). GET-only; regenerates nothing.
 export interface EffectivePromotedItem {
   id: string; sourceType: 'PROMOTED_LEARNING'; content: string; scope: string; rationale: string | null; effectiveFrom: string;
-  provenance: { promotionEventId: string; target: PromotionTarget; logicalLearningId: string; learningRevisionId: string; learningRevisionNumber: number; promotionSequence: number; epistemicStatus: string; lifecycleStatusAtRead: string; originalSourceLineage: { reviewRecordId: string; reviewRevision: number; recommendationSessionId: string | null } };
+  provenance: { promotionEventId: string; target: PromotionTarget; logicalLearningId: string; learningRevisionId: string; learningRevisionNumber: number; promotionSequence: number; epistemicStatus: string; lifecycleStatusAtRead: string; originalSourceLineage: { reviewRecordId: string | null; reviewRevision: number | null; recommendationSessionId: string | null } };
 }
 export interface EffectiveBusinessUnderstanding {
   target: 'BUSINESS_UNDERSTANDING';

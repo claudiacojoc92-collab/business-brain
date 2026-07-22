@@ -33,7 +33,6 @@ import { toExecutionReportView, toEffectiveExecutionView, effectiveFromHead, cha
 import { PgStrategicOutcomeReviewRepository } from '../business-model/pg-strategic-outcome-review.repository';
 import { toOutcomeReviewView, OutcomeReviewError, type ObservedOutcome, type StrategicOutcomeReviewInput } from '../business-model/strategic-outcome-review';
 import { PgLearningCandidateRepository } from '../business-model/pg-learning-candidate.repository';
-import { assertLearningFromCandidateAdmissible } from '../business-model/strategic-learning';
 import { toCandidateView, LearningCandidateError, type LearningCandidateInput, type CandidateVerdict } from '../business-model/learning-candidate';
 import { AnthropicStrategyModel } from '../business-model/anthropic-strategy.model';
 import { strategyModelConfig } from '../business-model/model-config';
@@ -594,44 +593,56 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
     await reply.send({ review: toOutcomeReviewView(review) });
   });
 
-  // STRATEGIC LEARNING ORIGINATION GATE (ADR-017). The ONLY path by which a Strategic Outcome Review may feed learning:
-  // Outcome Review → Learning Candidate (a PROPOSAL — creates nothing) → explicit founder judgment (ACCEPT/DISMISS) →
-  // Strategic Learning (origin=OUTCOME_REVIEW). No generic Review→Learning source; the Plan Review learning route below is
-  // separate and unchanged. ACCEPT creates a learning but NEVER a promotion.
+  // STRATEGIC LEARNING ORIGINATION GATE (ADR-017 + V088 completion). The ONLY path by which a Strategic Outcome Review may
+  // feed learning: Outcome Review → Learning Candidate (an append-only REVISIONED proposal — creates nothing) → explicit
+  // founder judgment (ADOPT/REJECT/DEFER/WITHDRAW) → Strategic Learning (origin=OUTCOME_REVIEW). No generic Review→Learning
+  // source; the Plan Review learning route below is separate and unchanged. ADOPT creates a learning but NEVER a promotion.
   const candidateErr = (reply: FastifyReply, e: LearningCandidateError) => {
-    const status = e.reason === 'OUTCOME_REVIEW_NOT_FOUND' || e.reason === 'CANDIDATE_NOT_FOUND' ? 404 : e.reason === 'CANDIDATE_ALREADY_DECIDED' ? 409 : 400;
+    const status = e.reason === 'OUTCOME_REVIEW_NOT_FOUND' || e.reason === 'CANDIDATE_NOT_FOUND' ? 404
+      : (e.reason === 'CANDIDATE_ALREADY_DECIDED' || e.reason === 'STALE_CANDIDATE_REVISION') ? 409 : 400;
     return reply.code(status).send({ error: { code: e.reason, message: e.message }, reason: e.reason });
   };
-  async function candidateWithDecision(founderId: string, candidateId: string) {
-    const candidate = await learningCandidateRepo.getById(founderId, candidateId);
-    if (!candidate) return null;
-    return { candidate, decision: await learningCandidateRepo.getDecision(founderId, candidateId) };
-  }
-  const learningInputFrom = (b: Record<string, unknown>): LearningInput => {
+  const candidateInputFrom = (b: Record<string, unknown>): LearningCandidateInput => {
     const arr = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []);
     return {
-      learningStatement: String(b['learningStatement'] ?? ''), learningCategory: String(b['learningCategory'] ?? '') as LearningInput['learningCategory'],
-      confidence: String(b['confidence'] ?? '') as LearningInput['confidence'], priorUnderstanding: String(b['priorUnderstanding'] ?? ''),
-      revisedUnderstanding: String(b['revisedUnderstanding'] ?? ''), changeStatement: String(b['changeStatement'] ?? ''),
-      learningScope: String(b['learningScope'] ?? '') as LearningInput['learningScope'], broadScopeAcknowledged: b['broadScopeAcknowledged'] === true,
-      isCausalHypothesis: b['isCausalHypothesis'] === true, boundaryConditions: arr(b['boundaryConditions']), counterEvidence: arr(b['counterEvidence']), unresolvedUnknowns: arr(b['unresolvedUnknowns']),
-      observations: Array.isArray(b['observations']) ? (b['observations'] as Array<Record<string, unknown>>).map((o) => ({ statement: String(o?.['statement'] ?? ''), sourceType: String(o?.['sourceType'] ?? 'FOUNDER_REPORTED') as ObservationSource })) : [],
-      evidenceReferences: Array.isArray(b['evidenceReferences']) ? (b['evidenceReferences'] as Array<Record<string, unknown>>).map((e) => ({ space: String(e?.['space'] ?? ''), id: String(e?.['id'] ?? '') })) : [],
+      candidateStatement: String(b['candidateStatement'] ?? ''), founderStatement: String(b['founderStatement'] ?? ''),
+      priorUnderstanding: String(b['priorUnderstanding'] ?? ''), revisedUnderstanding: String(b['revisedUnderstanding'] ?? ''), changeStatement: String(b['changeStatement'] ?? ''),
+      learningCategory: String(b['learningCategory'] ?? '') as LearningCandidateInput['learningCategory'],
+      applicabilityScope: String(b['applicabilityScope'] ?? '') as LearningCandidateInput['applicabilityScope'],
+      epistemicStatus: String(b['epistemicStatus'] ?? '') as LearningCandidateInput['epistemicStatus'],
+      isCausalHypothesis: b['isCausalHypothesis'] === true, broadScopeAcknowledged: b['broadScopeAcknowledged'] === true,
+      selectedObservations: Array.isArray(b['selectedObservations']) ? (b['selectedObservations'] as Array<Record<string, unknown>>).map((o) => ({ kind: o?.['kind'] === 'EVIDENCE' ? 'EVIDENCE' : 'REPORTED', ref: String(o?.['ref'] ?? ''), statement: String(o?.['statement'] ?? '') })) : [],
+      unknownMarkers: arr(b['unknownMarkers']), contradictionMarkers: arr(b['contradictionMarkers']),
+      candidateRationale: b['candidateRationale'] != null ? String(b['candidateRationale']) : null,
+      expectedSourceHash: b['expectedSourceHash'] != null ? String(b['expectedSourceHash']) : undefined,
       idempotencyKey: String(b['idempotencyKey'] ?? ''),
     };
   };
 
-  // Propose a candidate from an exact owned Outcome Review. Creates NO learning, NO promotion.
+  // Propose revision 1 of a candidate from an exact owned Outcome Review. Creates NO learning, NO promotion.
   server.post('/strategy/outcome-reviews/:reviewId/learning-candidates', async (request: FastifyRequest, reply: FastifyReply) => {
     const founderId = await sessionFounder(request);
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
     const review = await outcomeReviewRepo.getById(founderId, (request.params as { reviewId: string }).reviewId); // founder-owned only
     if (!review) { await reply.code(404).send({ error: { code: 'OUTCOME_REVIEW_NOT_FOUND', message: 'not found' }, reason: 'OUTCOME_REVIEW_NOT_FOUND' }); return; }
-    const b = (request.body ?? {}) as Record<string, unknown>;
-    const input: LearningCandidateInput = { candidateStatement: String(b['candidateStatement'] ?? ''), candidateRationale: b['candidateRationale'] != null ? String(b['candidateRationale']) : null, idempotencyKey: String(b['idempotencyKey'] ?? '') };
     try {
-      const candidate = await learningCandidateRepo.create(founderId, review, input, new Date());
-      await reply.code(201).send({ candidate: toCandidateView(candidate, null) });
+      const candidate = await learningCandidateRepo.create(founderId, review, candidateInputFrom((request.body ?? {}) as Record<string, unknown>), new Date());
+      await reply.code(201).send({ candidate: toCandidateView(candidate, []) });
+    } catch (e) { if (e instanceof LearningCandidateError) { await candidateErr(reply, e); return; } throw e; }
+  });
+
+  // Edit → append a new candidate revision (history immutable). Creates NO learning.
+  server.post('/strategy/learning-candidates/:logicalId/revisions', async (request: FastifyRequest, reply: FastifyReply) => {
+    const founderId = await sessionFounder(request);
+    if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
+    const logicalId = (request.params as { logicalId: string }).logicalId;
+    const head = await learningCandidateRepo.getEffectiveRevision(founderId, logicalId);
+    if (!head) { await reply.code(404).send({ error: { code: 'CANDIDATE_NOT_FOUND', message: 'not found' }, reason: 'CANDIDATE_NOT_FOUND' }); return; }
+    const review = await outcomeReviewRepo.getById(founderId, head.outcomeReviewId);
+    if (!review) { await reply.code(404).send({ error: { code: 'OUTCOME_REVIEW_NOT_FOUND', message: 'not found' }, reason: 'OUTCOME_REVIEW_NOT_FOUND' }); return; }
+    try {
+      const candidate = await learningCandidateRepo.revise(founderId, logicalId, review, candidateInputFrom((request.body ?? {}) as Record<string, unknown>), new Date());
+      await reply.code(201).send({ candidate: toCandidateView(candidate, await learningCandidateRepo.decisionsForThread(founderId, logicalId)) });
     } catch (e) { if (e instanceof LearningCandidateError) { await candidateErr(reply, e); return; } throw e; }
   });
 
@@ -641,40 +652,38 @@ export function registerStrategyRoutes(server: FastifyInstance): void {
     const review = await outcomeReviewRepo.getById(founderId, (request.params as { reviewId: string }).reviewId);
     if (!review) { await reply.code(404).send({ error: 'not found' }); return; }
     const candidates = await learningCandidateRepo.listForOutcomeReview(founderId, review.id);
-    const views = await Promise.all(candidates.map(async (c) => toCandidateView(c, await learningCandidateRepo.getDecision(founderId, c.id))));
+    const views = await Promise.all(candidates.map(async (c) => toCandidateView(c, await learningCandidateRepo.decisionsForThread(founderId, c.logicalCandidateId))));
     await reply.send({ candidates: views });
   });
 
-  server.get('/strategy/learning-candidates/:candidateId', async (request: FastifyRequest, reply: FastifyReply) => {
+  // Full revision thread + judgment history for one logical candidate.
+  server.get('/strategy/learning-candidates/:logicalId', async (request: FastifyRequest, reply: FastifyReply) => {
     const founderId = await sessionFounder(request);
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
-    const found = await candidateWithDecision(founderId, (request.params as { candidateId: string }).candidateId);
-    if (!found) { await reply.code(404).send({ error: 'not found' }); return; }
-    await reply.send({ candidate: toCandidateView(found.candidate, found.decision) });
+    const logicalId = (request.params as { logicalId: string }).logicalId;
+    const thread = await learningCandidateRepo.getThread(founderId, logicalId);
+    if (!thread.length) { await reply.code(404).send({ error: 'not found' }); return; }
+    const decisions = await learningCandidateRepo.decisionsForThread(founderId, logicalId);
+    await reply.send({ candidate: toCandidateView(thread[thread.length - 1]!, decisions), revisions: thread.map((c) => toCandidateView(c, decisions)) });
   });
 
-  // The explicit founder judgment. ACCEPT creates a Strategic Learning (origin=OUTCOME_REVIEW); DISMISS creates nothing.
-  const candidateDecision = (verdict: CandidateVerdict) => async (request: FastifyRequest, reply: FastifyReply) => {
+  // The explicit founder judgment on an EXACT candidate revision. ADOPT creates ONE learning (origin=OUTCOME_REVIEW),
+  // idempotent on the key; REJECT/WITHDRAW are terminal (create nothing); DEFER is non-terminal (candidate stays eligible).
+  const candidateJudgment = (verdict: CandidateVerdict) => async (request: FastifyRequest, reply: FastifyReply) => {
     const founderId = await sessionFounder(request);
     if (!founderId) { await reply.code(401).send({ error: 'authentication required' }); return; }
-    const found = await candidateWithDecision(founderId, (request.params as { candidateId: string }).candidateId);
-    if (!found) { await reply.code(404).send({ error: { code: 'CANDIDATE_NOT_FOUND', message: 'not found' }, reason: 'CANDIDATE_NOT_FOUND' }); return; }
+    const candidateRevisionId = (request.params as { candidateId: string }).candidateId;
     const b = (request.body ?? {}) as Record<string, unknown>;
-    const founderJudgment = String(b['founderJudgment'] ?? '');
-    const idempotencyKey = String(b['idempotencyKey'] ?? '');
-    let learningInput: LearningInput | null = null;
-    if (verdict === 'ACCEPT') {
-      learningInput = learningInputFrom(b);
-      try { assertLearningFromCandidateAdmissible(found.candidate, learningInput); }
-      catch (e) { if (e instanceof LearningValidationError) { await reply.code(400).send({ error: { code: e.reason, message: e.message }, reason: e.reason }); return; } throw e; }
-    }
     try {
-      const { decision, learning } = await learningCandidateRepo.decide(founderId, found.candidate, verdict, founderJudgment, learningInput, idempotencyKey, new Date());
-      await reply.code(201).send({ candidate: toCandidateView(found.candidate, decision), learning: learning ? toLearningView(learning) : null });
+      const { decision, learning } = await learningCandidateRepo.judge(founderId, candidateRevisionId, verdict, String(b['founderJudgment'] ?? ''), String(b['idempotencyKey'] ?? ''), new Date());
+      const thread = await learningCandidateRepo.getThread(founderId, decision.logicalCandidateId);
+      await reply.code(201).send({ candidate: toCandidateView(thread[thread.length - 1]!, await learningCandidateRepo.decisionsForThread(founderId, decision.logicalCandidateId)), learning: learning ? toLearningView(learning) : null });
     } catch (e) { if (e instanceof LearningCandidateError) { await candidateErr(reply, e); return; } throw e; }
   };
-  server.post('/strategy/learning-candidates/:candidateId/accept', candidateDecision('ACCEPT'));
-  server.post('/strategy/learning-candidates/:candidateId/dismiss', candidateDecision('DISMISS'));
+  server.post('/strategy/learning-candidates/:candidateId/adopt', candidateJudgment('ADOPT'));
+  server.post('/strategy/learning-candidates/:candidateId/reject', candidateJudgment('REJECT'));
+  server.post('/strategy/learning-candidates/:candidateId/defer', candidateJudgment('DEFER'));
+  server.post('/strategy/learning-candidates/:candidateId/withdraw', candidateJudgment('WITHDRAW'));
 
   server.get('/strategy/plan-reviews/:reviewId', async (request: FastifyRequest, reply: FastifyReply) => {
     const founderId = await sessionFounder(request);

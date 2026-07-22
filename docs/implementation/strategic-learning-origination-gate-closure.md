@@ -65,3 +65,63 @@ behavior-unchanged. Frozen engine byte-identical. Not deployed, not pushed, no p
 ## Remaining debt
 - **LOG-1** — a model-*suggested* candidate (still requiring explicit founder ACCEPT): out of scope; candidates are
   founder-drafted here. Promotion of `OUTCOME_REVIEW`-origin learnings uses the existing ADR-013 gate unchanged.
+
+---
+
+## Constitutional completion (2026-07-22) — revisioned candidate, four-way judgment, source freeze, idempotent adoption
+
+The first slice shipped a minimal proposal→ACCEPT/DISMISS gate. A governance-to-implementation audit found the fuller
+contract unmet (candidate revisions, epistemic preservation, four-way judgment, source freeze, idempotent adoption). This
+remediation (V088, one commit) completes it. No prior commit amended.
+
+**Candidate revision model.** `business.learning_candidate` is now append-only + REVISIONED: `logical_candidate_id` groups
+revisions, `revision`/`predecessor_candidate_id` form the chain, and editing appends a new revision (history immutable). A
+generated `predecessor_revision = revision - 1` + composite FK `fk_lcand_predecessor_same_chain` make the DATABASE reject a
+predecessor from another founder, another source Outcome Review, or a non-adjacent revision; `uniq_lcand_predecessor` +
+`uniq_lcand_thread_revision` enforce no-fork. Each revision carries a SHA-256 `content_hash`.
+
+**Frozen epistemic content (preserved end-to-end).** A revision freezes: selected source observations (validated to exist
+in the source review), unknown markers, contradiction markers, applicability scope, epistemic status, the founder's own
+wording (`founder_statement`, kept distinct from the proposed `candidate_statement`), and the narrative
+(prior/revised/change). An ADOPT derives the learning DETERMINISTICALLY from the exact revision, so unknowns →
+`unresolved_unknowns`, contradictions → `counter_evidence`, scope → `learning_scope`, epistemic status → `confidence` are
+never silently dropped or strengthened; the causal guard forbids an unqualified SUPPORTED causal claim.
+
+**Source freeze.** Each candidate records the exact `outcome_review_id`, `source_outcome_review_revision` (the immutable
+SOR record id = revision 1, documented — SOR has no separate revision concept), `source_snapshot_id`, and
+`outcome_review_content_hash`. Creation fails closed (`SOURCE_HASH_MISMATCH`) if a supplied `expectedSourceHash` no longer
+matches the source review.
+
+**Four-way judgment (append-only).** `learning_candidate_decision.verdict ∈ {ADOPT, REJECT, DEFER, WITHDRAW}` targeting one
+EXACT candidate revision. `uniq_lcdec_terminal` allows at most ONE terminal (ADOPT/REJECT/WITHDRAW) per thread; DEFER is
+non-terminal (repeatable; the candidate stays eligible). ADOPT → one learning (`resulting_learning_id`, CHECK
+`lcdec_result_shape`); REJECT/WITHDRAW/DEFER create nothing. A stale (non-head) revision cannot be adopted
+(`STALE_CANDIDATE_REVISION`).
+
+**Idempotent adoption.** `judge` is idempotent on `(founder, idempotency_key)` — an identical retry returns the SAME
+decision + learning (one row), and a conflicting second terminal returns `CANDIDATE_ALREADY_DECIDED` (a stable domain
+error, not a raw UNIQUE violation).
+
+**Nullable Plan Review invariant (Part 8).** Every consumer of the learning's now-nullable Plan Review reference was
+audited: `slr_origin_consistency` CHECK requires PLAN_REVIEW ⇒ review ref present + no outcome/candidate refs, and
+OUTCOME_REVIEW ⇒ outcome + candidate refs present + no review ref. `effective-context.ts`, `export.service.ts`,
+`strategic-learning-lifecycle.ts` (null-safe lineage set), the web promotion type, and two UI render lines (now
+origin-aware — "from a retrospective outcome review") were all updated; no consumer assumes a Plan Review exists.
+
+**Export reconstruction.** The export reconstructs Outcome Review → exact candidate revision lineage (with source ids,
+selected observations, unknowns, contradictions, scope, epistemic status, founder wording, content hash) → four-way
+judgment log → resulting learning (with origin). Candidate and Strategic Learning are separate keys, never flattened.
+
+**Acceptance.** Deterministic `learning-candidate.test.ts` (**10**); live `learning-candidate.live.test.ts` (**9**) —
+revisions + rev-1 immutability; DB rejection of fork/non-adjacent/cross-founder/cross-source predecessors; ADOPT preserves
+epistemics; idempotent adoption + conflicting-terminal rejection; stale-revision rejection; REJECT/DEFER/WITHDRAW
+semantics; zero promotion/snapshot/session/FSC on ADOPT; origin distinctness; append-only + isolation + source-freeze +
+zero-orphan delete. Playwright `strategic-learning-origination-gate.spec.ts` drives the full rendered lifecycle
+(propose→edit→defer→adopt→reject) with DB proof of one OUTCOME_REVIEW learning, preserved unknowns/contradictions, and zero
+promotion. Backend **1096 pass / 1 skip** (was 1092, +4); web build + **73** unit; typechecks clean; migrations through
+**V088**; all eight required Playwright suites green; frozen strategist hashes byte-identical. Zero temp founders / zero
+orphans; not pushed.
+
+## Remaining debt
+- **LOG-1** — a model-*suggested* candidate (still requiring explicit founder ADOPT) remains out of scope; candidates are
+  founder-drafted. Promotion of OUTCOME_REVIEW-origin learnings uses the existing ADR-013 gate unchanged.
