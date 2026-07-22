@@ -3,6 +3,7 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import {
   clarityTurn, getConcern, acceptProposedChange, rejectProposedChange, crystallizeConcern, revalidateInContext, ApiError,
+  pilotReality, pilotShouldFeedback, pilotFeedback, pilotEnding,
   TRUTH_LABEL_TEXT, type ClarityResult, type ClarityMessage, type ConcernDetail, type TruthLabel, type ContinuityItem,
 } from '../api/client';
 import { AppShell, Button, Thinking } from '../system/ui';
@@ -23,12 +24,14 @@ export function ClarityPage() {
   const [busy, setBusy] = useState(false);
   const [retry, setRetry] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [feedbackDue, setFeedbackDue] = useState(false);
 
   const load = useCallback(async (id: string) => {
     try { setDetail(await getConcern(id)); }
     catch (e) { if (e instanceof ApiError && e.status === 401) navigate('/signin', { replace: true }); else setError('Could not load this.'); }
   }, [navigate]);
   useEffect(() => { if (founderId && concernId) void load(concernId); }, [founderId, concernId, load]);
+  useEffect(() => { if (concernId) void pilotShouldFeedback(concernId).then(setFeedbackDue); }, [concernId, detail]);
 
   const send = async () => {
     const text = input.trim(); if (text.length < 2 || busy) return;
@@ -124,8 +127,8 @@ export function ClarityPage() {
           <section data-testid="endings" style={{ marginTop: 'var(--sp-6)', paddingTop: 'var(--sp-4)', borderTop: '1px solid var(--line)' }}>
             <p style={meta}>Where to from here — your call</p>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 'var(--sp-2)' }}>
-              <button type="button" data-testid="end-enough" onClick={() => navigate('/welcome')} style={endBtn}>This is enough for now</button>
-              <button type="button" data-testid="end-explore" onClick={() => { setInput(''); window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }} style={endBtn}>Keep exploring</button>
+              <button type="button" data-testid="end-enough" onClick={() => { if (concernId) void pilotEnding(concernId, 'enough'); navigate('/welcome'); }} style={endBtn}>This is enough for now</button>
+              <button type="button" data-testid="end-explore" onClick={() => { if (concernId) void pilotEnding(concernId, 'keep_exploring'); setInput(''); window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }} style={endBtn}>Keep exploring</button>
               {latest.possibleStrategicQuestion && (
                 <button type="button" data-testid="end-crystallize" onClick={() => void crystallize(latest.possibleStrategicQuestion!)} style={{ ...endBtn, borderColor: 'var(--ink)', color: 'var(--ink)' }}>
                   Turn this into a strategic question →
@@ -135,6 +138,8 @@ export function ClarityPage() {
             {latest.possibleStrategicQuestion && <p style={quiet}>Would become: “{latest.possibleStrategicQuestion}”</p>}
           </section>
         )}
+
+        {latest && concernId && <PilotResearch concernId={concernId} due={feedbackDue} onFeedbackDone={() => setFeedbackDue(false)} />}
       </div>
     </AppShell>
   );
@@ -162,6 +167,51 @@ function List({ testid, title, items }: { testid: string; title: string; items: 
     </div>
   );
 }
+
+/** Research capture (pilot) — a reality marker + an OPTIONAL, dismissible feedback prompt. Never blocks the reading. */
+function PilotResearch({ concernId, due, onFeedbackDone }: { concernId: string; due: boolean; onFeedbackDone: () => void }) {
+  const [realityDone, setRealityDone] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const [fb, setFb] = useState<{ clearer?: string; changedAttention?: string; reachedAlone?: string }>({});
+  const markReality = async (marker: 'yes_now' | 'yes_not_urgent' | 'exploratory') => { try { await pilotReality(concernId, marker); } catch { /* research, best-effort */ } setRealityDone(true); };
+  const submit = async () => { try { await pilotFeedback({ concernId, ...fb }); } catch { /* best-effort */ } onFeedbackDone(); };
+  return (
+    <div data-testid="pilot-research" style={{ marginTop: 'var(--sp-5)' }}>
+      {!realityDone && (
+        <div data-testid="reality-marker" style={{ ...researchCard }}>
+          <p style={researchQ}>Is this something you’re genuinely dealing with right now?</p>
+          <div style={pillRow}>
+            <button type="button" data-testid="reality-yes-now" onClick={() => void markReality('yes_now')} style={pill}>Yes, now</button>
+            <button type="button" onClick={() => void markReality('yes_not_urgent')} style={pill}>Yes, not urgent</button>
+            <button type="button" onClick={() => void markReality('exploratory')} style={pill}>Just exploring</button>
+          </div>
+        </div>
+      )}
+      {due && !dismissed && (
+        <div data-testid="feedback-prompt" style={{ ...researchCard, marginTop: 'var(--sp-3)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}><p style={researchQ}>A couple of quick questions — optional</p><button type="button" data-testid="feedback-dismiss" onClick={() => setDismissed(true)} style={dismiss}>Dismiss</button></div>
+          <FbRow label="Do you see the situation more clearly now?" opts={[['yes', 'Yes'], ['somewhat', 'Somewhat'], ['no', 'No']]} val={fb.clearer} on={(v) => setFb({ ...fb, clearer: v })} testid="fb-clearer" />
+          <FbRow label="Did this change what you think deserves attention next?" opts={[['yes', 'Yes'], ['no', 'No'], ['not_sure', 'Not sure']]} val={fb.changedAttention} on={(v) => setFb({ ...fb, changedAttention: v })} testid="fb-attention" />
+          <FbRow label="Would you have reached this on your own?" opts={[['probably', 'Probably'], ['maybe', 'Maybe'], ['probably_not', 'Probably not']]} val={fb.reachedAlone} on={(v) => setFb({ ...fb, reachedAlone: v })} testid="fb-alone" />
+          <div style={{ marginTop: 'var(--sp-2)' }}><button type="button" data-testid="feedback-submit" onClick={() => void submit()} style={{ ...pill, borderColor: 'var(--ink)', color: 'var(--ink)' }}>Send</button></div>
+        </div>
+      )}
+    </div>
+  );
+}
+function FbRow({ label, opts, val, on, testid }: { label: string; opts: Array<[string, string]>; val?: string; on: (v: string) => void; testid: string }) {
+  return (
+    <div style={{ marginTop: 'var(--sp-2)' }} data-testid={testid}>
+      <p style={{ ...quiet, color: 'var(--ink-2)' }}>{label}</p>
+      <div style={pillRow}>{opts.map(([v, t]) => <button key={v} type="button" onClick={() => on(v)} style={{ ...pill, background: val === v ? 'var(--ink)' : 'transparent', color: val === v ? 'var(--surface)' : 'var(--ink-2)' }}>{t}</button>)}</div>
+    </div>
+  );
+}
+const researchCard = { background: 'var(--surface)', border: '1px solid var(--line-2)', borderRadius: 'var(--r-2)', padding: 'var(--sp-3) var(--sp-4)' } as const;
+const researchQ = { fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: 0 } as const;
+const pillRow = { display: 'flex', gap: 8, flexWrap: 'wrap' as const, marginTop: 6 };
+const pill = { background: 'transparent', border: '1px solid var(--line-2)', borderRadius: 'var(--r-1)', padding: '5px 12px', cursor: 'pointer', fontFamily: 'var(--sans)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)' } as const;
+const dismiss = { background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--sans)', fontSize: 'var(--fs-xs)', color: 'var(--ink-3)' } as const;
 
 const STALE_TEXT: Record<string, string> = {
   contradicted: 'Your message suggests this may have changed.',

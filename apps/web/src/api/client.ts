@@ -505,6 +505,28 @@ export async function revalidateInContext(concernId: string, body: { understandi
   return request<RevalidateResponse>(`clarity/concerns/${encodeURIComponent(concernId)}/revalidate`, { method: 'POST', body: JSON.stringify(body) });
 }
 
+// ─── Pilot (Founder Validation Readiness) — invite/setup + research capture (no engagement mechanics) ─────────────────
+export interface PilotStatus { founderId: string; accessStatus: 'active' | 'disabled'; consentPilot: boolean; setupCompleted: boolean; businessName: string | null; stage: string | null; wtpOpen: boolean }
+export async function pilotMe(): Promise<PilotStatus | null> { return (await request<{ pilot: PilotStatus | null }>('pilot/me')).pilot; }
+export async function pilotActivate(code: string, consentPilot: boolean, consentResearchReview: boolean): Promise<void> {
+  await request('pilot/activate', { method: 'POST', body: JSON.stringify({ code, consentPilot, consentResearchReview }) });
+}
+export async function pilotSetup(body: { businessName?: string; sells?: string; primaryCustomer?: string; stage?: string; goals?: string[]; constraints?: string[]; complete?: boolean }): Promise<void> {
+  await request('pilot/setup', { method: 'POST', body: JSON.stringify(body) });
+}
+export async function pilotReality(concernId: string, marker: 'yes_now' | 'yes_not_urgent' | 'exploratory'): Promise<void> {
+  await request('pilot/reality', { method: 'POST', body: JSON.stringify({ concernId, marker }) });
+}
+export async function pilotShouldFeedback(concernId: string): Promise<boolean> {
+  try { return (await request<{ due: boolean }>(`pilot/should-feedback?concernId=${encodeURIComponent(concernId)}`)).due; } catch { return false; }
+}
+export async function pilotFeedback(body: { concernId: string; clearer?: string; changedAttention?: string; reachedAlone?: string; usefulText?: string; normalAlternative?: string }): Promise<void> {
+  await request('pilot/feedback', { method: 'POST', body: JSON.stringify(body) });
+}
+export async function pilotEnding(concernId: string, ending: 'enough' | 'keep_exploring'): Promise<void> {
+  try { await request('pilot/ending', { method: 'POST', body: JSON.stringify({ concernId, ending }) }); } catch { /* research signal, best-effort */ }
+}
+
 // ─── Understanding surface — the founder-facing view of the accumulated, effective understanding ──────────────────────
 export interface EffectiveUnderstandingItem { id: string; statement: string; label: TruthLabel; source: 'observed' | 'founder'; origin: 'synthesis' | 'clarity_acceptance' | 'founder_correction'; createdAt: string | null }
 export interface EffectiveUnderstanding { current: EffectiveUnderstandingItem[]; unknowns: string[]; disagreements: EffectiveUnderstandingItem[]; recentlyAccepted: EffectiveUnderstandingItem[] }

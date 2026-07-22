@@ -49,6 +49,8 @@ export interface FounderExport {
   contextSnapshots: unknown[];
   executionReports: unknown[];
   strategicOutcomeReviews: unknown[];
+  clarity: { concerns: unknown[]; messages: unknown[]; results: unknown[]; understandingItems: unknown[]; proposedChanges: unknown[]; revalidations: unknown[] };
+  pilotResearch: { feedback: unknown[]; realityMarkers: unknown[]; willingnessToPay: unknown[] };
   meta: { note: string };
 }
 
@@ -207,9 +209,25 @@ export async function buildFounderExport(args: {
     .orderBy('created_at', 'asc')
     .execute()) as Array<Record<string, unknown>>;
 
+  // Clarity/Sensemaking (V089–V091) + the founder's OWN pilot research rows — founder-owned, exported for portability.
+  type Rows = Array<Record<string, unknown>>;
+  const [clConcerns, clMessages, clResults, clItems, clProposed, clRevals, pfFeedback, pfReality, pfWtp] = (await Promise.all([
+    db.selectFrom('business.concern').selectAll().where('founder_id', '=', founderId).orderBy('created_at', 'asc').execute(),
+    db.selectFrom('business.concern_message').selectAll().where('founder_id', '=', founderId).orderBy('seq', 'asc').execute(),
+    db.selectFrom('business.clarity_result').selectAll().where('founder_id', '=', founderId).orderBy('created_at', 'asc').execute(),
+    db.selectFrom('business.understanding_item').selectAll().where('founder_id', '=', founderId).orderBy('created_at', 'asc').execute(),
+    db.selectFrom('business.proposed_understanding_change').selectAll().where('founder_id', '=', founderId).orderBy('created_at', 'asc').execute(),
+    db.selectFrom('business.understanding_revalidation').selectAll().where('founder_id', '=', founderId).orderBy('created_at', 'asc').execute(),
+    db.selectFrom('pilot.concern_feedback').selectAll().where('founder_id', '=', founderId).execute(),
+    db.selectFrom('pilot.concern_reality').selectAll().where('founder_id', '=', founderId).execute(),
+    db.selectFrom('pilot.wtp_record').selectAll().where('founder_id', '=', founderId).execute(),
+  ])) as [Rows, Rows, Rows, Rows, Rows, Rows, Rows, Rows, Rows];
+
   return {
     exportedAt: now.toISOString(),
     founder: { founderId: founder.founder_id as string, email: founder.email as string, createdAt: iso(founder.created_at) },
+    clarity: { concerns: clConcerns, messages: clMessages, results: clResults, understandingItems: clItems, proposedChanges: clProposed, revalidations: clRevals },
+    pilotResearch: { feedback: pfFeedback, realityMarkers: pfReality, willingnessToPay: pfWtp }, // the founder's own research rows (not facilitator notes)
     evidence: fragments.map((f) => ({
       id: f.id, source: f.source, platform: f.platform, sourceUrl: f.sourceUrl, confidenceKind: f.confidenceKind,
       occurredAt: iso(f.occurredAt), capturedAt: iso(f.capturedAt), visibility: f.visibility,

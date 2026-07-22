@@ -18,6 +18,7 @@ import { StrategyPage } from './strategy/StrategyPage';
 import { StrategyThreadPage } from './strategy/StrategyThreadPage';
 import { ClarityPage } from './clarity/ClarityPage';
 import { UnderstandingSurfacePage } from './understanding/UnderstandingSurfacePage';
+import { PilotActivatePage } from './pilot/PilotActivatePage';
 import { StrategicContextPage } from './strategic-context/StrategicContextPage';
 import { ConnectPreviewPage } from './connect/ConnectPreviewPage';
 import { UploadPreviewPage } from './upload/UploadPreviewPage';
@@ -56,6 +57,9 @@ export function App() {
           <Route path="/market" element={<MarketPage />} />
 
           {/* Wave 4 — Founder Strategy (bounded priority-decision reasoning over Waves 1–3 outputs). */}
+          {/* Pilot (Founder Validation Readiness) — invite activation + minimal setup. */}
+          <Route path="/activate" element={<PilotActivatePage />} />
+
           {/* Clarity / Sensemaking — the tension→clarity entry point BEFORE a Strategy Thread. */}
           <Route path="/clarity" element={<ClarityPage />} />
           <Route path="/clarity/:concernId" element={<ClarityPage />} />

@@ -19,6 +19,8 @@ import { PgUnderstandingItemRepository } from '../business-model/pg-understandin
 import { composeEffectiveUnderstanding } from '../business-model/effective-understanding';
 import { ClarityService, crystallizeConcern } from '../business-model/clarity.service';
 import { AnthropicClarityModel, FixtureClarityModel } from '../business-model/clarity-model';
+import { PgPilotStore } from '../pilot/pg-pilot.repository';
+import { PILOT_EVENTS, classifyConcern, pilotModeOn } from '../pilot/pilot.service';
 
 /**
  * Clarity / Sensemaking API. The cognitive entry point BEFORE a Strategy Thread: a founder brings a tension and Business
@@ -48,6 +50,11 @@ export function registerClarityRoutes(server: FastifyInstance): void {
     ? new FixtureClarityModel()
     : new AnthropicClarityModel(process.env['ANTHROPIC_API_KEY'] ?? '');
   const service = new ClarityService({ store, model, understanding, strategicContext, understandingItems, db });
+  const pilotStore = new PgPilotStore(db);
+  // Best-effort research instrumentation — never breaks a founder request (validation research, not engagement).
+  const track = async (f: string, type: string, entity: string | null, meta: Record<string, unknown> = {}): Promise<void> => {
+    try { const pf = await pilotStore.getPilotFounder(f); await pilotStore.emitEvent(f, pf?.cohort ?? null, type, entity, meta, new Date()); } catch { /* instrumentation must never fail the request */ }
+  };
 
   async function founder(request: FastifyRequest): Promise<string | null> {
     const sid = readCookie(request.headers['cookie'], SESSION_COOKIE);
@@ -56,6 +63,8 @@ export function registerClarityRoutes(server: FastifyInstance): void {
   const need = async (request: FastifyRequest, reply: FastifyReply): Promise<string | null> => {
     const f = await founder(request);
     if (!f) { await reply.code(401).send({ error: 'authentication required' }); return null; }
+    // Pilot access enforcement ONLY when PILOT_MODE=1 (existing tests/dev unaffected). Disabled/unactivated → 403 (data kept).
+    if (pilotModeOn()) { const pf = await pilotStore.getPilotFounder(f); if (!pf || pf.accessStatus !== 'active') { await reply.code(403).send({ error: 'pilot access is not active' }); return null; } }
     return f;
   };
 
@@ -65,11 +74,19 @@ export function registerClarityRoutes(server: FastifyInstance): void {
     const body = (request.body ?? {}) as { input?: string; concernId?: string };
     const input = (body.input ?? '').trim();
     if (input.length < 2) { await reply.code(400).send({ error: 'a short message is required' }); return; }
+    const isNew = !body.concernId;
     try {
       const turn = await service.turn(f, input, body.concernId ?? null);
-      if (!turn.ok) { await reply.code(200).send({ ok: false, retry: true, concernId: turn.concernId, message: 'I couldn’t read that clearly enough to be useful. Your message is saved — try rephrasing.' }); return; }
+      if (!turn.ok) { await track(f, PILOT_EVENTS.clarityFailed, turn.concernId); await reply.code(200).send({ ok: false, retry: true, concernId: turn.concernId, message: 'I couldn’t read that clearly enough to be useful. Your message is saved — try rephrasing.' }); return; }
+      if (isNew) { // a NEW distinct concern (not a continuation) — the key voluntary-return signal
+        const cls = await classifyConcern(pilotStore, f, true);
+        await track(f, PILOT_EVENTS.concernSubmitted, turn.concernId, { ordinal: cls.ordinal, kind: cls.kind });
+        if (cls.kind === 'new_distinct') await track(f, PILOT_EVENTS.secondDistinctConcern, turn.concernId, { ordinal: cls.ordinal });
+      }
+      await track(f, PILOT_EVENTS.clarityProduced, turn.concernId, { continued: !isNew });
       await reply.code(200).send({ ok: true, concernId: turn.concernId, result: turn.result, proposedChanges: turn.proposedChanges });
     } catch {
+      await track(f, PILOT_EVENTS.clarityFailed, body.concernId ?? null);
       await reply.code(502).send({ ok: false, retry: true, message: 'I couldn’t complete that just now. Your message is saved — please try again.' });
     }
   });
@@ -97,14 +114,17 @@ export function registerClarityRoutes(server: FastifyInstance): void {
     const f = await need(request, reply); if (!f) return;
     const item = await service.acceptProposedChange(f, (request.params as { id: string }).id);
     if (!item) { await reply.code(409).send({ error: 'not pending or not found' }); return; }
+    await track(f, PILOT_EVENTS.proposalAccepted, item.id);
     await reply.send({ accepted: true, understandingItemId: item.id });
   });
 
   // POST /clarity/changes/:id/reject — the founder declines; confirmed Understanding is left unchanged.
   server.post('/clarity/changes/:id/reject', async (request, reply) => {
     const f = await need(request, reply); if (!f) return;
-    const ok = await service.rejectProposedChange(f, (request.params as { id: string }).id);
+    const changeId = (request.params as { id: string }).id;
+    const ok = await service.rejectProposedChange(f, changeId);
     if (!ok) { await reply.code(409).send({ error: 'not pending or not found' }); return; }
+    await track(f, PILOT_EVENTS.proposalRejected, changeId);
     await reply.send({ rejected: true });
   });
 
@@ -121,6 +141,7 @@ export function registerClarityRoutes(server: FastifyInstance): void {
     if (body.outcome === 'confirmed' || body.outcome === 'unsure') {
       const ok = await service.revalidate(f, itemId, body.outcome, concernId);
       if (!ok) { await reply.code(409).send({ error: 'item not found' }); return; }
+      await track(f, body.outcome === 'confirmed' ? PILOT_EVENTS.contextRevalidatedConfirmed : PILOT_EVENTS.contextRevalidatedUnsure, itemId);
       await reply.send({ revalidated: true, outcome: body.outcome });
       return;
     }
@@ -130,6 +151,7 @@ export function registerClarityRoutes(server: FastifyInstance): void {
       const corrected = await service.correctUnderstanding(f, { supersedesItemId: itemId, statement });
       if (!corrected) { await reply.code(409).send({ error: 'nothing to correct or not owned' }); return; }
       const refreshed = await service.refreshReading(f, concernId); // re-read with the corrected context
+      await track(f, PILOT_EVENTS.contextCorrected, corrected.id);
       await reply.send({ corrected: corrected.id, refreshed });
       return;
     }
@@ -147,6 +169,7 @@ export function registerClarityRoutes(server: FastifyInstance): void {
       captureContext: (fid) => captureEffectiveContext(fid, { assembler, promotionRepo, learningRepo }),
     });
     if (!sessionId) { await reply.code(409).send({ error: 'concern not found or already crystallized' }); return; }
+    await track(f, PILOT_EVENTS.endedStrategyThread, id);
     await reply.code(201).send({ sessionId });
   });
 

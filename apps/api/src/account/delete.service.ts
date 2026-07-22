@@ -63,6 +63,24 @@ export async function deleteFounderAccount(
     await tx.deleteFrom('business.market_finding_response').where('founder_id', '=', founderId).execute(); // Wave 3 (V063) — finding response history
     await tx.deleteFrom('business.market_finding').where('founder_id', '=', founderId).execute();     // Wave 3 (V061) — market findings
     await tx.deleteFrom('business.market_entity').where('founder_id', '=', founderId).execute();      // Wave 3 (V061) — market entities
+    // Clarity/Sensemaking (V089–V091) — append-only ledgers gated on their delete GUCs (founder-account deletion path).
+    await sql`SET LOCAL bb.allow_concern_delete = 'on'`.execute(tx);
+    await sql`SET LOCAL bb.allow_understanding_item_delete = 'on'`.execute(tx);
+    await tx.deleteFrom('business.clarity_context_use').where('founder_id', '=', founderId).execute();       // V091
+    await tx.deleteFrom('business.understanding_revalidation').where('founder_id', '=', founderId).execute(); // V091
+    await tx.deleteFrom('business.proposed_understanding_change').where('founder_id', '=', founderId).execute(); // V089
+    await tx.deleteFrom('business.understanding_item').where('founder_id', '=', founderId).execute();         // V090
+    await tx.deleteFrom('business.clarity_result').where('founder_id', '=', founderId).execute();             // V089
+    await tx.deleteFrom('business.concern_message').where('founder_id', '=', founderId).execute();            // V089
+    await tx.deleteFrom('business.concern').where('founder_id', '=', founderId).execute();                    // V089
+
+    // Pilot (V092) — personal/business research rows deleted; research_event anonymized (aggregate signal kept, PII dropped).
+    for (const t of ['pilot.concern_feedback', 'pilot.concern_reality', 'pilot.facilitator_note', 'pilot.wtp_record', 'pilot.pilot_founder']) {
+      await tx.deleteFrom(t).where('founder_id', '=', founderId).execute();
+    }
+    await tx.updateTable('pilot.invite').set({ founder_id: null, status: 'disabled' }).where('founder_id', '=', founderId).execute();
+    await tx.updateTable('pilot.research_event').set({ founder_id: null }).where('founder_id', '=', founderId).execute();
+
     await tx.deleteFrom('identity.sessions').where('founder_id', '=', founderId).execute();     // revokes all sessions
     await tx.deleteFrom('identity.founder_credentials').where('founder_id', '=', founderId).execute(); // Wave 1 (V056) — password credential
     await tx.deleteFrom('identity.oauth_identities').where('founder_id', '=', founderId).execute();    // Wave 1 (V057) — federated login identities

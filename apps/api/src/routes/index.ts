@@ -18,6 +18,8 @@ import { registerUnderstandingRoutes } from './understanding.routes';
 import { registerMarketRoutes } from './market.routes';
 import { registerStrategyRoutes } from './strategy.routes';
 import { registerClarityRoutes } from './clarity.routes';
+import { registerPilotRoutes } from './pilot.routes';
+import { registerPilotAdminRoutes } from './pilot-admin.routes';
 import { registerStrategicContextRoutes } from './strategic-context.routes';
 import { PgIdentityRepository } from '../session/pg-identity.repository';
 import { registerRequireFounder } from '../session/require-founder';
@@ -55,6 +57,8 @@ export async function registerRoutes(
     registerMarketRoutes(api);             // A–E Wave 3 — known-entity market context → /api/market*; strict session
     registerStrategyRoutes(api);           // Wave 4 — Founder Strategy (priority-decision) → /api/strategy*; strict session
     registerClarityRoutes(api);            // Clarity/Sensemaking — the tension→clarity entry point → /api/clarity*; strict session
+    registerPilotRoutes(api);              // Founder Validation Readiness — invite/setup/reality/feedback → /api/pilot*; strict session
+    registerPilotAdminRoutes(api);         // Pilot admin (X-Pilot-Admin-Token authorized) → /api/admin/pilot*; NOT session-based
     registerStrategicContextRoutes(api);   // Wave 4 — Founder Strategic Context (5 kinds) → /api/founder-strategic-context*; strict session
   }, { prefix: '/api' });
 
