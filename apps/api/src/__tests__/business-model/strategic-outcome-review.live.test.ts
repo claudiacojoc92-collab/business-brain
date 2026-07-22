@@ -23,7 +23,14 @@ import { PgMarketReviewRepository } from '../../business-model/pg-market-review.
 import { PgExecutionReportRepository } from '../../business-model/pg-execution-report.repository';
 import { PgStrategicOutcomeReviewRepository } from '../../business-model/pg-strategic-outcome-review.repository';
 import { computeReviewContentHash, composeOutcomeReviewAssessment, type StrategicOutcomeReviewInput } from '../../business-model/strategic-outcome-review';
+import { type PlanReviewInput } from '../../business-model/strategic-plan-review';
 import { type ExecutionReportInput } from '../../business-model/execution-report';
+import { buildFounderExport } from '../../account/export.service';
+import { deleteFounderAccount } from '../../account/delete.service';
+import { PgEvidenceRepository } from '@bb/infrastructure';
+import { PgThreadRepository } from '../../business-model/pg-thread.repository';
+import { PgRecommendationRepository } from '../../business-model/pg-recommendation.repository';
+import { PgBusinessReadRepository } from '../../business-model/pg-business-read.repository';
 import { processSession } from '../../business-model/strategic-session.worker';
 import type { StrategyModel } from '../../business-model/anthropic-strategy.model';
 import type { StrategicContext } from '../../business-model/strategic-context.assembler';
@@ -235,5 +242,68 @@ describe('strategic outcome review boundary §LIVE', () => {
     const snapshot = (await new PgContextSnapshotRepository(db).getById(founderId, s.id))!;
     const recomposed = composeOutcomeReviewAssessment(p, eff, snapshot, reviewInput({ contextSnapshotId: s.id, observedOutcome: 'NOT_AS_INTENDED', idempotencyKey: 'h-r' }));
     expect(computeReviewContentHash(recomposed)).toBe(review.contentHash); // reproducible forever
+  });
+});
+
+// ── ADR-016 boundary-closure: Strategic Plan Review and Strategic Outcome Review are DISTINCT, never interchangeable ──
+function planReviewRepo() { return new PgStrategicPlanReviewRepository(db); }
+function planReviewInput(over: Partial<PlanReviewInput> = {}): PlanReviewInput { return { reviewStatement: 'A month in.', reviewConclusion: 'PLAN_REMAINS_COHERENT', selectedDisposition: 'CONTINUE_CURRENT_PLAN', idempotencyKey: generateId(), ...over }; }
+async function bothReviews(email: string) {
+  const { founderId, plan } = await founderWithPlan(email);
+  const p = (await new PgStrategicPlanRepository(db).getByRevisionId(founderId, plan.id, new Date()))!;
+  const planReview = await planReviewRepo().create(founderId, p, planReviewInput(), new Date()); // Strategic PLAN Review (V075)
+  const s = await snap(founderId);
+  const outcomeReview = await makeReview(founderId, plan, s.id, { idempotencyKey: generateId() });   // Strategic OUTCOME Review (V086)
+  return { founderId, plan, planReview, outcomeReview };
+}
+
+async function tableCount(table: string, col: string, val: string): Promise<number> {
+  const r = await db.selectFrom(table).select(db.fn.countAll().as('c')).where(col, '=', val).executeTakeFirst();
+  return Number((r as { c: number | string }).c);
+}
+
+describe('review-type boundary §LIVE — Plan Review is not Outcome Review, no generic path', () => {
+  it('N. the repositories are type-safe — neither resolves the other type id (no generic review lookup)', async (ctx) => {
+    if (!dbUp) { ctx.skip(); return; }
+    const { founderId, planReview, outcomeReview } = await bothReviews(nextEmail());
+    // the Plan Review repository never resolves an Outcome Review id, and vice-versa
+    expect(await planReviewRepo().getById(founderId, outcomeReview.id)).toBeNull();
+    expect(await orepo().getById(founderId, planReview.id)).toBeNull();
+    // each id lives in exactly ONE table (distinct id namespaces; no shared/union table)
+    expect(await tableCount('business.strategic_outcome_review', 'id', outcomeReview.id)).toBe(1);
+    expect(await tableCount('business.strategic_plan_review_record', 'id', outcomeReview.id)).toBe(0);
+    expect(await tableCount('business.strategic_plan_review_record', 'id', planReview.id)).toBe(1);
+    expect(await tableCount('business.strategic_outcome_review', 'id', planReview.id)).toBe(0);
+  });
+
+  it('O. Strategic Learning consumes ONLY the Plan Review — an Outcome Review id can never feed the learning path', async (ctx) => {
+    if (!dbUp) { ctx.skip(); return; }
+    const { founderId, planReview, outcomeReview } = await bothReviews(nextEmail());
+    // the learning route resolves its :reviewId via planReviewRepo.getById → a Plan Review id resolves…
+    expect((await planReviewRepo().getById(founderId, planReview.id))!.id).toBe(planReview.id);
+    // …an Outcome Review id does NOT (so POST /plan-reviews/:id/learnings would 404 for it — Outcome Review cannot generate Learning)
+    expect(await planReviewRepo().getById(founderId, outcomeReview.id)).toBeNull();
+  });
+
+  it('P. export distinguishes the two review types — each id appears only under its own key', async (ctx) => {
+    if (!dbUp) { ctx.skip(); return; }
+    const { founderId, planReview, outcomeReview } = await bothReviews(nextEmail());
+    const exp = (await buildFounderExport({ founderId, db, evidence: new PgEvidenceRepository(db), threads: new PgThreadRepository(db), recommendations: new PgRecommendationRepository(db), reads: new PgBusinessReadRepository(db), now: new Date() }))!;
+    const planReviewIds = (exp.strategicPlanReviews as Array<{ id: string }>).map((r) => r.id);
+    const outcomeReviewIds = (exp.strategicOutcomeReviews as Array<{ id: string }>).map((r) => r.id);
+    expect(planReviewIds).toContain(planReview.id);
+    expect(outcomeReviewIds).toContain(outcomeReview.id);
+    expect(planReviewIds).not.toContain(outcomeReview.id); // no cross-contamination
+    expect(outcomeReviewIds).not.toContain(planReview.id);
+  });
+
+  it('Q. account deletion distinguishes + removes BOTH review types (zero orphans of either)', async (ctx) => {
+    if (!dbUp) { ctx.skip(); return; }
+    const { founderId, planReview, outcomeReview } = await bothReviews(nextEmail());
+    expect((await deleteFounderAccount(founderId, db)).deleted).toBe(true);
+    expect(await planReviewRepo().getById(founderId, planReview.id)).toBeNull();
+    expect(await orepo().getById(founderId, outcomeReview.id)).toBeNull();
+    expect(await tableCount('business.strategic_plan_review_record', 'founder_id', founderId)).toBe(0);
+    expect(await tableCount('business.strategic_outcome_review', 'founder_id', founderId)).toBe(0);
   });
 });

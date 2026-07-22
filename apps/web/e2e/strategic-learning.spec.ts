@@ -12,6 +12,17 @@ const EMAIL = 'slr.e2e@understand.test';
 const PASSWORD = 'slre2epass-12';
 const PSQL = ['exec', '-i', 'bb-postgres', 'psql', '-U', 'bbuser', '-d', 'businessbrain'];
 function sql(q: string): string { return execFileSync('docker', [...PSQL, '-t', '-A', '-c', q], { encoding: 'utf8' }).trim(); }
+// Founder cleanup mirrors GOVERNED account deletion: strategic_learning_record is APPEND-ONLY (V078 trigger
+// slr_forbid_delete), so an individual DELETE is rejected unless bb.allow_learning_delete='on' is set IN THE SAME SESSION.
+// All statements run in one psql -c invocation (one session), so the GUC is in scope for the learning DELETE. Order is
+// FK-safe (learning → plan_review → plan → commitment → decision → response → session).
+function cleanupFounder(fid: string): void {
+  sql([
+    `SET bb.allow_learning_delete='on'`,
+    ...['strategic_learning_record', 'strategic_plan_review_record', 'strategic_plan_record', 'strategic_commitment_record', 'strategic_decision_record', 'strategic_response', 'strategic_session']
+      .map((t) => `DELETE FROM business.${t} WHERE founder_id='${fid}'`),
+  ].join('; ') + ';');
+}
 
 const REC = JSON.stringify({
   recommendation: { title: 'Prioritize founder-led outreach', action: 'Spend the next 30 days on founder-led outreach.', horizon: '30 days' },
@@ -32,19 +43,15 @@ test.beforeAll(async ({ request }) => {
     const res = await request.post('/api/auth/signup', { data: { email: EMAIL, password: PASSWORD } });
     founderId = (await res.json()).founder_id as string;
   }
-  // clean any prior e2e rows for this founder, then seed ONE READY session (no model call needed)
-  for (const t of ['strategic_learning_record', 'strategic_plan_review_record', 'strategic_plan_record', 'strategic_commitment_record', 'strategic_decision_record', 'strategic_response', 'strategic_session']) {
-    sql(`DELETE FROM business.${t} WHERE founder_id='${founderId}';`);
-  }
+  // clean any prior e2e rows for this founder (governed append-only delete), then seed ONE READY session (no model call)
+  cleanupFounder(founderId);
   const rec = REC.replace(/'/g, "''");
   sql(`INSERT INTO business.strategic_session (id, founder_id, status, strategic_job, subtype, question_text, decision_horizon, recommendation, model_id, prompt_version, schema_version, attempt_count, max_attempts, started_at, finished_at, created_at, updated_at) VALUES ('${sessionId}','${founderId}','READY','PRIORITY_DECISION','CHANNEL_PRIORITY','Which channel should I prioritize?','30 days','${rec}'::jsonb,'seed-stub','seed',NULL,1,3,now(),now(),now(),now());`);
 });
 
 test.afterAll(async () => {
   if (!founderId) return;
-  for (const t of ['strategic_learning_record', 'strategic_plan_review_record', 'strategic_plan_record', 'strategic_commitment_record', 'strategic_decision_record', 'strategic_response', 'strategic_session']) {
-    sql(`DELETE FROM business.${t} WHERE founder_id='${founderId}';`);
-  }
+  cleanupFounder(founderId);
 });
 
 async function signIn(page: Page) {
@@ -140,8 +147,11 @@ test('founder records a durable learning through the rendered UI; it persists an
   const list = page.getByTestId('learnings-list');
   await expect(list).toBeVisible();
   await expect(list).toContainText('Founder-led outreach converts at our stage');
-  await expect(list.getByTestId('learning-source-review').first()).toBeVisible();
-  await expect(list).toContainText('Does not modify Business Understanding');
+  // the learning is shown as a THREAD card carrying its source PLAN review lineage (testid thread-source-review —
+  // renamed from the old flat-list `learning-source-review` when learning threads were introduced); the "does not modify
+  // BU/FSC" reminder lives on the learning-saved panel (asserted above), not the thread card.
+  await expect(list.getByTestId('thread-source-review').first()).toBeVisible();
+  await expect(list.getByTestId('thread-source-review').first()).toContainText('from review');
   await list.screenshot({ path: 'e2e/__evidence__/learnings-list-after-refresh.png' }).catch(() => {});
 
   // ── No other governed object changed: exactly one learning, review unchanged, no BU/FSC written ──

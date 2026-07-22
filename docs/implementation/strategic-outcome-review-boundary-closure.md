@@ -58,10 +58,12 @@ Strategic Outcome Review is deterministic, immutable, reproducible, and writes t
   Execution Boundary, Consumption Gate, Consumption, Promotion Gate, Strategic Learning lifecycle. Frozen strategist hashes
   byte-identical (`a39ea88` / `79802e9` / `f9df116`). Zero temp founders, zero orphans, servers stopped, nothing pushed.
 
-## Known pre-existing (not this slice)
-`strategic-learning.spec.ts` (the SLR create-from-review end-to-end) fails in this dev environment **independently of this
-slice** — it fails identically with the ADR-016 web changes stashed (a schema-drift issue in that spec's seeded session,
-unrelated to the Review boundary). Not introduced here; recorded for follow-up.
+## Known pre-existing (not this slice) — RESOLVED by the 2026-07-22 remediation below
+`strategic-learning.spec.ts` failed in this dev environment **independently of this slice** (it fails identically with the
+ADR-016 web changes stashed). The earlier characterization ("schema-drift in the seeded session") was imprecise; the
+boundary-closure remediation below establishes the exact root cause (two latent test-drift defects in that spec's cleanup +
+a stale selector) and **fixes them so the spec passes**. The earlier "all Playwright regressions green" claim was
+contradictory while that spec was red; it is corrected there.
 
 ## Scope discipline
 No Learning creation, no Promotion, no BU/FSC/Effective-Context change, no Recommendation regeneration, no Plan/Execution/
@@ -73,3 +75,52 @@ amended.
 - **SOR-1** — reconcile whether Strategic Learning should attach to the Strategic Outcome Review vs the Strategic Plan
   Review (no wiring changed here). Product-performed execution, outcome attribution/causation, and any judgment/scoring
   surface remain permanently out of scope.
+
+---
+
+## Boundary-closure remediation (2026-07-22) — Review-type explicitness + green learning regression
+
+The prior report contained a contradiction ("Playwright regressions green" while `strategic-learning.spec.ts` failed) and
+did not make the Plan Review vs Outcome Review relationship testably explicit. This remediation closes both — **one commit,
+test-only, no product code changed.**
+
+**Root cause of the `strategic-learning.spec.ts` failure (concrete, not "pre-existing" hand-waving).** Two latent
+test-drift defects in that spec, both masked because the first one aborted `beforeAll` before the body ran:
+1. **Append-only cleanup violation.** The `beforeAll`/`afterAll` cleanup issued a bare `DELETE FROM
+   business.strategic_learning_record` with no `bb.allow_learning_delete='on'` in the same session. The V078 trigger
+   `slr_forbid_delete` blocks it the instant a learning row exists; on a clean founder (0 rows) the FOR-EACH-ROW trigger
+   never fires, so the first run passed and every subsequent run threw in `beforeAll`. Fix: a `cleanupFounder` helper runs
+   `SET bb.allow_learning_delete='on'; DELETE …` as ONE psql session (mirrors governed account deletion).
+2. **Stale selector/text.** The spec asserted `learning-source-review` and `'Does not modify Business Understanding'` in
+   the learnings list, but the list was rewritten into thread cards (`thread-source-review`; the reminder now lives only on
+   the `learning-saved` panel, already asserted). Fix: assert `thread-source-review` contains "from review".
+
+Both defects predate `3c159a5`: the V078 trigger and the ThreadCard rename (threads/promotion era, V079–V081) both predate
+V086, and `3c159a5` touches only `strategic-outcome-review.*`/routes/export-delete/StrategyPage — never this spec, the
+learning table, its trigger, or the ThreadCard. Proven twice: the spec fails identically with the ADR-016 web changes
+stashed, and its failure is in cleanup SQL, not the Outcome-Review UI.
+
+**Review-type audit (Parts 4–7) — no generic path exists.** Plan Review and Outcome Review are fully segregated:
+- **Tables:** `strategic_plan_review_record` (V075) vs `strategic_outcome_review` (V086) — disjoint id namespaces.
+- **Repositories:** `PgStrategicPlanReviewRepository.getById` reads only `strategic_plan_review_record`;
+  `PgStrategicOutcomeReviewRepository.getById` reads only `strategic_outcome_review`. Neither resolves the other's id; no
+  union DTO, no generic review lookup.
+- **Routes:** Plan Review = `/strategy/plans/:logicalPlanId/reviews`, `/strategy/plan-reviews/:reviewId`,
+  `/strategy/plan-reviews/:reviewId/learnings`; Outcome Review = `/strategy/plans/:planId/outcome-reviews`,
+  `/strategy/outcome-reviews/:reviewId`. Each names its type explicitly; no `if (planReview) … else if (outcomeReview)`.
+- **Export/Delete:** separate keys (`strategicPlanReviews` vs `strategicOutcomeReviews`); deletion removes both.
+
+**Strategic Learning boundary (Part 6) = A — Learning consumes ONLY the Plan Review.** The learning route
+`POST /strategy/plan-reviews/:reviewId/learnings` resolves via `planReviewRepo.getById`, which reads only the plan-review
+table. An Outcome Review id is therefore unresolvable there → 404; **Outcome Review cannot generate Learning.**
+
+**New locking tests** (`strategic-outcome-review.live.test.ts` boundary block, +4): N — repos are type-safe, neither
+resolves the other's id, each id lives in exactly one table; O — Learning consumes only Plan Review (Outcome id → null);
+P — export distinguishes the two (no cross-contamination); Q — account deletion removes both, zero orphans of either.
+
+**Regression (corrected, honest).** Backend **1077 pass / 1 skip** (was 1073, +4). Web build + 73 unit; API + web
+typechecks clean. **All seven required Playwright suites GREEN:** `strategic-learning`, `strategic-outcome-review`,
+`strategic-execution-boundary`, `strategic-learning-consumption`, `strategic-learning-consumption-gate`,
+`strategic-learning-promotion`, `strategic-learning-lifecycle`. `strategic-learning.spec.ts` passes on two consecutive runs
+(afterAll now cleans up → no re-accumulation). Frozen strategist hashes byte-identical. No product code changed; migrations
+unchanged (V086 latest). Not pushed; no prior commit amended.
