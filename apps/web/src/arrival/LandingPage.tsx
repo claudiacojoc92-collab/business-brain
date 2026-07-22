@@ -1,4 +1,4 @@
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { AppShell, Button } from '../system/ui';
 
@@ -9,7 +9,8 @@ import { AppShell, Button } from '../system/ui';
  */
 export function LandingPage() {
   const { founderId, isLoading } = useAuth();
-  if (!isLoading && founderId) return <Navigate to="/welcome" replace />;
+  const navigate = useNavigate();
+  if (!isLoading && founderId) return <Navigate to="/home" replace />;
 
   return (
     <AppShell
@@ -28,8 +29,8 @@ export function LandingPage() {
           and works with you on positioning, content, and growth — and gets sharper every week.
         </p>
         <div className="bb-rise" style={{ ['--i' as string]: 3, display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <Link to="/signup" style={{ textDecoration: 'none' }}><Button variant="primary">Create your account</Button></Link>
-          <Link to="/signin" style={{ textDecoration: 'none' }}><Button variant="secondary">Sign in</Button></Link>
+          <Button variant="primary" onClick={() => navigate('/signup')}>Create your account</Button>
+          <Button variant="secondary" onClick={() => navigate('/signin')}>Sign in</Button>
         </div>
       </div>
     </AppShell>

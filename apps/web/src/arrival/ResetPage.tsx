@@ -24,7 +24,7 @@ export function ResetPage() {
     try {
       await resetPassword(token, password);
       await refresh();
-      navigate('/welcome', { replace: true });
+      navigate('/home', { replace: true });
     } catch (e) {
       if (e instanceof ApiError && e.status === 400) setError('That reset link is invalid or has expired. Request a new one.');
       else setError('Something went wrong. Please try again.');

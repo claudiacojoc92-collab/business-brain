@@ -38,7 +38,7 @@ export class ClarityService {
   constructor(private readonly deps: ClarityServiceDeps) {}
 
   /** Start a new concern, or continue an existing one, with one founder message → one clarity turn. */
-  async turn(founderId: string, founderInput: string, concernId: string | null, now: Date = new Date()): Promise<ClarityTurnResult> {
+  async turn(founderId: string, founderInput: string, concernId: string | null, now: Date = new Date(), language = 'en'): Promise<ClarityTurnResult> {
     const concern = concernId ? await this.deps.store.getConcern(founderId, concernId) : await this.deps.store.createConcern(founderId, founderInput, now);
     if (!concern) throw new Error('concern not found');
 
@@ -47,7 +47,7 @@ export class ClarityService {
     await this.deps.store.addMessage(founderId, concern.id, 'FOUNDER', founderInput, now);
 
     // 2) Read the reading (context + selection + audit + resolved continuity).
-    const reading = await this.produceReading(founderId, founderInput, prior.map((m) => ({ actor: m.actor, content: m.content })), now);
+    const reading = await this.produceReading(founderId, founderInput, prior.map((m) => ({ actor: m.actor, content: m.content })), now, language);
 
     // 3) Fail closed: no usable structured result → truthful retry; persist NO assistant turn, NO proposed state.
     if (!reading) return { ok: false, concernId: concern.id, result: null, proposedChanges: [], retry: true };
@@ -73,24 +73,24 @@ export class ClarityService {
    * persisted identity/label/origin/timestamps. Invented ids are dropped; any item derived as needing revalidation is always
    * surfaced even if the model didn't reference it. Returns null (fail closed) when the model output is unusable.
    */
-  private async produceReading(founderId: string, founderInput: string, priorMessages: Array<{ actor: 'FOUNDER' | 'BUSINESS_BRAIN'; content: string }>, now: Date): Promise<{ result: ClarityResult } | null> {
+  private async produceReading(founderId: string, founderInput: string, priorMessages: Array<{ actor: 'FOUNDER' | 'BUSINESS_BRAIN'; content: string }>, now: Date, language = 'en'): Promise<{ result: ClarityResult } | null> {
     const context = await assembleClarityContext(founderId, this.deps, now);
     const [currentItems, revalidations] = await Promise.all([this.deps.understandingItems.listCurrent(founderId), this.deps.understandingItems.listRevalidations(founderId)]);
     const selection = selectRelevantContext(currentItems, founderInput, revalidations);
-    const output = await this.deps.model.clarify({ founderInput, priorMessages, context, contextItems: selection });
+    const output = await this.deps.model.clarify({ founderInput, priorMessages, context, contextItems: selection, language });
     if (!output) return null;
     const result = { ...output.result, continuity: resolveContinuity(output.continuityRefs, selection) };
     return { result };
   }
 
   /** Re-run the reading for a concern using the CURRENT (e.g. just-corrected) context, appending a fresh clarity result. */
-  async refreshReading(founderId: string, concernId: string, now: Date = new Date()): Promise<ClarityResult | null> {
+  async refreshReading(founderId: string, concernId: string, now: Date = new Date(), language = 'en'): Promise<ClarityResult | null> {
     const concern = await this.deps.store.getConcern(founderId, concernId);
     if (!concern) return null;
     const messages = await this.deps.store.listMessages(founderId, concernId);
     const lastFounder = [...messages].reverse().find((m) => m.actor === 'FOUNDER');
     if (!lastFounder) return null;
-    const reading = await this.produceReading(founderId, lastFounder.content, messages.map((m) => ({ actor: m.actor, content: m.content })), now);
+    const reading = await this.produceReading(founderId, lastFounder.content, messages.map((m) => ({ actor: m.actor, content: m.content })), now, language);
     if (!reading) return null;
     const result = reading.result;
     const msg = await this.deps.store.addMessage(founderId, concernId, 'BUSINESS_BRAIN', result.clarifiedIssue ?? result.reflectedConcern, now);

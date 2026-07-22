@@ -24,6 +24,7 @@ export interface ClarityInput {
   founderInput: string;
   priorMessages: Array<{ actor: 'FOUNDER' | 'BUSINESS_BRAIN'; content: string }>;
   context: ClarityContext;
+  language?: string;    // the founder's active language (e.g. 'ro') — respond in it, never mix languages
   /** The bounded, id-bearing prior Understanding the model may build on. It references these by id in `continuity`; it must
    *  NOT invent ids or origins. Identity/label/origin/timestamps are supplied here (from persisted state), not authored. */
   contextItems: SelectedContextItem[];
@@ -39,6 +40,11 @@ export interface ClarityModel {
 
 function safeJson(t: string): unknown { try { const m = t.match(/\{[\s\S]*\}/); return m ? JSON.parse(m[0]) : null; } catch { return null; } }
 const MAX_TOKENS = 3000;
+// Respond in the founder's language — all founder-facing string VALUES in the JSON must be written in it (keys stay as-is).
+const LANGUAGE_INSTRUCTION: Record<string, string> = {
+  en: '',
+  ro: 'IMPORTANT: The founder is writing in Romanian. Write EVERY founder-facing text value in the JSON (reflectedConcern, clarifiedIssue, alternativeInterpretation, smallestUsefulNextMove, all list items, etc.) in ROMANIAN. Keep the JSON keys exactly as specified in English.',
+};
 
 export class AnthropicClarityModel implements ClarityModel {
   readonly version = 'clarity-1:anthropic';
@@ -58,9 +64,10 @@ export class AnthropicClarityModel implements ClarityModel {
       'FOUNDER SAYS:',
       input.founderInput,
       '',
+      LANGUAGE_INSTRUCTION[input.language ?? 'en'] ?? '',
       'Audit this as the strategist and return ONLY the clarity JSON now. In "continuity", include ONLY prior items that',
       'materially affect THIS reading, each with why it matters and how it shapes the reading.',
-    ].join('\n');
+    ].filter(Boolean).join('\n');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const resp: any = await client.messages.create({ model: this.modelId, max_tokens: MAX_TOKENS, system: CLARITY_SYSTEM_PROMPT, messages: [{ role: 'user', content: user }] });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

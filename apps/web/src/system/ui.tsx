@@ -1,5 +1,6 @@
 import type { ReactNode, CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
+import { PrimaryNav } from './PrimaryNav';
 
 /**
  * A–E shared UI system (Wave 1). The premium substrate every A–E surface reuses: shell, buttons, fields,
@@ -12,12 +13,14 @@ import { Link } from 'react-router-dom';
 export function AppShell({ children, actions, max = 'var(--reading)' }: { children: ReactNode; actions?: ReactNode; max?: string }) {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--paper)' }}>
-      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: '1px solid var(--line)' }}>
-        <Link to="/start" style={{ textDecoration: 'none', display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          <span style={{ fontFamily: 'var(--serif)', fontSize: '1.15rem', fontWeight: 600, color: 'var(--ink)', letterSpacing: '-0.01em' }}>Business Brain</span>
+      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--sp-5)', padding: '16px 24px', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
+        <Link to="/home" style={{ textDecoration: 'none', display: 'flex', alignItems: 'baseline', gap: 8, flexShrink: 0 }}>
+          <span style={{ fontFamily: 'var(--serif)', fontSize: '1.2rem', fontWeight: 600, color: 'var(--ink)', letterSpacing: '-0.01em' }}>Business Brain</span>
           <span aria-hidden style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--gold)', display: 'inline-block', transform: 'translateY(-3px)' }} />
         </Link>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>{actions}</div>
+        {/* The one persistent app navigation (renders only when signed in). Page-specific actions sit to its right. */}
+        <PrimaryNav />
+        {actions && <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>{actions}</div>}
       </header>
       <main style={{ flex: 1, display: 'flex', justifyContent: 'center', padding: '48px 20px 96px' }}>
         <div style={{ width: '100%', maxWidth: max }}>{children}</div>

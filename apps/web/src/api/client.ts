@@ -527,6 +527,18 @@ export async function pilotEnding(concernId: string, ending: 'enough' | 'keep_ex
   try { await request('pilot/ending', { method: 'POST', body: JSON.stringify({ concernId, ending }) }); } catch { /* research signal, best-effort */ }
 }
 
+// ─── Platform (Phase 1) — unified business profile, sources, preferences ──────────────────────────────────────────────
+export interface BusinessProfile { name: string | null; stage: string | null; description: string | null; offer: string | null; customer: string | null; goals: string[]; constraints: string[]; resources: string[]; otherToldMe: string[]; positioningCount: number; hasAnyContext: boolean }
+export async function getBusinessProfile(): Promise<BusinessProfile> { return request<BusinessProfile>('business/profile'); }
+
+export type SourceStatus = 'not_added' | 'connected' | 'processing' | 'needs_review' | 'error' | 'unavailable' | 'access_pending';
+export interface SourceState { key: string; name: string; status: SourceStatus; detail: string }
+export async function getSourcesStatus(): Promise<SourceState[]> { return (await request<{ sources: SourceState[] }>('sources/status')).sources; }
+
+export type Language = 'en' | 'ro';
+export async function getPreferences(): Promise<{ language: Language }> { return request<{ language: Language }>('preferences'); }
+export async function setLanguage(language: Language): Promise<void> { await request('preferences', { method: 'PUT', body: JSON.stringify({ language }) }); }
+
 // ─── Understanding surface — the founder-facing view of the accumulated, effective understanding ──────────────────────
 export interface EffectiveUnderstandingItem { id: string; statement: string; label: TruthLabel; source: 'observed' | 'founder'; origin: 'synthesis' | 'clarity_acceptance' | 'founder_correction'; createdAt: string | null }
 export interface EffectiveUnderstanding { current: EffectiveUnderstandingItem[]; unknowns: string[]; disagreements: EffectiveUnderstandingItem[]; recentlyAccepted: EffectiveUnderstandingItem[] }

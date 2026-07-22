@@ -18,14 +18,14 @@ export function SignUpPage() {
   const [error, setError] = useState('');
   const googleAvailable = useGoogleLoginAvailable();
 
-  if (!isLoading && founderId) return <Navigate to="/welcome" replace />;
+  if (!isLoading && founderId) return <Navigate to="/home" replace />;
 
   const submit = async () => {
     setError(''); setBusy(true);
     try {
       await signUp(email.trim(), password);
       await refresh();
-      navigate('/welcome', { replace: true });
+      navigate('/home', { replace: true });
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) setError('That email is already registered — sign in instead.');
       else if (e instanceof ApiError && e.status === 400) setError('Enter a valid email and a password of at least 8 characters.');

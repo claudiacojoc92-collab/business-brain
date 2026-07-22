@@ -51,6 +51,10 @@ export function registerClarityRoutes(server: FastifyInstance): void {
     : new AnthropicClarityModel(process.env['ANTHROPIC_API_KEY'] ?? '');
   const service = new ClarityService({ store, model, understanding, strategicContext, understandingItems, db });
   const pilotStore = new PgPilotStore(db);
+  // The founder's active language — clarity responds in it (no Romanian-in / English-out mixing).
+  const languageOf = async (f: string): Promise<string> => {
+    try { const r = await db.selectFrom('business.founder_preference').select('language').where('founder_id', '=', f).executeTakeFirst(); return r?.language ?? 'en'; } catch { return 'en'; }
+  };
   // Best-effort research instrumentation — never breaks a founder request (validation research, not engagement).
   const track = async (f: string, type: string, entity: string | null, meta: Record<string, unknown> = {}): Promise<void> => {
     try { const pf = await pilotStore.getPilotFounder(f); await pilotStore.emitEvent(f, pf?.cohort ?? null, type, entity, meta, new Date()); } catch { /* instrumentation must never fail the request */ }
@@ -76,7 +80,7 @@ export function registerClarityRoutes(server: FastifyInstance): void {
     if (input.length < 2) { await reply.code(400).send({ error: 'a short message is required' }); return; }
     const isNew = !body.concernId;
     try {
-      const turn = await service.turn(f, input, body.concernId ?? null);
+      const turn = await service.turn(f, input, body.concernId ?? null, new Date(), await languageOf(f));
       if (!turn.ok) { await track(f, PILOT_EVENTS.clarityFailed, turn.concernId); await reply.code(200).send({ ok: false, retry: true, concernId: turn.concernId, message: 'I couldn’t read that clearly enough to be useful. Your message is saved — try rephrasing.' }); return; }
       if (isNew) { // a NEW distinct concern (not a continuation) — the key voluntary-return signal
         const cls = await classifyConcern(pilotStore, f, true);
@@ -150,7 +154,7 @@ export function registerClarityRoutes(server: FastifyInstance): void {
       if (statement.length < 2) { await reply.code(400).send({ error: 'a new statement is required' }); return; }
       const corrected = await service.correctUnderstanding(f, { supersedesItemId: itemId, statement });
       if (!corrected) { await reply.code(409).send({ error: 'nothing to correct or not owned' }); return; }
-      const refreshed = await service.refreshReading(f, concernId); // re-read with the corrected context
+      const refreshed = await service.refreshReading(f, concernId, new Date(), await languageOf(f)); // re-read with the corrected context
       await track(f, PILOT_EVENTS.contextCorrected, corrected.id);
       await reply.send({ corrected: corrected.id, refreshed });
       return;

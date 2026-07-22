@@ -1,5 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './auth/AuthContext';
+import { AuthProvider, useAuth } from './auth/AuthContext';
+import { HomePage } from './home/HomePage';
+import { BusinessPage } from './business/BusinessPage';
+import { SourcesPage } from './sources/SourcesPage';
 import { LoginPage } from './pages/LoginPage';
 import { AccountPage } from './pages/AccountPage';
 import { ReadsListPage } from './pages/ReadsListPage';
@@ -11,7 +14,6 @@ import { SignUpPage } from './arrival/SignUpPage';
 import { SignInPage } from './arrival/SignInPage';
 import { RecoverPage } from './arrival/RecoverPage';
 import { ResetPage } from './arrival/ResetPage';
-import { WelcomePage } from './arrival/WelcomePage';
 import { UnderstandPage } from './understand/UnderstandPage';
 import { MarketPage } from './market/MarketPage';
 import { StrategyPage } from './strategy/StrategyPage';
@@ -29,26 +31,41 @@ import { MemoryPreviewPage } from './memory/MemoryPreviewPage';
 import { RecommendationPreviewPage } from './recommendation/RecommendationPreviewPage';
 
 /**
- * The M2 founder-facing app (dashboard / onboarding / review / history + their status guards) was
- * removed in S0-T1 (Article VI — manufactured-need machinery). Login + auth are DEFERRED (retire in
- * S0-T2 when a self-serve session lands). What remains is /login + the ADR-007 nucleus dev previews.
+ * Root routing (Phase 1). The bare root and any unknown path resolve through RootRedirect, which sends a
+ * SIGNED-IN founder to /home and a SIGNED-OUT visitor to /start (the arrival surface) — never to the obsolete
+ * /login. This is the single entry decision; the app shell (PrimaryNav) then carries the founder across surfaces.
  */
+function RootRedirect() {
+  const { founderId, isLoading } = useAuth();
+  if (isLoading) return null; // resolving the session cookie; avoid a wrong-way flash
+  return <Navigate to={founderId ? '/home' : '/start'} replace />;
+}
+
 export function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          {/* Public */}
+          {/* Bare root → founder-aware entry (signed-in → /home, signed-out → /start). */}
+          <Route path="/" element={<RootRedirect />} />
+
+          {/* Phase 1 — the unified authenticated product: Home, Business, Sources (nav also links the
+              existing Understanding / Clarity / Strategy / Account surfaces below). */}
+          <Route path="/home" element={<HomePage />} />
+          <Route path="/business" element={<BusinessPage />} />
+          <Route path="/sources" element={<SourcesPage />} />
+
+          {/* Legacy self-serve login — kept reachable by URL but no longer a destination we route founders to. */}
           <Route path="/login" element={<LoginPage />} />
 
-          {/* A–E Wave 1 — Trust & Arrival (new premium flow, additive; the current /login flow is untouched
-              and remains the default until the coherent A–E flow is complete and cut over). */}
+          {/* A–E Wave 1 — Trust & Arrival (signed-out entry). */}
           <Route path="/start" element={<LandingPage />} />
           <Route path="/signup" element={<SignUpPage />} />
           <Route path="/signin" element={<SignInPage />} />
           <Route path="/recover" element={<RecoverPage />} />
           <Route path="/reset" element={<ResetPage />} />
-          <Route path="/welcome" element={<WelcomePage />} />
+          {/* /welcome retired as a separate destination — the founder lands in the product at /home. */}
+          <Route path="/welcome" element={<Navigate to="/home" replace />} />
 
           {/* A–E Wave 2 — Business Understanding (guided website → synthesized "I understand your business"). */}
           <Route path="/understand" element={<UnderstandPage />} />
@@ -112,8 +129,8 @@ export function App() {
             <Route path="/recommendation-preview" element={<RecommendationPreviewPage />} />
           )}
 
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          {/* Fallback — founder-aware, never the obsolete /login. */}
+          <Route path="*" element={<RootRedirect />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

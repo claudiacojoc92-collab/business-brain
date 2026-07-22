@@ -18,14 +18,14 @@ export function SignInPage() {
   const [error, setError] = useState('');
   const googleAvailable = useGoogleLoginAvailable();
 
-  if (!isLoading && founderId) return <Navigate to="/welcome" replace />;
+  if (!isLoading && founderId) return <Navigate to="/home" replace />;
 
   const submit = async () => {
     setError(''); setBusy(true);
     try {
       await signIn(email.trim(), password);
       await refresh();
-      navigate('/welcome', { replace: true });
+      navigate('/home', { replace: true });
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) setError('Invalid email or password.');
       else setError('Something went wrong. Please try again.');
