@@ -451,6 +451,48 @@ export async function getStrategyThread(rootSessionId: string): Promise<Strategy
   return thread;
 }
 
+// ─── Clarity / Sensemaking — the tension→clarity entry point (audit what's happening BEFORE any recommendation) ────────
+export type TruthLabel = 'observed_from_material' | 'you_told_me' | 'my_reading' | 'you_corrected_this' | 'unconfirmed_or_disagree';
+export const TRUTH_LABEL_TEXT: Record<TruthLabel, string> = {
+  observed_from_material: 'Observed from your material', you_told_me: 'You told me', my_reading: 'My reading',
+  you_corrected_this: 'You corrected this', unconfirmed_or_disagree: 'Unconfirmed / we disagree',
+};
+export interface ClarityResult {
+  reflectedConcern: string;
+  relevantContextUsed: Array<{ label: TruthLabel; statement: string }>;
+  supportedObservations: string[]; founderStatements: string[]; interpretations: string[]; unknowns: string[];
+  conflicts: Array<{ founderClaim: string; evidence: string }>;
+  clarifiedIssue: string | null; alternativeInterpretation: string; smallestUsefulNextMove: string;
+  whatWouldChangeThisReading: string[];
+  proposedUnderstandingChanges: Array<{ changeType: 'ADD' | 'CORRECT'; statement: string; label: TruthLabel; explanation: string | null }>;
+  possibleStrategicQuestion: string | null; evidenceLimitation: string;
+}
+export interface ProposedChange { id: string; changeType: 'ADD' | 'CORRECT'; statement: string; label: TruthLabel; explanation: string | null; status: 'pending' | 'accepted' | 'rejected'; createdAt: string; resolvedAt: string | null }
+export interface ConcernSummary { id: string; originalInput: string; clarifiedConcern: string | null; status: string; crystallizedSessionId: string | null; createdAt: string; updatedAt: string }
+export interface ClarityMessage { id: string; actor: 'FOUNDER' | 'BUSINESS_BRAIN'; content: string; seq: number; createdAt: string }
+export interface ClarityTurnResponse { ok: boolean; concernId: string; result?: ClarityResult; proposedChanges?: ProposedChange[]; retry?: boolean; message?: string }
+export interface ConcernDetail { concern: ConcernSummary; messages: ClarityMessage[]; clarity: Array<{ id: string; result: ClarityResult; seq: number; createdAt: string }>; proposedChanges: ProposedChange[] }
+
+/** POST /clarity/turn — one founder message → one clarity turn. Fails soft (ok:false, retry) when the model output is unusable. */
+export async function clarityTurn(input: string, concernId?: string): Promise<ClarityTurnResponse> {
+  return request<ClarityTurnResponse>('clarity/turn', { method: 'POST', body: JSON.stringify({ input, ...(concernId ? { concernId } : {}) }) });
+}
+export async function listConcerns(): Promise<ConcernSummary[]> {
+  return (await request<{ concerns: ConcernSummary[] }>('clarity/concerns')).concerns;
+}
+export async function getConcern(id: string): Promise<ConcernDetail> {
+  return request<ConcernDetail>(`clarity/concerns/${encodeURIComponent(id)}`);
+}
+export async function acceptProposedChange(id: string): Promise<void> {
+  await request(`clarity/changes/${encodeURIComponent(id)}/accept`, { method: 'POST' });
+}
+export async function rejectProposedChange(id: string): Promise<void> {
+  await request(`clarity/changes/${encodeURIComponent(id)}/reject`, { method: 'POST' });
+}
+export async function crystallizeConcern(id: string, question: string): Promise<{ sessionId: string }> {
+  return request<{ sessionId: string }>(`clarity/concerns/${encodeURIComponent(id)}/crystallize`, { method: 'POST', body: JSON.stringify({ question }) });
+}
+
 // ─── Strategic Decision Record: a founder-EXPLICIT choice among understood alternatives (ADR-011 cat 10) ────
 // A decision is NOT recommendation feedback and NOT a commitment or plan. Only an explicit founder action here
 // creates one; it is append-only and preserves the decision-time state.
