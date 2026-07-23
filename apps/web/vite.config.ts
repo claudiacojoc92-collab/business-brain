@@ -25,6 +25,12 @@ export default defineConfig({
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
+      // Social sources (Meta App Review): /api/sources/* → api. Full path preserved (no rewrite),
+      // so /api/sources/*/callback and the authenticated reads reach the api exactly as written.
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
     },
   },
   test: {
