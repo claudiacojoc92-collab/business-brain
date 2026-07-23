@@ -186,15 +186,23 @@ function FacebookCard({ autoConnected }: { autoConnected: boolean }) {
   return (
     <div style={{ ...card, padding: '20px 22px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-        <div style={{ ...serif, fontSize: '1.2rem' }}>Facebook Page</div><Pill connected={connected} />
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <span style={{ ...serif, fontSize: '1.2rem' }}>Facebook Page</span>
+          <span style={{ ...muted, fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.08em', border: '1px solid var(--line-2)', borderRadius: 20, padding: '1px 8px' }}>Optional</span>
+        </div>
+        <Pill connected={connected} />
       </div>
-      <div style={{ ...muted, marginBottom: 14 }}>Facebook Login — select a Page, read its content &amp; engagement, and discover its linked Instagram account.</div>
+      <div style={{ ...muted, marginBottom: 14 }}>Connect a Facebook Page only if your business actively publishes there. Business Brain will read the selected Page&apos;s content and engagement. You can continue without connecting Facebook.</div>
       <div>
         <button style={btnGhost} onClick={() => void connect()}>{connected ? 'Reconnect Meta' : 'Connect Facebook Page'}</button>
         {connected && <button style={btn} onClick={() => void loadPages()} disabled={busy}>{busy ? 'Loading…' : 'Load my Pages'}</button>}
         {connected && <button style={btnGhost} onClick={() => void disconnect()}>Disconnect</button>}
       </div>
       {err && <div style={{ ...muted, color: 'var(--gold, #b8863b)', margin: '10px 0' }}>error: {err}</div>}
+
+      {connected && !selected && (
+        <div style={{ ...muted, marginTop: 10 }}>Your Facebook account is connected. Select a business Page to use as a source, or leave Facebook unconfigured.</div>
+      )}
 
       {pages?.pages && pages.pages.length > 0 && (
         <div style={{ marginTop: 8 }}>
