@@ -286,3 +286,55 @@ export interface CycleHistory {
 export function getCycleHistory(limit = 5): Promise<CycleHistory> {
   return request<CycleHistory>(`v1/founders/me/cycles/history?limit=${limit}`);
 }
+
+// ─── Social sources (App Review) — Instagram Login + Facebook Login ─────────────
+// Authenticated (Bearer JWT). The read endpoints return a structured { ok, error }
+// body even on 4xx, so socialFetch returns the body instead of throwing.
+async function socialFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(options.headers as Record<string, string>) };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  if (res.status === 204) return undefined as T;
+  return (await res.json().catch(() => ({}))) as T;
+}
+
+export interface IgMedia { id: string; caption: string; mediaType: string; timestamp: string; permalink: string; insights: { reach: number | null; likes: number | null; comments: number | null } | null }
+export interface InstagramRead {
+  ok: boolean;
+  account: { id: string; username: string; accountType: string | null; mediaCount: number | null; followersCount: number | null; followsCount: number | null } | null;
+  accountInsights: { reach: number | null } | null;
+  recentMedia: IgMedia[];
+  endpointsCalled: string[];
+  notes: string[];
+  error?: string;
+}
+export interface MetaPagesList {
+  ok: boolean;
+  user: { id: string; name: string } | null;
+  pages: Array<{ id: string; name: string; hasInstagram: boolean }>;
+  endpointsCalled: string[];
+  error?: string;
+}
+export interface MetaPageRead {
+  ok: boolean;
+  page: { id: string; name: string; category: string | null; fanCount: number | null; followersCount: number | null } | null;
+  posts: Array<{ id: string; message: string; createdTime: string; permalink: string; likes: number | null; comments: number | null }>;
+  instagram: { id: string; username: string; followers: number | null; mediaCount: number | null } | null;
+  endpointsCalled: string[];
+  notes: string[];
+  error?: string;
+}
+
+// Instagram Login
+export const getInstagramStatus = () => socialFetch<{ connected: boolean }>('api/sources/instagram/status');
+export const getInstagramConnectUrl = () => socialFetch<{ authUrl?: string; error?: string }>('api/sources/instagram/connect');
+export const readInstagram = () => socialFetch<InstagramRead>('api/sources/instagram/read');
+export const disconnectInstagram = () => socialFetch<{ connected: boolean }>('api/sources/instagram/disconnect', { method: 'POST' });
+
+// Facebook Login
+export const getMetaStatus = () => socialFetch<{ connected: boolean }>('api/sources/meta/status');
+export const getMetaConnectUrl = () => socialFetch<{ authUrl?: string; error?: string }>('api/sources/meta/connect');
+export const listMetaPages = () => socialFetch<MetaPagesList>('api/sources/meta/pages');
+export const readMetaPage = (pageId: string) => socialFetch<MetaPageRead>(`api/sources/meta/read?pageId=${encodeURIComponent(pageId)}`);
+export const disconnectMeta = () => socialFetch<{ connected: boolean }>('api/sources/meta/disconnect', { method: 'POST' });

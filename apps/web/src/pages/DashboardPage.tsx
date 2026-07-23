@@ -150,6 +150,12 @@ export function DashboardPage() {
               Past cycles
             </button>
             <button
+              onClick={() => navigate('/sources')}
+              style={{ background: 'none', border: '1px solid var(--line-2)', color: 'var(--ink-3)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.875rem', padding: '6px 14px', borderRadius: 8 }}
+            >
+              Sources
+            </button>
+            <button
               onClick={logout}
               style={{ background: 'none', border: '1px solid var(--line-2)', color: 'var(--ink-3)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.875rem', padding: '6px 14px', borderRadius: 8 }}
             >

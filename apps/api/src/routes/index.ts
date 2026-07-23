@@ -7,6 +7,7 @@ import { registerM21DevRoutes }        from './m21-dev.routes';
 import { registerM22DevRoutes }        from './m22-dev.routes';
 import { registerGoogleDevRoutes }     from './google-dev.routes';
 import { registerDeclaredDevRoutes }   from './declared-dev.routes';
+import { registerSocialSourcesRoutes } from './social-sources.routes';
 
 /**
  * Registers all routes. Each route module is self-contained.
@@ -19,6 +20,10 @@ export async function registerRoutes(
   registerHealthRoutes(server);
   registerAuthRoutes(server, deps);
   await registerFounderRoutes(server, deps);
+
+  // Social sources — the REAL authenticated Meta/Instagram connect flows (App Review). Present in EVERY
+  // build (including production) so a reviewer reaches them through the normal product, not a dev route.
+  registerSocialSourcesRoutes(server, deps);
 
   // Dev-only M2.1/M2.2 streaming endpoints (no auth; outside /v1). Never in production.
   if (process.env['NODE_ENV'] !== 'production') {

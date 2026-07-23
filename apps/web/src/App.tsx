@@ -11,6 +11,7 @@ import { UploadPreviewPage } from './upload/UploadPreviewPage';
 import { GooglePreviewPage } from './google/GooglePreviewPage';
 import { DeclaredPreviewPage } from './declared/DeclaredPreviewPage';
 import { CalendarPreviewPage } from './calendar/CalendarPreviewPage';
+import { SourcesPage } from './pages/SourcesPage';
 
 /**
  * Route guard: redirect based on founder status.
@@ -104,6 +105,16 @@ export function App() {
             }
           />
 
+          {/* Sources — connect social accounts (Instagram + Facebook Page). Real, authenticated flows. */}
+          <Route
+            path="/sources"
+            element={
+              <ActiveGuard>
+                <SourcesPage />
+              </ActiveGuard>
+            }
+          />
+
           {/* Root: redirect based on status */}
           <Route
             path="/"
@@ -134,7 +145,6 @@ export function App() {
           {import.meta.env.DEV && (
             <Route path="/calendar-preview" element={<CalendarPreviewPage />} />
           )}
-
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
