@@ -1,8 +1,13 @@
 # Business Brain web — nginx static serving + same-origin API proxy.
-# FE uses API_BASE='/' (relative), so /v1 and /auth are proxied to the api service
+# FE uses API_BASE='/' (relative), so /v1, /auth and /api are proxied to the api service
 # (mirrors apps/web/vite.config.ts dev proxy). Everything else is the SPA.
+#
+# This is an nginx TEMPLATE: the nginx image entrypoint (20-envsubst-on-templates.sh) renders
+# ${PORT} from the environment into /etc/nginx/conf.d/default.conf at container start, so the
+# server binds Railway's injected $PORT. Only ${PORT} is substituted; nginx's own $host,
+# $request_uri, $api_upstream, etc. are lowercase and are left untouched by envsubst.
 server {
-  listen 80;
+  listen ${PORT};
   server_name _;
   root /usr/share/nginx/html;
   index index.html;

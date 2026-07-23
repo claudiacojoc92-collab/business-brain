@@ -27,7 +27,11 @@ RUN npm run build --workspace @business-brain/web
 
 # ── run stage: nginx serves the static build ─────────────────────────────────────
 FROM nginx:1.27-alpine AS run
-COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+# nginx TEMPLATE: the image entrypoint renders ${PORT} into /etc/nginx/conf.d/default.conf at
+# start, so nginx binds Railway's injected $PORT. PORT defaults to 8080 for local/compose runs
+# where Railway does not inject one.
+ENV PORT=8080
+COPY apps/web/default.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
-EXPOSE 80
+EXPOSE 8080
 CMD ["nginx", "-g", "daemon off;"]
