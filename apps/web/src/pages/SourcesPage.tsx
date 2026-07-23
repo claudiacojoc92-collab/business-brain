@@ -48,7 +48,7 @@ function Endpoints({ list }: { list: string[] }) {
   if (!list?.length) return null;
   return (
     <>
-      <div style={kicker}>Graph endpoints executed (App Review proof)</div>
+      <div style={kicker}>Data read from your account</div>
       <div style={{ marginBottom: 12 }}>{list.map((e, i) => <span key={i} style={codeChip}>{e}</span>)}</div>
     </>
   );
@@ -115,7 +115,7 @@ function InstagramCard({ autoRead }: { autoRead: boolean }) {
         {connected && <button style={btn} onClick={() => void read()} disabled={busy}>{busy ? 'Reading…' : 'Read Instagram data'}</button>}
         {connected && <button style={btnGhost} onClick={() => void disconnect()}>Disconnect</button>}
       </div>
-      {err && <div style={{ ...muted, color: 'var(--gold, #b8863b)', margin: '10px 0' }}>error: {err}</div>}
+      {err && <div style={{ ...muted, color: 'var(--gold, #b8863b)', margin: '10px 0' }}>Couldn&apos;t load this data. Please try again.</div>}
 
       {data?.account && (
         <div style={{ marginTop: 8 }}>
@@ -143,7 +143,7 @@ function InstagramCard({ autoRead }: { autoRead: boolean }) {
             ))}
           </>}
           <Endpoints list={data.endpointsCalled} />
-          {data.notes.length > 0 && <div style={muted}>notes: {data.notes.join(' · ')}</div>}
+          {data.notes.length > 0 && <div style={muted}>Some details couldn&apos;t be loaded.</div>}
         </div>
       )}
       <PermStatus perms={['instagram_business_basic', 'instagram_business_manage_insights']} connected={Boolean(connected)} />
@@ -194,11 +194,11 @@ function FacebookCard({ autoConnected }: { autoConnected: boolean }) {
       </div>
       <div style={{ ...muted, marginBottom: 14 }}>Connect a Facebook Page only if your business actively publishes there. Business Brain will read the selected Page&apos;s content and engagement. You can continue without connecting Facebook.</div>
       <div>
-        <button style={btnGhost} onClick={() => void connect()}>{connected ? 'Reconnect Meta' : 'Connect Facebook Page'}</button>
+        <button style={btnGhost} onClick={() => void connect()}>{connected ? 'Reconnect Facebook' : 'Connect Facebook Page'}</button>
         {connected && <button style={btn} onClick={() => void loadPages()} disabled={busy}>{busy ? 'Loading…' : 'Load my Pages'}</button>}
         {connected && <button style={btnGhost} onClick={() => void disconnect()}>Disconnect</button>}
       </div>
-      {err && <div style={{ ...muted, color: 'var(--gold, #b8863b)', margin: '10px 0' }}>error: {err}</div>}
+      {err && <div style={{ ...muted, color: 'var(--gold, #b8863b)', margin: '10px 0' }}>Couldn&apos;t load this data. Please try again.</div>}
 
       {connected && !selected && (
         <div style={{ ...muted, marginTop: 10 }}>Your Facebook account is connected. Select a business Page to use as a source, or leave Facebook unconfigured.</div>
@@ -211,7 +211,7 @@ function FacebookCard({ autoConnected }: { autoConnected: boolean }) {
             <div key={p.id} style={{ ...card, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ ...serif, fontSize: '1rem' }}>{p.name}</div>
-                <div style={muted}>{p.hasInstagram ? 'has a linked Instagram account' : 'no linked Instagram'} · id {p.id}</div>
+                <div style={muted}>{p.hasInstagram ? 'has a linked Instagram account' : 'no linked Instagram'}</div>
               </div>
               <button style={btn} onClick={() => void usePage(p.id)} disabled={busy}>Use this Page</button>
             </div>
@@ -249,7 +249,7 @@ function FacebookCard({ autoConnected }: { autoConnected: boolean }) {
               : <div style={muted}>No Instagram professional account is linked to this Page.</div>}
           </div>
           <Endpoints list={selected.endpointsCalled} />
-          {selected.notes.length > 0 && <div style={muted}>notes: {selected.notes.join(' · ')}</div>}
+          {selected.notes.length > 0 && <div style={muted}>Some details couldn&apos;t be loaded.</div>}
         </div>
       )}
       <PermStatus perms={['pages_show_list', 'pages_read_engagement', 'instagram_basic']} connected={Boolean(connected)} />
