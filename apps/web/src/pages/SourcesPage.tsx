@@ -44,12 +44,41 @@ function PermStatus({ perms, connected }: { perms: string[]; connected: boolean 
     </>
   );
 }
-function Endpoints({ list }: { list: string[] }) {
+// Reviewer-facing endpoint evidence. Each catalog entry maps a raw endpoint record the API already
+// returned (endpointsCalled) to a human-readable label + a SANITIZED path — no real ids, query
+// strings, fields=, metric=, or tokens. An item renders only when the current flow actually executed
+// a matching endpoint (match() over the returned records); nothing is fabricated.
+type EndpointItem = { label: string; endpoint: string; match: (raw: string) => boolean };
+const IG_ENDPOINTS: EndpointItem[] = [
+  { label: 'Profile',          endpoint: 'GET /me',                     match: (r) => /^GET \/me(\?.*)?$/.test(r) },
+  { label: 'Recent media',     endpoint: 'GET /me/media',              match: (r) => /^GET \/me\/media(\?.*)?$/.test(r) },
+  { label: 'Account insights', endpoint: 'GET /{ig-user-id}/insights', match: (r) => r.includes('/insights') && !r.includes(',') },
+  { label: 'Media insights',   endpoint: 'GET /{media-id}/insights',   match: (r) => r.includes('/insights') && r.includes(',') },
+];
+const FB_ENDPOINTS: EndpointItem[] = [
+  { label: 'Facebook account', endpoint: 'GET /me',             match: (r) => /^GET \/me(\?.*)?$/.test(r) },
+  { label: 'Managed Pages',    endpoint: 'GET /me/accounts',    match: (r) => /^GET \/me\/accounts(\?.*)?$/.test(r) },
+  { label: 'Selected Page',    endpoint: 'GET /{page-id}',      match: (r) => /^GET \/[^/?\s]+\?fields=/.test(r) && r.includes('fan_count') },
+  { label: 'Page content',     endpoint: 'GET /{page-id}/feed', match: (r) => /\/feed(\?.*)?$/.test(r) },
+  { label: 'Linked Instagram', endpoint: 'GET /{ig-user-id}',   match: (r) => /^GET \/[^/?\s]+\?fields=/.test(r) && r.includes('username') },
+];
+
+function Endpoints({ list, kind }: { list: string[]; kind: 'instagram' | 'facebook' }) {
   if (!list?.length) return null;
+  const catalog = kind === 'instagram' ? IG_ENDPOINTS : FB_ENDPOINTS;
+  const items = catalog.filter((it) => list.some((raw) => it.match(raw)));
+  if (!items.length) return null;
   return (
     <>
       <div style={kicker}>Data read from your account</div>
-      <div style={{ marginBottom: 12 }}>{list.map((e, i) => <span key={i} style={codeChip}>{e}</span>)}</div>
+      <div style={{ marginBottom: 12 }}>
+        {items.map((it) => (
+          <div key={it.label} style={{ marginBottom: 8 }}>
+            <div style={{ ...muted, color: 'var(--ink-2)', marginBottom: 3 }}>{it.label}</div>
+            <span style={codeChip}>{it.endpoint}</span>
+          </div>
+        ))}
+      </div>
     </>
   );
 }
@@ -142,7 +171,7 @@ function InstagramCard({ autoRead }: { autoRead: boolean }) {
               </div>
             ))}
           </>}
-          <Endpoints list={data.endpointsCalled} />
+          <Endpoints list={data.endpointsCalled} kind="instagram" />
           {data.notes.length > 0 && <div style={muted}>Some details couldn&apos;t be loaded.</div>}
         </div>
       )}
@@ -216,7 +245,7 @@ function FacebookCard({ autoConnected }: { autoConnected: boolean }) {
               <button style={btn} onClick={() => void usePage(p.id)} disabled={busy}>Use this Page</button>
             </div>
           ))}
-          <Endpoints list={pages.endpointsCalled} />
+          <Endpoints list={pages.endpointsCalled} kind="facebook" />
         </div>
       )}
       {pages?.pages && pages.pages.length === 0 && <div style={{ ...muted, marginTop: 8 }}>No Pages found on this account.</div>}
@@ -248,7 +277,7 @@ function FacebookCard({ autoConnected }: { autoConnected: boolean }) {
                   <span style={statBox}><span style={num}>{n(selected.instagram.mediaCount)}</span><div style={muted}>media</div></span></>
               : <div style={muted}>No Instagram professional account is linked to this Page.</div>}
           </div>
-          <Endpoints list={selected.endpointsCalled} />
+          <Endpoints list={selected.endpointsCalled} kind="facebook" />
           {selected.notes.length > 0 && <div style={muted}>Some details couldn&apos;t be loaded.</div>}
         </div>
       )}
