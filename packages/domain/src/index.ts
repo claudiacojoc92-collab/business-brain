@@ -121,3 +121,6 @@ export type {
   Visibility,
 } from './evidence/evidence-fragment';
 export type { IEvidenceRepository } from './evidence/evidence.repository';
+
+// Understanding→Audit vertical slice (Commit 1: contracts + identity + clock + fixture)
+export * from './understanding';
