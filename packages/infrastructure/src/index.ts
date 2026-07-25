@@ -67,6 +67,10 @@ export { LoggingSnapshotGenerationEventSink } from './understanding/logging-snap
 export { PgRecognitionEventRepository } from './database/repositories/pg-recognition-event.repository';
 export { KyselyRecognitionUnitOfWork } from './understanding/kysely-recognition-unit-of-work';
 export { LoggingRecognitionEventSink } from './understanding/logging-recognition-event-sink';
+// Commit 6: review lifecycle (append-only)
+export { PgReviewRepository } from './database/repositories/pg-review.repository';
+export { KyselyReviewUnitOfWork } from './understanding/kysely-review-unit-of-work';
+export { LoggingReviewEventSink } from './understanding/logging-review-event-sink';
 
 // Intake session repository (B1 onboarding)
 export { PgIntakeSessionRepository } from './database/repositories/pg-intake-session.repository';

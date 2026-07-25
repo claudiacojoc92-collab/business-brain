@@ -45,3 +45,17 @@ export { RecognitionAppendService } from './recognition-append.service';
 export type { IRecognitionAppendService } from './recognition-append.service';
 export { SnapshotViewService } from './snapshot-view.service';
 export type { ISnapshotViewService } from './snapshot-view.service';
+
+// Commit 6: review lifecycle (append-only)
+export type {
+  ReviewLog,
+  ReviewAppendOutcome,
+  ReviewRepos,
+  ReviewUnitOfWork,
+  ReviewAppendCommand,
+  ReviewAppendResult,
+  ReviewAppendedEvent,
+  ReviewEventSink,
+} from './review-ports';
+export { ReviewAppendService } from './review-append.service';
+export type { IReviewAppendService } from './review-append.service';
