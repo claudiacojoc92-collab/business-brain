@@ -117,3 +117,14 @@ export type {
 } from './snapshot/recognition-event';
 export type { SnapshotPresentedEvent } from './snapshot/snapshot-presented-event';
 export type { SnapshotRepository, ReviewRepository } from './snapshot/snapshot.repository';
+// Commit 4: immutable snapshot generation
+export {
+  GENERATION_PROFILE_VERSION,
+  CANONICALIZATION_VERSION,
+  DEFINITION_VERSION,
+  SNAPSHOT_DEFINITIONS,
+  deriveConfidence,
+  buildScope,
+  generateSnapshotStatements,
+  buildBusinessSnapshotVersion,
+} from './snapshot/generation';

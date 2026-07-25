@@ -1,0 +1,127 @@
+{
+  "snapshotId": "fab8e8cbc65f70956450c6c1e69ef72cba0588aa79716c389b60ee8033a5c021",
+  "corpusRevision": "04ed1f2e95e1f8031db578045d645525c0f97300c4891eb0bd5df4516c940668",
+  "understandingContextRevision": "understanding_ctx_genesis",
+  "generationProfileVersion": "understanding.snapshot.physio_movement.v1",
+  "scope": {
+    "sources": [
+      "instagram"
+    ],
+    "window": "2025-01-06T09:00:00.000Z/2025-02-27T09:00:00.000Z",
+    "corpusSize": 16
+  },
+  "statementCount": 7,
+  "statements": [
+    {
+      "semanticKey": "c4f1c89fce26717c990b428fdf3033c5c4e5fbd0a539417dfb7970fc47d67698",
+      "versionId": "9b74969670ccc5ed915820db14d8c5e707fe5380ae41264931f2364aaac932d7",
+      "definitionKey": "snapshot.channel.activity_theme_recurs",
+      "definitionVersion": 1,
+      "subject": {
+        "type": "channel",
+        "id": "instagram"
+      },
+      "params": {
+        "theme": "mobility"
+      },
+      "confidence": "clear",
+      "provenanceKind": "observed",
+      "observationCount": 7
+    },
+    {
+      "semanticKey": "8e7c2fe64feda6923d7d19b29275b70032278db16453d0c736816c7be6945e60",
+      "versionId": "d07bcac1c6403b1220eec41d6d28b91a25b20c9d7f20c65e5064ab65c7612c55",
+      "definitionKey": "snapshot.channel.activity_theme_recurs",
+      "definitionVersion": 1,
+      "subject": {
+        "type": "channel",
+        "id": "instagram"
+      },
+      "params": {
+        "theme": "rehabilitation"
+      },
+      "confidence": "clear",
+      "provenanceKind": "observed",
+      "observationCount": 6
+    },
+    {
+      "semanticKey": "26a63797a0790644fd0c6d407eb5c7764db085d04089a9dc19c5020c41ae5cb2",
+      "versionId": "04a2ee243ac54ac659a836bf2c5f9cf6636188447695a4751689170903413476",
+      "definitionKey": "snapshot.channel.activity_theme_recurs",
+      "definitionVersion": 1,
+      "subject": {
+        "type": "channel",
+        "id": "instagram"
+      },
+      "params": {
+        "theme": "physiotherapy"
+      },
+      "confidence": "appears",
+      "provenanceKind": "observed",
+      "observationCount": 3
+    },
+    {
+      "semanticKey": "751d6c08d526e570c261c34d18b2684ee055eb7d4d5fa089761cea7e39ba0284",
+      "versionId": "2b7d4eb7747dcbd2172042cf05e3dc202b69de266f873a711a6cb713bad724d1",
+      "definitionKey": "snapshot.offer_mention_observed",
+      "definitionVersion": 1,
+      "subject": {
+        "type": "offer",
+        "id": "assessment"
+      },
+      "params": {
+        "offerType": "assessment"
+      },
+      "confidence": "appears",
+      "provenanceKind": "observed",
+      "observationCount": 2
+    },
+    {
+      "semanticKey": "f8e2c68387aeb27ec86f0ee6688f7178adc7ca640099f3972495ae2d68834d56",
+      "versionId": "5b6ce949e3cc3fd216dd55578a394b27b35cfff2d3668b723f002087dae5cef1",
+      "definitionKey": "snapshot.offer_mention_observed",
+      "definitionVersion": 1,
+      "subject": {
+        "type": "offer",
+        "id": "one_to_one"
+      },
+      "params": {
+        "offerType": "one_to_one"
+      },
+      "confidence": "tentative",
+      "provenanceKind": "observed",
+      "observationCount": 1
+    },
+    {
+      "semanticKey": "8910d934178080bcda6464a43befbd27206c203f6bcabbf6a49813a104ccaeed",
+      "versionId": "f915b3686616ab61bf38ab040def577c25185583cfe0480b6584336ada8cc9e2",
+      "definitionKey": "snapshot.offer_mention_observed",
+      "definitionVersion": 1,
+      "subject": {
+        "type": "offer",
+        "id": "program"
+      },
+      "params": {
+        "offerType": "program"
+      },
+      "confidence": "tentative",
+      "provenanceKind": "observed",
+      "observationCount": 1
+    },
+    {
+      "semanticKey": "350181e010eb5394ca20c80023ca4604754e95d0402df2f8091f62dd571f22d8",
+      "versionId": "55032b499982fa2b228f260f052d9b285824973e900a2c4800af8e9994c6cd98",
+      "definitionKey": "snapshot.channel.educational_explanation_recurs",
+      "definitionVersion": 1,
+      "subject": {
+        "type": "channel",
+        "id": "instagram"
+      },
+      "params": {},
+      "confidence": "clear",
+      "provenanceKind": "observed",
+      "observationCount": 6
+    }
+  ],
+  "declaredContext": []
+}

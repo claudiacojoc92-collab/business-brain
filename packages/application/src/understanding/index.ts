@@ -24,3 +24,8 @@ export type {
 export { FacetExtractionService } from './facet-extraction.service';
 export type { IFacetExtractionService } from './facet-extraction.service';
 export { ComposedEffectiveFacetResolver } from './effective-facet-resolver';
+
+// Commit 4: immutable snapshot generation
+export type { SnapshotUnitOfWork, SnapshotGeneratedEvent, SnapshotGenerationEventSink } from './snapshot-ports';
+export { SnapshotGenerationService } from './snapshot-generation.service';
+export type { ISnapshotGenerationService } from './snapshot-generation.service';

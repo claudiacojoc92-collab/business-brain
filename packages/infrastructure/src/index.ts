@@ -59,6 +59,10 @@ export { PgFacetCorrectionRepository } from './database/repositories/pg-facet-co
 export { PgFacetExtractionRunRepository } from './database/repositories/pg-facet-extraction-run.repository';
 export { KyselyFacetExtractionUnitOfWork } from './understanding/kysely-facet-extraction-unit-of-work';
 export { LoggingFacetExtractionEventSink } from './understanding/logging-facet-extraction-event-sink';
+// Commit 4: immutable snapshot generation
+export { PgSnapshotRepository } from './database/repositories/pg-snapshot.repository';
+export { KyselySnapshotUnitOfWork } from './understanding/kysely-snapshot-unit-of-work';
+export { LoggingSnapshotGenerationEventSink } from './understanding/logging-snapshot-generation-event-sink';
 
 // Intake session repository (B1 onboarding)
 export { PgIntakeSessionRepository } from './database/repositories/pg-intake-session.repository';
