@@ -77,6 +77,15 @@ export type {
   FacetCorrectionRepository,
   EffectiveFacetResolver,
 } from './facets/facet.repository';
+export {
+  EXTRACTION_PROFILE,
+  RULE_VERSION,
+  FACET_RULES,
+  ruleVersionsForProfile,
+} from './facets/rules';
+export type { FacetRule, MatchConfidence } from './facets/rules';
+export { extractForObservation, extractCorpusFacets, compareFacets } from './facets/extract';
+export { resolveEffectiveFacets } from './facets/effective';
 
 // declarations
 export type { FounderDeclaration, DeclarationKind } from './declarations/founder-declaration';

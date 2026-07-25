@@ -53,6 +53,12 @@ export { PgIngestionIdempotencyRepository } from './database/repositories/pg-ing
 export { KyselyIngestionUnitOfWork } from './understanding/kysely-ingestion-unit-of-work';
 export { SharedClockAdapter } from './understanding/shared-clock-adapter';
 export { LoggingIngestionEventSink } from './understanding/logging-ingestion-event-sink';
+// Commit 3: facet extraction + effective resolution
+export { PgFacetRepository } from './database/repositories/pg-facet.repository';
+export { PgFacetCorrectionRepository } from './database/repositories/pg-facet-correction.repository';
+export { PgFacetExtractionRunRepository } from './database/repositories/pg-facet-extraction-run.repository';
+export { KyselyFacetExtractionUnitOfWork } from './understanding/kysely-facet-extraction-unit-of-work';
+export { LoggingFacetExtractionEventSink } from './understanding/logging-facet-extraction-event-sink';
 
 // Intake session repository (B1 onboarding)
 export { PgIntakeSessionRepository } from './database/repositories/pg-intake-session.repository';

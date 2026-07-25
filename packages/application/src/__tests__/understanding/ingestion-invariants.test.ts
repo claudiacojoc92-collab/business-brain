@@ -14,10 +14,12 @@ function repoRoot(): string {
 const ROOT = repoRoot();
 
 // Ingestion (Commit 2) must not pull in any later-slice concern.
+// NB: the shared understanding/index.ts barrel is intentionally excluded — it aggregates exports
+// for ALL slices (ingestion + facets + …), so it is not a boundary file for "ingestion imports no
+// facet logic". The ingestion service + ports below are the real boundary.
 const INGESTION_FILES = [
   'packages/application/src/understanding/ports.ts',
   'packages/application/src/understanding/fixture-ingestion.service.ts',
-  'packages/application/src/understanding/index.ts',
   'packages/infrastructure/src/understanding/kysely-ingestion-unit-of-work.ts',
   'packages/infrastructure/src/understanding/shared-clock-adapter.ts',
   'packages/infrastructure/src/understanding/logging-ingestion-event-sink.ts',

@@ -1,0 +1,367 @@
+{
+  "corpusRevision": "04ed1f2e95e1f8031db578045d645525c0f97300c4891eb0bd5df4516c940668",
+  "extractionProfile": "understanding.physio_movement.v1",
+  "facetCount": 40,
+  "facets": [
+    {
+      "facetId": "476219c5082a10847b65d7277cdfbff251e35b172ecbe88fb1f0d5bdabf2a5e6",
+      "observationId": "154b664b974e3059b0dc06cdba54dd62af7f623be61de6215e8730e710fcb6ad",
+      "kind": "activity_theme",
+      "value": "physiotherapy",
+      "confidence": "high",
+      "ruleKey": "physio_movement.physiotherapy",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "f9975c8734c8a6bd4996844de275a5821145ea031e7e186f98af00777217be47",
+      "observationId": "154b664b974e3059b0dc06cdba54dd62af7f623be61de6215e8730e710fcb6ad",
+      "kind": "activity_theme",
+      "value": "physiotherapy_session",
+      "confidence": "high",
+      "ruleKey": "physio_movement.physiotherapy_session",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "d6c196c8993cf1e2c5f522208104b1b981396176da653d2161592b865253b35f",
+      "observationId": "154b664b974e3059b0dc06cdba54dd62af7f623be61de6215e8730e710fcb6ad",
+      "kind": "activity_theme",
+      "value": "rehabilitation",
+      "confidence": "medium",
+      "ruleKey": "physio_movement.rehabilitation",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "864bf7ff386437ea39f3cd4757c8f74c292665024d0d8c24efcf335477bfea5d",
+      "observationId": "1b277bf0b478e024bccc1e54506f95e491bd80785356ccc5684a3a59ca0d84e3",
+      "kind": "activity_theme",
+      "value": "physiotherapy",
+      "confidence": "high",
+      "ruleKey": "physio_movement.physiotherapy",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "6902923a1c39ff709e76b0319103c64129d2a781a906d7f50d63141896592978",
+      "observationId": "1b277bf0b478e024bccc1e54506f95e491bd80785356ccc5684a3a59ca0d84e3",
+      "kind": "activity_theme",
+      "value": "physiotherapy_session",
+      "confidence": "high",
+      "ruleKey": "physio_movement.physiotherapy_session",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "04c5564b286d0307bab373a2bc8496090f83c668d3ca0065b2cf5e89728f4c3b",
+      "observationId": "1b277bf0b478e024bccc1e54506f95e491bd80785356ccc5684a3a59ca0d84e3",
+      "kind": "addressed_audience",
+      "value": "second_person",
+      "confidence": "low",
+      "ruleKey": "physio_movement.audience_second_person",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "5d3793c1699b8ee4cfc1cfbe83553ef791fbe80b6be2ebd5900b23feb9187679",
+      "observationId": "1b277bf0b478e024bccc1e54506f95e491bd80785356ccc5684a3a59ca0d84e3",
+      "kind": "offer_mention",
+      "value": "assessment",
+      "confidence": "medium",
+      "ruleKey": "physio_movement.offer_assessment",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "cf074007a0bb69cf1d042a910b1f76d4b525a7e3858d4d5a6657fb1544c2cb07",
+      "observationId": "2d64cb9c0cce7ec98396f98fe2681d0abe7f7e1544e7021ddbf115d56e52ae19",
+      "kind": "activity_theme",
+      "value": "stretching",
+      "confidence": "high",
+      "ruleKey": "physio_movement.stretching",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "1a269a5f825bd746cc86f84beefb4a937dcb8dd70ede9f040dca9aa27e2dd60f",
+      "observationId": "2d64cb9c0cce7ec98396f98fe2681d0abe7f7e1544e7021ddbf115d56e52ae19",
+      "kind": "communication_style",
+      "value": "educational",
+      "confidence": "medium",
+      "ruleKey": "physio_movement.educational",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "69b555a32f51d97278608553d3da72433979d335c7eaa724a40ee91dfa9927b2",
+      "observationId": "46b8e5bdf821f4fdbaef8cd31933e0d938d0bf4feb6fe23e6c1662faca465f07",
+      "kind": "activity_theme",
+      "value": "rehabilitation",
+      "confidence": "high",
+      "ruleKey": "physio_movement.rehabilitation",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "ddf3d91219775af355a29e8d2ef4c749beb2335aa05c067035897bfdf6f4d2c3",
+      "observationId": "46b8e5bdf821f4fdbaef8cd31933e0d938d0bf4feb6fe23e6c1662faca465f07",
+      "kind": "communication_style",
+      "value": "educational",
+      "confidence": "medium",
+      "ruleKey": "physio_movement.educational",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "85d98008a19ae8ea5097774bbdf8d159e81189f252a54721f99455157f688e47",
+      "observationId": "4a4ebc365ebff4328b7618a6743df9412a4f35350ded41eeb457feab847bc3fd",
+      "kind": "activity_theme",
+      "value": "stretching",
+      "confidence": "high",
+      "ruleKey": "physio_movement.stretching",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "8247f984c6d6e8f645abd347a0be8ae8bd455eed6500a0ab66e2fc670ce6dc7a",
+      "observationId": "4a4ebc365ebff4328b7618a6743df9412a4f35350ded41eeb457feab847bc3fd",
+      "kind": "addressed_audience",
+      "value": "second_person",
+      "confidence": "low",
+      "ruleKey": "physio_movement.audience_second_person",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "46ecfd1b736c5e9a5849ba9510123e3efbe8bf5abbdeee806df9258ef5996c40",
+      "observationId": "520d4be6d10243c7ce100b879b876e45f3d50ccffcf7e5a7ebd3e941302dbb64",
+      "kind": "activity_theme",
+      "value": "mobility",
+      "confidence": "high",
+      "ruleKey": "physio_movement.mobility",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "a5c36d70a40bd1bfacbdd34e841ca7882760f21c7732408006029ae0b588557e",
+      "observationId": "520d4be6d10243c7ce100b879b876e45f3d50ccffcf7e5a7ebd3e941302dbb64",
+      "kind": "activity_theme",
+      "value": "yoga_resembling",
+      "confidence": "medium",
+      "ruleKey": "physio_movement.yoga_resembling",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "997db72b71dffe9e926e1230ea179d619ed28dcaa63a5ff1af19bf314e3e8f6e",
+      "observationId": "59338594a69afbbf2f63b79cd9a75a5005e9302cc405ba3002f6662498698572",
+      "kind": "activity_theme",
+      "value": "mobility",
+      "confidence": "medium",
+      "ruleKey": "physio_movement.mobility",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "fcfa8cb3128d5a2f3dfe5743ddd837efa118f70fe9fbc5b1225cbba718ba7fd5",
+      "observationId": "59338594a69afbbf2f63b79cd9a75a5005e9302cc405ba3002f6662498698572",
+      "kind": "activity_theme",
+      "value": "rehabilitation",
+      "confidence": "medium",
+      "ruleKey": "physio_movement.rehabilitation",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "e333b51f0eee930d8b2a23b9adc5202a887d8373dc13b38ef484b846ec4a4dea",
+      "observationId": "59338594a69afbbf2f63b79cd9a75a5005e9302cc405ba3002f6662498698572",
+      "kind": "addressed_audience",
+      "value": "second_person",
+      "confidence": "low",
+      "ruleKey": "physio_movement.audience_second_person",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "9ea0c522167653dedcdd55b6a4235cdf7b1538333a127d7af19eb36e64b188cc",
+      "observationId": "59338594a69afbbf2f63b79cd9a75a5005e9302cc405ba3002f6662498698572",
+      "kind": "communication_style",
+      "value": "educational",
+      "confidence": "medium",
+      "ruleKey": "physio_movement.educational",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "4c6dedb381c0df8400091d5b9be9a0302ebb6d3ad49c926a245cb21558030010",
+      "observationId": "677127b7ba83a93d07b168f867ea3b3bc5c4300c5f61b9defa205110af89bd15",
+      "kind": "activity_theme",
+      "value": "mobility",
+      "confidence": "high",
+      "ruleKey": "physio_movement.mobility",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "150b3e0f480deecf9994c8a5ea70e0e7b015d9800095c220d03771bc4fba7b81",
+      "observationId": "677127b7ba83a93d07b168f867ea3b3bc5c4300c5f61b9defa205110af89bd15",
+      "kind": "communication_style",
+      "value": "educational",
+      "confidence": "medium",
+      "ruleKey": "physio_movement.educational",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "ad9a9abfee8202865a65d87fbb5cbbf171a92297817cefe3570220c3920d6dbb",
+      "observationId": "6ccc6c5b376e619aa1ebfd86ce67c1d2156c45207dfbc24d4d26198f8b27b775",
+      "kind": "activity_theme",
+      "value": "mobility",
+      "confidence": "high",
+      "ruleKey": "physio_movement.mobility",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "fa049ba8979eca55038d257dc9cff4808d0cf0a0abbe8f9b87bf5868303fd756",
+      "observationId": "6ccc6c5b376e619aa1ebfd86ce67c1d2156c45207dfbc24d4d26198f8b27b775",
+      "kind": "communication_style",
+      "value": "educational",
+      "confidence": "medium",
+      "ruleKey": "physio_movement.educational",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "146e3734a58d7c82f4abcbafa14852a884b831bff0b106e84e8bd93b6c73adf3",
+      "observationId": "7eb82d5fcf0e359cb51b67f7393b2e15bed46d9f5505bec7d7d921b97dfcd779",
+      "kind": "activity_theme",
+      "value": "mobility",
+      "confidence": "high",
+      "ruleKey": "physio_movement.mobility",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "5208df335a1b7dd0eb35033866c6cbe532e9e016619285f26671d1e1a6dc312b",
+      "observationId": "7eb82d5fcf0e359cb51b67f7393b2e15bed46d9f5505bec7d7d921b97dfcd779",
+      "kind": "addressed_audience",
+      "value": "second_person",
+      "confidence": "low",
+      "ruleKey": "physio_movement.audience_second_person",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "0be6a342f9260de33a95ad8a9b2c69b3011d2a82ed80c4238946a97fd22f00ba",
+      "observationId": "7eb82d5fcf0e359cb51b67f7393b2e15bed46d9f5505bec7d7d921b97dfcd779",
+      "kind": "communication_style",
+      "value": "educational",
+      "confidence": "medium",
+      "ruleKey": "physio_movement.educational",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "3b9a6a66690bb4b962e0d04bf63716315eda16819f3bf454680a0a2e8e5cb85e",
+      "observationId": "ab89ceb458aaadd88ec466512452cb26d04be8f357001e1d3e8765b8ad1772f3",
+      "kind": "activity_theme",
+      "value": "rehabilitation",
+      "confidence": "high",
+      "ruleKey": "physio_movement.rehabilitation",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "ce510e7923fca94e2e8c6976265800388f04b8af97062e8bd7fa3ef071e0d1e9",
+      "observationId": "ab89ceb458aaadd88ec466512452cb26d04be8f357001e1d3e8765b8ad1772f3",
+      "kind": "offer_mention",
+      "value": "program",
+      "confidence": "high",
+      "ruleKey": "physio_movement.offer_program",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "d434582b5ab081f9ef5a23c0e45b926f1fe906336cdcaaadb38285dcdd80a642",
+      "observationId": "c058dd746b3b3c38f45e3dd823d0be7447f1f28ff7bc7893b50ba288b2036fca",
+      "kind": "activity_theme",
+      "value": "rehabilitation",
+      "confidence": "high",
+      "ruleKey": "physio_movement.rehabilitation",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "7d975550321d0995eaa93572c3c83edeb5a72490bd81f0bdab7ff686731d317e",
+      "observationId": "c058dd746b3b3c38f45e3dd823d0be7447f1f28ff7bc7893b50ba288b2036fca",
+      "kind": "addressed_audience",
+      "value": "second_person",
+      "confidence": "low",
+      "ruleKey": "physio_movement.audience_second_person",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "29b7f9b1e543a1cbe593120f97c035b6b622c95697125514c7e6d740a9351463",
+      "observationId": "c058dd746b3b3c38f45e3dd823d0be7447f1f28ff7bc7893b50ba288b2036fca",
+      "kind": "offer_mention",
+      "value": "one_to_one",
+      "confidence": "high",
+      "ruleKey": "physio_movement.offer_one_to_one",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "bf3ea4869a8676bcd4c6060251567bf80538b5459692a5ea0017a6cf4d062502",
+      "observationId": "c1b138f20def935a5b4a71c872442253ef35f0c4762e0de1ece1e8b7af91cc69",
+      "kind": "activity_theme",
+      "value": "mobility",
+      "confidence": "high",
+      "ruleKey": "physio_movement.mobility",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "265fafa369a2192b6d5f4ecbf112305b06101cb6a39aa0e86136d7578ffbca49",
+      "observationId": "c1b138f20def935a5b4a71c872442253ef35f0c4762e0de1ece1e8b7af91cc69",
+      "kind": "activity_theme",
+      "value": "stretching",
+      "confidence": "high",
+      "ruleKey": "physio_movement.stretching",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "47bd5ddb0fd0fe44b361e118e4c65568983ec326519c441c24d971d6b58f7340",
+      "observationId": "c4e1d3eb556d4f59f29eed75d85cc9fb14c9668be2590c27fc197217923b38c8",
+      "kind": "activity_theme",
+      "value": "rehabilitation",
+      "confidence": "high",
+      "ruleKey": "physio_movement.rehabilitation",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "43f1721a63d0bd936f366ef7d8d18b6d67b9a1109ba95b389acc242cdeeb92ef",
+      "observationId": "cbe883aaf0e4ad0fe0a9f803516edf66ac9c33090d1486da8703b16433623e16",
+      "kind": "activity_theme",
+      "value": "physiotherapy",
+      "confidence": "medium",
+      "ruleKey": "physio_movement.physiotherapy",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "70763ab3a97b2af26f621a9da36155e60b42f0496da84f8dc69da2d097b064d6",
+      "observationId": "cbe883aaf0e4ad0fe0a9f803516edf66ac9c33090d1486da8703b16433623e16",
+      "kind": "addressed_audience",
+      "value": "second_person",
+      "confidence": "low",
+      "ruleKey": "physio_movement.audience_second_person",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "e7cefbb322f2d5294380d60de49db8a8d000104e9a435e090f691890dbb2591d",
+      "observationId": "cbe883aaf0e4ad0fe0a9f803516edf66ac9c33090d1486da8703b16433623e16",
+      "kind": "offer_mention",
+      "value": "assessment",
+      "confidence": "medium",
+      "ruleKey": "physio_movement.offer_assessment",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "277aa5000b151929cc0894af18fccbb2afd28d7c037d7c9db9890a84d95a1367",
+      "observationId": "cbe883aaf0e4ad0fe0a9f803516edf66ac9c33090d1486da8703b16433623e16",
+      "kind": "offer_mention",
+      "value": "booking",
+      "confidence": "medium",
+      "ruleKey": "physio_movement.offer_booking",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "0a775133d68d79670f427228445e04ad2fafe1c75e9d4642696941f0ef899ad7",
+      "observationId": "f03042b999d6d1e5caaca32877d705577e639e5426689620901140260949c21d",
+      "kind": "activity_theme",
+      "value": "mobility",
+      "confidence": "high",
+      "ruleKey": "physio_movement.mobility",
+      "ruleVersion": "1"
+    },
+    {
+      "facetId": "857e61b7819a69dd97825d0e64c031bcc23edf8fd570250a82812f530768618d",
+      "observationId": "f03042b999d6d1e5caaca32877d705577e639e5426689620901140260949c21d",
+      "kind": "activity_theme",
+      "value": "yoga_resembling",
+      "confidence": "low",
+      "ruleKey": "physio_movement.yoga_resembling",
+      "ruleVersion": "1"
+    }
+  ]
+}
