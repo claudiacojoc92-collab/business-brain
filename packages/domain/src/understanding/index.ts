@@ -18,6 +18,7 @@ export type {
   SnapshotReviewId,
   RecognitionEventId,
   SnapshotPresentedEventId,
+  ClaimId,
 } from './shared/types';
 export { canonicalStringify, sortedUnique } from './shared/canonicalize';
 export type { Clock } from './shared/clock';
@@ -86,6 +87,12 @@ export {
 export type { FacetRule, MatchConfidence } from './facets/rules';
 export { extractForObservation, extractCorpusFacets, compareFacets } from './facets/extract';
 export { resolveEffectiveFacets } from './facets/effective';
+
+// claims (Knowledge-Model core — FROZEN domain contracts only; storage/lifecycle is a later commit)
+// ClaimKind/ClaimBasis/ClaimOrigin were rejected in review (false taxonomy / conflated axis); provenance and
+// all links (declaration, evidence) are deferred to future immutable records (ADR-010).
+export type { Claim, ClaimObject } from './claims/claim';
+export type { ClaimRepository } from './claims/claim.repository';
 
 // declarations
 export type { FounderDeclaration, DeclarationKind } from './declarations/founder-declaration';

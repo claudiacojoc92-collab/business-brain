@@ -40,3 +40,4 @@ export type UnknownId = string;
 export type SnapshotReviewId = string;
 export type RecognitionEventId = string;
 export type SnapshotPresentedEventId = string;
+export type ClaimId = string;
