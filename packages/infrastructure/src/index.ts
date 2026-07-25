@@ -71,6 +71,10 @@ export { LoggingRecognitionEventSink } from './understanding/logging-recognition
 export { PgReviewRepository } from './database/repositories/pg-review.repository';
 export { KyselyReviewUnitOfWork } from './understanding/kysely-review-unit-of-work';
 export { LoggingReviewEventSink } from './understanding/logging-review-event-sink';
+// Commit 7: presentation lifecycle (append-only)
+export { PgPresentedEventRepository } from './database/repositories/pg-presented-event.repository';
+export { KyselyPresentationUnitOfWork } from './understanding/kysely-presentation-unit-of-work';
+export { LoggingPresentationEventSink } from './understanding/logging-presentation-event-sink';
 
 // Intake session repository (B1 onboarding)
 export { PgIntakeSessionRepository } from './database/repositories/pg-intake-session.repository';

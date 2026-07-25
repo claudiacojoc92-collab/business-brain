@@ -59,3 +59,20 @@ export type {
 } from './review-ports';
 export { ReviewAppendService } from './review-append.service';
 export type { IReviewAppendService } from './review-append.service';
+
+// Commit 7: presentation lifecycle (append-only) + additive latest-presentation read
+export type {
+  PresentedEventLog,
+  PresentedEventAppendOutcome,
+  PresentationRepos,
+  PresentationUnitOfWork,
+  PresentationAppendCommand,
+  PresentationAppendResult,
+  PresentationAppendedEvent,
+  PresentationEventSink,
+  PresentedSnapshotView,
+} from './presentation-ports';
+export { PresentationAppendService } from './presentation-append.service';
+export type { IPresentationAppendService } from './presentation-append.service';
+export { PresentationViewService } from './presentation-view.service';
+export type { IPresentationViewService } from './presentation-view.service';
