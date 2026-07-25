@@ -30,7 +30,10 @@ export {
   snapshotSemanticKey,
   statementVersionId,
   businessSnapshotVersionId,
+  corpusRevisionId,
+  fixtureIngestionKey,
 } from './shared/identity';
+export { businessRefKey } from './shared/business-ref';
 
 // revisions
 export type { CorpusRevisionId, DeclarationRevisionId } from './revisions/revision-ids';
@@ -39,6 +42,17 @@ export type { RevisionRepository } from './revisions/revision.repository';
 // ingestion
 export type { RawCapture, RawCaptureRepository } from './ingestion/raw-capture';
 export type { CorpusRevision } from './ingestion/corpus-revision';
+export {
+  NORMALIZATION_RULE_KEY,
+  NORMALIZATION_RULE_VERSION,
+  normalizePublication,
+} from './ingestion/normalize';
+export type {
+  NormalizationReasonCode,
+  RawPublicationEntry,
+  NormalizeResult,
+} from './ingestion/normalize';
+export { buildRawCapture, buildObservation } from './ingestion/assemble';
 export {
   FixtureMediaType,
   FixturePostSchema,

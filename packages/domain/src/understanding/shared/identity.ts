@@ -115,6 +115,26 @@ export function statementVersionId(input: {
 }
 
 /**
+ * CorpusRevision id — FROZEN formula: sha256(orderedObservationIds, activeFacetCorrectionIds).
+ * Observation order is SEMANTIC (source fixture order) and preserved; facet-correction ids are
+ * set-like and sorted. Deliberately excludes createdAt/capturedAt/businessRef/filename/db ids.
+ */
+export function corpusRevisionId(input: {
+  observationIds: readonly string[];
+  activeFacetCorrectionIds: readonly string[];
+}): string {
+  return hashParts({
+    observationIds: [...input.observationIds],
+    activeFacetCorrectionIds: sortedUnique(input.activeFacetCorrectionIds),
+  });
+}
+
+/** Fixture-ingestion idempotency key = sha256(canonical fixture input). Scoped by business at the store. */
+export function fixtureIngestionKey(fixture: unknown): string {
+  return sha256Hex(canonicalStringify(fixture));
+}
+
+/**
  * BusinessSnapshotVersion id — FROZEN formula. Statement version ids and declared-context
  * declaration ids are hashed in a canonical (sorted) order, so equivalent unordered inputs
  * produce the same snapshotId. Display order is a generation concern, not part of identity.

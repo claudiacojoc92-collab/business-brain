@@ -45,6 +45,15 @@ export { PgInternalBriefRepository } from './database/repositories/pg-internal-b
 export { PgContentPieceRepository } from './database/repositories/pg-content-piece.repository';
 export { PgEvidenceRepository } from './database/repositories/pg-evidence.repository';
 
+// Understanding→Audit vertical slice (Commit 2: fixture ingestion + corpus revision persistence)
+export { PgRawCaptureRepository } from './database/repositories/pg-raw-capture.repository';
+export { PgObservationRepository } from './database/repositories/pg-observation.repository';
+export { PgUnderstandingRevisionRepository } from './database/repositories/pg-understanding-revision.repository';
+export { PgIngestionIdempotencyRepository } from './database/repositories/pg-ingestion-idempotency.repository';
+export { KyselyIngestionUnitOfWork } from './understanding/kysely-ingestion-unit-of-work';
+export { SharedClockAdapter } from './understanding/shared-clock-adapter';
+export { LoggingIngestionEventSink } from './understanding/logging-ingestion-event-sink';
+
 // Intake session repository (B1 onboarding)
 export { PgIntakeSessionRepository } from './database/repositories/pg-intake-session.repository';
 export type { RedisClient } from './cache/redis-client';

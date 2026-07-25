@@ -34,3 +34,6 @@ export * from './founder/index';
 export * from './cycle/index';
 export * from './memory/index';
 export * from './campaign/index';
+
+// Understanding→Audit vertical slice (Commit 2: fixture ingestion)
+export * from './understanding/index';
