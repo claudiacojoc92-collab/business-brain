@@ -76,3 +76,19 @@ export { PresentationAppendService } from './presentation-append.service';
 export type { IPresentationAppendService } from './presentation-append.service';
 export { PresentationViewService } from './presentation-view.service';
 export type { IPresentationViewService } from './presentation-view.service';
+
+// Commit 8: founder declaration lifecycle (append-only) + narrow read
+export type {
+  DeclarationLog,
+  DeclarationAppendOutcome,
+  DeclarationRepos,
+  DeclarationUnitOfWork,
+  DeclarationAppendCommand,
+  DeclarationAppendResult,
+  DeclarationAppendedEvent,
+  DeclarationEventSink,
+} from './declaration-ports';
+export { DeclarationAppendService } from './declaration-append.service';
+export type { IDeclarationAppendService } from './declaration-append.service';
+export { DeclarationReadService } from './declaration-read.service';
+export type { IDeclarationReadService } from './declaration-read.service';

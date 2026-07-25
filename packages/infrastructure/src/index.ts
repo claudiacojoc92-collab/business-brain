@@ -75,6 +75,10 @@ export { LoggingReviewEventSink } from './understanding/logging-review-event-sin
 export { PgPresentedEventRepository } from './database/repositories/pg-presented-event.repository';
 export { KyselyPresentationUnitOfWork } from './understanding/kysely-presentation-unit-of-work';
 export { LoggingPresentationEventSink } from './understanding/logging-presentation-event-sink';
+// Commit 8: founder declaration lifecycle (append-only)
+export { PgDeclarationRepository } from './database/repositories/pg-declaration.repository';
+export { KyselyDeclarationUnitOfWork } from './understanding/kysely-declaration-unit-of-work';
+export { LoggingDeclarationEventSink } from './understanding/logging-declaration-event-sink';
 
 // Intake session repository (B1 onboarding)
 export { PgIntakeSessionRepository } from './database/repositories/pg-intake-session.repository';
