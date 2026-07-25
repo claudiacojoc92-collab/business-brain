@@ -29,3 +29,19 @@ export { ComposedEffectiveFacetResolver } from './effective-facet-resolver';
 export type { SnapshotUnitOfWork, SnapshotGeneratedEvent, SnapshotGenerationEventSink } from './snapshot-ports';
 export { SnapshotGenerationService } from './snapshot-generation.service';
 export type { ISnapshotGenerationService } from './snapshot-generation.service';
+
+// Commit 5: recognition append + snapshot-view read composition
+export type {
+  RecognitionRepos,
+  RecognitionEventLog,
+  RecognitionAppendOutcome,
+  RecognitionUnitOfWork,
+  RecognitionAppendCommand,
+  RecognitionAppendResult,
+  RecognitionAppendedEvent,
+  RecognitionEventSink,
+} from './recognition-ports';
+export { RecognitionAppendService } from './recognition-append.service';
+export type { IRecognitionAppendService } from './recognition-append.service';
+export { SnapshotViewService } from './snapshot-view.service';
+export type { ISnapshotViewService } from './snapshot-view.service';

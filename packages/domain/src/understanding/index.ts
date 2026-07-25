@@ -128,3 +128,10 @@ export {
   generateSnapshotStatements,
   buildBusinessSnapshotVersion,
 } from './snapshot/generation';
+// Commit 5: deterministic recognition projection
+export {
+  projectRecognition,
+  hasDirectEvent,
+  mapReviewResponseToStatus,
+  deriveSnapshotStatus,
+} from './snapshot/recognition-projection';

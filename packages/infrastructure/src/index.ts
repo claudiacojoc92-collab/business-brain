@@ -63,6 +63,10 @@ export { LoggingFacetExtractionEventSink } from './understanding/logging-facet-e
 export { PgSnapshotRepository } from './database/repositories/pg-snapshot.repository';
 export { KyselySnapshotUnitOfWork } from './understanding/kysely-snapshot-unit-of-work';
 export { LoggingSnapshotGenerationEventSink } from './understanding/logging-snapshot-generation-event-sink';
+// Commit 5: recognition append + snapshot-view read composition
+export { PgRecognitionEventRepository } from './database/repositories/pg-recognition-event.repository';
+export { KyselyRecognitionUnitOfWork } from './understanding/kysely-recognition-unit-of-work';
+export { LoggingRecognitionEventSink } from './understanding/logging-recognition-event-sink';
 
 // Intake session repository (B1 onboarding)
 export { PgIntakeSessionRepository } from './database/repositories/pg-intake-session.repository';
