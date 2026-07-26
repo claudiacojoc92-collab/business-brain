@@ -79,6 +79,10 @@ export { LoggingPresentationEventSink } from './understanding/logging-presentati
 export { PgDeclarationRepository } from './database/repositories/pg-declaration.repository';
 export { KyselyDeclarationUnitOfWork } from './understanding/kysely-declaration-unit-of-work';
 export { LoggingDeclarationEventSink } from './understanding/logging-declaration-event-sink';
+// Commit 9: claims lifecycle (append-only)
+export { PgClaimRepository } from './database/repositories/pg-claim.repository';
+export { KyselyClaimUnitOfWork } from './understanding/kysely-claim-unit-of-work';
+export { LoggingClaimEventSink } from './understanding/logging-claim-event-sink';
 
 // Intake session repository (B1 onboarding)
 export { PgIntakeSessionRepository } from './database/repositories/pg-intake-session.repository';

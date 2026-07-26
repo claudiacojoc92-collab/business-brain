@@ -92,3 +92,20 @@ export { DeclarationAppendService } from './declaration-append.service';
 export type { IDeclarationAppendService } from './declaration-append.service';
 export { DeclarationReadService } from './declaration-read.service';
 export type { IDeclarationReadService } from './declaration-read.service';
+
+// Commit 9: claims lifecycle (append-only) + narrow read
+export type {
+  ClaimLog,
+  ClaimAppendOutcome,
+  ClaimRepos,
+  ClaimUnitOfWork,
+  ClaimAppendCommand,
+  ClaimAppendResult,
+  ClaimAppendedEvent,
+  ClaimEventSink,
+} from './claim-ports';
+export { ClaimAppendService } from './claim-append.service';
+export type { IClaimAppendService } from './claim-append.service';
+export { ClaimReadService } from './claim-read.service';
+export type { IClaimReadService } from './claim-read.service';
+export { assertValidClientEventId } from './claim-validation';
