@@ -37,3 +37,6 @@ export * from './campaign/index';
 
 // Understanding→Audit vertical slice (Commit 2: fixture ingestion)
 export * from './understanding/index';
+
+// Business Brain V1 — versioned lifecycle vertical slice
+export * from './businessbrain/index';
