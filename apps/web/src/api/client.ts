@@ -385,6 +385,7 @@ export interface BBExecutionPlanPhase {
 export interface BBCurrentVersion {
   versionId: string;
   producedAt: string;
+  importWindow?: { from: string | null; to: string | null; postCount: number };
   businessReality: string;
   businessConsequences: string[];
   evidence: { claims: BBEvidenceClaim[] };
@@ -411,7 +412,9 @@ export const getBBFounder = () => request<BBFounder>(`${BB}/founder`);
 export const getBBSession = () => request<BBSession>(`${BB}/session`);
 export const getBBConnection = () => request<BBConnectionStatus>(`${BB}/connection`);
 // Bodyless POSTs still send `{}` — Fastify rejects an empty body when Content-Type is JSON.
-export const bbConnect = () => request<BBConnectionStatus>(`${BB}/connection/connect`, { method: 'POST', body: '{}' });
+// Connect begins REAL Instagram Business Login: it returns the provider consent URL for the browser
+// to navigate to (the token never rides a URL). The callback returns the browser to /business-brain.
+export const bbConnect = () => request<{ authUrl: string }>(`${BB}/connection/connect`, { method: 'POST', body: '{}' });
 export const bbDisconnect = () => request<BBConnectionStatus>(`${BB}/connection/disconnect`, { method: 'POST', body: '{}' });
 export const getBBRefresh = () => request<BBRefreshSnapshot>(`${BB}/refresh`);
 export const bbCancelRefresh = () => request<BBRefreshSnapshot>(`${BB}/refresh/cancel`, { method: 'POST', body: '{}' });

@@ -43,6 +43,49 @@ export interface DevConnectionStatus {
   readonly connectedAt?: string;
 }
 
+/** Phase ②: the persisted import run (account snapshot + window) for one Version. */
+export interface ImportRecordInput {
+  readonly importId: string;
+  readonly source: 'instagram';
+  readonly accountExternalId: string | null;
+  readonly accountUsername: string | null;
+  readonly accountType: string | null;
+  readonly followersCount: number | null;
+  readonly mediaCount: number | null;
+  readonly importedPostCount: number;
+  readonly windowFrom: string | null;
+  readonly windowTo: string | null;
+  readonly importedAt: string;
+}
+
+/** Phase ②: one persisted observation (imported post + deterministic signals + full caption). */
+export interface ObservationInput {
+  readonly observationId: string;
+  readonly postExternalId: string;
+  readonly permalink: string | null;
+  readonly mediaType: string | null;
+  readonly postedAt: string | null;
+  readonly reach: number | null;
+  readonly likes: number | null;
+  readonly comments: number | null;
+  readonly caption: string;
+  readonly captionLength: number;
+  readonly wordCount: number;
+  readonly hashtagCount: number;
+  readonly mentionCount: number;
+  readonly hasLink: boolean;
+  readonly hasCta: boolean;
+}
+
+/** Phase ②: the frozen structured context handed to the single LLM call, + its SHA-256. */
+export interface GenerationContextInput {
+  readonly generationContextId: string;
+  readonly context: unknown;
+  readonly contentHash: string;
+  readonly modelId: string | null;
+  readonly promptTemplateHash: string | null;
+}
+
 export interface CommitEvidenceInput {
   readonly founderId: string;
   readonly versionId: string;
@@ -50,6 +93,9 @@ export interface CommitEvidenceInput {
   readonly importJobId: string;
   readonly windowDescriptor?: string;
   readonly at: string;
+  /** Phase ②: persisted alongside evidence, in the same transaction (provenance). */
+  readonly import?: ImportRecordInput;
+  readonly observations?: readonly ObservationInput[];
 }
 
 export interface CommitDiagnosisInput {
@@ -60,6 +106,8 @@ export interface CommitDiagnosisInput {
   readonly at: string;
   /** Test seam: throw mid-transaction to prove whole-diagnosis atomicity. */
   readonly failAfterHeader?: boolean;
+  /** Phase ②: the frozen model input persisted in the same transaction (provenance). */
+  readonly generationContext?: GenerationContextInput;
 }
 
 /** The lifecycle-oriented persistence contract required by the coordination flow. */
@@ -114,9 +162,8 @@ export interface BusinessBrainRepository {
     at: string,
   ): Promise<void>;
 
-  // ---- Development Instagram connection adapter (NOT real OAuth) ----
+  // ---- Real Instagram connection (presence of the encrypted OAuth credential) ----
+  // Connect/disconnect are owned by the OAuth connector (apps/api), not this persistence boundary.
+  // This is a presence read only; the token is never selected/decrypted here.
   getConnectionStatus(founderId: string): Promise<DevConnectionStatus>;
-  connect(founderId: string, at: string): Promise<DevConnectionStatus>;
-  /** Idempotent. Never clears Current; discards an active Candidate as connection_lost. */
-  disconnect(founderId: string, at: string): Promise<DevConnectionStatus>;
 }

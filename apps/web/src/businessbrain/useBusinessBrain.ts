@@ -216,12 +216,18 @@ export function useBusinessBrain(): UseBusinessBrain {
     setCommandError(null);
     setBusy((b) => ({ ...b, connecting: true }));
     try {
-      const c = await bbConnect();
-      setConnection(c);
+      // Begin REAL Instagram Business Login: navigate the browser to the provider consent URL.
+      // The callback stores the encrypted credential and returns the browser to /business-brain.
+      const { authUrl } = await bbConnect();
+      if (authUrl) {
+        window.location.assign(authUrl);
+        return; // navigating away; keep the connecting state until redirect
+      }
+      setCommandError({ code: 'NO_AUTH_URL', message: 'Could not start Instagram sign-in. Please try again.' });
+      setBusy((b) => ({ ...b, connecting: false }));
     } catch (e) {
       if (isUnauthorized(e)) setPhase('unauthenticated');
       else if (e instanceof ApiError) setCommandError({ code: e.code, message: 'Could not connect. Please try again.' });
-    } finally {
       setBusy((b) => ({ ...b, connecting: false }));
     }
   }, []);

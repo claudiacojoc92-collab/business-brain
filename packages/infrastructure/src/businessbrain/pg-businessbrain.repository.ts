@@ -18,6 +18,8 @@ import type {
   DevConnectionStatus,
   DiagnosisContent,
   EvidenceVersion,
+  ImportRecordInput,
+  ObservationInput,
   FailureCategory,
   PublicCurrentVersion,
   PublicRefreshSnapshot,
@@ -172,9 +174,25 @@ export class PgBusinessBrainRepository implements BusinessBrainRepository {
       phase.actions.push({ statement: a.statement, sequence: a.sequence });
     }
 
+    // Phase ②: the imported window (surfaced with the Evidence Section).
+    const imp = await db
+      .selectFrom('businessbrain.bb_import')
+      .select(['window_from', 'window_to', 'imported_post_count'])
+      .where('version_id', '=', vid)
+      .executeTakeFirst();
+
     return {
       versionId: vid,
       producedAt: new Date(version.promoted_at).toISOString(),
+      ...(imp
+        ? {
+            importWindow: {
+              from: imp.window_from ? new Date(imp.window_from).toISOString() : null,
+              to: imp.window_to ? new Date(imp.window_to).toISOString() : null,
+              postCount: imp.imported_post_count,
+            },
+          }
+        : {}),
       businessReality: dv.business_reality,
       businessConsequences: consequences.map((r: any) => r.statement),
       evidence: { claims },
@@ -286,6 +304,9 @@ export class PgBusinessBrainRepository implements BusinessBrainRepository {
         .where('version_id', '=', input.versionId)
         .executeTakeFirst();
       if (existingEv) return true; // idempotent: import already committed (duplicate delivery)
+      // Phase ②: persist the provenance store (import run + per-post observations) in the SAME tx.
+      if (input.import) await insertImport(trx, input.founderId, input.versionId, input.import);
+      if (input.observations?.length) await insertObservations(trx, input.founderId, input.versionId, input.import?.importId ?? '', input.observations);
       await insertEvidence(trx, input.founderId, input.versionId, input.evidence, input.at, input.windowDescriptor);
       await trx
         .updateTable('businessbrain.bb_import_job')
@@ -355,6 +376,24 @@ export class PgBusinessBrainRepository implements BusinessBrainRepository {
       if (input.failAfterHeader) throw new Error('forced_diagnosis_commit_failure');
 
       await insertDiagnosisBody(trx, input, diagnosisVersionId);
+
+      // Phase ②: freeze the exact model input (context + SHA-256 + model/prompt provenance).
+      if (input.generationContext) {
+        const gc = input.generationContext;
+        await trx
+          .insertInto('businessbrain.bb_generation_context')
+          .values({
+            generation_context_id: gc.generationContextId,
+            version_id: input.versionId,
+            founder_id: input.founderId,
+            context: gc.context ?? {},
+            content_hash: gc.contentHash,
+            model_id: gc.modelId ?? null,
+            prompt_template_hash: gc.promptTemplateHash ?? null,
+            created_at: input.at,
+          })
+          .execute();
+      }
 
       await trx
         .insertInto('businessbrain.bb_diagnosis_job')
@@ -506,39 +545,38 @@ export class PgBusinessBrainRepository implements BusinessBrainRepository {
     });
   }
 
-  // ---- Development Instagram connection adapter (NOT real OAuth) ----
+  // ---- Real Instagram connection (reads the encrypted OAuth credential; NOT a dev adapter) ----
 
+  /**
+   * Connection presence is derived from the REAL encrypted credential in app.oauth_credentials
+   * (provider 'instagram'), written by the Instagram Business Login OAuth callback. This is a
+   * presence read only — the token is never selected, decrypted, or logged here. Connect/disconnect
+   * are OWNED by the OAuth connector (apps/api), not this repository.
+   */
   async getConnectionStatus(founderId: string): Promise<DevConnectionStatus> {
     const row = await (this.db as any)
-      .selectFrom('businessbrain.bb_dev_connection')
-      .selectAll()
+      .selectFrom('app.oauth_credentials')
+      .select(['created_at', 'updated_at'])
       .where('founder_id', '=', founderId)
+      .where('provider', '=', 'instagram')
       .executeTakeFirst();
     if (!row) return { connectionState: 'not_connected' };
+    const at = row.created_at ?? row.updated_at;
     return {
-      connectionState: row.state,
-      ...(row.connected_at ? { connectedAt: new Date(row.connected_at).toISOString() } : {}),
+      connectionState: 'connected',
+      ...(at ? { connectedAt: new Date(at).toISOString() } : {}),
     };
   }
 
-  async connect(founderId: string, at: string): Promise<DevConnectionStatus> {
-    await (this.db as any)
-      .insertInto('businessbrain.bb_dev_connection')
-      .values({ founder_id: founderId, state: 'connected', connected_at: at, updated_at: at })
-      .onConflict((oc: any) => oc.column('founder_id').doUpdateSet({ state: 'connected', connected_at: at, updated_at: at }))
-      .execute();
-    return { connectionState: 'connected', connectedAt: new Date(at).toISOString() };
-  }
-
-  async disconnect(founderId: string, at: string): Promise<DevConnectionStatus> {
-    // Idempotent: revoke authority; never clear Current; discard an active Candidate as connection_lost.
+  /**
+   * On disconnect: never clears Current; discards an active Candidate as connection_lost so an
+   * in-flight Refresh cannot promote a Version after the founder has revoked Instagram access.
+   * Idempotent. The credential itself is removed by the OAuth connector, not here. This is a
+   * concrete method (not on the lifecycle interface) called by the disconnect route.
+   */
+  async discardActiveCandidateOnDisconnect(founderId: string, at: string): Promise<void> {
     await this.db.transaction().execute(async (trx: any) => {
       await lockFounder(trx, founderId, at);
-      await trx
-        .insertInto('businessbrain.bb_dev_connection')
-        .values({ founder_id: founderId, state: 'revoked', connected_at: null, updated_at: at })
-        .onConflict((oc: any) => oc.column('founder_id').doUpdateSet({ state: 'revoked', updated_at: at }))
-        .execute();
       const candidate = await trx
         .selectFrom('businessbrain.bb_version')
         .select('version_id')
@@ -551,7 +589,6 @@ export class PgBusinessBrainRepository implements BusinessBrainRepository {
         await this.audit(trx, founderId, 'CandidateDiscarded', candidate.version_id, at, { reason: 'connection_lost' });
       }
     });
-    return { connectionState: 'revoked' };
   }
 }
 
@@ -656,6 +693,63 @@ async function bumpRefresh(
     .execute();
 }
 
+// Phase ②: persist the import run (account snapshot + window) for one Version.
+async function insertImport(trx: any, founderId: string, versionId: string, imp: ImportRecordInput): Promise<void> {
+  await trx
+    .insertInto('businessbrain.bb_import')
+    .values({
+      import_id: imp.importId,
+      version_id: versionId,
+      founder_id: founderId,
+      source: imp.source,
+      account_external_id: imp.accountExternalId,
+      account_username: imp.accountUsername,
+      account_type: imp.accountType,
+      followers_count: imp.followersCount,
+      media_count: imp.mediaCount,
+      imported_post_count: imp.importedPostCount,
+      window_from: imp.windowFrom,
+      window_to: imp.windowTo,
+      imported_at: imp.importedAt,
+    })
+    .execute();
+}
+
+// Phase ②: persist the per-post observations (full caption + deterministic signals + real metrics).
+async function insertObservations(
+  trx: any,
+  founderId: string,
+  versionId: string,
+  importId: string,
+  observations: readonly ObservationInput[],
+): Promise<void> {
+  for (const o of observations) {
+    await trx
+      .insertInto('businessbrain.bb_observation')
+      .values({
+        observation_id: o.observationId,
+        import_id: importId,
+        version_id: versionId,
+        founder_id: founderId,
+        post_external_id: o.postExternalId,
+        permalink: o.permalink,
+        media_type: o.mediaType,
+        posted_at: o.postedAt,
+        reach: o.reach,
+        likes: o.likes,
+        comments: o.comments,
+        caption: o.caption,
+        caption_length: o.captionLength,
+        word_count: o.wordCount,
+        hashtag_count: o.hashtagCount,
+        mention_count: o.mentionCount,
+        has_link: o.hasLink,
+        has_cta: o.hasCta,
+      })
+      .execute();
+  }
+}
+
 async function insertEvidence(
   trx: any,
   founderId: string,
@@ -686,6 +780,7 @@ async function insertEvidence(
         kind: item.kind,
         measure_value: item.value ?? null,
         claim_label: item.claimLabel,
+        provenance: item.provenance ?? null, // Phase ②: jsonb {source, metricKey, observationRefs}
         created_at: at,
       })
       .execute();

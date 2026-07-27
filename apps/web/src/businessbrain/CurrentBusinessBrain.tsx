@@ -45,6 +45,16 @@ function measureValue(m: { kind: string; value?: number }): React.ReactNode {
   return <span style={{ color: 'var(--ink-3, #6b7280)' }}>{' — present'}</span>;
 }
 
+/** Phase ②: the imported window, surfaced with the Evidence — "based on N posts from … to …". */
+function windowCaption(w?: { from: string | null; to: string | null; postCount: number }): string {
+  if (!w) return 'What your content actually shows';
+  const fmt = (iso: string | null): string | null => (iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : null);
+  const a = fmt(w.from);
+  const b = fmt(w.to);
+  const range = a && b ? (a === b ? a : `${a} – ${b}`) : '';
+  return `Based on your ${w.postCount} most recent posts${range ? ` (${range})` : ''}`;
+}
+
 export function CurrentBusinessBrain({ version }: { version: BBCurrentVersion }) {
   return (
     <div data-testid="current-business-brain" data-version-id={version.versionId}>
@@ -65,7 +75,7 @@ export function CurrentBusinessBrain({ version }: { version: BBCurrentVersion })
       </Section>
 
       {/* 3. Evidence — the only section with measures */}
-      <Section title="Evidence" testid="section-evidence" caption="What your content actually shows">
+      <Section title="Evidence" testid="section-evidence" caption={windowCaption(version.importWindow)}>
         {version.evidence.claims.map((claim, ci) => (
           <div key={ci} style={{ marginBottom: ci < version.evidence.claims.length - 1 ? 14 : 0 }}>
             <p style={{ font: '500 16px/1.5 var(--sans, system-ui)', color: 'var(--ink, #111827)', margin: '0 0 8px' }}>

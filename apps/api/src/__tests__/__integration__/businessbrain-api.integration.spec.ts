@@ -24,12 +24,61 @@ import {
 } from '@bb/infrastructure';
 import {
   BusinessBrainCoordinator,
-  deterministicImport,
-  constructEvidence,
-  deterministicDiagnosis,
+  buildDeterministicEvidence,
+  computeAccountMetrics,
+  computePostSignals,
+  assembleGenerationContext,
+  composeDiagnosisContent,
+} from '@bb/application';
+import type {
+  DiagnosisModelPort, DiagnosisResult, GenerationContext, ImportedAccount, InstagramImportPort, ObservationRecord,
 } from '@bb/application';
 import { registerErrorHandler } from '../../plugins/error-handler.plugin';
 import { registerBusinessBrainRoutes } from '../../routes/businessbrain.routes';
+import { __resetInstagramConnectorForTest } from '../../connectors/instagram/instagram-connector.instance';
+
+// ── Test doubles for the Phase ② ports (no real Graph / Anthropic). Behaviour is mutable per test. ──
+let importPostCount = 12;                                    // controls sufficiency (>=5 sufficient)
+type DiagMode = 'valid' | 'invalid' | 'fabricated' | 'throw';
+let diagnosisMode: DiagMode = 'valid';
+
+function fakeAccount(n: number): ImportedAccount {
+  const base = Date.parse('2025-01-01T00:00:00.000Z');
+  const posts = Array.from({ length: n }, (_, i) => ({
+    postExternalId: `m${i}`,
+    permalink: `https://instagram.com/p/m${i}`,
+    mediaType: i % 3 === 0 ? 'VIDEO' : 'IMAGE',
+    postedAt: new Date(base + i * 3 * 86_400_000).toISOString(),
+    caption: i % 2 === 0 ? `A day in my life ✨ #life` : `Behind the scenes of my work. link in bio`,
+    reach: 100 + i,
+    likes: 10 + i,
+    comments: i % 4,
+  }));
+  return { accountExternalId: 'ig1', username: 'founder', accountType: 'BUSINESS', followersCount: 1200, mediaCount: n, posts, importedAt: '2025-07-01T00:00:00.000Z' };
+}
+const fakeImport: InstagramImportPort = { async importAccount() { return fakeAccount(importPostCount); } };
+
+// A grounded, business-language narrative (no digits/channel words), citing a real deterministic key.
+function validNarrative(ctx: GenerationContext) {
+  const key = ctx.evidence.find((e) => e.key === 'cta_pct')?.key ?? ctx.evidence[0]!.key;
+  return {
+    businessReality: 'Your business is hard for the right buyers to recognise and choose.',
+    businessConsequences: ['The right customers rarely realise you can help them.', 'People who like you have no clear way to become buyers.'],
+    cannotYetKnow: 'We cannot yet see your actual sales, or what your audience privately thinks.',
+    rootCauses: [{ statement: 'Your offer is not made plain enough for people to act on it.', evidenceKeys: [key] }],
+    recommendations: [{ statement: 'State your offer clearly and invite people to take one next step.', rootCauseIndexes: [0] }],
+    executionPlan: [{ label: 'Weeks one to four: make the offer legible', actions: [{ statement: 'Introduce a recurring, clear invitation to work with you.', recommendationIndexes: [0] }] }],
+  };
+}
+const fakeDiagnosis: DiagnosisModelPort = {
+  async generate(ctx: GenerationContext): Promise<DiagnosisResult> {
+    if (diagnosisMode === 'throw') throw new Error('model unavailable');
+    const n = validNarrative(ctx);
+    if (diagnosisMode === 'invalid') return { narrative: { ...n, cannotYetKnow: '' }, modelId: 'test-model', promptTemplateHash: 'h' };
+    if (diagnosisMode === 'fabricated') return { narrative: { ...n, businessReality: 'Your business converts 87 of every hundred admirers into nothing.' }, modelId: 'test-model', promptTemplateHash: 'h' };
+    return { narrative: n, modelId: 'test-model', promptTemplateHash: 'h' };
+  },
+};
 
 const URL = process.env.BB_IT_DATABASE_URL;
 const suite = URL ? describe : describe.skip;
@@ -60,8 +109,27 @@ suite('LIVE Business Brain V1 public API', () => {
     server.inject({ method: 'POST', url, headers: { ...auth(token), ...(extra ?? {}) }, payload: body ?? {} });
   const body = (r: { body: string }) => JSON.parse(r.body);
 
+  // Begin the REAL Instagram connect — returns the provider consent URL (no network; builds a URL).
   async function connect(token: string) {
     return post(`${P}/connection/connect`, token);
+  }
+  // Establish a REAL connected state without performing OAuth: insert an encrypted-credential row
+  // exactly as the OAuth callback would. getConnectionStatus is a presence read (never decrypts),
+  // so a placeholder ciphertext is sufficient to make the founder "connected" for the gate.
+  async function seedConnected(fid: string): Promise<void> {
+    await pool.query(
+      `INSERT INTO app.oauth_credentials (founder_id, provider, encrypted_access_token, scopes, created_at, updated_at)
+       VALUES ($1,'instagram','enc:placeholder','instagram_business_basic', NOW(), NOW())
+       ON CONFLICT (founder_id, provider) DO UPDATE SET updated_at = NOW()`,
+      [fid],
+    );
+  }
+  async function credentialRows(fid: string): Promise<number> {
+    const r = await pool.query(
+      `SELECT count(*)::int n FROM app.oauth_credentials WHERE founder_id=$1 AND provider='instagram'`,
+      [fid],
+    );
+    return r.rows[0].n as number;
   }
   async function pollTerminal(token: string): Promise<Record<string, unknown>> {
     for (let i = 0; i < 100; i += 1) {
@@ -72,7 +140,7 @@ suite('LIVE Business Brain V1 public API', () => {
     throw new Error('refresh did not reach a terminal state');
   }
   async function runHappyOverHttp(token: string): Promise<string> {
-    await connect(token);
+    await seedConnected(founderId);
     await post(`${P}/refresh`, token, { idempotencyToken: generateId() });
     const term = await pollTerminal(token);
     expect(term.refreshState).toBe('completed');
@@ -86,22 +154,37 @@ suite('LIVE Business Brain V1 public API', () => {
     const priv = readFileSync(join(process.cwd(), 'jwt-dev-private.pem'), 'utf8');
     const pub = readFileSync(join(process.cwd(), 'jwt-dev-public.pem'), 'utf8');
     jwt = new JwtService(priv, pub);
+    // Configure the shared Instagram connector so /connection/connect returns a real consent URL
+    // (authorize() builds a URL only — no network). disconnect() uses the credential store on the
+    // test DB. These are the same env vars production reads.
+    process.env['INSTAGRAM_APP_ID'] = process.env['INSTAGRAM_APP_ID'] || 'test-ig-app-id';
+    process.env['INSTAGRAM_APP_SECRET'] = process.env['INSTAGRAM_APP_SECRET'] || 'test-ig-app-secret';
+    process.env['INSTAGRAM_REDIRECT_URI'] = 'https://app.example.com/api/sources/instagram/callback';
+    process.env['GOOGLE_OAUTH_ENCRYPTION_KEY'] = '0'.repeat(64);
+    process.env['DATABASE_URL'] = URL!;
+    __resetInstagramConnectorForTest();
     server = Fastify();
     registerErrorHandler(server, logger);
-    registerBusinessBrainRoutes(server, { db, jwtService: jwt, logger } as never);
+    registerBusinessBrainRoutes(server, { db, jwtService: jwt, logger } as never, { importPort: fakeImport, diagnosisModel: fakeDiagnosis });
     await server.ready();
   });
 
   afterAll(async () => {
     await server.close();
-    if (seeded.length) await pool.query(`DELETE FROM founder.founders WHERE id = ANY($1)`, [seeded]);
+    if (seeded.length) {
+      await pool.query(`DELETE FROM app.oauth_credentials WHERE founder_id = ANY($1)`, [seeded]);
+      await pool.query(`DELETE FROM founder.founders WHERE id = ANY($1)`, [seeded]);
+    }
     await db.destroy();
     await pool.end();
+    __resetInstagramConnectorForTest();
   });
 
   let founderId: string;
   let token: string;
   beforeEach(async () => {
+    importPostCount = 12;
+    diagnosisMode = 'valid';
     const f = await seedFounder();
     founderId = f.id;
     token = f.token;
@@ -125,14 +208,31 @@ suite('LIVE Business Brain V1 public API', () => {
     expect(body(r).error.code).toBe('INSTAGRAM_REQUIRED');
   });
 
-  it('4. Development Connect produces connected status', async () => {
+  it('4. Connect returns a real Instagram Business Login consent URL (no fake connection state)', async () => {
     const r = await connect(token);
     expect(r.statusCode).toBe(200);
-    expect(body(r).connectionState).toBe('connected');
+    const authUrl = body(r).authUrl as string;
+    expect(authUrl).toContain('instagram.com/oauth/authorize');
+    expect(authUrl).toContain('client_id=test-ig-app-id');
+    expect(authUrl).toContain('instagram_business_basic');
+    // Connect must NOT itself mark the founder connected — only the OAuth callback (real credential) does.
+    expect(await credentialRows(founderId)).toBe(0);
+    expect(body(await get(`${P}/connection`, token)).connectionState).toBe('not_connected');
+  });
+
+  it('4b. Get Connection reflects a real stored credential; refresh is then allowed', async () => {
+    expect(body(await get(`${P}/connection`, token)).connectionState).toBe('not_connected');
+    await seedConnected(founderId);
+    const c = body(await get(`${P}/connection`, token));
+    expect(c.connectionState).toBe('connected');
+    expect(c.connectedAt).toBeTruthy();
+    const r = await post(`${P}/refresh`, token, { idempotencyToken: generateId() });
+    expect(r.statusCode).toBe(200); // gate passes with a real credential
+    await pollTerminal(token);
   });
 
   it('5. Start Refresh with an idempotency token returns accepted (in_progress)', async () => {
-    await connect(token);
+    await seedConnected(founderId);
     const r = await post(`${P}/refresh`, token, { idempotencyToken: generateId() });
     expect(r.statusCode).toBe(200);
     const s = body(r);
@@ -142,7 +242,7 @@ suite('LIVE Business Brain V1 public API', () => {
   });
 
   it('6. Repeating the same Start Refresh with the same token returns the same refresh_reference', async () => {
-    await connect(token);
+    await seedConnected(founderId);
     const tok = generateId();
     const a = body(await post(`${P}/refresh`, token, { idempotencyToken: tok }));
     const b = body(await post(`${P}/refresh`, token, { idempotencyToken: tok }));
@@ -151,7 +251,7 @@ suite('LIVE Business Brain V1 public API', () => {
   });
 
   it('7. Reusing the token with conflicting semantics returns IDEMPOTENCY_CONFLICT', async () => {
-    await connect(token);
+    await seedConnected(founderId);
     const tok = generateId();
     await post(`${P}/refresh`, token, { idempotencyToken: tok, importMode: 'sufficient' });
     const r = await post(`${P}/refresh`, token, { idempotencyToken: tok, importMode: 'insufficient' });
@@ -161,7 +261,7 @@ suite('LIVE Business Brain V1 public API', () => {
   });
 
   it('8. Concurrent duplicate Start Refresh calls create one Candidate/Current', async () => {
-    await connect(token);
+    await seedConnected(founderId);
     const tok = generateId();
     const [a, b] = await Promise.all([
       post(`${P}/refresh`, token, { idempotencyToken: tok }),
@@ -177,7 +277,7 @@ suite('LIVE Business Brain V1 public API', () => {
   });
 
   it('9. Get Refresh Progress returns only a coherent allowed snapshot', async () => {
-    await connect(token);
+    await seedConnected(founderId);
     await post(`${P}/refresh`, token, { idempotencyToken: generateId() });
     const s = body(await get(`${P}/refresh`, token));
     const allowed = new Set(['refreshReference', 'refreshState', 'importState', 'diagnosisState', 'validationState', 'failureCategory', 'transitionMarker']);
@@ -186,7 +286,7 @@ suite('LIVE Business Brain V1 public API', () => {
   });
 
   it('10. Start Refresh response contains no Candidate/Job/artifact/persistence IDs', async () => {
-    await connect(token);
+    await seedConnected(founderId);
     const r = await post(`${P}/refresh`, token, { idempotencyToken: generateId() });
     const raw = r.body;
     for (const marker of ['candidateVersionId', 'versionId', 'importJobId', '-ei-', '-rc-', '-dv-', '-epv']) {
@@ -199,8 +299,9 @@ suite('LIVE Business Brain V1 public API', () => {
     // A Candidate exists transiently during this refresh, but validation fails so it is
     // never promoted. Get Current must remain no_current_version throughout and after —
     // the Candidate is never readable as a Current. (Deterministic: no promote race.)
-    await connect(token);
-    await post(`${P}/refresh`, token, { idempotencyToken: generateId(), flaw: 'omit_cannot_yet_know' });
+    diagnosisMode = 'invalid'; // model returns an ungrounded/invalid diagnosis → validation discards it
+    await seedConnected(founderId);
+    await post(`${P}/refresh`, token, { idempotencyToken: generateId() });
     const term = await pollTerminal(token);
     expect(term.refreshState).toBe('failed');
     expect(body(await get(`${P}/current`, token))).toEqual({ state: 'no_current_version' });
@@ -240,7 +341,8 @@ suite('LIVE Business Brain V1 public API', () => {
 
   it('15. Failed Validation preserves the previous Current', async () => {
     const v1 = await runHappyOverHttp(token);
-    await post(`${P}/refresh`, token, { idempotencyToken: generateId(), flaw: 'omit_cannot_yet_know' });
+    diagnosisMode = 'invalid';
+    await post(`${P}/refresh`, token, { idempotencyToken: generateId() });
     const term = await pollTerminal(token);
     expect(term.refreshState).toBe('failed');
     expect(term.failureCategory).toBe('diagnosis_unavailable');
@@ -258,11 +360,17 @@ suite('LIVE Business Brain V1 public API', () => {
     expect(r.statusCode).toBe(200);
   });
 
-  it('18. Disconnect preserves Current', async () => {
+  it('18. Disconnect removes the real credential and preserves Current', async () => {
     const v1 = await runHappyOverHttp(token);
+    expect(await credentialRows(founderId)).toBe(1);
     const d = await post(`${P}/connection/disconnect`, token);
-    expect(body(d).connectionState).toBe('revoked');
-    expect(body(await get(`${P}/current`, token)).versionId).toBe(v1);
+    expect(body(d).connectionState).toBe('not_connected'); // real credential gone
+    expect(await credentialRows(founderId)).toBe(0);
+    expect(body(await get(`${P}/current`, token)).versionId).toBe(v1); // Current untouched
+    // Refresh is blocked again once disconnected.
+    const r = await post(`${P}/refresh`, token, { idempotencyToken: generateId() });
+    expect(r.statusCode).toBe(409);
+    expect(body(r).error.code).toBe('INSTAGRAM_REQUIRED');
   });
 
   it('20. Founder A cannot read Founder B’s Current', async () => {
@@ -273,7 +381,7 @@ suite('LIVE Business Brain V1 public API', () => {
   });
 
   it('21. Founder A cannot read or cancel Founder B’s Refresh', async () => {
-    await connect(token);
+    await seedConnected(founderId);
     await post(`${P}/refresh`, token, { idempotencyToken: generateId() });
     const b = await seedFounder();
     const refreshB = body(await get(`${P}/refresh`, b.token));
@@ -296,19 +404,48 @@ suite('LIVE Business Brain V1 public API', () => {
     const repo = new PgBusinessBrainRepository(db);
     const at = new Date().toISOString();
     // Establish a Current via a manual coordinator (inline runner, real DB).
-    const coord = new BusinessBrainCoordinator(repo, { now: () => new Date(), nowISO: () => at, nowUnix: () => 0 }, 'inline');
-    await repo.connect(founderId, at);
+    const coord = new BusinessBrainCoordinator(repo, { now: () => new Date(), nowISO: () => at, nowUnix: () => 0 }, fakeImport, fakeDiagnosis, 'inline');
+    await seedConnected(founderId); // real encrypted credential (presence) satisfies the gate
     await coord.startRefresh(founderId, { idempotencyToken: generateId() });
     const v1 = (await repo.getCurrentAggregate(founderId))!.versionId;
     // Start a fresh Candidate WITHOUT running its pipeline, then disconnect mid-flight.
     const versionId = generateId();
     await repo.startRefresh({ founderId, versionId, refreshReference: generateId(), importJobId: generateId(), at });
-    await repo.disconnect(founderId, at);
+    await repo.discardActiveCandidateOnDisconnect(founderId, at);
     const snap = await repo.getRefreshProgress(founderId);
     expect(snap.refreshState).toBe('failed');
     expect(snap.failureCategory).toBe('connection_lost');
     expect((await repo.getCurrentAggregate(founderId))!.versionId).toBe(v1); // Current preserved
     expect(await repo.getActiveCandidateVersionId(founderId)).toBeNull(); // Candidate discarded
+  });
+
+  it('P2-A. A completed refresh persists the provenance store and surfaces the import window', async () => {
+    await runHappyOverHttp(token);
+    const vid = (await pool.query(`SELECT version_id FROM businessbrain.bb_version WHERE founder_id=$1 AND lifecycle_status='current'`, [founderId])).rows[0].version_id;
+    const imp = (await pool.query(`SELECT * FROM businessbrain.bb_import WHERE version_id=$1`, [vid])).rows[0];
+    expect(imp.imported_post_count).toBe(importPostCount);
+    expect(imp.window_from).toBeTruthy();
+    expect(imp.window_to).toBeTruthy();
+    const obs = await pool.query(`SELECT count(*)::int n, bool_or(caption <> '') has_caption FROM businessbrain.bb_observation WHERE version_id=$1`, [vid]);
+    expect(obs.rows[0].n).toBe(importPostCount);        // one observation per imported post
+    expect(obs.rows[0].has_caption).toBe(true);          // full captions persisted
+    const gc = (await pool.query(`SELECT content_hash, model_id FROM businessbrain.bb_generation_context WHERE version_id=$1`, [vid])).rows[0];
+    expect(gc.content_hash).toMatch(/^[0-9a-f]{64}$/);   // SHA-256 of the frozen model input
+    const prov = await pool.query(`SELECT count(*)::int n FROM businessbrain.bb_evidence_item WHERE version_id=$1 AND provenance IS NOT NULL`, [vid]);
+    expect(prov.rows[0].n).toBeGreaterThan(0);           // every measure carries provenance
+    // Public output surfaces the imported window (item 11).
+    const cur = body(await get(`${P}/current`, token));
+    expect(cur.importWindow.postCount).toBe(importPostCount);
+    expect(cur.importWindow.from).toBeTruthy();
+  });
+
+  it('P2-B. Grounding rejects a fabricated number → the candidate is discarded, no Current', async () => {
+    diagnosisMode = 'fabricated'; // narrative contains a number the metrics never produced
+    await seedConnected(founderId);
+    await post(`${P}/refresh`, token, { idempotencyToken: generateId() });
+    const term = await pollTerminal(token);
+    expect(term.refreshState).toBe('failed');
+    expect(body(await get(`${P}/current`, token))).toEqual({ state: 'no_current_version' });
   });
 
   // ---- Runnable HTTP demonstration (§11). Opt-in: BB_DEMO=1 prints the public flow. ----
@@ -317,7 +454,8 @@ suite('LIVE Business Brain V1 public API', () => {
     const log = process.env.BB_DEMO === '1' ? console.log : () => {};
     log('\n--- Business Brain V1 — public HTTP lifecycle ---');
     log('1. Get Session   :', body(await get(`${P}/session`, token)));
-    log('2. Connect       :', body(await connect(token)));
+    log('2. Connect       :', body(await connect(token)), '(returns the real Instagram consent URL)');
+    await seedConnected(founderId); // stand in for completing the real OAuth callback (encrypted credential)
     log('3. Get Current   :', body(await get(`${P}/current`, token)), '(no_current_version expected)');
     const accepted = body(await post(`${P}/refresh`, token, { idempotencyToken: generateId() }));
     log('4. Start Refresh :', accepted, '(accepted; not a Version)');
@@ -340,10 +478,15 @@ suite('LIVE Business Brain V1 public API', () => {
     const at = new Date().toISOString();
     const versionId = generateId();
     await repo.startRefresh({ founderId, versionId, refreshReference: generateId(), importJobId: generateId(), at });
-    const ev = constructEvidence(versionId, founderId, deterministicImport('sufficient')).evidence!;
+    const acct = fakeAccount(12);
+    const obs: ObservationRecord[] = acct.posts.map((p) => ({ observationId: generateId(), ...p, ...computePostSignals(p.caption) }));
+    const metrics = computeAccountMetrics(obs, acct.followersCount);
+    const built = buildDeterministicEvidence(versionId, founderId, metrics, obs);
+    const ev = built.evidence!;
     await repo.commitImportSufficient({ founderId, versionId, evidence: ev, importJobId: generateId(), at });
     await repo.cancelAndDiscard(founderId, at); // discard the Candidate
-    const diagnosis = deterministicDiagnosis(versionId, ev, 'none');
+    const ctx = assembleGenerationContext(acct, metrics, obs, ev.items);
+    const diagnosis = composeDiagnosisContent(versionId, validNarrative(ctx), ev, built.claims!);
     const wrote = await repo.commitCandidateDiagnosis({ founderId, versionId, diagnosis, diagnosisJobId: generateId(), at });
     expect(wrote).toBe(false); // stale guard: nothing written
     const n = await pool.query(`SELECT count(*)::int n FROM businessbrain.bb_diagnosis_version WHERE version_id=$1`, [versionId]);

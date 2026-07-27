@@ -11,7 +11,14 @@ export type FounderId = string;
 export type VersionId = string;
 export type RefreshReference = string;
 
-export type MeasureKind = 'proportion' | 'presence' | 'absence';
+export type MeasureKind = 'proportion' | 'count' | 'presence' | 'absence';
+
+/** Provenance for a deterministic measure: which metric produced it and which posts back it. */
+export interface EvidenceProvenance {
+  readonly source: 'deterministic';
+  readonly metricKey: string;
+  readonly observationRefs: readonly string[]; // permalinks (or post ids) — human-checkable handles
+}
 
 /** A single unit of proof. `value` is absent for presence/absence measures. */
 export interface EvidenceItem {
@@ -20,6 +27,8 @@ export interface EvidenceItem {
   readonly kind: MeasureKind;
   readonly value?: number;
   readonly claimLabel: string;
+  /** Phase ②: how this measure was computed and which observations it traces to. */
+  readonly provenance?: EvidenceProvenance;
 }
 
 export interface EvidenceVersion {
@@ -132,6 +141,8 @@ export interface PublicEvidence {
 export interface PublicCurrentVersion {
   readonly versionId: VersionId;
   readonly producedAt: string;
+  /** Phase ②: the imported window this Version was built from (surfaced with the Evidence). */
+  readonly importWindow?: { readonly from: string | null; readonly to: string | null; readonly postCount: number };
   readonly businessReality: string;
   readonly businessConsequences: readonly string[];
   readonly evidence: PublicEvidence;

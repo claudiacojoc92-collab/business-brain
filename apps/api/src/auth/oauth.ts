@@ -35,6 +35,8 @@ export interface PendingAuth {
   provider: string;
   codeVerifier: string;
   createdAt: number;
+  /** Optional SPA path to return the browser to after a successful callback (e.g. '/business-brain'). */
+  returnTo?: string;
 }
 
 /**

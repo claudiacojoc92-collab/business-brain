@@ -18,15 +18,50 @@ import {
   // pure domain reference (shared with the in-memory slice)
 } from '@bb/shared';
 import {
-  deterministicImport,
-  constructEvidence,
-  deterministicDiagnosis,
   validateCandidate,
   isCoherentSnapshot,
-  type DiagnosisFlaw,
+  buildDeterministicEvidence,
+  computeAccountMetrics,
+  computePostSignals,
 } from '@bb/application';
+import type { DiagnosisContent, EvidenceVersion, ImportedAccount, ObservationRecord } from '@bb/application';
 import { createKyselyClient, type KyselyDB } from '../../../database/client';
 import { PgBusinessBrainRepository } from '../../../businessbrain/pg-businessbrain.repository';
+
+// ── Local shims: preserve the old fixture call-shape but build from the REAL deterministic path.
+//    (Phase ② removed the product fixtures; these test doubles feed the repo valid/invalid content.) ──
+type DiagnosisFlaw = 'none' | 'omit_cannot_yet_know' | 'metric_in_reality';
+function fakeAccount(n: number): ImportedAccount {
+  const base = Date.parse('2025-01-01T00:00:00.000Z');
+  const posts = Array.from({ length: n }, (_, i) => ({
+    postExternalId: `m${i}`, permalink: `https://instagram.com/p/m${i}`,
+    mediaType: i % 3 === 0 ? 'VIDEO' : 'IMAGE', postedAt: new Date(base + i * 3 * 86_400_000).toISOString(),
+    caption: i % 2 === 0 ? 'A day in my life ✨ #life' : 'Behind the scenes of my work. link in bio',
+    reach: 100 + i, likes: 10 + i, comments: i % 4,
+  }));
+  return { accountExternalId: 'ig1', username: 'founder', accountType: 'BUSINESS', followersCount: 1200, mediaCount: n, posts, importedAt: '2025-07-01T00:00:00.000Z' };
+}
+function deterministicImport(mode: 'sufficient' | 'insufficient'): 'sufficient' | 'insufficient' { return mode; }
+function constructEvidence(versionId: string, founderId: string, mode: 'sufficient' | 'insufficient'): { sufficient: boolean; evidence?: EvidenceVersion } {
+  const acct = fakeAccount(mode === 'insufficient' ? 1 : 12);
+  const obs: ObservationRecord[] = acct.posts.map((p, i) => ({ observationId: `${versionId}-o-${i}`, ...p, ...computePostSignals(p.caption) }));
+  const metrics = computeAccountMetrics(obs, acct.followersCount);
+  const built = buildDeterministicEvidence(versionId, founderId, metrics, obs);
+  return { sufficient: built.sufficient, ...(built.evidence ? { evidence: built.evidence } : {}) };
+}
+function deterministicDiagnosis(versionId: string, evidence: EvidenceVersion, flaw: DiagnosisFlaw): DiagnosisContent {
+  const first = evidence.items[0]!;
+  const rootCause = { rootCauseId: `${versionId}-rc-1`, versionId, statement: 'Your offer is not made plain enough for people to act on it.', evidenceItemIds: [first.evidenceItemId] };
+  const rec = { recommendationId: `${versionId}-rec-1`, versionId, statement: 'State your offer clearly and invite people to take one next step.', rootCauseIds: [rootCause.rootCauseId] };
+  const action = { actionId: `${versionId}-a-1`, versionId, statement: 'Introduce a recurring, clear invitation to work with you.', sequence: 1, recommendationIds: [rec.recommendationId] };
+  return {
+    businessReality: flaw === 'metric_in_reality' ? 'Your business converts 87 of every hundred admirers into nothing.' : 'Your business is hard for the right buyers to recognise and choose.',
+    businessConsequences: ['The right customers rarely realise you can help them.', 'People who like you have no clear way to become buyers.'],
+    evidenceClaims: [{ claimStatement: 'What your recent activity shows', measures: evidence.items.map((it) => ({ descriptor: it.claimLabel, kind: it.kind, ...(it.value !== undefined ? { value: it.value } : {}) })) }],
+    cannotYetKnow: flaw === 'omit_cannot_yet_know' ? '' : 'We cannot yet see your actual sales, or what your audience privately thinks.',
+    rootCauses: [rootCause], recommendations: [rec], executionPlan: [{ label: 'Weeks one to four', actions: [action] }],
+  };
+}
 
 const URL = process.env.BB_IT_DATABASE_URL;
 const AT = '2025-01-06T04:00:00.000Z';
@@ -129,7 +164,7 @@ suite('LIVE Postgres — V060 + PgBusinessBrainRepository', () => {
   it('5. Import Completion persists one Evidence Version and its items atomically', async () => {
     const { versionId } = await startAndImport();
     expect(await count('businessbrain.bb_evidence_version', 'version_id=$1', [versionId])).toBe(1);
-    expect(await count('businessbrain.bb_evidence_item', 'version_id=$1', [versionId])).toBe(4);
+    expect(await count('businessbrain.bb_evidence_item', 'version_id=$1', [versionId])).toBe(9);
   });
 
   it('6. duplicate Import completion creates no duplicate Evidence', async () => {
@@ -140,7 +175,7 @@ suite('LIVE Postgres — V060 + PgBusinessBrainRepository', () => {
     await repo.commitImportSufficient({ founderId, versionId, evidence: ev.evidence!, importJobId, at: AT });
     await repo.commitImportSufficient({ founderId, versionId, evidence: ev.evidence!, importJobId, at: AT }); // duplicate
     expect(await count('businessbrain.bb_evidence_version', 'version_id=$1', [versionId])).toBe(1);
-    expect(await count('businessbrain.bb_evidence_item', 'version_id=$1', [versionId])).toBe(4);
+    expect(await count('businessbrain.bb_evidence_item', 'version_id=$1', [versionId])).toBe(9);
   });
 
   it('7. Diagnosis Completion persists the complete diagnosis, plan, and joins atomically', async () => {
@@ -157,7 +192,7 @@ suite('LIVE Postgres — V060 + PgBusinessBrainRepository', () => {
     expect(await count('businessbrain.bb_rec_rootcause', 'version_id=$1', [versionId])).toBe(1);
     expect(await count('businessbrain.bb_action_rec', 'version_id=$1', [versionId])).toBe(1);
     expect(await count('businessbrain.bb_evidence_claim', 'version_id=$1', [versionId])).toBe(1);
-    expect(await count('businessbrain.bb_evidence_claim_measure', 'version_id=$1', [versionId])).toBe(4);
+    expect(await count('businessbrain.bb_evidence_claim_measure', 'version_id=$1', [versionId])).toBe(9);
   });
 
   it('8. partial diagnosis persistence is impossible when the transaction fails', async () => {

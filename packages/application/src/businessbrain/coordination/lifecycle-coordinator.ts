@@ -22,22 +22,33 @@ import type {
   PublicCurrentVersion,
   PublicRefreshSnapshot,
 } from '../domain/model';
-import type { BusinessBrainRepository, DevConnectionStatus } from './repository';
-import { deterministicImport } from '../pipeline/import-fixture';
-import { constructEvidence } from '../pipeline/evidence-construction';
-import { deterministicDiagnosis, type DiagnosisFlaw } from '../pipeline/diagnosis-fixture';
+import type { BusinessBrainRepository, DevConnectionStatus, ObservationInput } from './repository';
 import { validateCandidate } from '../domain/validation';
+import type { DiagnosisModelPort, InstagramImportPort } from '../ports';
+import type { ImportedAccount, ObservationRecord } from '../provenance/model';
+import { computePostSignals } from '../provenance/signals';
+import { computeAccountMetrics } from '../provenance/metrics';
+import { buildDeterministicEvidence } from '../provenance/evidence';
+import { assembleGenerationContext, hashGenerationContext } from '../provenance/generation-context';
+import { checkGrounding } from '../provenance/grounding';
+import { composeDiagnosisContent } from '../provenance/compose-diagnosis';
+
+/** Most-recent-N posts imported and persisted per refresh (all available if fewer). */
+export const MAX_IMPORT_POSTS = 100;
 
 export interface StartRefreshOptions {
   readonly idempotencyToken?: string;
-  /** Dev-only deterministic drivers behind the fixture boundary. */
+  /**
+   * Dev-only idempotency-fingerprint discriminators (do NOT drive any fixture — the pipeline is real).
+   * Kept so a reused token with different declared semantics still raises IDEMPOTENCY_CONFLICT.
+   */
   readonly importMode?: 'sufficient' | 'insufficient';
-  readonly flaw?: DiagnosisFlaw;
+  readonly flaw?: string;
 }
 
 /** Stable, content-free fingerprint of the request semantics for idempotency conflict detection. */
 function fingerprint(opts: StartRefreshOptions): string {
-  return `${opts.importMode ?? 'sufficient'}:${opts.flaw ?? 'none'}`;
+  return `${opts.importMode ?? 'default'}:${opts.flaw ?? 'none'}`;
 }
 
 export class BusinessBrainCoordinator {
@@ -46,6 +57,10 @@ export class BusinessBrainCoordinator {
   constructor(
     private readonly repo: BusinessBrainRepository,
     private readonly clock: IClock,
+    /** Real Instagram import (adapter loads the credential + calls Graph). */
+    private readonly importPort: InstagramImportPort,
+    /** The single-call account diagnosis model (real Anthropic in production). */
+    private readonly diagnosisPort: DiagnosisModelPort,
     /** 'detached' (default) returns accepted before completion; 'inline' awaits it (tests). */
     private readonly runner: 'detached' | 'inline' = 'detached',
   ) {}
@@ -61,18 +76,9 @@ export class BusinessBrainCoordinator {
     return this.repo.getRefreshProgress(founderId);
   }
 
+  /** Reflects the real Instagram connection (presence of an encrypted OAuth credential). */
   getConnectionStatus(founderId: string): Promise<DevConnectionStatus> {
     return this.repo.getConnectionStatus(founderId);
-  }
-
-  // ---- Connection (dev adapter) ----
-
-  connect(founderId: string): Promise<DevConnectionStatus> {
-    return this.repo.connect(founderId, this.clock.nowISO());
-  }
-
-  disconnect(founderId: string): Promise<DevConnectionStatus> {
-    return this.repo.disconnect(founderId, this.clock.nowISO());
   }
 
   // ---- Commands ----
@@ -122,39 +128,104 @@ export class BusinessBrainCoordinator {
     if (this.runner === 'inline') await task;
   }
 
-  private async runPipeline(founderId: string, versionId: string, opts: StartRefreshOptions): Promise<void> {
+  private async runPipeline(founderId: string, versionId: string, _opts: StartRefreshOptions): Promise<void> {
     const at = (): string => this.clock.nowISO();
+    const genFail = 'diagnosis_unavailable' as const;
     try {
-      const observations = deterministicImport(opts.importMode ?? 'sufficient');
-      const ev = constructEvidence(versionId, founderId, observations);
-      if (!ev.sufficient || !ev.evidence) {
+      // 1. REAL import — the adapter loads the encrypted credential and calls the Graph API.
+      let imported: ImportedAccount;
+      try {
+        imported = await this.importPort.importAccount(founderId, { maxPosts: MAX_IMPORT_POSTS });
+      } catch {
+        await this.repo.commitImportFailureAndDiscard(founderId, versionId, 'failed', 'import_temporarily_unavailable', at());
+        return;
+      }
+
+      // 2. Deterministic signals → observation records.
+      const observations: ObservationRecord[] = imported.posts.map((p) => ({
+        observationId: generateId(),
+        ...p,
+        ...computePostSignals(p.caption),
+      }));
+
+      // 3. Deterministic account metrics (every number is a real computation over the observations).
+      const metrics = computeAccountMetrics(observations, imported.followersCount);
+
+      // 4. Deterministic evidence + sufficiency gate.
+      const built = buildDeterministicEvidence(versionId, founderId, metrics, observations);
+      if (!built.sufficient || !built.evidence || !built.claims) {
         await this.repo.commitImportFailureAndDiscard(founderId, versionId, 'insufficient', 'insufficient_evidence', at());
         return;
       }
-      const importOk = await this.repo.commitImportSufficient({ founderId, versionId, evidence: ev.evidence, importJobId: generateId(), at: at() });
-      if (!importOk) return; // Candidate was cancelled/discarded — stale, write nothing.
 
-      const diagnosis = deterministicDiagnosis(versionId, ev.evidence, opts.flaw ?? 'none');
+      // 5. Persist the provenance store (import + observations) + evidence in ONE transaction.
+      const importId = generateId();
+      const observationInputs: ObservationInput[] = observations.map((o) => ({
+        observationId: o.observationId, postExternalId: o.postExternalId, permalink: o.permalink,
+        mediaType: o.mediaType, postedAt: o.postedAt, reach: o.reach, likes: o.likes, comments: o.comments,
+        caption: o.caption, captionLength: o.captionLength, wordCount: o.wordCount, hashtagCount: o.hashtagCount,
+        mentionCount: o.mentionCount, hasLink: o.hasLink, hasCta: o.hasCta,
+      }));
+      const importOk = await this.repo.commitImportSufficient({
+        founderId, versionId, evidence: built.evidence, importJobId: generateId(), at: at(),
+        ...(metrics.windowFrom && metrics.windowTo ? { windowDescriptor: `${metrics.windowFrom}..${metrics.windowTo}` } : {}),
+        import: {
+          importId, source: 'instagram',
+          accountExternalId: imported.accountExternalId, accountUsername: imported.username, accountType: imported.accountType,
+          followersCount: imported.followersCount, mediaCount: imported.mediaCount,
+          importedPostCount: observations.length, windowFrom: metrics.windowFrom, windowTo: metrics.windowTo,
+          importedAt: imported.importedAt,
+        },
+        observations: observationInputs,
+      });
+      if (!importOk) return; // stale — candidate cancelled/discarded
+
+      // 6. One structured context — the model's entire input.
+      const ctx = assembleGenerationContext(imported, metrics, observations, built.evidence.items);
+
+      // 7. ONE LLM call for the whole account.
+      let result;
+      try {
+        result = await this.diagnosisPort.generate(ctx);
+      } catch {
+        await this.repo.failAndDiscard(founderId, versionId, genFail, { importState: 'sufficient', diagnosisState: 'generation_failed' }, at());
+        return;
+      }
+
+      // 8. Grounding gate — reject fabricated numbers / dangling links before anything is shown.
+      if (!checkGrounding(result.narrative, ctx).ok) {
+        await this.repo.failAndDiscard(founderId, versionId, genFail, { importState: 'sufficient', diagnosisState: 'generation_failed' }, at());
+        return;
+      }
+
+      // 9. Compose DiagnosisContent: deterministic evidence + business-language narrative + traceability.
+      const diagnosis = composeDiagnosisContent(versionId, result.narrative, built.evidence, built.claims);
+
+      // 10. Persist diagnosis + freeze the exact model input (context + SHA-256).
       let diagOk = false;
       try {
-        diagOk = await this.repo.commitCandidateDiagnosis({ founderId, versionId, diagnosis, diagnosisJobId: generateId(), at: at() });
+        diagOk = await this.repo.commitCandidateDiagnosis({
+          founderId, versionId, diagnosis, diagnosisJobId: generateId(), at: at(),
+          generationContext: {
+            generationContextId: generateId(), context: ctx, contentHash: hashGenerationContext(ctx),
+            modelId: result.modelId, promptTemplateHash: result.promptTemplateHash,
+          },
+        });
       } catch {
-        // Diagnosis could not be persisted (e.g., structurally impossible content) — generation failure.
-        await this.repo.failAndDiscard(founderId, versionId, 'diagnosis_unavailable', { importState: 'sufficient', diagnosisState: 'generation_failed' }, at());
+        await this.repo.failAndDiscard(founderId, versionId, genFail, { importState: 'sufficient', diagnosisState: 'generation_failed' }, at());
         return;
       }
       if (!diagOk) return; // stale
 
-      const validation = validateCandidate({ versionId, founderId, evidence: ev.evidence, diagnosis });
+      // 11. Validate (business grammar + traceability) → promote.
+      const validation = validateCandidate({ versionId, founderId, evidence: built.evidence, diagnosis });
       if (!validation.valid) {
         await this.repo.commitValidationFailedAndDiscard(founderId, versionId, at());
         return;
       }
       await this.repo.commitValidationPassed(founderId, versionId, at());
       await this.repo.promoteCandidateAtomically(founderId, versionId, at());
-      // 'stale' → the Candidate was concurrently cancelled/deleted; nothing to do.
     } catch {
-      // Any unexpected failure: commit a governed, content-free terminal failed state.
       const category: FailureCategory = 'temporary_failure';
       try {
         await this.repo.failAndDiscard(founderId, versionId, category, {}, at());

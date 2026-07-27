@@ -1,16 +1,25 @@
-/** Business Brain V1 — vertical-slice public surface (internal module barrel). */
+/** Business Brain V1 — public surface (internal module barrel). Phase ②: real import + one LLM call. */
 export * from './domain/model';
 export { validateCandidate, containsMetricOrChannel } from './domain/validation';
 export type { ValidationResult } from './domain/validation';
 export { meetsPromotionCriteria } from './domain/promotion';
-export { deterministicImport } from './pipeline/import-fixture';
-export type { TransientObservation, ImportMode } from './pipeline/import-fixture';
-export { constructEvidence, SUFFICIENCY_MINIMUM } from './pipeline/evidence-construction';
-export { deterministicDiagnosis } from './pipeline/diagnosis-fixture';
-export type { DiagnosisFlaw } from './pipeline/diagnosis-fixture';
-export { BusinessBrainStore, PromotionFailure } from './coordination/store';
-export { RefreshCoordinationService } from './coordination/refresh-coordination.service';
-export type { RefreshPlan } from './coordination/refresh-coordination.service';
+
+// Ports (application boundary) — production injects real Instagram import + real Anthropic diagnosis.
+export type { InstagramImportPort, DiagnosisModelPort, DiagnosisNarrative, DiagnosisResult } from './ports';
+
+// Deterministic provenance layer (pure).
+export type {
+  ImportedPost, ImportedAccount, PostSignals, ObservationRecord, AccountMetrics, GenerationContext,
+} from './provenance/model';
+export { computePostSignals } from './provenance/signals';
+export { computeAccountMetrics } from './provenance/metrics';
+export { buildDeterministicEvidence, MIN_POSTS_FOR_DIAGNOSIS } from './provenance/evidence';
+export type { DeterministicEvidence } from './provenance/evidence';
+export { assembleGenerationContext, hashGenerationContext, canonicalSerialize, sha256Hex } from './provenance/generation-context';
+export { checkGrounding } from './provenance/grounding';
+export type { GroundingResult } from './provenance/grounding';
+export { composeDiagnosisContent } from './provenance/compose-diagnosis';
+
 export {
   toPublicCurrentVersion,
   toPublicRefreshSnapshot,
@@ -23,8 +32,11 @@ export type {
   StartRefreshKind,
   CommitEvidenceInput,
   CommitDiagnosisInput,
+  ImportRecordInput,
+  ObservationInput,
+  GenerationContextInput,
   DevConnectionState,
   DevConnectionStatus,
 } from './coordination/repository';
-export { BusinessBrainCoordinator } from './coordination/lifecycle-coordinator';
+export { BusinessBrainCoordinator, MAX_IMPORT_POSTS } from './coordination/lifecycle-coordinator';
 export type { StartRefreshOptions } from './coordination/lifecycle-coordinator';

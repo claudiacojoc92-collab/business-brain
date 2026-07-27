@@ -90,13 +90,22 @@ describe('Business Brain V1 frontend', () => {
     expect(screen.getByText(/Connect before starting a refresh/i)).toBeInTheDocument();
   });
 
-  it('4. Connect updates authoritative connection state', async () => {
-    m(client.bbConnect).mockResolvedValue({ connectionState: 'connected', connectedAt: 'x' });
-    renderWs();
-    const connectBtn = await screen.findByRole('button', { name: /Connect Instagram/i });
-    await userEvent.click(connectBtn);
-    await waitFor(() => expect(screen.getByTestId('connection-status')).toHaveTextContent(/connected/i));
-    expect(screen.getByTestId('start-refresh')).not.toBeDisabled();
+  it('4. Connect begins REAL Instagram Business Login by redirecting to the consent URL', async () => {
+    const authUrl = 'https://www.instagram.com/oauth/authorize?client_id=ig&scope=instagram_business_basic&state=abc';
+    m(client.bbConnect).mockResolvedValue({ authUrl });
+    // jsdom's location.assign is non-configurable — replace window.location wholesale, then restore.
+    const original = window.location;
+    const assign = vi.fn();
+    Object.defineProperty(window, 'location', { configurable: true, writable: true, value: { ...original, assign } });
+    try {
+      renderWs();
+      const connectBtn = await screen.findByRole('button', { name: /Connect Instagram/i });
+      await userEvent.click(connectBtn);
+      await waitFor(() => expect(client.bbConnect).toHaveBeenCalled());
+      await waitFor(() => expect(assign).toHaveBeenCalledWith(authUrl));
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, writable: true, value: original });
+    }
   });
 
   it('5. Start Refresh sends exactly one idempotency token; 6/7 token reuse & new token', async () => {
@@ -208,7 +217,7 @@ describe('Business Brain V1 frontend', () => {
   it('19. Disconnect preserves Current', async () => {
     m(client.getBBConnection).mockResolvedValue({ connectionState: 'connected' });
     m(client.getBBCurrent).mockResolvedValue(VERSION('V1'));
-    m(client.bbDisconnect).mockResolvedValue({ connectionState: 'revoked' });
+    m(client.bbDisconnect).mockResolvedValue({ connectionState: 'not_connected' });
     renderWs(100000);
     await screen.findByTestId('current-business-brain');
     await userEvent.click(screen.getByRole('button', { name: /Disconnect/i }));

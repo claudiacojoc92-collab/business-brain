@@ -6,7 +6,7 @@ import { PendingAuthStore } from '../auth/oauth';
 import { MetaConnector } from '../connectors/meta/meta.connector';
 import type { MetaOAuthConfig } from '../connectors/meta/meta-oauth';
 import { InstagramConnector } from '../connectors/instagram/instagram.connector';
-import type { InstagramOAuthConfig } from '../connectors/instagram/instagram-oauth';
+import { getInstagramConnector } from '../connectors/instagram/instagram-connector.instance';
 
 /**
  * Social sources — the REAL, authenticated, in-product Meta/Instagram connect flows (App Review).
@@ -44,17 +44,9 @@ export function registerSocialSourcesRoutes(server: FastifyInstance, deps: Serve
   }
 
   // ── Instagram (Instagram Login) connector ────────────────────────────────────────────────────
-  const igAppId = process.env['INSTAGRAM_APP_ID'] ?? '';
-  const igAppSecret = process.env['INSTAGRAM_APP_SECRET'] ?? '';
-  const igRedirect = process.env['INSTAGRAM_REDIRECT_URI'] ?? 'http://localhost:3000/api/sources/instagram/callback';
-  const igReady = Boolean(igAppId && igAppSecret && encKeyHex);
-  let ig: InstagramConnector | null = null;
-  if (igReady) {
-    const db = createKyselyClient(process.env['DATABASE_URL'] ?? '');
-    const store = new PgCredentialStore(db, FieldEncryptor.fromHexKey(encKeyHex));
-    const oauth: InstagramOAuthConfig = { appId: igAppId, appSecret: igAppSecret, redirectUri: igRedirect };
-    ig = new InstagramConnector(store, oauth, new PendingAuthStore());
-  }
+  // Shared process-singleton: the Business Brain connection routes reuse the SAME instance, so the
+  // OAuth `state` created by either /connect is redeemable at this /callback (one PendingAuthStore).
+  const ig: InstagramConnector | null = getInstagramConnector();
 
   // Resolve the signed-in founder from the Bearer JWT (same contract as /v1). Null → 401 already sent.
   const founderOf = (request: FastifyRequest, reply: FastifyReply): string | null => {
@@ -96,8 +88,15 @@ export function registerSocialSourcesRoutes(server: FastifyInstance, deps: Serve
     if (q['error']) return reply.redirect(`${appOrigin}/sources?error=${encodeURIComponent(String(q['error_description'] ?? q['error']))}`);
     const state = String(q['state'] ?? ''); const code = String(q['code'] ?? '');
     if (!state || !code) return reply.redirect(`${appOrigin}/sources?error=missing_parameters`);
-    try { await c.handleCallback(state, code); return reply.redirect(`${appOrigin}/sources?connected=instagram`); }
-    catch (e) { return reply.redirect(`${appOrigin}/sources?error=${encodeURIComponent(e instanceof Error ? e.message : 'connect_failed')}`); }
+    try {
+      const { returnTo } = await c.handleCallback(state, code);
+      const dest = returnTo && returnTo.startsWith('/') ? returnTo : '/sources';
+      return reply.redirect(`${appOrigin}${dest}?connected=instagram`);
+    }
+    catch (e) {
+      const returnTo = '/sources';
+      return reply.redirect(`${appOrigin}${returnTo}?error=${encodeURIComponent(e instanceof Error ? e.message : 'connect_failed')}`);
+    }
   });
 
   server.get('/api/sources/instagram/read', async (request, reply) => {

@@ -10,6 +10,7 @@
  * Real Graph calls only — no mocks, no fabricated data; a metric that isn't available for the account
  * is reported in `notes`, never faked. Tokens live only on the credential plane, never returned/logged.
  */
+import type { ImportedAccount, ImportedPost, InstagramImportPort } from '@bb/application';
 import type { CredentialStore } from '../../auth/credential-store';
 import { PendingAuthStore, createState } from '../../auth/oauth';
 import {
@@ -30,7 +31,7 @@ export interface InstagramRead {
   error?: string;
 }
 
-export class InstagramConnector {
+export class InstagramConnector implements InstagramImportPort {
   private readonly doFetch: FetchImpl;
   private readonly graph: string;
   constructor(
@@ -42,14 +43,14 @@ export class InstagramConnector {
     this.graph = oauth.graphBase ?? IG_GRAPH;
   }
 
-  authorize(founderId: string): { authUrl: string; state: string } {
+  authorize(founderId: string, returnTo?: string): { authUrl: string; state: string } {
     const state = createState();
-    this.pending.put(state, { founderId, provider: INSTAGRAM_PROVIDER, codeVerifier: '', createdAt: Date.now() });
+    this.pending.put(state, { founderId, provider: INSTAGRAM_PROVIDER, codeVerifier: '', createdAt: Date.now(), ...(returnTo ? { returnTo } : {}) });
     return { authUrl: buildAuthUrl(this.oauth, state), state };
   }
 
   /** Callback: verify state, exchange code → short-lived → long-lived, persist ENCRYPTED. */
-  async handleCallback(state: string, code: string): Promise<{ founderId: string }> {
+  async handleCallback(state: string, code: string): Promise<{ founderId: string; returnTo?: string }> {
     const p = this.pending.take(state);
     if (!p) throw new Error('invalid or expired OAuth state');
     const short = await exchangeCode(this.oauth, code);
@@ -58,7 +59,7 @@ export class InstagramConnector {
     await this.credentials.save(p.founderId, INSTAGRAM_PROVIDER, {
       accessToken: long.accessToken, refreshToken: null, expiresAt: long.expiresAt, scopes: long.scopes,
     });
-    return { founderId: p.founderId };
+    return { founderId: p.founderId, ...(p.returnTo ? { returnTo: p.returnTo } : {}) };
   }
 
   async status(founderId: string): Promise<InstagramConnectionState> {
@@ -165,5 +166,78 @@ export class InstagramConnector {
     } catch (e) {
       return { ok: false, account: null, accountInsights: null, recentMedia: [], endpointsCalled: called, notes, error: e instanceof Error ? e.message : 'read error' };
     }
+  }
+
+  /**
+   * Phase ② real import (InstagramImportPort). Paginates /me/media up to `maxPosts` (all available if
+   * fewer), reading the FULL caption + like/comment counts, plus per-media reach via insights
+   * (best-effort — null when Instagram does not return it, never faked). The token never leaves the
+   * credential plane: it rides the query string internally and is never returned or logged.
+   */
+  async importAccount(founderId: string, opts: { readonly maxPosts: number }): Promise<ImportedAccount> {
+    const token = await this.token(founderId);
+    const getUrl = async (url: string): Promise<Record<string, unknown>> => {
+      const res = await this.doFetch(url, { method: 'GET' });
+      const json = (await res.json()) as Record<string, unknown>;
+      if (!res.ok) throw new Error(String((json['error'] as { message?: string } | undefined)?.message ?? res.status));
+      return json;
+    };
+    const graphGet = (path: string, params: Record<string, string>): Promise<Record<string, unknown>> => {
+      const u = new URL(`${this.graph}${path}`);
+      for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
+      u.searchParams.set('access_token', token);
+      return getUrl(u.toString());
+    };
+    const insightReach = (json: Record<string, unknown>): number | null => {
+      const arr = Array.isArray(json['data']) ? (json['data'] as Record<string, unknown>[]) : [];
+      const d0 = arr.find((d) => d['name'] === 'reach') ?? arr[0];
+      if (!d0) return null;
+      const tv = d0['total_value'] as { value?: number } | undefined;
+      if (tv && typeof tv.value === 'number') return tv.value;
+      const vals = d0['values'] as { value?: number }[] | undefined;
+      return Array.isArray(vals) && vals.length ? Number(vals[vals.length - 1]?.value ?? 0) : null;
+    };
+
+    const me = await graphGet('/me', { fields: 'user_id,username,account_type,media_count,followers_count' });
+
+    const posts: ImportedPost[] = [];
+    const pageSize = Math.min(Math.max(opts.maxPosts, 1), 25);
+    let page = await graphGet('/me/media', {
+      fields: 'id,caption,media_type,timestamp,permalink,like_count,comments_count',
+      limit: String(pageSize),
+    });
+    for (let guard = 0; guard < 25 && posts.length < opts.maxPosts; guard += 1) {
+      const items = Array.isArray(page['data']) ? (page['data'] as Record<string, unknown>[]) : [];
+      for (const m of items) {
+        if (posts.length >= opts.maxPosts) break;
+        const mediaId = String(m['id'] ?? '');
+        let reach: number | null = null;
+        try { reach = insightReach(await graphGet(`/${mediaId}/insights`, { metric: 'reach' })); } catch { reach = null; }
+        posts.push({
+          postExternalId: mediaId,
+          permalink: m['permalink'] ? String(m['permalink']) : null,
+          mediaType: m['media_type'] ? String(m['media_type']) : null,
+          postedAt: m['timestamp'] ? String(m['timestamp']) : null,
+          caption: m['caption'] ? String(m['caption']) : '',
+          reach,
+          likes: typeof m['like_count'] === 'number' ? (m['like_count'] as number) : null,
+          comments: typeof m['comments_count'] === 'number' ? (m['comments_count'] as number) : null,
+        });
+      }
+      const paging = page['paging'] as { next?: string } | undefined;
+      const next = paging?.next ?? null;
+      if (!next || posts.length >= opts.maxPosts) break;
+      page = await getUrl(next);
+    }
+
+    return {
+      accountExternalId: me['user_id'] ? String(me['user_id']) : (me['id'] ? String(me['id']) : null),
+      username: me['username'] ? String(me['username']) : null,
+      accountType: me['account_type'] ? String(me['account_type']) : null,
+      followersCount: typeof me['followers_count'] === 'number' ? (me['followers_count'] as number) : null,
+      mediaCount: typeof me['media_count'] === 'number' ? (me['media_count'] as number) : null,
+      posts,
+      importedAt: new Date().toISOString(),
+    };
   }
 }
