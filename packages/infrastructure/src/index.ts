@@ -84,6 +84,9 @@ export { PgClaimRepository } from './database/repositories/pg-claim.repository';
 export { KyselyClaimUnitOfWork } from './understanding/kysely-claim-unit-of-work';
 export { LoggingClaimEventSink } from './understanding/logging-claim-event-sink';
 
+// Business Brain V1 — versioned lifecycle persistence (V060)
+export { PgBusinessBrainRepository } from './businessbrain/pg-businessbrain.repository';
+
 // Intake session repository (B1 onboarding)
 export { PgIntakeSessionRepository } from './database/repositories/pg-intake-session.repository';
 export type { RedisClient } from './cache/redis-client';
