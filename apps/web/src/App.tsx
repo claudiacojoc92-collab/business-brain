@@ -12,6 +12,7 @@ import { GooglePreviewPage } from './google/GooglePreviewPage';
 import { DeclaredPreviewPage } from './declared/DeclaredPreviewPage';
 import { CalendarPreviewPage } from './calendar/CalendarPreviewPage';
 import { SourcesPage } from './pages/SourcesPage';
+import { BusinessBrainPage } from './pages/BusinessBrainPage';
 
 /**
  * Route guard: redirect based on founder status.
@@ -111,6 +112,16 @@ export function App() {
             element={
               <ActiveGuard>
                 <SourcesPage />
+              </ActiveGuard>
+            }
+          />
+
+          {/* Business Brain V1 — versioned lifecycle workspace (ACTIVE founders) */}
+          <Route
+            path="/business-brain"
+            element={
+              <ActiveGuard>
+                <BusinessBrainPage />
               </ActiveGuard>
             }
           />

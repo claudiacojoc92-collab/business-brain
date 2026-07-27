@@ -6,7 +6,12 @@
  * Throws ApiError on non-2xx responses so callers can handle uniformly.
  */
 
-const API_BASE = '/';
+let API_BASE = '/';
+
+/** Override the API base (used by full-stack integration tests against a real local server). */
+export function setApiBase(base: string): void {
+  API_BASE = base;
+}
 
 export class ApiError extends Error {
   constructor(
@@ -337,4 +342,80 @@ export const getMetaStatus = () => socialFetch<{ connected: boolean }>('api/sour
 export const getMetaConnectUrl = () => socialFetch<{ authUrl?: string; error?: string }>('api/sources/meta/connect');
 export const listMetaPages = () => socialFetch<MetaPagesList>('api/sources/meta/pages');
 export const readMetaPage = (pageId: string) => socialFetch<MetaPageRead>(`api/sources/meta/read?pageId=${encodeURIComponent(pageId)}`);
+
+// ─── Business Brain V1 (public API — Version ID is the only public identity) ────
+
+export type BBConnectionState = 'not_connected' | 'connected' | 'revoked';
+export interface BBConnectionStatus {
+  connectionState: BBConnectionState;
+  connectedAt?: string;
+}
+
+export type BBRefreshState = 'none' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
+export type BBImportState = 'none' | 'running' | 'sufficient' | 'insufficient' | 'failed';
+export type BBDiagnosisState = 'none' | 'running' | 'produced' | 'generation_failed';
+export type BBValidationState = 'none' | 'passed' | 'failed';
+export type BBFailureCategory =
+  | 'connection_lost' | 'insufficient_evidence' | 'import_temporarily_unavailable'
+  | 'import_timeout' | 'diagnosis_unavailable' | 'session_lost' | 'temporary_failure';
+
+export interface BBRefreshSnapshot {
+  refreshReference?: string;
+  refreshState: BBRefreshState;
+  importState: BBImportState;
+  diagnosisState: BBDiagnosisState;
+  validationState: BBValidationState;
+  failureCategory?: BBFailureCategory;
+  transitionMarker: number;
+}
+
+export interface BBEvidenceMeasure {
+  descriptor: string;
+  kind: 'proportion' | 'presence' | 'absence';
+  value?: number;
+}
+export interface BBEvidenceClaim {
+  claimStatement: string;
+  measures: BBEvidenceMeasure[];
+}
+export interface BBExecutionPlanPhase {
+  label: string;
+  actions: { statement: string; sequence: number }[];
+}
+export interface BBCurrentVersion {
+  versionId: string;
+  producedAt: string;
+  businessReality: string;
+  businessConsequences: string[];
+  evidence: { claims: BBEvidenceClaim[] };
+  cannotYetKnow: string;
+  rootCauses: string[];
+  recommendations: string[];
+  executionPlan: BBExecutionPlanPhase[];
+}
+export type BBCurrent = BBCurrentVersion | { state: 'no_current_version' };
+
+export interface BBFounder { founderReference: string }
+export interface BBSession { sessionReference: string; state: string; expiresAt?: string }
+
+export interface BBStartRefreshInput {
+  idempotencyToken: string;
+  /** Dev-only deterministic drivers (ignored by the API in production). */
+  importMode?: 'sufficient' | 'insufficient';
+  flaw?: string;
+}
+
+const BB = 'v1/businessbrain';
+
+export const getBBFounder = () => request<BBFounder>(`${BB}/founder`);
+export const getBBSession = () => request<BBSession>(`${BB}/session`);
+export const getBBConnection = () => request<BBConnectionStatus>(`${BB}/connection`);
+// Bodyless POSTs still send `{}` — Fastify rejects an empty body when Content-Type is JSON.
+export const bbConnect = () => request<BBConnectionStatus>(`${BB}/connection/connect`, { method: 'POST', body: '{}' });
+export const bbDisconnect = () => request<BBConnectionStatus>(`${BB}/connection/disconnect`, { method: 'POST', body: '{}' });
+export const getBBRefresh = () => request<BBRefreshSnapshot>(`${BB}/refresh`);
+export const bbCancelRefresh = () => request<BBRefreshSnapshot>(`${BB}/refresh/cancel`, { method: 'POST', body: '{}' });
+export const getBBCurrent = () => request<BBCurrent>(`${BB}/current`);
+export const bbStartRefresh = (input: BBStartRefreshInput) =>
+  request<BBRefreshSnapshot>(`${BB}/refresh`, { method: 'POST', body: JSON.stringify(input) });
 export const disconnectMeta = () => socialFetch<{ connected: boolean }>('api/sources/meta/disconnect', { method: 'POST' });

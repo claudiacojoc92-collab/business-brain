@@ -16,5 +16,7 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "comment": "Integration specs boot a real server (cross-app imports) and are run only by Vitest; they are excluded from the production type-check/build so app code stays free of api/infra imports.",
+  "exclude": ["src/**/*.integration.spec.ts", "src/**/*.integration.spec.tsx"]
 }
