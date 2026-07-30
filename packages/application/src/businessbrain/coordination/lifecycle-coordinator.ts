@@ -183,23 +183,49 @@ export class BusinessBrainCoordinator {
       // 6. One structured context — the model's entire input.
       const ctx = assembleGenerationContext(imported, metrics, observations, built.evidence.items);
 
-      // 7. ONE LLM call for the whole account.
-      let result;
-      try {
-        result = await this.diagnosisPort.generate(ctx);
-      } catch {
+      // 7–9. ONE LLM call, with a BOUNDED RETRY. The narrative must pass BOTH the grounding gate and
+      // business-grammar/traceability validation. All three failure modes are non-deterministic LLM slips
+      // (an occasional digit or channel word in a narrative field; a cited evidence key or index that
+      // doesn't resolve). Rather than fail the whole refresh on the first imperfect draft, regenerate up
+      // to MAX_DIAGNOSIS_ATTEMPTS and only persist a narrative that ALREADY validates. Every rejected
+      // attempt is logged with its exact reason, so a systematic (non-transient) failure is visible.
+      const MAX_DIAGNOSIS_ATTEMPTS = 3;
+      let result: Awaited<ReturnType<DiagnosisModelPort['generate']>> | undefined;
+      let diagnosis: ReturnType<typeof composeDiagnosisContent> | undefined;
+      for (let attempt = 1; attempt <= MAX_DIAGNOSIS_ATTEMPTS; attempt += 1) {
+        let draft: Awaited<ReturnType<DiagnosisModelPort['generate']>>;
+        try {
+          draft = await this.diagnosisPort.generate(ctx);
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.error('[bb-pipeline] generate threw attempt=%d/%d founder=%s version=%s err=%s', attempt, MAX_DIAGNOSIS_ATTEMPTS, founderId, versionId, e instanceof Error ? e.stack ?? e.message : String(e));
+          continue;
+        }
+        const grounding = checkGrounding(draft.narrative, ctx);
+        if (!grounding.ok) {
+          // eslint-disable-next-line no-console
+          console.error('[bb-pipeline] grounding rejected attempt=%d/%d founder=%s version=%s detail=%j', attempt, MAX_DIAGNOSIS_ATTEMPTS, founderId, versionId, grounding);
+          continue;
+        }
+        const draftDiagnosis = composeDiagnosisContent(versionId, draft.narrative, built.evidence, built.claims);
+        const check = validateCandidate({ versionId, founderId, evidence: built.evidence, diagnosis: draftDiagnosis });
+        if (!check.valid) {
+          // eslint-disable-next-line no-console
+          console.error('[bb-pipeline] validation failed attempt=%d/%d founder=%s version=%s failures=%j', attempt, MAX_DIAGNOSIS_ATTEMPTS, founderId, versionId, check.failures);
+          continue;
+        }
+        // eslint-disable-next-line no-console
+        console.log('[bb-pipeline] diagnosis valid on attempt=%d/%d founder=%s version=%s', attempt, MAX_DIAGNOSIS_ATTEMPTS, founderId, versionId);
+        result = draft;
+        diagnosis = draftDiagnosis;
+        break;
+      }
+      if (!result || !diagnosis) {
+        // eslint-disable-next-line no-console
+        console.error('[bb-pipeline] diagnosis exhausted all %d attempts founder=%s version=%s', MAX_DIAGNOSIS_ATTEMPTS, founderId, versionId);
         await this.repo.failAndDiscard(founderId, versionId, genFail, { importState: 'sufficient', diagnosisState: 'generation_failed' }, at());
         return;
       }
-
-      // 8. Grounding gate — reject fabricated numbers / dangling links before anything is shown.
-      if (!checkGrounding(result.narrative, ctx).ok) {
-        await this.repo.failAndDiscard(founderId, versionId, genFail, { importState: 'sufficient', diagnosisState: 'generation_failed' }, at());
-        return;
-      }
-
-      // 9. Compose DiagnosisContent: deterministic evidence + business-language narrative + traceability.
-      const diagnosis = composeDiagnosisContent(versionId, result.narrative, built.evidence, built.claims);
 
       // 10. Persist diagnosis + freeze the exact model input (context + SHA-256).
       let diagOk = false;
@@ -211,21 +237,28 @@ export class BusinessBrainCoordinator {
             modelId: result.modelId, promptTemplateHash: result.promptTemplateHash,
           },
         });
-      } catch {
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[bb-pipeline] diagnosis persist failed founder=%s version=%s err=%s', founderId, versionId, e instanceof Error ? e.stack ?? e.message : String(e));
         await this.repo.failAndDiscard(founderId, versionId, genFail, { importState: 'sufficient', diagnosisState: 'generation_failed' }, at());
         return;
       }
       if (!diagOk) return; // stale
 
-      // 11. Validate (business grammar + traceability) → promote.
+      // 11. Validate (business grammar + traceability) → promote. Already validated above; this is the
+      // authoritative persisted-state gate. A failure here means a repository mapping problem, not the LLM.
       const validation = validateCandidate({ versionId, founderId, evidence: built.evidence, diagnosis });
       if (!validation.valid) {
+        // eslint-disable-next-line no-console
+        console.error('[bb-pipeline] post-persist validation failed founder=%s version=%s failures=%j', founderId, versionId, validation.failures);
         await this.repo.commitValidationFailedAndDiscard(founderId, versionId, at());
         return;
       }
       await this.repo.commitValidationPassed(founderId, versionId, at());
       await this.repo.promoteCandidateAtomically(founderId, versionId, at());
-    } catch {
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[bb-pipeline] pipeline threw founder=%s version=%s err=%s', founderId, versionId, e instanceof Error ? e.stack ?? e.message : String(e));
       const category: FailureCategory = 'temporary_failure';
       try {
         await this.repo.failAndDiscard(founderId, versionId, category, {}, at());

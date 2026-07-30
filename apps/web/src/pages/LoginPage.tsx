@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login as apiLogin, ApiError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { LegalFooter } from '../legal/LegalPages';
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
@@ -123,6 +124,7 @@ export function LoginPage() {
           {isLoading ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
+      <LegalFooter />
     </div>
   );
 }

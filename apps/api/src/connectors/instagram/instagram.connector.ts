@@ -19,6 +19,25 @@ import {
 
 export const INSTAGRAM_PROVIDER = 'instagram';
 
+// The OAuth `state` = "<csrf>.<base64url(returnTo)>". Instagram returns it verbatim, so the SPA return
+// path survives the round trip independent of the in-memory pending store (resilient to api restarts).
+const STATE_SEP = '.';
+function encodeState(csrf: string, returnTo?: string): string {
+  if (!returnTo) return csrf;
+  return `${csrf}${STATE_SEP}${Buffer.from(returnTo, 'utf8').toString('base64url')}`;
+}
+/** Recover the SPA return path from a round-tripped state. Null if absent/invalid or not an app path. */
+export function returnToFromState(state: string): string | null {
+  const i = state.indexOf(STATE_SEP);
+  if (i < 0) return null;
+  try {
+    const path = Buffer.from(state.slice(i + 1), 'base64url').toString('utf8');
+    return path.startsWith('/') && !path.startsWith('//') ? path : null;
+  } catch {
+    return null;
+  }
+}
+
 export type InstagramConnectionState = 'disconnected' | 'connected';
 
 export interface InstagramRead {
@@ -44,13 +63,20 @@ export class InstagramConnector implements InstagramImportPort {
   }
 
   authorize(founderId: string, returnTo?: string): { authUrl: string; state: string } {
-    const state = createState();
+    // The state carries the CSRF token AND the SPA return path. Instagram round-trips it verbatim, so
+    // the callback can always recover where to send the browser back — even if this process restarted
+    // and lost the in-memory pending entry. CSRF is still verified against the store below.
+    const state = encodeState(createState(), returnTo);
     this.pending.put(state, { founderId, provider: INSTAGRAM_PROVIDER, codeVerifier: '', createdAt: Date.now(), ...(returnTo ? { returnTo } : {}) });
     return { authUrl: buildAuthUrl(this.oauth, state), state };
   }
 
-  /** Callback: verify state, exchange code → short-lived → long-lived, persist ENCRYPTED. */
-  async handleCallback(state: string, code: string): Promise<{ founderId: string; returnTo?: string }> {
+  /**
+   * Callback: verify state, exchange code → short-lived → long-lived, persist ENCRYPTED. Also returns
+   * the app-scoped IG user id (from the token exchange) so the caller can record the ig-id ↔ founder
+   * mapping that Meta's Deauthorize / Data-Deletion callbacks rely on.
+   */
+  async handleCallback(state: string, code: string): Promise<{ founderId: string; returnTo?: string; igUserId?: string }> {
     const p = this.pending.take(state);
     if (!p) throw new Error('invalid or expired OAuth state');
     const short = await exchangeCode(this.oauth, code);
@@ -59,7 +85,11 @@ export class InstagramConnector implements InstagramImportPort {
     await this.credentials.save(p.founderId, INSTAGRAM_PROVIDER, {
       accessToken: long.accessToken, refreshToken: null, expiresAt: long.expiresAt, scopes: long.scopes,
     });
-    return { founderId: p.founderId, ...(p.returnTo ? { returnTo: p.returnTo } : {}) };
+    return {
+      founderId: p.founderId,
+      ...(p.returnTo ? { returnTo: p.returnTo } : {}),
+      ...(short.userId ? { igUserId: short.userId } : {}),
+    };
   }
 
   async status(founderId: string): Promise<InstagramConnectionState> {

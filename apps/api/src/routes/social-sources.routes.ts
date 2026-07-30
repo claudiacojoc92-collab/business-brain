@@ -5,8 +5,9 @@ import { PgCredentialStore } from '../auth/pg-credential-store';
 import { PendingAuthStore } from '../auth/oauth';
 import { MetaConnector } from '../connectors/meta/meta.connector';
 import type { MetaOAuthConfig } from '../connectors/meta/meta-oauth';
-import { InstagramConnector } from '../connectors/instagram/instagram.connector';
+import { InstagramConnector, returnToFromState } from '../connectors/instagram/instagram.connector';
 import { getInstagramConnector } from '../connectors/instagram/instagram-connector.instance';
+import { getInstagramComplianceStore } from '../connectors/instagram/instagram-compliance.store';
 
 /**
  * Social sources — the REAL, authenticated, in-product Meta/Instagram connect flows (App Review).
@@ -75,27 +76,38 @@ export function registerSocialSourcesRoutes(server: FastifyInstance, deps: Serve
     await reply.send({ connected: (await c.status(f)) === 'connected' });
   });
 
-  // Called WITH the Bearer token; returns the consent URL for the client to navigate to.
+  // Called WITH the Bearer token; returns the consent URL for the client to navigate to. The Sources
+  // page flow returns the browser to /sources after the callback (the Business Brain page passes its own
+  // returnTo). The path is carried in the OAuth state, so it survives even an api restart mid-flow.
   server.get('/api/sources/instagram/connect', async (request, reply) => {
     const f = founderOf(request, reply); if (!f) return; const c = needIg(reply); if (!c) return;
-    await reply.send({ authUrl: c.authorize(f).authUrl });
+    await reply.send({ authUrl: c.authorize(f, '/sources').authUrl });
   });
 
-  // Browser redirect target — identity comes from the OAuth `state`, not a header. Returns to the SPA.
+  // Browser redirect target — identity comes from the OAuth `state`, not a header. The SPA destination is
+  // recovered from the state (via returnToFromState), so success AND error land the founder back on the
+  // page they started from — never stranded on a different screen. Defaults to /business-brain.
   server.get('/api/sources/instagram/callback', async (request, reply) => {
     const c = needIg(reply); if (!c) return;
     const q = request.query as Record<string, unknown>;
-    if (q['error']) return reply.redirect(`${appOrigin}/sources?error=${encodeURIComponent(String(q['error_description'] ?? q['error']))}`);
     const state = String(q['state'] ?? ''); const code = String(q['code'] ?? '');
-    if (!state || !code) return reply.redirect(`${appOrigin}/sources?error=missing_parameters`);
+    const back = returnToFromState(state) ?? '/business-brain';
+    if (q['error']) return reply.redirect(`${appOrigin}${back}?error=${encodeURIComponent(String(q['error_description'] ?? q['error']))}`);
+    if (!state || !code) return reply.redirect(`${appOrigin}${back}?error=missing_parameters`);
     try {
-      const { returnTo } = await c.handleCallback(state, code);
-      const dest = returnTo && returnTo.startsWith('/') ? returnTo : '/sources';
+      const { returnTo, founderId, igUserId } = await c.handleCallback(state, code);
+      // Record the app-scoped ig-id ↔ founder mapping so Meta's Deauthorize / Data-Deletion callbacks
+      // (which carry only the ig user id) can find and purge this founder's Instagram data. Best-effort:
+      // a mapping failure must never break the founder's successful connection.
+      if (igUserId) {
+        try { await getInstagramComplianceStore()?.recordIdentity(igUserId, founderId); }
+        catch (e) { request.log.warn({ err: e instanceof Error ? e.message : 'identity record failed' }, 'ig identity map'); }
+      }
+      const dest = returnTo && returnTo.startsWith('/') ? returnTo : back;
       return reply.redirect(`${appOrigin}${dest}?connected=instagram`);
     }
     catch (e) {
-      const returnTo = '/sources';
-      return reply.redirect(`${appOrigin}${returnTo}?error=${encodeURIComponent(e instanceof Error ? e.message : 'connect_failed')}`);
+      return reply.redirect(`${appOrigin}${back}?error=${encodeURIComponent(e instanceof Error ? e.message : 'connect_failed')}`);
     }
   });
 

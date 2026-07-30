@@ -271,6 +271,10 @@ export function useBusinessBrain(): UseBusinessBrain {
       } else if (e instanceof ApiError && e.code === 'INSTAGRAM_REQUIRED') {
         safeSession.remove(PENDING_TOKEN_KEY);
         setCommandError({ code: e.code, message: 'Connect before starting a refresh.' });
+      } else if (e instanceof ApiError && (e.status === 429 || e.code === 'RATE_LIMIT_EXCEEDED')) {
+        // Distinct from a pipeline failure: the request was throttled, not the refresh itself failing.
+        // Keep the pending token so the retry is idempotent.
+        setCommandError({ code: 'RATE_LIMITED', message: 'Too many requests just now. Please wait a moment, then start the refresh again.' });
       } else {
         // Network/uncertain: keep the pending token so a retry is idempotent.
         setCommandError({ code: 'TEMPORARY', message: 'Could not start the refresh. Please try again.' });

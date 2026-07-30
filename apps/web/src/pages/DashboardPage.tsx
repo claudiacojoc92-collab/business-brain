@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { LegalFooter } from '../legal/LegalPages';
 import {
   ApiError,
   getFounderProfile,
@@ -143,6 +144,12 @@ export function DashboardPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40 }}>
           <h1 style={{ fontFamily: 'var(--serif)', fontSize: '1.35rem', fontWeight: 500, letterSpacing: '0.01em' }}>Business Brain</h1>
           <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              onClick={() => navigate('/business-brain')}
+              style={{ background: 'var(--ink, #1f2937)', border: '1px solid var(--ink, #1f2937)', color: 'var(--paper, #fff)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.875rem', fontWeight: 600, padding: '6px 14px', borderRadius: 8 }}
+            >
+              Business Brain
+            </button>
             <button
               onClick={() => navigate('/history')}
               style={{ background: 'none', border: '1px solid var(--line-2)', color: 'var(--ink-3)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.875rem', padding: '6px 14px', borderRadius: 8 }}
@@ -363,6 +370,7 @@ export function DashboardPage() {
             </div>
           </>
         )}
+        <LegalFooter />
       </div>
     </div>
   );

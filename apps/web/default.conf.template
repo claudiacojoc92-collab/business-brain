@@ -44,8 +44,20 @@ server {
     proxy_set_header X-Forwarded-Proto $scheme;
   }
 
-  # --- SPA fallback: client routes (/login, /onboarding, /dashboard, /review, /) ---
+  # --- Static build assets: Vite fingerprints every file (…-<hash>.js/.css), so the content can
+  #     never change under a given name. Cache them hard. ---
+  location /assets/ {
+    add_header Cache-Control "public, max-age=31536000, immutable" always;
+    try_files $uri =404;
+  }
+
+  # --- SPA fallback: client routes (/login, /onboarding, /dashboard, /review, /business-brain, /).
+  #     index.html MUST NOT be cached, or the browser keeps running an old bundle that references
+  #     stale (deleted) asset hashes after a deploy. no-cache forces a revalidate every load, so a
+  #     fresh deploy is picked up immediately — no hard refresh required. ---
   location / {
+    add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+    add_header Pragma "no-cache" always;
     try_files $uri $uri/ /index.html;
   }
 }

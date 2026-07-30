@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import { useBusinessBrain } from './useBusinessBrain';
 import { CurrentBusinessBrain } from './CurrentBusinessBrain';
 import { RefreshProgress } from './RefreshProgress';
+import { LegalFooter } from '../legal/LegalPages';
 
 const btn: React.CSSProperties = {
   font: '600 14px/1 var(--sans,system-ui)', padding: '10px 16px', borderRadius: 8,
@@ -120,6 +121,7 @@ export function BusinessBrainWorkspace({ pollIntervalMs = 1500 }: { pollInterval
           </p>
         </section>
       )}
+      <LegalFooter />
     </div>
   );
 }

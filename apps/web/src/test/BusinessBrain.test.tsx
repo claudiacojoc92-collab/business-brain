@@ -42,7 +42,7 @@ const VERSION = (id: string) => ({
   producedAt: '2025-01-06T04:00:00.000Z',
   businessReality: 'Your communication makes it hard for the right clients to understand what you sell and why to choose you.',
   businessConsequences: ['The right clients rarely discover that you can help them.', 'People who like you have no clear path to becoming buyers.'],
-  evidence: { claims: [{ claimStatement: 'Almost nothing you publish makes the case for your offer.', measures: [{ descriptor: 'personal / lifestyle share', kind: 'proportion', value: 87 }, { descriptor: 'proof-of-results posts', kind: 'absence' }] }] },
+  evidence: { claims: [{ claimStatement: 'Almost nothing you publish makes the case for your offer.', measures: [{ descriptor: 'personal / lifestyle share', kind: 'proportion', value: 87 }, { descriptor: 'average reach per post', kind: 'count', value: 1545 }, { descriptor: 'proof-of-results posts', kind: 'absence' }] }] },
   cannotYetKnow: 'We cannot yet see your actual sales, or what your audience privately thinks.',
   rootCauses: ['Your expertise is not made legible.'],
   recommendations: ['Make your expertise visible and state your offer plainly.'],
@@ -197,6 +197,9 @@ describe('Business Brain V1 frontend', () => {
     // measures only in Evidence
     expect(screen.getByTestId('section-evidence')).toHaveTextContent('87%');
     expect(screen.getByTestId('section-business-reality')).not.toHaveTextContent('87');
+    // count measures render as plain numbers, NEVER as a percentage
+    expect(screen.getByTestId('section-evidence')).toHaveTextContent('1545');
+    expect(screen.getByTestId('section-evidence')).not.toHaveTextContent('1545%');
     // one-based ordered actions
     const items = screen.getByTestId('section-execution-plan').querySelectorAll('ol > li');
     expect(items[0]).toHaveAttribute('value', '1');

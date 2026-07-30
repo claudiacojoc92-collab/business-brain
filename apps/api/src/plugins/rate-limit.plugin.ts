@@ -19,9 +19,13 @@ export async function registerRateLimit(
       return user?.sub ?? request.ip;
     },
     max: (request) => {
-      if (request.method === 'GET') return 100;
+      if (request.method === 'GET') return 200;
       if (request.url.startsWith('/admin/')) return 200;
-      return 20;
+      // Authenticated founders legitimately perform many POST actions across the app in a short burst
+      // (connect/disconnect, refresh, strategic-context/decision/commitment writes). A tight bucket makes
+      // a heavy, deliberate action like "Start refresh" fail with an opaque 429. 60/min stays protective
+      // against abuse while never blocking normal interactive use.
+      return 60;
     },
     timeWindow: '1 minute',
     errorResponseBuilder: () => ({

@@ -38,9 +38,17 @@ function Section(props: { title: string; testid: string; caption?: string; child
   );
 }
 
-/** Render an Evidence measure's value by kind — absence/presence must read as a state, not a bare label. */
+/**
+ * Render an Evidence measure's value by kind:
+ *  - proportion → a percentage (e.g. "75%")
+ *  - count      → a plain number (e.g. "100", "1545 reach") — NEVER a percentage
+ *  - absence/presence → a state, not a bare label.
+ */
 function measureValue(m: { kind: string; value?: number }): React.ReactNode {
-  if (m.value !== undefined) return <strong style={{ color: 'var(--ink, #111827)' }}>{` — ${m.value}%`}</strong>;
+  if (m.value !== undefined) {
+    const rendered = m.kind === 'proportion' ? `${m.value}%` : String(m.value);
+    return <strong style={{ color: 'var(--ink, #111827)' }}>{` — ${rendered}`}</strong>;
+  }
   if (m.kind === 'absence') return <span style={{ color: 'var(--ink-3, #6b7280)' }}>{' — none found'}</span>;
   return <span style={{ color: 'var(--ink-3, #6b7280)' }}>{' — present'}</span>;
 }

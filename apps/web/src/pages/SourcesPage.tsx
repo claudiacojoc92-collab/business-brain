@@ -93,6 +93,7 @@ export function SourcesPage() {
       <div style={inner}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
           <div style={muted}><Link to="/dashboard" style={{ color: 'var(--ink-3)' }}>← Dashboard</Link></div>
+          <div style={muted}><Link to="/business-brain" style={{ color: 'var(--ink)', fontWeight: 600 }}>Open Business Brain →</Link></div>
         </div>
         <div style={kicker}>Sources</div>
         <h1 style={{ ...serif, fontSize: '1.7rem', fontWeight: 500, letterSpacing: '-0.01em', margin: '0 0 6px' }}>Social accounts</h1>

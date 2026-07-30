@@ -1,5 +1,5 @@
 # Dockerfile.migrate — Railway prod migration.
-# Business Brain (V060-V062) only: self-contained, additive schema (businessbrain.*) that depends solely
+# Business Brain (V060-V063) only: self-contained, additive schema (businessbrain.*) that depends solely
 # on founder.founders + app.oauth_credentials (already present in prod). Prod's existing V001-V055 history
 # is intentionally NOT re-validated here — those migrations belong to a different (main) lineage and are
 # left exactly as prod applied them. Connection/schema from env (FLYWAY_URL/USER/PASSWORD/SCHEMAS).
@@ -7,4 +7,5 @@ FROM flyway/flyway:10-alpine
 COPY database/migrations/V060__create_businessbrain.sql       /flyway/sql/
 COPY database/migrations/V061__businessbrain_api_support.sql  /flyway/sql/
 COPY database/migrations/V062__businessbrain_provenance.sql   /flyway/sql/
+COPY database/migrations/V063__instagram_compliance.sql       /flyway/sql/
 CMD ["migrate"]

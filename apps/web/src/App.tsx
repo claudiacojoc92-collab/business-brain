@@ -13,6 +13,7 @@ import { DeclaredPreviewPage } from './declared/DeclaredPreviewPage';
 import { CalendarPreviewPage } from './calendar/CalendarPreviewPage';
 import { SourcesPage } from './pages/SourcesPage';
 import { BusinessBrainPage } from './pages/BusinessBrainPage';
+import { PrivacyPage, TermsPage, DataDeletionPage } from './legal/LegalPages';
 
 /**
  * Route guard: redirect based on founder status.
@@ -65,6 +66,11 @@ export function App() {
         <Routes>
           {/* Public */}
           <Route path="/login" element={<LoginPage />} />
+
+          {/* Public legal pages — no authentication, maintained and deployed with the app */}
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/data-deletion" element={<DataDeletionPage />} />
 
           {/* Onboarding — only for INTAKE_PENDING founders */}
           <Route

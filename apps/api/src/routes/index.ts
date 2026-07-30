@@ -8,6 +8,7 @@ import { registerM22DevRoutes }        from './m22-dev.routes';
 import { registerGoogleDevRoutes }     from './google-dev.routes';
 import { registerDeclaredDevRoutes }   from './declared-dev.routes';
 import { registerSocialSourcesRoutes } from './social-sources.routes';
+import { registerInstagramComplianceRoutes } from './instagram-compliance.routes';
 import { registerBusinessBrainRoutes } from './businessbrain.routes';
 
 /**
@@ -25,6 +26,10 @@ export async function registerRoutes(
   // Social sources — the REAL authenticated Meta/Instagram connect flows (App Review). Present in EVERY
   // build (including production) so a reviewer reaches them through the normal product, not a dev route.
   registerSocialSourcesRoutes(server, deps);
+
+  // Instagram compliance (Meta App Review): Deauthorize + Data-Deletion callbacks + public status page.
+  // Present in EVERY build — Meta calls these directly, unauthenticated but signed_request-verified.
+  registerInstagramComplianceRoutes(server);
 
   // Business Brain V1 — versioned lifecycle public API (Phase 6). Present in every build.
   registerBusinessBrainRoutes(server, deps);
