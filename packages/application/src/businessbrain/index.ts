@@ -25,6 +25,13 @@ export {
   toPublicRefreshSnapshot,
   isCoherentSnapshot,
 } from './read/public-mappers';
+export { buildTraceability } from './read/traceability';
+export type {
+  TraceabilityInput,
+  BuildTraceabilityResult,
+  TraceabilityViolation,
+  TraceabilityEdgeType,
+} from './read/traceability';
 export type {
   BusinessBrainRepository,
   StartRefreshInput,

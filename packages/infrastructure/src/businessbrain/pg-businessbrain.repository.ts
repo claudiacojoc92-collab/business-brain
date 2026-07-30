@@ -11,6 +11,7 @@
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { generateId } from '@bb/shared';
+import { buildTraceability } from '@bb/application';
 import type {
   BusinessBrainRepository,
   CommitDiagnosisInput,
@@ -119,13 +120,13 @@ export class PgBusinessBrainRepository implements BusinessBrainRepository {
       .execute();
     const rootCauses = await db
       .selectFrom('businessbrain.bb_root_cause')
-      .select('statement')
+      .select(['root_cause_id', 'statement']) // id selected for traceability only; output maps to statement below
       .where('version_id', '=', vid)
       .orderBy('ordinal')
       .execute();
     const recommendations = await db
       .selectFrom('businessbrain.bb_recommendation')
-      .select('statement')
+      .select(['recommendation_id', 'statement'])
       .where('version_id', '=', vid)
       .orderBy('ordinal')
       .execute();
@@ -138,11 +139,14 @@ export class PgBusinessBrainRepository implements BusinessBrainRepository {
       .orderBy('ordinal')
       .execute();
     const claims = [];
-    for (const c of claimRows) {
+    // ADDITIVE (Slice 1): evidence traceability rows, one per public measure, in the same order.
+    const evidenceTrace: { evidenceItemId: string; claimIndex: number; measureIndex: number }[] = [];
+    for (let claimIndex = 0; claimIndex < claimRows.length; claimIndex += 1) {
+      const c = claimRows[claimIndex];
       const measureRows = await db
         .selectFrom('businessbrain.bb_evidence_claim_measure as m')
         .innerJoin('businessbrain.bb_evidence_item as i', 'i.evidence_item_id', 'm.evidence_item_id')
-        .select(['i.claim_label as descriptor', 'i.kind as kind', 'i.measure_value as value'])
+        .select(['i.evidence_item_id as evidence_item_id', 'i.claim_label as descriptor', 'i.kind as kind', 'i.measure_value as value'])
         .where('m.evidence_claim_id', '=', c.evidence_claim_id)
         .orderBy('m.ordinal')
         .execute();
@@ -154,6 +158,9 @@ export class PgBusinessBrainRepository implements BusinessBrainRepository {
           ...(mr.value === null || mr.value === undefined ? {} : { value: Number(mr.value) }),
         })),
       });
+      measureRows.forEach((mr: any, measureIndex: number) =>
+        evidenceTrace.push({ evidenceItemId: mr.evidence_item_id, claimIndex, measureIndex }),
+      );
     }
 
     // Execution Plan: actions grouped into phases (by phase_ordinal/label).
@@ -165,13 +172,18 @@ export class PgBusinessBrainRepository implements BusinessBrainRepository {
       .orderBy('sequence')
       .execute();
     const phases: { label: string; actions: { statement: string; sequence: number }[] }[] = [];
+    // ADDITIVE (Slice 1): action traceability rows, aligned to the phases/actions built above.
+    const actionTrace: { actionId: string; phaseIndex: number; actionIndex: number }[] = [];
     for (const a of actionRows) {
-      let phase = phases.find((p) => p.label === a.phase_label);
-      if (!phase) {
-        phase = { label: a.phase_label, actions: [] };
-        phases.push(phase);
+      let phaseIndex = phases.findIndex((p) => p.label === a.phase_label);
+      if (phaseIndex === -1) {
+        phases.push({ label: a.phase_label, actions: [] });
+        phaseIndex = phases.length - 1;
       }
+      const phase = phases[phaseIndex]!;
+      const actionIndex = phase.actions.length;
       phase.actions.push({ statement: a.statement, sequence: a.sequence });
+      actionTrace.push({ actionId: a.action_id, phaseIndex, actionIndex });
     }
 
     // Phase ②: the imported window (surfaced with the Evidence Section).
@@ -180,6 +192,45 @@ export class PgBusinessBrainRepository implements BusinessBrainRepository {
       .select(['window_from', 'window_to', 'imported_post_count'])
       .where('version_id', '=', vid)
       .executeTakeFirst();
+
+    // ADDITIVE (Slice 1): persisted traceability edges → stable public refs. Read-only, no schema change.
+    const rcEvidenceRows = await db
+      .selectFrom('businessbrain.bb_rc_evidence')
+      .select(['root_cause_id', 'evidence_item_id'])
+      .where('version_id', '=', vid)
+      .execute();
+    const recRootCauseRows = await db
+      .selectFrom('businessbrain.bb_rec_rootcause')
+      .select(['recommendation_id', 'root_cause_id'])
+      .where('version_id', '=', vid)
+      .execute();
+    const actionRecRows = await db
+      .selectFrom('businessbrain.bb_action_rec')
+      .select(['action_id', 'recommendation_id'])
+      .where('version_id', '=', vid)
+      .execute();
+
+    const built = buildTraceability({
+      evidence: evidenceTrace,
+      rootCauses: rootCauses.map((r: any) => ({ rootCauseId: r.root_cause_id })),
+      recommendations: recommendations.map((r: any) => ({ recommendationId: r.recommendation_id })),
+      actions: actionTrace,
+      rcEvidence: rcEvidenceRows.map((r: any) => ({ rootCauseId: r.root_cause_id, evidenceItemId: r.evidence_item_id })),
+      recRootCause: recRootCauseRows.map((r: any) => ({ recommendationId: r.recommendation_id, rootCauseId: r.root_cause_id })),
+      actionRec: actionRecRows.map((r: any) => ({ actionId: r.action_id, recommendationId: r.recommendation_id })),
+    });
+    // FAIL CLOSED: a broken provenance edge must never be presented as a complete graph. On any integrity
+    // violation we OMIT the (optional) traceability field — legacy fields stay intact so the Version is
+    // still readable — and emit a structured server-side integrity log (never exposed to the client, and
+    // carrying no internal ids in the public response).
+    if (built.violations.length > 0) {
+      // eslint-disable-next-line no-console
+      console.error('[bb-traceability] integrity violation: traceability omitted', JSON.stringify({
+        versionId: vid,
+        violations: built.violations,
+      }));
+    }
+    const traceability = built.traceability; // null when violations exist → omitted below
 
     return {
       versionId: vid,
@@ -200,6 +251,7 @@ export class PgBusinessBrainRepository implements BusinessBrainRepository {
       rootCauses: rootCauses.map((r: any) => r.statement),
       recommendations: recommendations.map((r: any) => r.statement),
       executionPlan: phases,
+      ...(traceability ? { traceability } : {}), // additive + omitted on any integrity violation
     };
   }
 

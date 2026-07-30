@@ -153,6 +153,32 @@ export interface PublicCurrentVersion {
     readonly label: string;
     readonly actions: readonly { readonly statement: string; readonly sequence: number }[];
   }[];
+  /**
+   * ADDITIVE (Phase 1 read-model). Stable, public traceability references over the SAME immutable
+   * content already returned above. Optional and non-breaking: existing clients ignore it. The
+   * rootCauses/recommendations/actions arrays are aligned 1:1 (same length + order) to their string
+   * counterparts above; evidence entries name an exact (claimIndex, measureIndex) in `evidence.claims`.
+   * Refs are fresh public tokens (rc1, rec1, e1.1, a1.1) — no internal identifiers are exposed. They are
+   * stable because a promoted Version is immutable (content never reorders after promotion).
+   */
+  readonly traceability?: PublicTraceability;
+}
+
+/** Stable public traceability graph over one immutable Version (see PublicCurrentVersion.traceability). */
+export interface PublicTraceability {
+  /** One entry per public evidence measure, aligned to evidence.claims[claimIndex].measures[measureIndex]. */
+  readonly evidence: readonly { readonly ref: string; readonly claimIndex: number; readonly measureIndex: number }[];
+  /** Aligned 1:1 to PublicCurrentVersion.rootCauses. `evidenceRefs` point at `evidence[].ref`. */
+  readonly rootCauses: readonly { readonly ref: string; readonly evidenceRefs: readonly string[] }[];
+  /** Aligned 1:1 to PublicCurrentVersion.recommendations. `rootCauseRefs` point at `rootCauses[].ref`. */
+  readonly recommendations: readonly { readonly ref: string; readonly rootCauseRefs: readonly string[] }[];
+  /** Aligned to PublicCurrentVersion.executionPlan (phase → action). `recommendationRefs` → `recommendations[].ref`. */
+  readonly actions: readonly {
+    readonly ref: string;
+    readonly phaseIndex: number;
+    readonly actionIndex: number;
+    readonly recommendationRefs: readonly string[];
+  }[];
 }
 
 export interface NoCurrentVersion {
