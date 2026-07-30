@@ -33,13 +33,12 @@
   <section class="section">
     <div class="wrap">
       <h1>Privacy Policy</h1>
-      <p class="updated">Business Brain · Last updated: 10 July 2026</p>
+      <p class="updated">Business Brain · Last updated: 30 July 2026</p>
 
       <p>This Privacy Policy explains how <strong>BLACKLINE SOLUTIONS S.R.L.</strong> (“we”, “us”, “our”),
       a company registered in Romania and the operator of <strong>Business Brain</strong> (“the service”),
-      handles information in connection with this website and the Business Brain product. Business Brain
-      is currently under development and is not yet publicly available; this policy describes our intended
-      handling of data and applies as features become available.</p>
+      handles information in connection with this website and the Business Brain product. It applies to
+      the product as offered, including when you connect a third-party account such as Instagram.</p>
 
       <h2>1. Who we are</h2>
       <p>The data controller is BLACKLINE SOLUTIONS S.R.L., registered in Romania (Romanian Tax
@@ -71,15 +70,21 @@
       <p>Integrations are optional and take effect only when you connect them and grant permission. We
       access only what the granted permissions allow, use it solely to produce your own analysis, and do
       not sell or share it.</p>
-      <p><strong>Meta platforms (Facebook and Instagram).</strong> A Meta integration is planned and is
-      <strong>pending Meta’s review and our verification</strong>; it is <strong>not currently live</strong>.
-      When available and only if you connect your Meta account, the integration is designed to access, on a
-      <strong>read-only</strong> basis and with your explicit consent: the list of Facebook Pages you manage
-      (<code>pages_show_list</code>); your selected Page’s audience data such as fan and follower counts
-      (<code>pages_read_engagement</code>); and the basic profile of the linked Instagram Business/Creator
-      account — username, follower count, and media count (<code>instagram_basic</code>). The integration is
-      designed <strong>not</strong> to post, publish, comment, send messages, or modify anything on your
-      accounts. Any information obtained is used only to show you an analysis of your own business.</p>
+      <p><strong>Meta platforms (Instagram, and optionally Facebook Pages).</strong> When you connect your
+      Instagram professional (Business or Creator) account, and only with your explicit consent, the
+      integration accesses your account on a <strong>read-only</strong> basis to produce an analysis of your
+      own business. Under <code>instagram_business_basic</code> it reads your Instagram
+      <strong>profile and account metadata</strong> (username, account type, follower count and media count)
+      and your <strong>owned media</strong> — including each item’s media type, timestamp, permalink,
+      <strong>caption</strong>, and engagement counts (likes and comments). Under
+      <code>instagram_business_manage_insights</code> it reads <strong>account-level and per-media insights</strong>
+      such as reach. If you additionally connect a Facebook Page, it reads the list of Pages you manage
+      (<code>pages_show_list</code>), the selected Page’s audience data such as fan and follower counts
+      (<code>pages_read_engagement</code>), and the linked Instagram account’s basic profile
+      (<code>instagram_basic</code>). The integration does <strong>not</strong> post, publish, comment, send
+      messages, or modify anything on your accounts. This information is used only to produce your own
+      Business Brain analysis, and is processed by the providers described in “Service providers” below. You
+      can disconnect at any time; see <a href="/data-deletion.html">Data Deletion</a>.</p>
 
       <h2>4. Why we process information</h2>
       <p>We process information to: provide and operate the website and the product; authenticate you and
@@ -96,10 +101,28 @@
       stored credentials.</p>
 
       <h2>6. Service providers</h2>
-      <p>We rely on a small number of third-party providers that process data on our behalf and under our
-      instructions — for example, cloud hosting and database infrastructure, transactional email delivery,
-      and the AI/model processing used to analyse connected evidence. These providers may only use the data
-      to provide their service to us. We do not sell your data or share it for advertising.</p>
+      <p>We rely on a small number of third-party providers that process data on our behalf, under our
+      instructions and under confidentiality obligations. They may use the data only to provide their
+      service to us; we do not sell your data or share it for advertising. For the Business Brain product,
+      and for the Instagram data described above (your profile and account metadata, owned media, captions,
+      and permitted insights), our providers are:</p>
+      <ul>
+        <li><strong>Railway (Railway Corp., United States)</strong> — cloud hosting and database
+        infrastructure. Railway stores and processes the data we hold to operate the service: your account
+        and session records, your <strong>encrypted</strong> access credentials, and the information imported
+        from connected sources — for Instagram, your profile and account metadata, owned media (media type,
+        timestamp, permalink), <strong>captions</strong>, engagement counts, and account-level and per-media
+        insights — together with the Business Brain analysis generated from it.</li>
+        <li><strong>Anthropic (Anthropic, PBC, United States)</strong> — AI model processing used to generate
+        your analysis. When you run a Business Brain, the imported Instagram content and metrics (owned-media
+        metadata, <strong>captions</strong>, and insight-derived measures such as reach, likes and comments)
+        are sent to Anthropic’s API to produce your business-language analysis. Your access
+        credentials/tokens are <strong>never</strong> sent to Anthropic. Anthropic processes this input to
+        return the result and, under its commercial terms, retains it only transiently for trust-and-safety
+        purposes and does <strong>not</strong> use it to train its models.</li>
+      </ul>
+      <p>Both providers may process this data in the <strong>United States</strong>; see “International
+      transfers” below.</p>
 
       <h2>7. Security</h2>
       <p>We take reasonable measures to protect information. Access credentials for connected third-party
@@ -121,9 +144,14 @@
       requests within 30 days and confirm by email.</p>
 
       <h2>10. International transfers</h2>
-      <p>Some of our service providers may process data outside the European Economic Area. Where that
-      happens, we rely on appropriate safeguards recognised under applicable law (such as the European
-      Commission’s Standard Contractual Clauses) to protect your information.</p>
+      <p>As an EU/Romanian data controller, we may transfer personal data to service providers located
+      outside the European Economic Area — in particular to <strong>Railway (United States)</strong> and
+      <strong>Anthropic (United States)</strong>, as described in “Service providers” above. Where we do, we
+      rely on appropriate safeguards recognised under the EU/Romanian GDPR — in particular the European
+      Commission’s <strong>Standard Contractual Clauses</strong> — together with the encryption and
+      access-limitation measures described in “Security”, to protect your information. You can request more
+      detail about these safeguards at
+      <a href="mailto:privacy@getbusinessbrain.com">privacy@getbusinessbrain.com</a>.</p>
 
       <h2>11. Children</h2>
       <p>The service is intended for founders and businesses and is not directed to children. We do not
