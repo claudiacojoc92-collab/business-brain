@@ -32,3 +32,11 @@ coverage
 **/* 2.md
 * 2.sql
 **/* 2.sql
+
+# Unwired/local-only files kept in the working tree but never part of any deployed image.
+# meta-dev.routes.ts is dead code (not registered in routes/index.ts) yet `COPY apps` + `tsc -b`
+# would otherwise compile it into the api image; the two web files are unreferenced by the Vite
+# build. Excluding them from the build context guarantees they cannot ride into an image.
+apps/api/src/routes/meta-dev.routes.ts
+apps/web/bb-review.html
+apps/web/src/businessbrain/review-entry.tsx

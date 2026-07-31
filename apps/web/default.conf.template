@@ -13,12 +13,23 @@ server {
   index index.html;
 
   # --- API (same-origin) → the api service over Railway private networking ---
-  # Static upstream: nginx resolves api.railway.internal once at startup via the system resolver
-  # (no Docker embedded-DNS resolver needed). The api listens on 0.0.0.0:3000; Railway private
-  # networking reaches it over IPv4/IPv6. Trade-off: a startup-resolved host is cached until the
-  # next reload, so a web redeploy/restart is needed if the api's private IP changes.
+  # Railway private networking is an IPv6-only Wireguard mesh that re-IPs every service on each
+  # redeploy. A LITERAL proxy_pass target (http://api.railway.internal:3000) is resolved ONCE at
+  # worker start and cached for the worker's life — so after any api deploy nginx keeps proxying to
+  # the dead old IP until web is restarted (this caused a prod outage of /auth /v1 /api incl. Meta
+  # compliance). Fix: a runtime `resolver` + a VARIABLE proxy_pass target, so nginx re-resolves the
+  # name itself (at most every 1s). No web restart is needed when the api's private IP changes.
+  #   • ${NGINX_RESOLVER} = Railway internal DNS, default "[fd12::10]" (see Dockerfile.web); it is
+  #     env-substituted at container start, so local tests can override it (e.g. 127.0.0.11).
+  #   • ipv6=on is required — Railway private hosts have AAAA records only.
+  #   • $api_upstream is an nginx runtime variable (NOT an env var) → envsubst leaves it untouched.
+  #     Its target has no URI part, so the original request URI + query string are forwarded as-is.
+  resolver ${NGINX_RESOLVER} ipv6=on valid=1s;
+  resolver_timeout 5s;
+  set $api_upstream http://api.railway.internal:3000;
+
   location /v1/ {
-    proxy_pass http://api.railway.internal:3000;
+    proxy_pass $api_upstream;
     proxy_set_header Host              $host;
     proxy_set_header X-Real-IP         $remote_addr;
     proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
@@ -26,7 +37,7 @@ server {
   }
 
   location /auth/ {
-    proxy_pass http://api.railway.internal:3000;
+    proxy_pass $api_upstream;
     proxy_set_header Host              $host;
     proxy_set_header X-Real-IP         $remote_addr;
     proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
@@ -37,7 +48,7 @@ server {
   # the api handlers; the OAuth callbacks under this prefix are intentionally auth-free (identity
   # rides the OAuth `state`). nginx only forwards the full path; it neither adds nor requires auth.
   location /api/ {
-    proxy_pass http://api.railway.internal:3000;
+    proxy_pass $api_upstream;
     proxy_set_header Host              $host;
     proxy_set_header X-Real-IP         $remote_addr;
     proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;

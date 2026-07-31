@@ -31,6 +31,11 @@ FROM nginx:1.27-alpine AS run
 # start, so nginx binds Railway's injected $PORT. PORT defaults to 8080 for local/compose runs
 # where Railway does not inject one.
 ENV PORT=8080
+# Railway internal DNS resolver for runtime re-resolution of api.railway.internal (see the
+# default.conf.template comment). Default is Railway's internal DNS; override at runtime for local
+# tests (e.g. NGINX_RESOLVER=127.0.0.11 for Docker's embedded DNS). Substituted into the template
+# by the nginx image entrypoint (20-envsubst-on-templates.sh) alongside ${PORT}.
+ENV NGINX_RESOLVER="[fd12::10]"
 COPY apps/web/default.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 EXPOSE 8080
