@@ -102,4 +102,14 @@ describe('R1 invariants — opaque reference constructors', () => {
     expect(origin.key).toBe('spike');
     expect(Object.isFrozen(origin)).toBe(true);
   });
+
+  it('accepts the diagnosis_evidence_measure source type (public BB traceability ref)', () => {
+    const ref = makeSourceEvidenceRef('businessbrain', 'diagnosis_evidence_measure', 'v-1::e1.1');
+    expect(ref).toEqual({
+      sourceContext: 'businessbrain',
+      sourceType: 'diagnosis_evidence_measure',
+      sourceId: 'v-1::e1.1',
+    });
+    expect(Object.isFrozen(ref)).toBe(true);
+  });
 });

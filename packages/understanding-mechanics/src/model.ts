@@ -55,7 +55,16 @@ export type FounderConstraints = FieldValue<'compatible' | 'incompatible'>;
 // ---- opaque provenance / causal references (never repository entities) ----
 export interface SourceEvidenceRef {
   readonly sourceContext: 'understanding' | 'businessbrain' | 'manual_fixture';
-  readonly sourceType: 'observation' | 'evidence_fragment' | 'claim' | 'diagnosis_version' | 'founder_context';
+  // `diagnosis_evidence_measure` = a PUBLIC Business Brain traceability evidence entry
+  // (e.g. { ref: 'e1.1', claimIndex, measureIndex }) — a measure inside an immutable diagnosis
+  // Version. It is deliberately NOT an @bb/domain EvidenceFragment / Claim / Observation.
+  readonly sourceType:
+    | 'observation'
+    | 'evidence_fragment'
+    | 'claim'
+    | 'diagnosis_version'
+    | 'diagnosis_evidence_measure'
+    | 'founder_context';
   readonly sourceId: string;
 }
 
