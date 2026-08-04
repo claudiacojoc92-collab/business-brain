@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "./packages/shared" },
+    { "path": "./packages/understanding-mechanics" },
     { "path": "./packages/domain" },
     { "path": "./packages/application" },
     { "path": "./packages/infrastructure" },
