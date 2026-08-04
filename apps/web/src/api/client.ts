@@ -382,6 +382,18 @@ export interface BBExecutionPlanPhase {
   label: string;
   actions: { statement: string; sequence: number }[];
 }
+/**
+ * Public traceability graph (Slice 1, additive + optional). Refs are stable PUBLIC tokens
+ * (rc1, rec1, e1.2, a1.1) — never internal DB ids. Present only when the server could build a
+ * complete graph; omitted entirely on any integrity violation (server fails closed). Node arrays
+ * align 1:1 (same length + order) with the Version's rootCauses / recommendations / executionPlan.
+ */
+export interface BBTraceability {
+  evidence: { ref: string; claimIndex: number; measureIndex: number }[];
+  rootCauses: { ref: string; evidenceRefs: string[] }[];
+  recommendations: { ref: string; rootCauseRefs: string[] }[];
+  actions: { ref: string; phaseIndex: number; actionIndex: number; recommendationRefs: string[] }[];
+}
 export interface BBCurrentVersion {
   versionId: string;
   producedAt: string;
@@ -393,6 +405,8 @@ export interface BBCurrentVersion {
   rootCauses: string[];
   recommendations: string[];
   executionPlan: BBExecutionPlanPhase[];
+  /** Optional; consumed read-only by the Living Brief. Absent ⇒ provenance links unavailable. */
+  traceability?: BBTraceability;
 }
 export type BBCurrent = BBCurrentVersion | { state: 'no_current_version' };
 
