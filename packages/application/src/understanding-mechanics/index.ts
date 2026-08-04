@@ -7,3 +7,4 @@
  */
 export * from './offer-context';
 export * from './offer-acl';
+export * from './evaluate-offer-use-case';
