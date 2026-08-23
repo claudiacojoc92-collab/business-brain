@@ -25,6 +25,15 @@ export interface CarouselSourceRef {
 }
 export const canRenderAsMedia = (r: ReuseRight): boolean => r === 'owned' || r === 'founder_uploaded' || r === 'licensed';
 
+// ── Slice 6.1 (additive) — a MEDIA PLAN the photo-led path may hand the frozen compose. It is ADVISORY over the
+//    rights gate (canRenderAsMedia still disposes) and carries NO claims: it only proposes which founder image
+//    fills which canonical media slot, by role. Under CanonicalCarouselTemplate v1 'detail' degrades to
+//    'supporting' placement (v1 has no distinct detail slot). Absent ⇒ frozen Slice-6 media behavior. ──
+export type MediaRole = 'hero' | 'supporting' | 'detail';
+/** Literal normalized (0–1) image geometry — where a subject/face IS, never what it means (Slice 6.1). */
+export interface NormBox { readonly x: number; readonly y: number; readonly width: number; readonly height: number; readonly confidence?: number }
+export interface MediaPlanItem { readonly sourceRefId: string; readonly role: MediaRole; readonly focalSubjectBox?: NormBox | null; readonly faceBoxes?: NormBox[] }
+
 // ── Brand context — real constraints, or a BRAND-NEUTRAL restrained editorial default (never BB's identity) ──
 export interface BrandConstraints {
   readonly logoRef?: string;
@@ -109,6 +118,9 @@ export interface MediaSlot {
   readonly sourceRefId: string | null;      // must be a canRenderAsMedia source when kind==='image'
   readonly fit: 'cover' | 'contain';
   readonly locked: boolean;
+  // Slice 6.1 (additive): literal image geometry driving the deterministic legibility/placement layer. Absent on
+  // the frozen plan path (graphic focal) ⇒ canonical R1 placement ⇒ byte-identical render.
+  readonly placement?: { readonly focalSubjectBox?: NormBox | null; readonly faceBoxes?: NormBox[] };
 }
 export interface Slide {
   readonly slideId: string;                 // STABLE identity

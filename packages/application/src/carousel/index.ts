@@ -4,6 +4,7 @@ export * from './carousel-quality';
 export * from './carousel-safety';
 export * from './feasibility';
 export * from './extractive';
+export * from './placement';
 export * from './brand-resolve';
 export * from './closure';
 export * from './compose';

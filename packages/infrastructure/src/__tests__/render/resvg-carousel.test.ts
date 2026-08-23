@@ -47,6 +47,13 @@ describe('Slice 6 — deterministic carousel renderer', () => {
     expect(report.findings.some((f) => f.code === 'text_overflow' || f.code === 'below_min_font')).toBe(true);
   });
 
+  it('G. plan path is byte-identical: the frozen (no photo-geometry) composition matches the pinned golden hashes', async () => {
+    // Guards that the Slice 6.1 legibility additions do NOT perturb the frozen Slice-6 render. A slide with NO
+    // placement geometry (the plan path / graphic focal) must produce exactly the pre-6.1 bytes.
+    const out = await r.render(comp(good));
+    expect(out.map((s) => hash(s.png))).toEqual(['eaf2e02f87ff4bde', 'be47794f9319e7fd', 'cba20943bb1f1d14']);
+  });
+
   it('renders Romanian/Italian diacritics without missing glyphs', async () => {
     const ro = [slide('r1', 0, 'hook', 'Redu risipa acțiunilor și câștigă timp'), slide('r2', 1, 'proof', 'Perché è più efficace', 'Così ottieni però risultati veri.'), slide('r3', 2, 'cta', 'Începe astăzi')];
     const out = await r.render(comp(ro));

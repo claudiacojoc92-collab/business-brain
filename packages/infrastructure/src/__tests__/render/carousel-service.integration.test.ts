@@ -101,6 +101,37 @@ function svc(model: ICarouselModelPort) {
 }
 const pngHash = (b: Buffer): string => createHash('sha256').update(b).digest('hex').slice(0, 16);
 
+// ── Slice 6.1 — the additive media-plan seam: inert on the plan path (byte-identical), honored + rights-safe on
+//    the photo-led path. Uses the real renderer; the mediaPlan dep stands in for a resolved PhotoLedCarouselContext.
+describe('Slice 6.1 — additive compose seam (plan path byte-identical; photo-led plan honored + rights-safe)', () => {
+  const PNG_1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  const IMG = { sourceRefId: 'up1', sourceType: 'uploaded_image' as const, provenance: 'founder upload', reuseRight: 'founder_uploaded' as const, mediaRef: 'media/up1.png' };
+  const REF = { sourceRefId: 'r1', sourceType: 'website' as const, provenance: 'competitor', reuseRight: 'reference_only' as const, mediaRef: 'media/r1.png' };
+  async function gen(mediaPlan?: (b: string, h: string) => Promise<{ sourceRefId: string; role: 'hero' | 'supporting' | 'detail' }[] | null>) {
+    const repo = memRepo(); const blob = memBlob();
+    await blob.blob.put('media/up1.png', PNG_1x1); await blob.blob.put('media/r1.png', PNG_1x1);
+    const ctx = { ...CTX, sourceRefs: [IMG, REF] };
+    const service = new CarouselService({ repo: repo.repo, model: fakeModel(), render: new ResvgCarouselRenderer(), blob: blob.blob, judge: fakeJudge, handoff: async () => HANDOFF, context: async () => ctx, businessName: async () => 'Marbury & Vale', clock: () => '2026-08-13T00:00:00.000Z', ...(mediaPlan ? { mediaPlan } : {}) });
+    const g = await service.generate('B', 'ch1'); if (g.status !== 'created') throw new Error('gen failed: ' + g.status);
+    const hashes = await Promise.all(g.render.slideImages.map(async (si) => pngHash((await blob.blob.get(si.blobKey))!)));
+    return { g, hashes };
+  }
+
+  it('plan path is byte-identical: no mediaPlan dep === mediaPlan dep returning null (same PNG hashes)', async () => {
+    const a = await gen(undefined);
+    const b = await gen(async () => null);
+    expect(b.hashes).toEqual(a.hashes);
+  });
+
+  it('a photo-led plan places the founder photo on the hook; a reference_only planned source never renders', async () => {
+    const { g } = await gen(async () => [{ sourceRefId: 'up1', role: 'hero' }, { sourceRefId: 'r1', role: 'supporting' }]);
+    const hook = g.version.slides.find((s) => s.semanticRole === 'hook')!;
+    expect(hook.mediaSlots.some((m) => m.kind === 'image' && m.sourceRefId === 'up1')).toBe(true); // hero honored
+    expect(g.version.slides.some((s) => s.mediaSlots.some((m) => m.sourceRefId === 'r1'))).toBe(false); // rights disposes
+    expect(g.render.gateReport.valid).toBe(true);
+  });
+});
+
 describe('Slice 6 — carousel service (generate → gates → export → scoped revision)', () => {
   it('generates a governed, structurally-valid carousel and persists render + PNGs', async () => {
     const { service, repo, blob } = svc(fakeModel());

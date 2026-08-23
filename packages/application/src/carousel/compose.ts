@@ -11,7 +11,7 @@ import type { CarouselSourceRef } from './contracts';
  * uploaded as a brand asset informs brand tokens, never a full-bleed slide photo. */
 const isSlideMedia = (s: CarouselSourceRef): boolean => Boolean(s.mediaRef) && canRenderAsMedia(s.reuseRight) && s.sourceType !== 'brand_asset';
 import type {
-  CarouselCopyDraft, Concept, Slide, TextBlock, MediaSlot, SlideRole, LayoutFamily, AssetAuthorizationSnapshot,
+  CarouselCopyDraft, Concept, Slide, TextBlock, MediaSlot, SlideRole, LayoutFamily, AssetAuthorizationSnapshot, MediaPlanItem,
 } from './contracts';
 
 const layoutForRole = (role: SlideRole): LayoutFamily => {
@@ -67,6 +67,82 @@ export function attachHookMedia(slides: Slide[], snapshot: AssetAuthorizationSna
   const target = slides[i]!;
   const withMedia: Slide = { ...target, mediaSlots: [{ slotId: generateId(), kind: 'image', sourceRefId: eligible.sourceRefId, fit: 'cover', locked: false }], sourceRefIds: [...new Set([...target.sourceRefIds, eligible.sourceRefId])] };
   return slides.map((s, idx) => (idx === i ? withMedia : s));
+}
+
+/**
+ * Slice 6.1 (additive) — the ONE approved compose seam. When a PhotoLedCarouselContext supplies a media PLAN,
+ * honor its role/order when placing founder photos: 'hero' leads the first media-bearing slide (the hook),
+ * 'supporting'/'detail' fill later non-CTA slides in order ('detail' degrades to supporting under Canonical v1).
+ * HONOR ≠ FORCE: every planned source still passes the FROZEN rights gate (isSlideMedia); a reference_only /
+ * unknown / missing / already-used source is skipped, never forced. Called ONLY when a plan exists — the plan
+ * path (no PhotoLedCarouselContext) uses the untouched attachHookMedia above, so its behavior is byte-identical.
+ */
+export function attachPlannedMedia(slides: Slide[], snapshot: AssetAuthorizationSnapshot, plan: MediaPlanItem[]): Slide[] {
+  if (!plan.length) return attachHookMedia(slides, snapshot);
+  // renderable planned sources only (rights disposes), preserving plan order; hero first, then supporting/detail
+  const order: Record<MediaPlanItem['role'], number> = { hero: 0, supporting: 1, detail: 1 };
+  const eligible = plan
+    .map((p) => ({ p, src: snapshot.sourceRefs.find((s) => s.sourceRefId === p.sourceRefId) }))
+    .filter((x): x is { p: MediaPlanItem; src: CarouselSourceRef } => Boolean(x.src) && isSlideMedia(x.src!))
+    .sort((a, b) => order[a.p.role] - order[b.p.role]);
+  if (!eligible.length) return slides;
+
+  // target slides in reading order: hook first, then the rest, never the CTA slide; one media slot per slide.
+  const hookIdx = slides.findIndex((s) => s.semanticRole === 'hook');
+  const targetOrder = [
+    ...(hookIdx >= 0 ? [hookIdx] : []),
+    ...slides.map((_, i) => i).filter((i) => i !== hookIdx && slides[i]!.semanticRole !== 'cta'),
+  ];
+  const next = slides.map((s) => ({ ...s }));
+  let ei = 0;
+  for (const ti of targetOrder) {
+    if (ei >= eligible.length) break;
+    const slide = next[ti]!;
+    if (slide.mediaSlots.some((m) => m.kind === 'image')) continue; // don't double-place
+    const { p } = eligible[ei]!; ei += 1;
+    const placement = (p.focalSubjectBox || p.faceBoxes) ? { placement: { focalSubjectBox: p.focalSubjectBox ?? null, faceBoxes: p.faceBoxes ?? [] } } : {};
+    next[ti] = { ...slide, mediaSlots: [{ slotId: generateId(), kind: 'image', sourceRefId: p.sourceRefId, fit: 'cover', locked: false, ...placement }], sourceRefIds: [...new Set([...slide.sourceRefIds, p.sourceRefId])] };
+  }
+  return next;
+}
+
+/**
+ * Slice 6.1 legibility repair — CONTENT-DENSITY ADAPTATION (never copy invention). When a photo slide can only
+ * safely carry a MINIMAL plane (a tight founder headshot etc.), the slide keeps its kicker/headline over the
+ * reduced plane and its BODY block is REDISTRIBUTED to an adjacent eligible slide — the SAME immutable block
+ * (blockId + authorization binding preserved), so no substantive meaning disappears and no new claim is minted.
+ * The moved block re-enters the FROZEN safety/closure/overflow gates downstream like any other block. If no
+ * eligible neighbour exists the body is left in place (the image still renders minimally; the structural gate
+ * guards fit). A locked body / locked slide is never moved. Plan path (no minimal slides) ⇒ identity.
+ */
+export function redistributeMinimalMedia(slides: Slide[], minimalSlideIds: ReadonlySet<string>): Slide[] {
+  if (!minimalSlideIds.size) return slides;
+  const eligibleTarget = (s: Slide): boolean => s.semanticRole !== 'cta' && !minimalSlideIds.has(s.slideId);
+  const removed = new Map<number, Set<string>>();   // sourceIndex → blockIds to remove
+  const added = new Map<number, TextBlock[]>();      // targetIndex → blocks appended (as body)
+  slides.forEach((src, i) => {
+    if (!minimalSlideIds.has(src.slideId)) return;
+    const body = src.textBlocks.find((b) => b.role === 'body' && !b.locked
+      && !src.lockedFields.includes('slide') && !src.lockedFields.includes(`block:${b.blockId}`));
+    if (!body) return;                               // no movable substantive block → already minimal-friendly
+    let ti = -1;
+    for (let d = 1; d < slides.length && ti < 0; d++) {
+      if (i + d < slides.length && eligibleTarget(slides[i + d]!)) ti = i + d;
+      else if (i - d >= 0 && eligibleTarget(slides[i - d]!)) ti = i - d;
+    }
+    if (ti < 0) return;                              // nowhere to move it → keep here (image still renders)
+    (removed.get(i) ?? removed.set(i, new Set()).get(i)!).add(body.blockId);
+    (added.get(ti) ?? added.set(ti, []).get(ti)!).push(body);
+  });
+  if (!removed.size) return slides;
+  return slides.map((s, i): Slide => {
+    const rm = removed.get(i); const ad = added.get(i);
+    let textBlocks = rm ? s.textBlocks.filter((b) => !rm.has(b.blockId)) : s.textBlocks;
+    if (!ad) return rm ? { ...s, textBlocks } : s;
+    textBlocks = [...textBlocks, ...ad];
+    const extraSrc = ad.map((b) => b.authorizedFrom.sourceRefId).filter((x): x is string => Boolean(x));
+    return { ...s, textBlocks, sourceRefIds: [...new Set([...s.sourceRefIds, ...extraSrc])] };
+  });
 }
 
 /** Apply a copy-only revision to a single slide's blocks, preserving locks and everything non-targeted. */

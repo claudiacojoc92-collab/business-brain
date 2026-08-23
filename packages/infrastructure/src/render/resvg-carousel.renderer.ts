@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { Resvg } from '@resvg/resvg-js';
 import * as opentype from 'opentype.js';
-import { planComposition } from '@bb/application';
+import { planComposition, choosePlanePlacement, chromeReservedBoxes, sliceBox, imageAspectFromPng } from '@bb/application';
 import type { IRenderPort, RenderComposition, RenderedSlide, SlideMeasure, Slide, VisualSystem, CanvasSpec, TextBlock } from '@bb/application';
 
 const FONT_DIR = join(__dirname, '..', '..', 'assets', 'fonts');
@@ -65,6 +65,23 @@ export class ResvgCarouselRenderer implements IRenderPort {
   }
   private missingGlyphs(text: string): boolean { for (const ch of text) { if (ch === ' ' || ch === '\n') continue; if (this.metrics['400'].charToGlyphIndex(ch) <= 0) return true; } return false; }
 
+  // ── Slice 6.1 legibility helpers (deterministic; visual-only). sliceBox / imageAspectFromPng are shared with
+  //    the application layer (placement.ts) so the renderer and compose map image→canvas boxes identically. ──
+  /** Mean relative luminance (0..1) behind a canvas-space box, sampled from the sliced image pixels. */
+  private lumSampler(png: Buffer): (box: { x: number; y: number; width: number; height: number }) => number {
+    try {
+      const W = 48, H = 60; const b64 = png.toString('base64');
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><image href="data:image/png;base64,${b64}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid slice"/></svg>`;
+      const px = new Resvg(svg, { font: { loadSystemFonts: false, fontFiles: this.fontPaths } }).render().pixels;
+      return (box) => {
+        const x0 = Math.max(0, Math.floor(box.x * W)), x1 = Math.min(W, Math.ceil((box.x + box.width) * W));
+        const y0 = Math.max(0, Math.floor(box.y * H)), y1 = Math.min(H, Math.ceil((box.y + box.height) * H));
+        let sum = 0, n = 0;
+        for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = (y * W + x) * 4; sum += 0.2126 * chan(px[i]!) + 0.7152 * chan(px[i + 1]!) + 0.0722 * chan(px[i + 2]!); n++; }
+        return n ? sum / n : 0.5;
+      };
+    } catch { return () => 0.5; }
+  }
   private startSize(role: TextBlock['role'], vs: VisualSystem, emphasis: Emphasis): { weight: Weight; size: number; lh: number } {
     const ts = vs.typeScale;
     switch (role) {
@@ -85,6 +102,25 @@ export class ResvgCarouselRenderer implements IRenderPort {
     const hasMedia = Boolean(slot);
     const mediaSlotRequested = slide.mediaSlots.some((s) => s.kind === 'image');
 
+    // ── Slice 6.1 IMAGE-AWARE PLACEMENT (photo-led media slides only; deterministic, visual-only). Given literal
+    //    subject/face geometry, pick the safe DARK-plane anchor (R1..R5) so light text never covers a face or the
+    //    primary subject; or exclude the image (graphic fallback). Plan path (no geometry) ⇒ untouched. ──
+    let placedPlane: { x: number; y: number; width: number; height: number } | null = null;
+    let placedScrim = 1; let excludeMedia = false; let minimalPlane = false;
+    const geom = slot?.placement;
+    if (slot && geom && (geom.focalSubjectBox || (geom.faceBoxes && geom.faceBoxes.length))) {
+      const png = media[slot.sourceRefId!]!;
+      const ar = imageAspectFromPng(png);
+      const focalBox = geom.focalSubjectBox ? sliceBox(geom.focalSubjectBox, ar) : null;
+      const faceBoxes = (geom.faceBoxes ?? []).map((f) => sliceBox(f, ar));
+      // the frozen page chrome (index / logo / footer) is a HARD placement constraint alongside faces + subject.
+      const chromeBoxes = chromeReservedBoxes({ pageIndex: vs.pageIndex, footer: Boolean(vs.footer), logo: Boolean(vs.logoRef && media[vs.logoRef]), total });
+      const choice = choosePlanePlacement({ focalBox, faceBoxes, lumOf: this.lumSampler(png), chromeBoxes });
+      if (choice) { placedPlane = choice.plane; placedScrim = choice.scrim; minimalPlane = choice.mode === 'minimal'; } else excludeMedia = true;
+    }
+    const showMedia = hasMedia && !excludeMedia;
+    const textOnEff: typeof plan.textOn = placedPlane ? 'plane' : plan.textOn;
+
     // ── CANONICAL LAYERS: dark ground → gradient sky (top field) → split focal circle → decorative panel. ──
     let defs = ''; let layers = '';
     const horizonY = plan.secondary ? Math.round(height * plan.secondary.frac) : 0;
@@ -99,7 +135,7 @@ export class ResvgCarouselRenderer implements IRenderPort {
       else { x = Math.round(width * (1 - f.frac)); w = width - x; }
       layers += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${f.color}"/>`;
     }
-    if (plan.focal?.kind === 'media' && slot) {
+    if (plan.focal?.kind === 'media' && slot && showMedia) {
       const b64 = (media[slot.sourceRefId!] ?? Buffer.alloc(0)).toString('base64');
       layers += `<image href="data:image/png;base64,${b64}" x="0" y="0" width="${width}" height="${height}" preserveAspectRatio="xMidYMid slice"/>`;
     } else if (plan.focal?.kind === 'disc') {
@@ -114,19 +150,23 @@ export class ResvgCarouselRenderer implements IRenderPort {
     let px = 0, py = 0, pw = 0, ph = 0; const hasPlane = Boolean(plan.plane);
     if (plan.plane) {
       const pl = plan.plane;
-      px = Math.round(width * pl.xFrac); py = Math.round(height * pl.yFrac); pw = Math.round(width * pl.wFrac); ph = Math.round(height * pl.hFrac);
+      // frozen canonical box on the plan path; the image-aware anchor (R1..R5) when a photo demanded placement.
+      const box = placedPlane ?? { x: pl.xFrac, y: pl.yFrac, width: pl.wFrac, height: pl.hFrac };
+      px = Math.round(width * box.x); py = Math.round(height * box.y); pw = Math.round(width * box.width); ph = Math.round(height * box.height);
       if (pl.elevate) layers += `<rect x="${px}" y="${py + 16}" width="${pw}" height="${ph}" rx="${pl.radius}" fill="#000000" fill-opacity="0.13"/>`;
-      layers += `<rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="${pl.radius}" fill="${pl.fill}"/>`;
+      // the DARK plane is frozen; over a photo it carries a bounded scrim opacity so light text stays readable.
+      const opacity = placedPlane ? placedScrim.toFixed(3) : '1';
+      layers += `<rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="${pl.radius}" fill="${pl.fill}" fill-opacity="${opacity}"/>`;
     }
 
     // ── TEXT REGION ──
-    const pad = 46;
+    const pad = minimalPlane ? 34 : 46; // a reduced (minimal-density) plane uses tighter padding for its short copy
     let tx: number, tw: number, ty0: number, ty1: number, inkColor: string, mutedColor: string, bgBehind: string;
-    if (plan.textOn === 'canvas_bottom') {
+    if (textOnEff === 'canvas_bottom') {
       // anchored bottom-left on the canvas, spanning the width, over the dark ground/panel → light text.
       tx = margin; tw = width - margin * 2; ty0 = Math.round(height * 0.5); ty1 = height - margin - (vs.footer ? 60 : 6);
       inkColor = plan.ink; mutedColor = plan.plane ? plan.plane.onFillMuted : plan.muted; bgBehind = plan.plane ? plan.plane.fill : plan.ground;
-    } else if (plan.textOn === 'plane' && hasPlane) {
+    } else if (textOnEff === 'plane' && hasPlane) {
       tx = px + pad; tw = pw - pad * 2; ty0 = py + pad; ty1 = py + ph - pad;
       inkColor = plan.plane!.onFill; mutedColor = plan.plane!.onFillMuted; bgBehind = plan.plane!.fill;
     } else {
@@ -203,7 +243,7 @@ export class ResvgCarouselRenderer implements IRenderPort {
       clipped: false,
       minContrast: lines.length ? Math.min(...lines.map((l) => contrast(l.bg, l.color))) : contrast(plan.ground, inkColor),
       missingGlyphs: lines.some((l) => this.missingGlyphs(l.text)),
-      mediaPresent: mediaSlotRequested ? hasMedia : true,
+      mediaPresent: mediaSlotRequested ? (excludeMedia || hasMedia) : true, // an image intentionally excluded for legibility is not a failure
     };
     return { svg, measure };
   }

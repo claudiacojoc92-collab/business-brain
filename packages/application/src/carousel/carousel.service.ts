@@ -12,7 +12,7 @@ import type {
   ICarouselRepository, ICarouselModelPort, IRenderPort, IBlobStore, CarouselContextView,
   CarouselBrief, CarouselAssetVersion, CarouselAsset, AssetAuthorizationSnapshot, RenderVersion, RevisionScope,
   Slide, CanvasSpec, RenderedSlide, GateFinding, GateReport, Concept, VisualSystem, CarouselSafetyTrace, CarouselSafetyTraceCore, CarouselSafetyDisposition,
-  CarouselSourceRef, ReuseRight, SourceType, CarouselCopyDraft, GenerationMode, TextBlock, RepairTarget, RepairedBlock, TargetedRepairTrace, BrandContext,
+  CarouselSourceRef, ReuseRight, SourceType, CarouselCopyDraft, GenerationMode, TextBlock, RepairTarget, RepairedBlock, TargetedRepairTrace, BrandContext, MediaPlanItem,
 } from './contracts';
 import { validateCarouselCopy } from './carousel-quality';
 import { validateCarouselClaimSafety } from './carousel-safety';
@@ -20,8 +20,9 @@ import { validateClosure } from './closure';
 import { checkFeasibility, bindBeats, assessConcept, assessClosureFeasibility } from './feasibility';
 import { validateExtractiveBindings, validateScopePreservation } from './extractive';
 import { structuralVisualGates } from './visual-gates';
-import { composeSlides, reviseSlideCopy, attachHookMedia } from './compose';
+import { composeSlides, reviseSlideCopy, attachHookMedia, attachPlannedMedia, redistributeMinimalMedia } from './compose';
 import { visualSystemFor, planLayouts, alternateVisualSystem } from './visual-system';
+import { chromeReservedBoxes, planePlacementMode, imageAspectFromPng, sliceBox } from './placement';
 
 /** The proposition-preservation judge (Layer 3), shared with Voice, plus its resolved identity. */
 export interface CarouselJudgePort {
@@ -34,7 +35,7 @@ const CANVAS: CanvasSpec = { width: 1080, height: 1350, margin: 96, minFontPx: 2
 const SUPPORTED_FORMAT = 'image_carousel';
 
 /** Everything the gate/persist/repair helpers need for one generation (assembled once in generate()). */
-interface GenerateShared { assetId: string; businessId: string; createHandoffId: string; brief: CarouselBrief; snapshot: AssetAuthorizationSnapshot; concept: Concept; ctx: CarouselContextView; system: VisualSystem }
+interface GenerateShared { assetId: string; businessId: string; createHandoffId: string; brief: CarouselBrief; snapshot: AssetAuthorizationSnapshot; concept: Concept; ctx: CarouselContextView; system: VisualSystem; mediaPlan: MediaPlanItem[] | null }
 /** A gated (not-yet-persisted) candidate — enough to persist as-is or to plan a targeted repair. */
 interface GateOutcome { version: CarouselAssetVersion; rendered: RenderedSlide[]; visReport: GateReport; copyReport: GateReport; safetyCore: CarouselSafetyTraceCore; antiTemplateFail: string | null; blockingFindings: GateFinding[]; clean: boolean }
 const shaShort = (t: string): string => createHash('sha256').update(t, 'utf8').digest('hex').slice(0, 16);
@@ -49,6 +50,9 @@ export interface CarouselDeps {
   readonly judge?: CarouselJudgePort;
   readonly handoff: (businessId: string, createHandoffId: string) => Promise<CreateHandoff | null>;
   readonly context: (businessId: string) => Promise<CarouselContextView | null>;
+  /** Slice 6.1 (additive, opt-in): the photo-led media PLAN for this handoff, or null for the plan path. Null ⇒
+   * byte-identical frozen Slice-6 media behavior. Advisory only — the frozen rights gate still disposes. */
+  readonly mediaPlan?: (businessId: string, createHandoffId: string) => Promise<MediaPlanItem[] | null>;
   readonly businessName: (businessId: string) => Promise<string>;
   readonly clock?: () => string;
   readonly log?: (e: { type: string; detail?: string }) => void;
@@ -210,9 +214,12 @@ export class CarouselService {
     if (clo.status === 'contract') { this.deps.log?.({ type: 'carousel_closure_contracted', detail: clo.reason }); concept = { ...concept, slideOutline: clo.outline }; }
     const businessName = await this.deps.businessName(businessId).catch(() => null);
     const system: VisualSystem = { ...visualSystemFor(ctx.brand), footer: businessName };
+    // Slice 6.1 (additive): the photo-led media plan for this handoff, or null (plan path ⇒ frozen behavior).
+    const mediaPlan = this.deps.mediaPlan ? await this.deps.mediaPlan(businessId, createHandoffId).catch(() => null) : null;
+    if (mediaPlan?.length) this.deps.log?.({ type: 'carousel_media_plan', detail: `${mediaPlan.length} planned` });
 
     const assetId = generateId();
-    const shared = { assetId, businessId, createHandoffId, brief, snapshot, concept, ctx, system };
+    const shared: GenerateShared = { assetId, businessId, createHandoffId, brief, snapshot, concept, ctx, system, mediaPlan };
 
     // PRIMARY PATH — the richer governed draft→safety→repair loop (bounded attempts). This is the default;
     // the constrained fallback below is NOT reached unless every normal attempt fail-closes.
@@ -241,7 +248,7 @@ export class CarouselService {
       let constrainedCore = lastCore;
       try {
         const draft = await this.deps.model.realizeConstrained({ brief, snapshot, voiceLines: ctx.voiceLines, concept, beats, ctaFunction: snapshot.ctaFunction });
-        const { slides, advisories } = this.composeAndPlan(draft, shared);
+        const { slides, advisories } = await this.composeAndPlan(draft, shared);
         const outcome0 = await this.gateSlides(shared, slides, advisories, 'constrained_fallback');
         constrainedCore = outcome0.safetyCore;
         if (outcome0.clean) { this.deps.log?.({ type: 'carousel_constrained_ok' }); return await this.persistCreated(shared, outcome0, 'constrained_fallback', MAX_CAROUSEL_ATTEMPTS, repairReasons, fallbackBindingsHash, null); }
@@ -292,11 +299,45 @@ export class CarouselService {
     return { status: 'insufficient' };
   }
 
-  /** attachHookMedia + composeSlides + planLayouts (compose ONCE; targeted repair edits these slides in place). */
-  private composeAndPlan(draft: CarouselCopyDraft, shared: GenerateShared): { slides: Slide[]; advisories: GateFinding[] } {
-    const composed = attachHookMedia(composeSlides(draft, shared.concept, shared.snapshot), shared.snapshot);
-    const planned = planLayouts(composed, shared.concept, shared.system);
+  /** attachHookMedia + composeSlides + (6.1) minimal-density redistribution + planLayouts (compose ONCE; targeted
+   * repair edits these slides in place). */
+  private async composeAndPlan(draft: CarouselCopyDraft, shared: GenerateShared): Promise<{ slides: Slide[]; advisories: GateFinding[] }> {
+    const slides0 = composeSlides(draft, shared.concept, shared.snapshot);
+    // Slice 6.1 seam: honor the photo-led media plan when present; else the untouched frozen attachHookMedia.
+    const composed = shared.mediaPlan && shared.mediaPlan.length ? attachPlannedMedia(slides0, shared.snapshot, shared.mediaPlan) : attachHookMedia(slides0, shared.snapshot);
+    // Slice 6.1 legibility repair (photo path ONLY): a photo slide whose faces/subject forbid a full-density
+    // plane switches to MINIMAL density and its body is redistributed to an adjacent slide (below, through the
+    // frozen safety path). Decided from GEOMETRY (lum-independent) so it never diverges from the renderer's plane
+    // choice. No media plan (plan path) ⇒ this is skipped entirely ⇒ byte-identical frozen behavior.
+    let adapted = composed;
+    if (shared.mediaPlan && shared.mediaPlan.length) {
+      const minimal = await this.minimalDensitySlides(composed, shared.system, shared.snapshot);
+      if (minimal.size) { this.deps.log?.({ type: 'carousel_minimal_density', detail: `${minimal.size} slide(s) → photo-led minimal mode` }); adapted = redistributeMinimalMedia(composed, minimal); }
+    }
+    const planned = planLayouts(adapted, shared.concept, shared.system);
     return { slides: planned.slides, advisories: planned.advisories };
+  }
+
+  /** Photo slides that can only carry a MINIMAL (reduced-density) plane — computed from the LITERAL subject/face
+   * geometry + the frozen chrome zones, mapped image→canvas with the real image aspect (same helpers the renderer
+   * uses). Geometry-only ⇒ the renderer independently reaches the same mode; 'exclude' is left to the renderer's
+   * graphic fallback (the body already renders on the graphic slide, so no redistribution is needed). */
+  private async minimalDensitySlides(slides: Slide[], system: VisualSystem, snapshot: AssetAuthorizationSnapshot): Promise<Set<string>> {
+    const ids = new Set<string>();
+    const chrome = chromeReservedBoxes({ pageIndex: system.pageIndex, footer: Boolean(system.footer), logo: Boolean(system.logoRef), total: slides.length });
+    for (const s of slides) {
+      const slot = s.mediaSlots.find((m) => m.kind === 'image' && m.sourceRefId && m.placement && (m.placement.focalSubjectBox || (m.placement.faceBoxes && m.placement.faceBoxes.length)));
+      if (!slot) continue;
+      const ref = snapshot.sourceRefs.find((x) => x.sourceRefId === slot.sourceRefId);
+      if (!ref?.mediaRef) continue;
+      const bytes = await this.deps.blob.get(ref.mediaRef).catch(() => null);
+      if (!bytes) continue;
+      const ar = imageAspectFromPng(bytes);
+      const focal = slot.placement!.focalSubjectBox ? sliceBox(slot.placement!.focalSubjectBox, ar) : null;
+      const faces = (slot.placement!.faceBoxes ?? []).map((f) => sliceBox(f, ar));
+      if (planePlacementMode(focal, faces, chrome) === 'minimal') ids.add(s.slideId);
+    }
+    return ids;
   }
 
   /** Run the full gate stack on a composed slide set WITHOUT persisting (so a candidate can be repaired first). */
@@ -336,7 +377,7 @@ export class CarouselService {
     draft: CarouselCopyDraft, shared: GenerateShared,
     attempt: number, priorRepairReasons: string[], generationMode: GenerationMode, fallbackBindingsHash: string | null,
   ): Promise<{ ok: true; result: GenerateResult } | { ok: false; repairReasons: string[]; core: CarouselSafetyTraceCore | null }> {
-    const { slides, advisories } = this.composeAndPlan(draft, shared);
+    const { slides, advisories } = await this.composeAndPlan(draft, shared);
     const outcome = await this.gateSlides(shared, slides, advisories, generationMode);
     if (outcome.clean) return { ok: true, result: await this.persistCreated(shared, outcome, generationMode, attempt, priorRepairReasons, fallbackBindingsHash, null) };
     const repairReasons = [...findingsToReasons(outcome.copyReport.findings), ...findingsToReasons(outcome.visReport.findings.filter((f) => f.severity !== 'advisory')), ...(outcome.antiTemplateFail ? [outcome.antiTemplateFail] : [])];
