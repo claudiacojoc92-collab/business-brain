@@ -207,6 +207,107 @@ describe('Slice 7 — reel service (observe → recommend → accept → render 
     expect(opp.sufficiency).toBe('sufficient_with_gap');                        // gap, not fabricated sufficiency
   });
 
+  // ── Spike 0: the conceptSeed seam (V2 "Tell me what to film" → frozen V1) ──
+  // A fake that DRIFTS its own angle and realizes the seed's roleHints (to prove V1 still owns ranges/rights/fit).
+  const driftRealizeOpp = (i: ReelOpportunityInput): ReelOpportunityDraft => {
+    const o = i.videoSet.observations;
+    const ref = (s: string) => o.find((x) => x.sourceRefId === s)!.observationId;
+    const hints = i.conceptSeed?.roleHints;
+    const selectedRanges = hints?.length
+      ? hints.map((h) => ({ sourceRefId: h.sourceRefId, observationRef: ref(h.sourceRefId), inMs: h.usableWindow?.inMs ?? 200, outMs: h.usableWindow?.outMs ?? 3000, role: h.sequenceRole, audioUse: 'original' as const }))
+      : [{ sourceRefId: 'c1', observationRef: ref('c1'), inMs: 300, outMs: 3300, role: 'hook' as const, audioUse: 'original' as const }, { sourceRefId: 'c2', observationRef: ref('c2'), inMs: 200, outMs: 3000, role: 'build' as const, audioUse: 'original' as const }, { sourceRefId: 'c3', observationRef: ref('c3'), inMs: 200, outMs: 2800, role: 'close' as const, audioUse: 'original' as const }];
+    return { communicationJob: 'A COMPLETELY DIFFERENT DRIFTED ANGLE', narrativeArc: 'drifted arc', ctaDirection: 'book a call', whyFootageSupports: 'gym dumbbells training',
+      strategicConnection: 'consistency', nonTransplantabilityTrace: 'these clips this coach', selectedRanges, excludedClips: [], targetDurationMs: 9000, missingMaterial: [],
+      founderLegibleRecommendation: 'A consistent week.', hookText: 'Keep it simple.', ctaText: 'Book a free intro call.' };
+  };
+  const SEED = { communicationJob: 'sustainable consistency day-in-the-life routine', narrativeArc: 'walk in → simple sets → done', editingEnergy: 'calm' as const, targetDurationMs: 12000, ctaDirection: 'book a call' as const };
+  const seedWith = (roleHints?: { sequenceRole: 'hook' | 'build' | 'close'; sourceRefId: string; usableWindow?: { inMs: number; outMs: number } }[]) => ({ ...SEED, ...(roleHints ? { roleHints } : {}) });
+
+  it('Spike0 §1 seed present → realizes the AGREED concept (no drift), even when the model drifts', async () => {
+    const { svc, repo, store, sources } = makeSvc({ opp: driftRealizeOpp });
+    await seed(repo, store, sources);
+    const ob = await svc.observeUploadSet('B', 'U');
+    const vsu = (ob as { understanding: { videoSetUnderstandingId: string } }).understanding.videoSetUnderstandingId;
+    const rec = await svc.recommend('B', vsu, undefined, null, seedWith());
+    const opp = (rec as { opportunity: { communicationJob: string; narrativeArc: string; editingEnergy: string; selectedRanges: unknown[] } }).opportunity;
+    expect(opp.communicationJob).toBe(SEED.communicationJob);        // fixed to the agreed angle, NOT the drift
+    expect(opp.narrativeArc).toBe(SEED.narrativeArc);
+    expect(opp.editingEnergy).toBe('calm');                          // treatment from the seed
+    expect(opp.selectedRanges.length).toBeGreaterThanOrEqual(3);     // V1 still produced an edit
+  });
+
+  it('Spike0 §2/§3 V1 still chooses exact ranges + excludes weak/unusable extras (seed does not lock the edit)', async () => {
+    const { svc, repo, store, sources } = makeSvc({ opp: driftRealizeOpp, obsClips: { c3: { verdict: 'unusable' } } });
+    await seed(repo, store, sources);
+    const ob = await svc.observeUploadSet('B', 'U');
+    const vsu = (ob as { understanding: { videoSetUnderstandingId: string } }).understanding.videoSetUnderstandingId;
+    // seed hints an out-of-bounds window on c1 and hints the (unusable) c3 — V1 must clamp c1 and drop c3
+    const rec = await svc.recommend('B', vsu, undefined, null, seedWith([
+      { sequenceRole: 'hook', sourceRefId: 'c1', usableWindow: { inMs: 300, outMs: 99000 } },
+      { sequenceRole: 'build', sourceRefId: 'c2', usableWindow: { inMs: 200, outMs: 3000 } },
+      { sequenceRole: 'close', sourceRefId: 'c3', usableWindow: { inMs: 0, outMs: 3000 } },
+    ]));
+    const opp = (rec as { opportunity: { selectedRanges: { sourceRefId: string; outMs: number }[]; excludedClips: { sourceRefId: string }[] } }).opportunity;
+    const c1 = opp.selectedRanges.find((r) => r.sourceRefId === 'c1')!;
+    expect(c1.outMs).toBeLessThanOrEqual(6000);                      // clamped by V1 to the real clip duration, not 99000
+    expect(opp.selectedRanges.some((r) => r.sourceRefId === 'c3')).toBe(false);   // unusable clip excluded despite the hint
+    expect(opp.excludedClips.some((e) => e.sourceRefId === 'c3')).toBe(true);
+  });
+
+  it('Spike0 §4 rights override a seed hint — a reference_only hinted clip never renders', async () => {
+    const sources = [{ sourceRefId: 'c1', reuseRight: 'founder_uploaded' as const }, { sourceRefId: 'c2', reuseRight: 'founder_uploaded' as const }, { sourceRefId: 'c3', reuseRight: 'founder_uploaded' as const }, { sourceRefId: 'c4', reuseRight: 'reference_only' as const }];
+    const { svc, repo, store } = makeSvc({ opp: driftRealizeOpp, sources });
+    await seed(repo, store, sources);
+    const ob = await svc.observeUploadSet('B', 'U');
+    const vsu = (ob as { understanding: { videoSetUnderstandingId: string } }).understanding.videoSetUnderstandingId;
+    const rec = await svc.recommend('B', vsu, undefined, null, seedWith([
+      { sequenceRole: 'hook', sourceRefId: 'c1' }, { sequenceRole: 'build', sourceRefId: 'c4' }, { sequenceRole: 'close', sourceRefId: 'c3' },
+    ]));
+    const opp = (rec as { opportunity: { selectedRanges: { sourceRefId: string }[] } }).opportunity;
+    expect(opp.selectedRanges.some((r) => r.sourceRefId === 'c4')).toBe(false);   // rights win over the seed hint
+  });
+
+  it('Spike0 §5 editorial-fit overrides a bad seed/clip — a calm seed opening on high-energy is demoted', async () => {
+    const { svc, repo, store, sources } = makeSvc({ opp: driftRealizeOpp, obsClips: { c1: { motionIntensity: 'high' }, c2: { motionIntensity: 'medium' }, c3: { motionIntensity: 'low' } } });
+    await seed(repo, store, sources);
+    const ob = await svc.observeUploadSet('B', 'U');
+    const vsu = (ob as { understanding: { videoSetUnderstandingId: string } }).understanding.videoSetUnderstandingId;
+    const rec = await svc.recommend('B', vsu, undefined, null, seedWith([
+      { sequenceRole: 'hook', sourceRefId: 'c1' }, { sequenceRole: 'build', sourceRefId: 'c2' }, { sequenceRole: 'close', sourceRefId: 'c3' },
+    ]));
+    const opp = (rec as { opportunity: { selectedRanges: { sourceRefId: string; role: string }[] } }).opportunity;
+    expect(opp.selectedRanges.find((r) => r.role === 'hook')!.sourceRefId).not.toBe('c1');   // intense opener demoted despite the seed
+  });
+
+  it('Spike0 §6 authorization governs copy independently of the seed — a load-bearing unsupported spoken claim still FAILS CLOSED', async () => {
+    // c1 (the hook) is a talking-head that SPEAKS an unsupported claim; the seed must not authorize it.
+    const { svc, repo, store, sources } = makeSvc({ opp: driftRealizeOpp, obsClips: { c1: { shot: 'talking_head', speechPresent: true } }, scripts: { c1: { text: 'This training burns fat faster than any other program.' } } });
+    await seed(repo, store, sources);
+    const ob = await svc.observeUploadSet('B', 'U');
+    const vsu = (ob as { understanding: { videoSetUnderstandingId: string } }).understanding.videoSetUnderstandingId;
+    const rec = await svc.recommend('B', vsu, undefined, null, seedWith());
+    const acc = await svc.accept('B', (rec as { opportunity: { opportunityId: string } }).opportunity.opportunityId);
+    expect(acc.status).toBe('fail_closed');                          // seed never authorizes a load-bearing spoken claim
+  });
+
+  it('Spike0 §7 seed ABSENT → frozen behavior unchanged + deterministic EDL hash (regression anchor)', async () => {
+    const run = async () => {
+      const { svc, repo, store, sources } = makeSvc({});               // defaultOpp, no seed
+      await seed(repo, store, sources);
+      const ob = await svc.observeUploadSet('B', 'U');
+      const vsu = (ob as { understanding: { videoSetUnderstandingId: string } }).understanding.videoSetUnderstandingId;
+      const rec = await svc.recommend('B', vsu);                       // NO conceptSeed
+      const opp = (rec as { opportunity: { opportunityId: string; communicationJob: string; selectedRanges: { sourceRefId: string; role: string }[] } }).opportunity;
+      const acc = await svc.accept('B', opp.opportunityId);
+      return { job: opp.communicationJob, sel: opp.selectedRanges.map((r) => `${r.sourceRefId}/${r.role}`).join(','), edl: acc.status === 'accepted' ? acc.version.edlHash : 'x' };
+    };
+    const a = await run(); const b = await run();
+    expect(a.job).toBe('sustainable consistency routine');            // the model's own angle survives (no override)
+    expect(a.sel).toBe('c1/hook,c2/build,c3/close');                  // frozen selection unchanged
+    expect(a.edl).toBe(b.edl);                                        // same deterministic inputs → same EDL hash
+    expect(a.edl).not.toBe('x');
+  });
+
   it('spoken claim: load-bearing (hook) unsupported claim FAILS CLOSED; incidental one is MUTED and not amplified', async () => {
     // hook talking-head speaks an unsupported claim → fail closed
     const hookClaim = (i: ReelOpportunityInput): ReelOpportunityDraft => { const d = defaultOpp(i); return { ...d, selectedRanges: d.selectedRanges.map((r) => (r.sourceRefId === 'c1' ? { ...r } : r)) }; };

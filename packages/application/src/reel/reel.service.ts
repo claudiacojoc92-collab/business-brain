@@ -15,7 +15,7 @@ import type {
   IReelRepository, IReelRenderPort, IObjectStore, IVideoObservationModelPort, IReelOpportunityModelPort, ITranscriptionPort,
   ReelContextView, VideoSetUnderstanding, ClipObservation, ReelOpportunity, ReelAuthorizationSnapshot,
   ReelAsset, ReelAssetVersion, ReelRenderVersion, ReelTextBlock, SelectedClipRange, ReelLanguageConfig,
-  ReelSafetyTrace, ReelSpokenClaimTrace, ReelJob, ReelJobStage, MissingShot, EditingEnergy,
+  ReelSafetyTrace, ReelSpokenClaimTrace, ReelJob, ReelJobStage, MissingShot, EditingEnergy, ConceptSeed,
 } from './contracts';
 import {
   setSignal, hashOf, observedTokens, filterRenderableRanges, validateSelectionRefs, assessNonTransplantable,
@@ -109,8 +109,11 @@ export class ReelService {
     } finally { rmSync(dir, { recursive: true, force: true }); }
   }
 
-  /** RECOMMEND — one strategy-specific, non-transplantable reel opportunity with EXACT ranges + sufficiency. */
-  async recommend(businessId: string, videoSetUnderstandingId: string, avoid?: string, job: ReelJob | null = null): Promise<RecommendResult> {
+  /** RECOMMEND — one strategy-specific, non-transplantable reel opportunity with EXACT ranges + sufficiency.
+   *  conceptSeed (V2) is optional INTENT: it fixes the angle the founder filmed for and lets V1 realize it against
+   *  the clips. When absent, behavior is the frozen "Use my clips" path (unchanged). The seed never carries claim
+   *  authority — copy is still governed at accept; rights/editorial-fit/sufficiency/exact-ranges remain V1's. */
+  async recommend(businessId: string, videoSetUnderstandingId: string, avoid?: string, job: ReelJob | null = null, conceptSeed?: ConceptSeed): Promise<RecommendResult> {
     const vs = await this.deps.repo.getVideoSetUnderstanding(businessId, videoSetUnderstandingId);
     if (!vs) return { status: 'not_found' };
     const ctx0 = await this.deps.context(businessId);
@@ -122,17 +125,24 @@ export class ReelService {
     const strategyTokens = new Set([...tok(ctx.goal), ...tok(ctx.coreBet), ...tok(ctx.audience)]);
     const observed = observedTokens(vs);
     const hasClaimBasis = ctx.licensedPropositions.length > 0 || ctx.proofFacts.length > 0;
-    // treatment intent for THIS strategy (founder-invisible) — the opener's visual energy is matched against it
-    const editingEnergy: EditingEnergy = deriveEditingEnergy([ctx.goal, ctx.coreBet, ctx.positioning].join(' '));
+    // treatment intent (founder-invisible). When a V2 conceptSeed is present, it fixes the agreed treatment; else
+    // it is derived from THIS strategy. The opener's visual energy is matched against it by the frozen editorial-fit gate.
+    const editingEnergy: EditingEnergy = conceptSeed?.editingEnergy ?? deriveEditingEnergy([ctx.goal, ctx.coreBet, ctx.positioning].join(' '));
 
     let ntReason = '';
     let avoidNext = avoid;
     for (let attempt = 0; attempt < MAX_ANGLE_ATTEMPTS; attempt++) {
-      const draft = await this.deps.opportunityModel.recommend({
+      const rawDraft = await this.deps.opportunityModel.recommend({
         videoSet: vs, goal: ctx.goal, coreBet: ctx.coreBet, audience: ctx.audience, positioning: ctx.positioning,
         ctaDirection: ctx.ctaDirection, businessName, voiceLines: ctx.voiceLines, language: ctx.language || 'en', editingEnergy,
         ...(avoidNext || attempt > 0 ? { avoid: avoidNext ?? 'the previous generic angle; be specific to these clips and this strategy' } : {}),
+        ...(conceptSeed ? { conceptSeed } : {}),
       });
+      // When seeded, the AGREED angle is authoritative intent (the founder filmed for it): fix the narrative fields to
+      // the seed and let the model realize only the ranges/hook against the clips. Absent ⇒ the model's own draft.
+      const draft = conceptSeed
+        ? { ...rawDraft, communicationJob: conceptSeed.communicationJob, narrativeArc: conceptSeed.narrativeArc, ctaDirection: conceptSeed.ctaDirection ?? rawDraft.ctaDirection, targetDurationMs: conceptSeed.targetDurationMs || rawDraft.targetDurationMs }
+        : rawDraft;
       const nt = assessNonTransplantable(draft, businessName, strategyTokens, observed);
       ntReason = nt.reason;
       if (!nt.ok) { this.deps.log?.({ type: 'reel_opportunity_transplantable', detail: nt.reason }); continue; }

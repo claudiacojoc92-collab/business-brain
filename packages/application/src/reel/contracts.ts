@@ -352,6 +352,26 @@ export interface IVideoObservationModelPort {
   descriptor?(): { modelId: string };
 }
 
+// ── conceptSeed (Slice 7 V2 "Tell me what to film") — the ONE sanctioned optional seam into frozen V1. ──
+// INTENT + EXECUTION PROVENANCE ONLY. It may guide WHICH concept V1 realizes; it may NEVER assert WHAT is true.
+// It carries NO licensed propositions, proof, claims, safety decisions, authorization, or fixed EDL ranges — claim
+// authority stays entirely in the frozen authorization/safety path. roleHints are GUIDANCE (candidate clip + a
+// usable window per beat); V1 still decides exact in/out, the strongest subset, exclusions, ordering, editorial-fit,
+// rights, safety, sufficiency, and the final timeline. Absent ⇒ frozen "Use my clips" behavior is unchanged.
+export interface ConceptRoleHint {
+  readonly sequenceRole: SegmentRole;
+  readonly sourceRefId: string;                 // a matched clip for this beat (guidance, not a lock)
+  readonly usableWindow?: { readonly inMs: number; readonly outMs: number };  // a hint window; V1 picks the exact range
+}
+export interface ConceptSeed {
+  readonly communicationJob: string;            // the agreed angle (intent) — the reel the founder filmed for
+  readonly narrativeArc: string;                // beat intent (hook→…→close), not clip-tied
+  readonly editingEnergy: EditingEnergy;        // the concept's treatment (drives the frozen editorial-fit gate)
+  readonly targetDurationMs: number;            // proposed length (still bounded/never padded by V1)
+  readonly ctaDirection?: string | null;        // only if earned by strategy
+  readonly roleHints?: ConceptRoleHint[];       // per-beat candidate clip + usable window (guidance only)
+}
+
 /** Reel opportunity model — strategy-conditioned creative-director recommendation + exact ranges. */
 export interface ReelOpportunityInput {
   readonly videoSet: VideoSetUnderstanding;
@@ -359,6 +379,7 @@ export interface ReelOpportunityInput {
   readonly ctaDirection: string | null; readonly businessName: string; readonly voiceLines: string[]; readonly language: string;
   readonly avoid?: string;
   readonly editingEnergy?: EditingEnergy;     // treatment intent for this strategy — the opener's visual energy must match it
+  readonly conceptSeed?: ConceptSeed;         // V2 seam — realize THIS agreed concept using these clips (intent only)
 }
 export interface ReelOpportunityDraft {
   readonly communicationJob: string; readonly narrativeArc: string; readonly ctaDirection: string | null;

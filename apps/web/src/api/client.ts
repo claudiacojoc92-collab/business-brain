@@ -480,3 +480,45 @@ export async function reelObjectUrl(path: string): Promise<string> {
   if (!res.ok) throw new ApiError(res.status, 'FETCH_FAILED', 'Could not load reel.');
   return URL.createObjectURL(await res.blob());
 }
+
+// ─── Slice 7 V2: "Tell me what to film" ──────────────────────────────────────────
+export interface ShootShot { n: number; instruction: string; sayThis?: string }
+export interface ShootFulfillment { status: string; missing: string | null; canCreate?: boolean }
+export interface ShootPlanView { conceptId: string; planId: string; idea: string; whyNow: string; accomplishes: string; effort: string; guidance: string[]; shots: ShootShot[]; anotherAngleAvailable: boolean; fulfillment?: ShootFulfillment; assetId?: string | null }
+
+export function reelProposeConcept(businessId: string, uiLanguage?: string): Promise<ShootPlanView> {
+  return request(`v1/businesses/${businessId}/reel/concepts`, { method: 'POST', body: JSON.stringify(uiLanguage ? { uiLanguage } : {}) });
+}
+export function reelGetShootPlan(businessId: string, planId: string): Promise<ShootPlanView> {
+  return request(`v1/businesses/${businessId}/reel/plans/${planId}`);
+}
+export function reelConstrain(businessId: string, planId: string, constraint: string, uiLanguage?: string): Promise<ShootPlanView> {
+  return request(`v1/businesses/${businessId}/reel/plans/${planId}/constrain`, { method: 'POST', body: JSON.stringify({ constraint, ...(uiLanguage ? { uiLanguage } : {}) }) });
+}
+export async function reelAnotherAngle(businessId: string, conceptId: string): Promise<ShootPlanView | null> {
+  try { return await request(`v1/businesses/${businessId}/reel/concepts/${conceptId}/another-angle`, { method: 'POST', body: '{}' }); }
+  catch (e) { if (e instanceof ApiError && e.status === 409) return null; throw e; }
+}
+export function reelShootUploads(businessId: string, planId: string, clips: { filename?: string; contentType?: string }[]): Promise<{ uploadSetId: string; uploads: { sourceRefId: string; objectKey: string; filename: string | null }[] }> {
+  return request(`v1/businesses/${businessId}/reel/plans/${planId}/uploads`, { method: 'POST', body: JSON.stringify({ clips }) });
+}
+export async function reelShootPutBlob(businessId: string, planId: string, objectKey: string, bytes: Blob): Promise<void> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}v1/businesses/${businessId}/reel/plans/${planId}/blob/${encodeURIComponent(objectKey)}`, { method: 'PUT', headers: { 'Content-Type': 'application/octet-stream', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: bytes });
+  if (!res.ok && res.status !== 204) throw new ApiError(res.status, 'UPLOAD_FAILED', 'Upload failed.');
+}
+export function reelShootRegister(businessId: string, planId: string, clips: { sourceRefId: string; objectKey: string; filename?: string }[]): Promise<{ registered: number }> {
+  return request(`v1/businesses/${businessId}/reel/plans/${planId}/register`, { method: 'POST', body: JSON.stringify({ clips }) });
+}
+export function reelShootProcess(businessId: string, planId: string): Promise<{ status: string }> {
+  return request(`v1/businesses/${businessId}/reel/plans/${planId}/process`, { method: 'POST', body: '{}' });
+}
+export function reelShootAddShot(businessId: string, planId: string): Promise<{ status: string }> {
+  return request(`v1/businesses/${businessId}/reel/plans/${planId}/add-shot`, { method: 'POST', body: '{}' });
+}
+export function reelGetFulfillment(businessId: string, planId: string): Promise<ShootFulfillment> {
+  return request(`v1/businesses/${businessId}/reel/plans/${planId}/fulfillment`);
+}
+export function reelCreateFromPlan(businessId: string, planId: string): Promise<{ status: string; assetId?: string; ready?: boolean; reason?: string }> {
+  return request(`v1/businesses/${businessId}/reel/plans/${planId}/create-reel`, { method: 'POST', body: '{}' });
+}
