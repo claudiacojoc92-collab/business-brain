@@ -436,3 +436,47 @@ export const getBBCurrent = () => request<BBCurrent>(`${BB}/current`);
 export const bbStartRefresh = (input: BBStartRefreshInput) =>
   request<BBRefreshSnapshot>(`${BB}/refresh`, { method: 'POST', body: JSON.stringify(input) });
 export const disconnectMeta = () => socialFetch<{ connected: boolean }>('api/sources/meta/disconnect', { method: 'POST' });
+
+// ─── Slice 7: Reel Creation ("Use my clips" → real MP4) ─────────────────────────
+export interface ReelOpportunityView { opportunityId: string; sufficiency: string; recommendation: string; why: string; usingClips: number; excludedClips: number; missing: string[]; alternativeAvailable: boolean; canCreate: boolean }
+export interface ReelAssetView { assetId: string; versionNumber: number; durationMs: number; clips: number; ready: boolean; mp4Url: string | null; posterUrl: string | null; canSwapOpening: boolean }
+
+export function reelPresignUploads(businessId: string, clips: { filename?: string; contentType?: string }[]): Promise<{ uploadSetId: string; uploads: { sourceRefId: string; url: string; method: string; objectKey: string; filename: string | null }[] }> {
+  return request(`v1/businesses/${businessId}/reel/uploads`, { method: 'POST', body: JSON.stringify({ clips }) });
+}
+export async function reelPutBlobLocal(businessId: string, objectKey: string, bytes: Blob): Promise<void> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}v1/businesses/${businessId}/reel/blob/${encodeURIComponent(objectKey)}`, { method: 'PUT', headers: { 'Content-Type': 'application/octet-stream', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: bytes });
+  if (!res.ok && res.status !== 204) throw new ApiError(res.status, 'UPLOAD_FAILED', 'Upload failed.');
+}
+export function reelRegister(businessId: string, uploadSetId: string, clips: { sourceRefId: string; objectKey: string; filename?: string; bytes?: number }[]): Promise<{ uploadSetId: string; registered: number }> {
+  return request(`v1/businesses/${businessId}/reel/uploads/${uploadSetId}/register`, { method: 'POST', body: JSON.stringify({ clips }) });
+}
+export function reelProcess(businessId: string, uploadSetId: string): Promise<{ jobId: string; stage: string; opportunity?: ReelOpportunityView | null }> {
+  return request(`v1/businesses/${businessId}/reel/uploads/${uploadSetId}/process`, { method: 'POST', body: '{}' });
+}
+export interface ReelJobView { jobId: string; stage: string; opportunityId: string | null; assetId: string | null; failed: boolean }
+export function reelGetJob(businessId: string, jobId: string): Promise<ReelJobView> {
+  return request(`v1/businesses/${businessId}/reel/jobs/${jobId}`);
+}
+export function reelGetOpportunity(businessId: string, opportunityId: string): Promise<ReelOpportunityView> {
+  return request(`v1/businesses/${businessId}/reel/opportunities/${opportunityId}`);
+}
+export function reelAlternative(businessId: string, opportunityId: string): Promise<ReelOpportunityView> {
+  return request(`v1/businesses/${businessId}/reel/opportunities/${opportunityId}/alternative`, { method: 'POST', body: '{}' });
+}
+export function reelAccept(businessId: string, opportunityId: string): Promise<{ status: string; assetId?: string; ready?: boolean; jobId?: string; reason?: string }> {
+  return request(`v1/businesses/${businessId}/reel/opportunities/${opportunityId}/accept`, { method: 'POST', body: '{}' });
+}
+export function reelGetAsset(businessId: string, assetId: string): Promise<ReelAssetView> {
+  return request(`v1/businesses/${businessId}/reel/assets/${assetId}`);
+}
+export function reelSwapOpening(businessId: string, assetId: string): Promise<{ status: string; versionNumber?: number; ready?: boolean; jobId?: string }> {
+  return request(`v1/businesses/${businessId}/reel/assets/${assetId}/swap-opening`, { method: 'POST', body: '{}' });
+}
+export async function reelObjectUrl(path: string): Promise<string> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}${path.replace(/^\//, '')}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) throw new ApiError(res.status, 'FETCH_FAILED', 'Could not load reel.');
+  return URL.createObjectURL(await res.blob());
+}

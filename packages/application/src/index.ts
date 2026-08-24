@@ -40,3 +40,6 @@ export * from './understanding/index';
 
 // Business Brain V1 — versioned lifecycle vertical slice
 export * from './businessbrain/index';
+
+// Slice 7 — Reel Creation (real MP4)
+export * from './reel/index';

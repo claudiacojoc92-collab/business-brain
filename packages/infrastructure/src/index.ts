@@ -138,3 +138,11 @@ export type { Logger } from './telemetry/logger';
 // Health
 export { HealthChecks } from './health/health-checks';
 export type { HealthCheckResult, HealthStatus } from './health/health-checks';
+
+// Slice 7 — Reel Creation (real MP4) infra
+export { FfmpegReelRenderer } from './reel/ffmpeg-reel.renderer';
+export { SkiaReelTextRenderer } from './reel/skia-reel-text.renderer';
+export { DeepgramTranscription, FakeTranscription, type FakeScript } from './reel/reel-transcription.adapter';
+export { LocalObjectStore, S3ObjectStore, type S3ObjectStoreConfig } from './storage/reel-object-store';
+
+export { PgReelRepository } from './database/repositories/pg-reel.repository';
