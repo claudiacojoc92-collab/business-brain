@@ -38,7 +38,7 @@ const observations = corpus.posts.map((p) => {
 });
 const corpusRevision = corpusRevisionId({ observationIds: observations.map((o) => o.id), activeFacetCorrectionIds: [] });
 const facets = extractCorpusFacets(observations, EXTRACTION_PROFILE);
-const scope = buildScope({ sources: observations.map(() => 'instagram'), occurredAts: observations.map((o) => o.payload.occurredAt), corpusSize: observations.length });
+const scope = buildScope({ sources: observations.map(() => 'instagram'), occurredAts: observations.flatMap((o) => (o.kind === 'publication' ? [o.payload.occurredAt] : [])), corpusSize: observations.length });
 const statements = generateSnapshotStatements({ corpusRevision, understandingContextRevision: 'understanding_ctx_genesis', effectiveFacets: facets, scope });
 const version = buildBusinessSnapshotVersion({ businessRef, corpusRevision, understandingContextRevision: 'understanding_ctx_genesis', observedStatements: statements, declaredContext: [], createdAt: CAPTURED_AT });
 

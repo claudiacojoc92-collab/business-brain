@@ -1,8 +1,8 @@
 import { createServer } from './server';
-import { buildCompositionRoot } from './composition-root';
+import { buildCompositionRoot } from '@bb/composition';
 import { createKyselyClient } from '@bb/infrastructure';
 import { createRedisClient } from '@bb/infrastructure';
-import { createLogger } from '@bb/infrastructure';
+import { createLogger, createQueues, QueueRegistry } from '@bb/infrastructure';
 
 const logger = createLogger({ service: 'bb-api' });
 
@@ -15,13 +15,22 @@ async function main(): Promise<void> {
 
   const db    = createKyselyClient(databaseUrl);
   const redis = createRedisClient(redisUrl);
+  const reelQueue = new QueueRegistry(createQueues(redis)); // Slice 7 — enqueue reel process/render jobs to BullMQ
 
-  const { commandBus, queryBus, jwtService, passwordService } =
-    buildCompositionRoot(db);
+  const {
+    commandBus, queryBus, jwtService, passwordService, businessService, founderAccountService,
+    learnBusinessService, discoveredProfileRepo, understandingRepo, ahaRepo,
+    conversationService, aha2Service, strategyService, voiceService, planService, carouselService,
+    photoLedService, photoLedRepo, reelService, reelObjectStore, reelRepo, reelShootService, reelShootRepo,
+  } = buildCompositionRoot(db);
 
   const server = await createServer({
     db, redis, logger,
     commandBus, queryBus, jwtService, passwordService,
+    businessService, founderAccountService,
+    learnBusinessService, discoveredProfileRepo, understandingRepo, ahaRepo,
+    conversationService, aha2Service, strategyService, voiceService, planService, carouselService,
+    photoLedService, photoLedRepo, reelService, reelObjectStore, reelRepo, reelQueue, reelShootService, reelShootRepo,
   });
 
   const port = parseInt(process.env['PORT'] ?? '3000', 10);

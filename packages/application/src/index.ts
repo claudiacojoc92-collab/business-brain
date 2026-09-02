@@ -41,5 +41,27 @@ export * from './understanding/index';
 // Business Brain V1 — versioned lifecycle vertical slice
 export * from './businessbrain/index';
 
+// Slice 0 — Business + Membership tenancy seam and founder account service
+export * from './business/index';
+
+// Slice 1 — "BB learned my business": website understanding + Aha 1
+export * from './bi/index';
+
+// Slice 2 — "BB understood me": founder conversation + founder model + Aha 2
+export * from './conversation/index';
+
+// Slice 3 — "BB gave me a real strategy": Strategy Candidate → Proposal → Current
+export * from './strategy/index';
+
+// Slice 4 — "BB learned my voice": example-grounded Voice Model + calibration
+export * from './voice/index';
+// Slice 5 — "30-Day Plan + Today": Strategy → Execution
+export * from './plan/index';
+export * from './carousel/index';
+export * from './photocarousel/index';
+
 // Slice 7 — Reel Creation (real MP4)
 export * from './reel/index';
+
+// Slice 7 V2 — "Tell me what to film" (upstream shoot planning → frozen V1)
+export * from './reel-shoot/index';

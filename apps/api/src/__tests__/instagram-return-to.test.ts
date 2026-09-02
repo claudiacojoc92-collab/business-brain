@@ -42,4 +42,17 @@ describe('returnToFromState', () => {
     // ...and the pending entry is keyed by that full state (so an invalid/replayed state is rejected).
     await expect(c.handleCallback('tampered.state', 'code')).rejects.toThrow(/invalid or expired/i);
   });
+
+  it('consent URL sets force_reauth=true (fresh grant) and requests EXACTLY the two Instagram permissions', () => {
+    const { authUrl } = mkConnector().authorize('founder-1', '/sources');
+    const q = new URL(authUrl).searchParams;
+    expect(new URL(authUrl).origin + new URL(authUrl).pathname).toBe('https://www.instagram.com/oauth/authorize');
+    expect(q.get('force_reauth')).toBe('true');                 // forces the full consent screen (matches Meta's Business Login URL)
+    expect(q.get('response_type')).toBe('code');
+    // scopes unchanged: the two requested permissions and no others
+    const scopes = (q.get('scope') ?? '').split(',').filter(Boolean).sort();
+    expect(scopes).toEqual(['instagram_business_basic', 'instagram_business_manage_insights']);
+    // no comments / messaging / publishing / any extra permission crept in
+    expect(q.get('scope')).not.toMatch(/comment|message|publish|content_publish|manage_comments/i);
+  });
 });

@@ -4,6 +4,7 @@ import {
   type CorpusRevision,
   type CorpusRevisionId,
   type NormalizedObservation,
+  type NormalizedObservationPayload,
   type RawCapture,
   type SubjectRef,
   buildObservation,
@@ -30,7 +31,7 @@ export interface IFixtureIngestionService {
 interface AcceptedEntry {
   externalId: string;
   entry: unknown;
-  payload: NormalizedObservation['payload'];
+  payload: NormalizedObservationPayload; // fixtures are Instagram publications
   extraction: NormalizedObservation['extraction'];
 }
 

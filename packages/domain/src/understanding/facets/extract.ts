@@ -16,6 +16,7 @@ export function compareFacets(a: Facet, b: Facet): number {
 /** Run the pinned rules over one observation's normalized caption. Pure, deterministic. */
 export function extractForObservation(observation: NormalizedObservation, profile: string): Facet[] {
   if (profile !== EXTRACTION_PROFILE) return [];
+  if (observation.kind !== 'publication') return []; // these rules are publication-caption specific
   const text = observation.payload.caption.toLowerCase(); // caption only; no diacritic folding
   const facets: Facet[] = [];
   for (const rule of FACET_RULES) {

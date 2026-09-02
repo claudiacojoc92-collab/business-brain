@@ -202,3 +202,18 @@ export function TermsPage() {
     </LegalLayout>
   );
 }
+
+/** Public contact page — same truthful details as the canonical site, served on the app domain. */
+export function ContactPage() {
+  return (
+    <LegalLayout title="Contact" updated="30 July 2026">
+      <P>Business Brain is operated by <strong>BLACKLINE SOLUTIONS S.R.L.</strong>, a company registered in Romania (Romanian Tax Identification Number 45154743).</P>
+      <H2>Get in touch</H2>
+      <P>General: <Mail addr="contact@getbusinessbrain.com" /></P>
+      <P>Privacy &amp; data requests: <Mail addr="privacy@getbusinessbrain.com" /></P>
+      <H2>Registered address</H2>
+      <P>Str. Răzoare nr. 211, Bl. C, Et. 1, Ap. 1, Cluj-Napoca, Cluj, 400000, Romania</P>
+      <P>See our <a href="/privacy-policy">Privacy Policy</a> and <a href="/data-deletion">Data Deletion</a> instructions.</P>
+    </LegalLayout>
+  );
+}

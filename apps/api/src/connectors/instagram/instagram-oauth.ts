@@ -42,10 +42,17 @@ function errOf(json: Record<string, unknown>, status: number): string {
   return String(json['error_message'] ?? e?.['message'] ?? json['error_type'] ?? status);
 }
 
-/** Build the Instagram consent URL. `state` = CSRF (round-tripped, verified on callback). */
+/**
+ * Build the Instagram consent URL. `state` = CSRF (round-tripped, verified on callback).
+ * `force_reauth=true` matches Meta's dashboard-generated Business Login URL: it forces a fresh
+ * authentication + re-authorization prompt instead of the "you previously connected" one-tap shortcut,
+ * so the full consent screen reliably appears (required for App Review's visible permission grant).
+ * Scopes are unchanged: only the two requested Instagram permissions.
+ */
 export function buildAuthUrl(cfg: InstagramOAuthConfig, state: string): string {
   const u = new URL(cfg.authEndpoint ?? IG_AUTH_ENDPOINT);
   u.search = new URLSearchParams({
+    force_reauth: 'true',
     client_id: cfg.appId,
     redirect_uri: cfg.redirectUri,
     response_type: 'code',

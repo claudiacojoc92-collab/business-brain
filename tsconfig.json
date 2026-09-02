@@ -6,6 +6,7 @@
     { "path": "./packages/domain" },
     { "path": "./packages/application" },
     { "path": "./packages/infrastructure" },
+    { "path": "./packages/composition" },
     { "path": "./apps/api" },
     { "path": "./apps/workers" },
     { "path": "./apps/web" }

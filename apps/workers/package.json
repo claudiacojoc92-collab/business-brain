@@ -13,6 +13,7 @@
     "@bb/shared":         "*",
     "@bb/domain":         "*",
     "@bb/application":    "*",
+    "@bb/composition":    "*",
     "@bb/infrastructure": "*",
     "bullmq":             "^5.0.0",
     "ioredis":            "^5.3.0"

@@ -53,7 +53,7 @@ export type {
   RawPublicationEntry,
   NormalizeResult,
 } from './ingestion/normalize';
-export { buildRawCapture, buildObservation } from './ingestion/assemble';
+export { buildRawCapture, buildObservation, buildWebObservation, WEB_NORMALIZATION_RULE_VERSION } from './ingestion/assemble';
 export {
   FixtureMediaType,
   FixturePostSchema,
@@ -67,6 +67,10 @@ export type { Extraction, ExtractionMode } from './observations/extraction';
 export type {
   NormalizedObservation,
   NormalizedObservationPayload,
+  PublicationObservation,
+  PublicationObservationPayload,
+  WebObservation,
+  WebObservationPayload,
 } from './observations/normalized-observation';
 export type { ObservationRepository } from './observations/observation.repository';
 

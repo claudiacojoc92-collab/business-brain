@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { createAnthropicClient } from '@bb/infrastructure';
+import { createAnthropicClient } from '../llm/anthropic-client';
 import type {
   IVoiceModelPort,
   VoiceSeedInput, VoiceSeedOutput,

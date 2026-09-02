@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { createAnthropicClient } from '@bb/infrastructure';
+import { createAnthropicClient } from '../llm/anthropic-client';
 import type {
   IVideoObservationModelPort, IReelOpportunityModelPort, ClipObservation, VideoObservationInput,
   ReelOpportunityInput, ReelOpportunityDraft, SelectedClipRange, SegmentRole, AudioUse,

@@ -1,4 +1,6 @@
 import { createKyselyClient, createRedisClient, createBullMqConnection, createLogger } from '@bb/infrastructure';
+import { buildCompositionRoot } from '@bb/composition';
+import { ReelShootWorker } from './reel-shoot/reel-shoot.worker';
 import { MemoryAccumulatorWorker } from './memory/memory-accumulator.worker';
 import { NotificationWorker }      from './notification/notification.worker';
 import { AttributionWorker }       from './attribution/outcome-attribution.worker';
@@ -91,6 +93,19 @@ async function main(): Promise<void> {
   );
   contentDeliverySubscriber.register();
 
+  // Slice 8.0 — Reel async consumer (Slice-7 V1 + V2) in the product workers entrypoint, using the SAME canonical
+  // composition as the API. Reuses the existing frozen ReelShootWorker + Reel services/queues; no duplication.
+  const reelComposition = buildCompositionRoot(db);
+  const reelShootWorker = new ReelShootWorker(
+    bullMq,
+    reelComposition.reelService,
+    reelComposition.reelRepo,
+    reelComposition.reelShootService,
+    reelComposition.reelShootRepo,
+    logger,
+  );
+  reelShootWorker.start();
+
   // Outbox relay — continuous loop, publishes domain events to the in-process bus
   const outboxRelay = new OutboxRelayWorker(
     new OutboxRelay(db, eventBus),
@@ -121,6 +136,7 @@ async function main(): Promise<void> {
     outboxRelay.stop();
     await pipelineWorker.close();
     await contentDeliveryWorker.close();
+    await reelShootWorker.close();
     for (const worker of workers) {
       await worker.close();
     }

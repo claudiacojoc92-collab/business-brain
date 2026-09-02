@@ -19,7 +19,7 @@ import type {
   MaterialType,
 } from './contracts';
 import { classifyVoiceSample, sampleText, isExplicitBoundary, type VoiceSampleContext } from './validation';
-import { classifyLayers, isPermittedDiscourse } from './proposition-classes';
+import { validateAgainstAuthorization } from './proposition-safety';
 import { buildAuthorizationSnapshot, type AuthorizationSnapshot, type SafetyDecision } from './authorization-snapshot';
 
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
@@ -61,14 +61,11 @@ export interface VoiceDeps {
 
 interface AllowedFacts { business: string[]; founderOwned: string[]; strategyDecisions: string[]; proof: string[]; blob: string }
 
-// The proposition-preservation judge is stochastic: a single call can miss a leak it would catch on a
-// re-run. So every candidate is validated with N independent passes and UNION-FAIL — ANY pass detecting
-// a new proposition rejects the candidate (never majority-pass). Residual leaks after the bounded repair
-// budget FAIL CLOSED (no least-harmful fallback, no persistence, no founder-visible output).
-const PROPOSITION_CHECK_PASSES = 3;
+// The N-pass UNION-FAIL semantic judge is the frozen validation kernel, now shared via
+// ./proposition-safety so Slice-6 Carousel enforces the SAME authority. Residual leaks after the bounded
+// repair budget FAIL CLOSED (no least-harmful fallback, no persistence, no founder-visible output).
 const MAX_SEMANTIC_REPAIR_ATTEMPTS = 2;
 
-type NewProposition = { clause: string; proposition: string; reason: string };
 type SelectedJob = { kind: CommunicationJobKind; objective: string; refs: string[] };
 
 export class VoiceService {
@@ -121,31 +118,6 @@ export class VoiceService {
     return { business, founderOwned, strategyDecisions, proof, blob: [...business, ...founderOwned, ...strategyDecisions].join(' \n ') };
   }
 
-  /**
-   * PRIMARY semantic guard: run the proposition-preservation judge N times over the EXACT same
-   * (candidate, spec, channel) and return the UNION of every new proposition any pass detected
-   * (obvious duplicates normalized). UNION-FAIL — a non-empty result means the candidate is invalid,
-   * even if some passes returned clean. NEVER majority-pass. If the judge port is absent, returns [].
-   */
-  private async propositionUnion(content: SampleContent, channel: SampleChannel, spec: AuthorizedMessageSpec): Promise<{ passes: NewProposition[][]; union: NewProposition[] }> {
-    if (!this.deps.model.checkPropositions) return { passes: [], union: [] };
-    const seen = new Set<string>();
-    const union: NewProposition[] = [];
-    const passes: NewProposition[][] = [];
-    for (let pass = 0; pass < PROPOSITION_CHECK_PASSES; pass++) {
-      let found: NewProposition[] = [];
-      try { found = (await this.deps.model.checkPropositions({ content, channel, spec })).newPropositions; }
-      catch { passes.push([]); continue; /* a failed judge call cannot be read as "clean" — other passes still gate */ }
-      passes.push(found);
-      for (const p of found) {
-        const key = `${norm(p.clause)}::${norm(p.proposition)}`;
-        if (seen.has(key)) continue;
-        seen.add(key); union.push(p);
-      }
-    }
-    return { passes, union };
-  }
-
   // ── Voice REALIZATION of an AuthorizedMessageSpec (HOW). Order: realize → N-pass proposition check
   //    (UNION-FAIL, PRIMARY) → scoped semantic repair → re-check ALL N from zero → deterministic +
   //    judged backstops (defense-in-depth). Residual after the bounded budget FAILS CLOSED: returns
@@ -171,20 +143,16 @@ export class VoiceService {
     // attempts 0..MAX = initial candidate + up to MAX_SEMANTIC_REPAIR_ATTEMPTS repairs. Every candidate
     // (including each repair) gets a FRESH full validation set — no previous clean verdict is reused.
     for (let attempt = 0; attempt <= MAX_SEMANTIC_REPAIR_ATTEMPTS; attempt++) {
-      const reasons: string[] = [];
-      // DETERMINISTIC Layer 1/2 FIRST: audience-situation and sales-process (stance-gated) are classified
-      // deterministically, so a CTA-only verdict never materially depends on the stochastic judge for these
-      // known classes. Layer-1 violations are rejected here regardless of Layer 3.
-      const layered = classifyLayers(content, spec);
-      for (const v of layered.layer1Violations) {
-        reasons.push(`LAYER1 ${v.propositionClass} "${v.clause}" — proposition-bearing and not authorized${v.stanceGated ? ' by an explicit behavioral stance' : ''}. Remove it; realize only the authorized message.`);
-      }
-      // PRIMARY: N-pass UNION-FAIL proposition preservation (Layer 3) over the RESIDUAL — any finding that
-      // is in fact permitted Layer-2 discourse (brevity marker, invitation, relevance conditional) is
-      // dropped, so the stochastic judge can never reject non-propositional framing.
-      const judged = await this.propositionUnion(content, channel, spec);
-      const union = judged.union.filter((p) => !isPermittedDiscourse(p.clause, spec));
-      for (const p of union) reasons.push(`NEW PROPOSITION "${p.clause}" — ${p.reason}. Remove it; express only authorized propositions.`);
+      // PRIMARY governance = the shared frozen kernel: DETERMINISTIC Layer 1/2 first (audience-situation
+      // and sales-process are classified deterministically, so a CTA-only verdict never materially depends
+      // on the stochastic judge for these known classes), then the N-pass UNION-FAIL proposition-
+      // preservation judge (Layer 3) with permitted Layer-2 discourse dropped. Identical to the extracted
+      // Carousel path — one authority, no fork.
+      const kernel = await validateAgainstAuthorization(content, channel, spec, this.deps.model.checkPropositions ? (i) => this.deps.model.checkPropositions!(i) : undefined);
+      const layered = kernel.layered;
+      const judged = { passes: kernel.passes };
+      const union = kernel.union;
+      const reasons: string[] = [...kernel.reasons];
       // BACKSTOP (defense-in-depth), only consulted once the deterministic Layer-1 and semantic union are clean.
       if (reasons.length === 0) {
         const v = classifyVoiceSample(content, channel, ctx);
@@ -452,8 +420,9 @@ export function buildAuthorizedMessageSpec(strategy: VoiceStrategyView, allowed:
   };
 }
 
-/** Governed business facts the copy may assert (grounded in website evidence). */
-function allowedBusinessFacts(u: GovernedUnderstanding | null): string[] {
+/** Governed business facts the copy may assert (grounded in website evidence). Exported so downstream
+ * governed generators (Slice 6 Carousel) license the SAME business evidence as Voice — no re-derivation. */
+export function allowedBusinessFacts(u: GovernedUnderstanding | null): string[] {
   if (!u) return [];
   const out: string[] = [];
   if (u.offer?.summary) out.push(u.offer.summary);

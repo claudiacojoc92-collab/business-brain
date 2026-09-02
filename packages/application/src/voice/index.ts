@@ -1,5 +1,6 @@
 export * from './contracts';
 export * from './proposition-classes';
+export * from './proposition-safety';
 export * from './authorization-snapshot';
 export {
   classifyVoiceSample,
@@ -18,6 +19,7 @@ export {
 export {
   VoiceService,
   buildAuthorizedMessageSpec,
+  allowedBusinessFacts,
   type VoiceDeps,
   type VoiceEvent,
   type VoiceStrategyView,

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createHash } from 'node:crypto';
-import { createAnthropicClient } from '@bb/infrastructure';
+import { createAnthropicClient } from '../llm/anthropic-client';
 import type {
   ICarouselModelPort, CarouselModelInput, Concept, CarouselCopyDraft, CarouselBrief, AssetAuthorizationSnapshot,
   AntiTemplateVerdict, ClosureVerdict, SlideRole, ConceptFamily, SlideCopy, CopyBinding, ConstrainedRealizationInput, GenerationMode,

@@ -38,3 +38,6 @@ Thumbs.db
 * 2.json
 * 2.md
 * 2.sql
+
+# Redis local dump artifact
+dump.rdb

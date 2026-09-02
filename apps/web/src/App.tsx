@@ -1,178 +1,95 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './auth/AuthContext';
-import { LoginPage } from './pages/LoginPage';
-import { OnboardingPage } from './pages/OnboardingPage';
-import { DashboardPage } from './pages/DashboardPage';
-import { ReviewPage } from './pages/ReviewPage';
-import { HistoryPage } from './pages/HistoryPage';
-import { ConnectPreviewPage } from './connect/ConnectPreviewPage';
-import { UploadPreviewPage } from './upload/UploadPreviewPage';
-import { GooglePreviewPage } from './google/GooglePreviewPage';
-import { DeclaredPreviewPage } from './declared/DeclaredPreviewPage';
-import { CalendarPreviewPage } from './calendar/CalendarPreviewPage';
-import { SourcesPage } from './pages/SourcesPage';
-import { BusinessBrainPage } from './pages/BusinessBrainPage';
-import { PrivacyPage, TermsPage, DataDeletionPage } from './legal/LegalPages';
+import { LocaleProvider } from './i18n/LocaleContext';
+import type { Locale } from './i18n/messages';
+import { SessionProvider, useSession } from './slice0/session';
+import { AuthPage } from './slice0/AuthPage';
+import { SigninCallbackPage } from './slice0/SigninCallbackPage';
+import { BusinessHomePage } from './slice0/BusinessHomePage';
+import { BusinessStartPage } from './slice0/BusinessStartPage';
+import { ConversationPage } from './slice0/ConversationPage';
+import { StrategyPage } from './slice0/StrategyPage';
+import { VoicePage } from './slice0/VoicePage';
+import { PlanPage } from './slice0/PlanPage';
+import { TodayPage } from './slice0/TodayPage';
+import { CarouselPage } from './slice0/CarouselPage';
+import { PhotoCreatePage } from './slice0/PhotoCreatePage';
+import { ReelCreatePage } from './slice0/ReelCreatePage';
+import { ShootPlanPage } from './slice0/ShootPlanPage';
+import { PrivacyPage, TermsPage, DataDeletionPage, ContactPage } from './legal/LegalPages';
+import { LandingPage } from './legal/LandingPage';
+import { setInterfaceLocale } from './api/client';
+import './slice0/slice0.css';
 
 /**
- * Route guard: redirect based on founder status.
- *
- * - Not authenticated       → /login
- * - INTAKE_PENDING          → /onboarding
- * - ACTIVE / anything else  → /dashboard
+ * Slice 0 production routing. The founder path is: /signin → / (businesses) → /b/:id (start).
+ * The retired weekly-cycle / diagnosis / research surfaces are intentionally NOT routed here
+ * (their files remain on disk and unit-tested in isolation); the production path never lands
+ * on a research surface, passive-card MVP, or debug harness.
  */
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { founder, isLoading } = useAuth();
 
-  if (isLoading) return <LoadingScreen />;
-  if (!founder) return <Navigate to="/login" replace />;
+function Loading() {
+  return <div className="s0-loading">Loading…</div>;
+}
 
+function RequireSession({ children }: { children: React.ReactNode }) {
+  const { account, isLoading } = useSession();
+  if (isLoading) return <Loading />;
+  if (!account) return <Navigate to="/signin" replace />;
   return <>{children}</>;
 }
 
-function OnboardingGuard({ children }: { children: React.ReactNode }) {
-  const { founder, isLoading } = useAuth();
-
-  if (isLoading) return <LoadingScreen />;
-  if (!founder) return <Navigate to="/login" replace />;
-  if (founder.status !== 'INTAKE_PENDING') return <Navigate to="/dashboard" replace />;
-
+function RedirectIfAuthed({ children }: { children: React.ReactNode }) {
+  const { account, isLoading } = useSession();
+  if (isLoading) return <Loading />;
+  if (account) return <Navigate to="/home" replace />;
   return <>{children}</>;
 }
 
-function ActiveGuard({ children }: { children: React.ReactNode }) {
-  const { founder, isLoading } = useAuth();
-
-  if (isLoading) return <LoadingScreen />;
-  if (!founder) return <Navigate to="/login" replace />;
-  if (founder.status === 'INTAKE_PENDING') return <Navigate to="/onboarding" replace />;
-
-  return <>{children}</>;
-}
-
-function LoadingScreen() {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0a0f1a', color: '#6b7280' }}>
-      <span style={{ fontSize: '14px', letterSpacing: '0.05em' }}>Loading…</span>
-    </div>
-  );
+/** Persist the interface locale to the founder record once signed in (best-effort). */
+function syncLocale(locale: Locale): void {
+  try {
+    if (localStorage.getItem('bb_access_token')) void setInterfaceLocale(locale).catch(() => undefined);
+  } catch {
+    /* ignore */
+  }
 }
 
 export function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <Routes>
-          {/* Public */}
-          <Route path="/login" element={<LoginPage />} />
+    <LocaleProvider onLocaleChange={syncLocale}>
+      <BrowserRouter>
+        <SessionProvider>
+          <Routes>
+            <Route path="/signin" element={<RedirectIfAuthed><AuthPage /></RedirectIfAuthed>} />
+            <Route path="/signin/callback" element={<SigninCallbackPage />} />
 
-          {/* Public legal pages — no authentication, maintained and deployed with the app */}
-          <Route path="/privacy" element={<PrivacyPage />} />
-          <Route path="/terms" element={<TermsPage />} />
-          <Route path="/data-deletion" element={<DataDeletionPage />} />
+            {/* Public reviewer/legal pages — no login required (Meta Access Verification) */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/privacy-policy" element={<PrivacyPage />} />
+            <Route path="/terms" element={<TermsPage />} />
+            <Route path="/data-deletion" element={<DataDeletionPage />} />
+            <Route path="/contact" element={<ContactPage />} />
 
-          {/* Onboarding — only for INTAKE_PENDING founders */}
-          <Route
-            path="/onboarding"
-            element={
-              <OnboardingGuard>
-                <OnboardingPage />
-              </OnboardingGuard>
-            }
-          />
+            <Route path="/home" element={<RequireSession><BusinessHomePage /></RequireSession>} />
+            <Route path="/b/:id" element={<RequireSession><BusinessStartPage /></RequireSession>} />
+            <Route path="/b/:id/talk" element={<RequireSession><ConversationPage /></RequireSession>} />
+            <Route path="/b/:id/reel/create" element={<RequireSession><ReelCreatePage /></RequireSession>} />
+            <Route path="/b/:id/reel/shoot" element={<RequireSession><ShootPlanPage /></RequireSession>} />
+            <Route path="/b/:id/reel/shoot/:planId" element={<RequireSession><ShootPlanPage /></RequireSession>} />
+            <Route path="/b/:id/reel/:reelId" element={<RequireSession><ReelCreatePage /></RequireSession>} />
+            <Route path="/b/:id/strategy" element={<RequireSession><StrategyPage /></RequireSession>} />
+            <Route path="/b/:id/voice" element={<RequireSession><VoicePage /></RequireSession>} />
+            <Route path="/b/:id/plan" element={<RequireSession><PlanPage /></RequireSession>} />
+            <Route path="/b/:id/today" element={<RequireSession><TodayPage /></RequireSession>} />
+            <Route path="/b/:id/create/:handoffId" element={<RequireSession><CarouselPage /></RequireSession>} />
+            <Route path="/b/:id/photos" element={<RequireSession><PhotoCreatePage /></RequireSession>} />
 
-          {/* Dashboard — only for ACTIVE founders */}
-          <Route
-            path="/dashboard"
-            element={
-              <ActiveGuard>
-                <DashboardPage />
-              </ActiveGuard>
-            }
-          />
-
-          {/* Review — one screen: brief + pending content (ACTIVE founders) */}
-          <Route
-            path="/review"
-            element={
-              <ActiveGuard>
-                <ReviewPage />
-              </ActiveGuard>
-            }
-          />
-
-          {/* History — read-only past committed cycles (ACTIVE founders) */}
-          <Route
-            path="/history"
-            element={
-              <ActiveGuard>
-                <HistoryPage />
-              </ActiveGuard>
-            }
-          />
-
-          {/* Sources — connect social accounts (Instagram + Facebook Page). Real, authenticated flows. */}
-          <Route
-            path="/sources"
-            element={
-              <ActiveGuard>
-                <SourcesPage />
-              </ActiveGuard>
-            }
-          />
-
-          {/* Business Brain V1 — versioned lifecycle workspace (ACTIVE founders) */}
-          <Route
-            path="/business-brain"
-            element={
-              <ActiveGuard>
-                <BusinessBrainPage />
-              </ActiveGuard>
-            }
-          />
-
-          {/* Root: redirect based on status */}
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <RootRedirect />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Dev-only: M2.1 Connect Your World reflection preview (not registered in prod). */}
-          {import.meta.env.DEV && (
-            <Route path="/connect-preview" element={<ConnectPreviewPage />} />
-          )}
-          {/* Dev-only: M2.2 Upload Connector reflection preview (not registered in prod). */}
-          {import.meta.env.DEV && (
-            <Route path="/upload-preview" element={<UploadPreviewPage />} />
-          )}
-          {/* Dev-only: Google Source (authenticated) connect + read preview (not registered in prod). */}
-          {import.meta.env.DEV && (
-            <Route path="/google-preview" element={<GooglePreviewPage />} />
-          )}
-          {/* Dev-only: Capability B v1 declared-intent capture preview (not registered in prod). */}
-          {import.meta.env.DEV && (
-            <Route path="/declared-preview" element={<DeclaredPreviewPage />} />
-          )}
-          {/* Dev-only: Calendar Source (behavior dimension) connect + read preview (not registered in prod). */}
-          {import.meta.env.DEV && (
-            <Route path="/calendar-preview" element={<CalendarPreviewPage />} />
-          )}
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </AuthProvider>
-    </BrowserRouter>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </SessionProvider>
+      </BrowserRouter>
+    </LocaleProvider>
   );
-}
-
-function RootRedirect() {
-  const { founder } = useAuth();
-  if (!founder) return <Navigate to="/login" replace />;
-  if (founder.status === 'INTAKE_PENDING') return <Navigate to="/onboarding" replace />;
-  return <Navigate to="/dashboard" replace />;
 }

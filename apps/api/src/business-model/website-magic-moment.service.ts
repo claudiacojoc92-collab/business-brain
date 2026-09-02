@@ -8,7 +8,7 @@
  */
 import type { IEvidenceRepository, EvidenceFragment } from '@bb/domain';
 import type { BusinessModel } from '@bb/business-model-engine';
-import { readWebsite, type ConnectionState, type ProgressEvent } from '../connectors/website/website.connector';
+import { readWebsite, type ConnectionState, type ProgressEvent } from '@bb/infrastructure';
 import { recomputeFromWebsite } from './recompute';
 import { buildObservedReflection, buildInferredLines, type Reflection, type ReflectionLine } from './reflection';
 

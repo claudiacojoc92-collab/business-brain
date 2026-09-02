@@ -17,7 +17,6 @@ export function TodayPage() {
   const [business, setBusiness] = useState<Business | null | undefined>(undefined);
   const [today, setToday] = useState<TodayResp | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [created, setCreated] = useState<Record<string, string>>({});
   const started = useRef(false);
 
   useEffect(() => {
@@ -37,7 +36,7 @@ export function TodayPage() {
   async function create(actionId: string) {
     if (!id) return;
     setBusy(actionId);
-    try { const r = await createFromAction(id, actionId); setCreated((c) => ({ ...c, [actionId]: r.note })); }
+    try { const r = await createFromAction(id, actionId); navigate(`/b/${id}/create/${r.createHandoffId}`); }
     finally { setBusy(null); }
   }
 
@@ -62,7 +61,7 @@ export function TodayPage() {
         {today.state === 'none' && <p className="s0-strat-body">{t('plan.today.empty')}</p>}
 
         {ready.map((a) => (
-          <ActionCard key={a.actionId} a={a} t={t} busy={busy === a.actionId} created={created[a.actionId] ?? null}
+          <ActionCard key={a.actionId} a={a} t={t} busy={busy === a.actionId}
             onOutcome={(o) => outcome(a.actionId, o)} onCreate={() => create(a.actionId)} />
         ))}
 
@@ -81,26 +80,22 @@ export function TodayPage() {
 }
 
 function ActionCard(props: {
-  a: TodayAction; t: T; busy: boolean; created: string | null;
+  a: TodayAction; t: T; busy: boolean;
   onOutcome: (o: PlanOutcome) => void; onCreate: () => void;
 }) {
-  const { a, t, busy, created, onOutcome, onCreate } = props;
+  const { a, t, busy, onOutcome, onCreate } = props;
   return (
     <div className="s0-strat-block s0-today-action">
       <p className="s0-strat-lead">{a.what}</p>
       {a.effort && <p className="s0-plan-band">{t('plan.today.effort')}: {a.effort}</p>}
       <p className="s0-today-why"><span className="s0-strat-label">{t('plan.today.why')}</span> {a.whyNow}</p>
       <p className="s0-today-done"><span className="s0-strat-label">{t('plan.today.done')}</span> {a.doneLooksLike}</p>
-      {created ? (
-        <p className="s0-today-created"><strong>{t('plan.create.ready')}</strong> — {t('plan.create.note')}</p>
-      ) : (
-        <div className="s0-today-actions">
-          <button type="button" className="s0-plan-primary s0-btn-inline" disabled={busy} onClick={() => onOutcome('done')}>{t('plan.today.markdone')}</button>
-          <button type="button" className="s0-linkbtn" disabled={busy} onClick={() => onOutcome('deferred')}>{t('plan.today.defer')}</button>
-          <button type="button" className="s0-linkbtn" disabled={busy} onClick={() => onOutcome('skipped')}>{t('plan.today.skip')}</button>
-          {a.canCreate && <button type="button" className="s0-linkbtn s0-today-create" disabled={busy} onClick={onCreate}>{t('plan.today.create')} →</button>}
-        </div>
-      )}
+      <div className="s0-today-actions">
+        <button type="button" className="s0-plan-primary s0-btn-inline" disabled={busy} onClick={() => onOutcome('done')}>{t('plan.today.markdone')}</button>
+        <button type="button" className="s0-linkbtn" disabled={busy} onClick={() => onOutcome('deferred')}>{t('plan.today.defer')}</button>
+        <button type="button" className="s0-linkbtn" disabled={busy} onClick={() => onOutcome('skipped')}>{t('plan.today.skip')}</button>
+        {a.canCreate && <button type="button" className="s0-linkbtn s0-today-create" disabled={busy} onClick={onCreate}>{t('plan.today.create')} →</button>}
+      </div>
     </div>
   );
 }

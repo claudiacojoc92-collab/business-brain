@@ -85,6 +85,398 @@ export async function login(email: string, password: string): Promise<LoginRespo
   });
 }
 
+// ─── Slice 0: account + business tenancy ────────────────────────────────────────
+
+export interface Account {
+  founderId: string;
+  email: string;
+  name: string;
+  interfaceLocale: string;
+}
+
+export interface Business {
+  id: string;
+  name: string;
+  ownerFounderId: string;
+  defaultConversationLanguage: string;
+  createdAt: string;
+}
+
+export interface RegisterResponse {
+  founder_id: string;
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+}
+
+/** Real self-registration — creates the account + credential and returns an access token. */
+export function registerAccount(input: {
+  email: string;
+  name: string;
+  password: string;
+  interfaceLocale?: string;
+}): Promise<RegisterResponse> {
+  return request<RegisterResponse>('auth/register', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function getMe(): Promise<Account> {
+  return request<Account>('v1/me');
+}
+
+export function setInterfaceLocale(locale: string): Promise<{ interfaceLocale: string }> {
+  return request<{ interfaceLocale: string }>('v1/me/locale', {
+    method: 'PUT',
+    body: JSON.stringify({ locale }),
+  });
+}
+
+export function listBusinesses(): Promise<{ businesses: Business[] }> {
+  return request<{ businesses: Business[] }>('v1/businesses');
+}
+
+export function createBusiness(input: {
+  name: string;
+  defaultConversationLanguage?: string;
+}): Promise<Business> {
+  return request<Business>('v1/businesses', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function getBusiness(id: string): Promise<Business> {
+  return request<Business>(`v1/businesses/${encodeURIComponent(id)}`);
+}
+
+/** Begin Google ACCOUNT sign-in; returns the consent URL for the browser to navigate to. */
+export function getGoogleSigninUrl(): Promise<{ authUrl: string }> {
+  return request<{ authUrl: string }>('auth/google/start');
+}
+
+// ─── Slice 1: "BB learned my business" ───────────────────────────────────────────
+
+export interface AhaSourceRef {
+  label: string;
+  url: string;
+}
+export interface AhaFinding {
+  finding: string;
+  implication?: string;
+  sourceRefs: AhaSourceRef[];
+}
+export interface DiscoveredProfile {
+  id: string;
+  platform: string;
+  url: string;
+  status: 'discovered' | 'confirmed' | 'rejected';
+}
+export interface LearnResult {
+  state: 'synced' | 'partial' | 'empty' | 'failed';
+  pagesRead: number;
+  error?: string;
+  discovered: DiscoveredProfile[];
+  understandingId?: string;
+  aha: { status: 'produced' | 'insufficient'; findings: AhaFinding[] };
+}
+
+/** Reads the real website and produces governed understanding + Aha 1 (may take ~30s). */
+export function learnBusiness(businessId: string, url: string): Promise<LearnResult> {
+  return request<LearnResult>(`v1/businesses/${encodeURIComponent(businessId)}/learn`, {
+    method: 'POST',
+    body: JSON.stringify({ url }),
+  });
+}
+
+export interface AhaResponse {
+  state: 'none' | 'produced' | 'insufficient';
+  findings?: AhaFinding[];
+  createdAt?: string;
+}
+export function getAha(businessId: string): Promise<AhaResponse> {
+  return request<AhaResponse>(`v1/businesses/${encodeURIComponent(businessId)}/aha`);
+}
+
+export function getDiscoveredProfiles(businessId: string): Promise<{ profiles: DiscoveredProfile[] }> {
+  return request<{ profiles: DiscoveredProfile[] }>(`v1/businesses/${encodeURIComponent(businessId)}/discovered-profiles`);
+}
+
+export function setDiscoveredProfileStatus(
+  businessId: string,
+  profileId: string,
+  status: 'confirmed' | 'rejected',
+): Promise<DiscoveredProfile> {
+  return request<DiscoveredProfile>(
+    `v1/businesses/${encodeURIComponent(businessId)}/discovered-profiles/${encodeURIComponent(profileId)}`,
+    { method: 'POST', body: JSON.stringify({ status }) },
+  );
+}
+
+// ─── Slice 2: founder conversation + founder model + Aha 2 ────────────────────────
+
+export interface ConvTurn {
+  id: string;
+  role: 'founder' | 'bb';
+  content: string;
+  language: string;
+  seq: number;
+  createdAt: string;
+}
+export interface ConvView {
+  session: { id: string; status: 'active' | 'paused' | 'ready_for_aha2'; conversationLanguage: string };
+  turns: ConvTurn[];
+  readyForAha2: boolean;
+}
+const CONV = (id: string) => `v1/businesses/${encodeURIComponent(id)}/conversation`;
+
+export function startConversation(businessId: string): Promise<ConvView> {
+  return request<ConvView>(CONV(businessId), { method: 'POST', body: '{}' });
+}
+export function submitTurn(businessId: string, message: string): Promise<ConvView> {
+  return request<ConvView>(`${CONV(businessId)}/turn`, { method: 'POST', body: JSON.stringify({ message }) });
+}
+export function pauseConversation(businessId: string): Promise<void> {
+  return request<void>(`${CONV(businessId)}/pause`, { method: 'POST', body: '{}' });
+}
+
+export interface FounderStateItem {
+  id: string;
+  kind: string;
+  statement: string;
+  scope: string | null;
+  temporary: boolean;
+  status: string;
+}
+export interface FounderObs {
+  id: string;
+  behavior: string;
+  status: string;
+}
+export interface FounderModel {
+  goal: FounderStateItem | null;
+  horizon: FounderStateItem | null;
+  constraints: FounderStateItem[];
+  preferences: FounderStateItem[];
+  decisions: FounderStateItem[];
+  intentions: FounderStateItem[];
+  challengePermissions: FounderStateItem[];
+  resources: FounderStateItem[];
+  businessCorrections: FounderStateItem[];
+  observations: FounderObs[];
+}
+export function getFounderModel(businessId: string): Promise<FounderModel> {
+  return request<FounderModel>(`v1/businesses/${encodeURIComponent(businessId)}/founder-model`);
+}
+export function updateFounderState(businessId: string, stateId: string, action: 'delete' | 'temporary', temporary?: boolean): Promise<void> {
+  return request<void>(`v1/businesses/${encodeURIComponent(businessId)}/founder-model/state/${encodeURIComponent(stateId)}`, {
+    method: 'POST',
+    body: JSON.stringify({ action, temporary }),
+  });
+}
+export function updateObservation(businessId: string, obsId: string, status: 'confirmed' | 'rejected' | 'deleted'): Promise<FounderObs> {
+  return request<FounderObs>(`v1/businesses/${encodeURIComponent(businessId)}/founder-model/observation/${encodeURIComponent(obsId)}`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
+}
+
+export interface Aha2Finding {
+  implication: string;
+  business: string[];
+  founder: string[];
+  observations: string[];
+}
+export interface Aha2Resp {
+  state: 'none' | 'produced' | 'insufficient';
+  findings?: Aha2Finding[];
+  createdAt?: string;
+}
+export function generateAha2(businessId: string): Promise<Aha2Resp> {
+  return request<Aha2Resp>(`v1/businesses/${encodeURIComponent(businessId)}/aha2`, { method: 'POST', body: '{}' });
+}
+export function getAha2(businessId: string): Promise<Aha2Resp> {
+  return request<Aha2Resp>(`v1/businesses/${encodeURIComponent(businessId)}/aha2`);
+}
+
+// ── Slice 3: strategy (Proposal → Current) ──
+export interface StrategyCoreBet {
+  priority: string; deprioritized: string; whyOverAlternative: string;
+  relationToGoal: string; relationToBottleneck: string; founderFit: string; resourceFit: string;
+}
+export interface StrategyDecision {
+  key: string; title: string; rationale: string; sourceRefs: string[]; founderRefs: string[];
+  claimStrength: 'evidenced' | 'bounded' | 'assumption'; assumption: string | null; reconsiderTrigger: string | null;
+}
+export interface StrategyBundle {
+  core: {
+    goal: string; horizon: string; diagnosis: string; coreBet: StrategyCoreBet;
+    offerDirection: string; positioningDirection: string; audiencePrimaryForGoal: string;
+    audienceRoles: { role: string; who: string }[];
+    founderConstraints: string[]; resourceEnvelope: string[];
+    assumptions: { statement: string }[]; tradeOffs: { choosing: string; over: string; why: string }[];
+    notNow: { item: string; reason: string }[]; reconsiderTriggers: { condition: string }[];
+  };
+  branch: {
+    market: string; language: string; messagingDirection: string;
+    channelPriorities: { channel: string; whyGoal: string; whyAudience: string; whyResource: string; overAlternative: string; assumption: string }[];
+    acquisitionApproach: string; contentRole: string; ctaDirection: string;
+  };
+  decisions: StrategyDecision[];
+}
+export interface StrategyResp {
+  state?: 'none';
+  id?: string;
+  version?: number;
+  status?: 'proposal' | 'insufficient';
+  language?: string;
+  createdAt?: string;
+  adoptedAt?: string | null;
+  strategy?: StrategyBundle;
+}
+const S = (b: string) => `v1/businesses/${encodeURIComponent(b)}/strategy`;
+export function getStrategyProposal(businessId: string): Promise<StrategyResp> {
+  return request<StrategyResp>(`${S(businessId)}/proposal`);
+}
+export function regenerateStrategy(businessId: string): Promise<StrategyResp> {
+  return request<StrategyResp>(S(businessId), { method: 'POST', body: '{}' });
+}
+export function getCurrentStrategy(businessId: string): Promise<StrategyResp> {
+  return request<StrategyResp>(`${S(businessId)}/current`);
+}
+export function adoptStrategy(businessId: string, versionId: string): Promise<StrategyResp> {
+  return request<StrategyResp>(`${S(businessId)}/adopt`, { method: 'POST', body: JSON.stringify({ versionId }) });
+}
+export function respondToStrategy(businessId: string, kind: string, statement: string): Promise<StrategyResp> {
+  return request<StrategyResp>(`${S(businessId)}/respond`, { method: 'POST', body: JSON.stringify({ kind, statement }) });
+}
+
+// ── Slice 4: voice calibration ──
+export interface VoiceSampleContent { hook?: string; beats?: string[]; caption?: string; cta?: string }
+export interface VoiceSample {
+  id: string; sessionId: string | null; subject: string; language: string; market: string | null;
+  channel: 'reel' | 'carousel' | 'caption'; speakingRole: string; objective: string; content: VoiceSampleContent; status: string; createdAt: string;
+}
+export interface VoiceProjection { calibrated: boolean; lines: string[] }
+export interface VoiceView {
+  state: 'none' | 'active';
+  sessionId?: string;
+  samples?: VoiceSample[];
+  calibrated?: boolean;
+  projection?: VoiceProjection;
+}
+const V = (b: string) => `v1/businesses/${encodeURIComponent(b)}/voice`;
+export function getVoice(businessId: string): Promise<VoiceView> {
+  return request<VoiceView>(V(businessId));
+}
+export function startVoiceCalibration(businessId: string): Promise<{ sessionId: string; samples: VoiceSample[]; calibrated: boolean }> {
+  return request(`${V(businessId)}/calibration`, { method: 'POST', body: '{}' });
+}
+export function reactToSample(businessId: string, sampleId: string, reaction: string): Promise<{ target: string; sample: VoiceSample | null; note: string }> {
+  return request(`${V(businessId)}/samples/${encodeURIComponent(sampleId)}/react`, { method: 'POST', body: JSON.stringify({ reaction }) });
+}
+export function editSample(businessId: string, sampleId: string, text: string): Promise<{ sample: VoiceSample | null }> {
+  return request(`${V(businessId)}/samples/${encodeURIComponent(sampleId)}/edit`, { method: 'POST', body: JSON.stringify({ text }) });
+}
+export function getVoiceProjection(businessId: string): Promise<VoiceProjection> {
+  return request<VoiceProjection>(`${V(businessId)}/projection`);
+}
+
+// ── Slice 5: 30-day plan + today (strategy → execution) ──
+export interface PlanPriority {
+  priorityId: string; title: string; why: string; timeBand: string;
+  focus: boolean; blocker: string | null; signal: string | null; steps: { what: string }[];
+}
+export interface PlanView {
+  state: 'proposed' | 'active'; planVersionId: string; direction: string;
+  priorities: PlanPriority[]; notNow: { item: string; reason: string }[]; stale: boolean;
+}
+export interface PlanActiveResp { active: PlanView | null; proposal: PlanView | null }
+export type PlanProposeResp = PlanView | { state: 'insufficient' | 'no_strategy' };
+export interface TodayAction {
+  actionId: string; what: string; whyNow: string; doneLooksLike: string; effort: string | null; canCreate: boolean;
+}
+export interface TodayResp {
+  state: 'active' | 'none';
+  ready?: TodayAction[];
+  blocked?: { what: string; need: string } | null;
+}
+export type PlanOutcome = 'done' | 'deferred' | 'skipped';
+const PL = (b: string) => `v1/businesses/${encodeURIComponent(b)}/plan`;
+export function getPlanState(businessId: string): Promise<PlanActiveResp> {
+  return request<PlanActiveResp>(`${PL(businessId)}/active`);
+}
+export function proposePlan(businessId: string): Promise<PlanProposeResp> {
+  return request<PlanProposeResp>(`${PL(businessId)}/propose`, { method: 'POST', body: '{}' });
+}
+export function adoptPlan(businessId: string, planVersionId: string): Promise<PlanView | { state: 'none' }> {
+  return request(`${PL(businessId)}/${encodeURIComponent(planVersionId)}/adopt`, { method: 'POST', body: '{}' });
+}
+export function getToday(businessId: string): Promise<TodayResp> {
+  return request<TodayResp>(`${PL(businessId)}/today`);
+}
+export function applyActionOutcome(businessId: string, actionId: string, outcome: PlanOutcome, reason?: string): Promise<TodayResp> {
+  return request<TodayResp>(`${PL(businessId)}/action/${encodeURIComponent(actionId)}/outcome`, { method: 'POST', body: JSON.stringify({ outcome, reason: reason ?? '' }) });
+}
+export function createFromAction(businessId: string, actionId: string): Promise<{ state: 'ready_for_create'; objective: string; note: string; createHandoffId: string }> {
+  return request(`${PL(businessId)}/action/${encodeURIComponent(actionId)}/create`, { method: 'POST', body: '{}' });
+}
+
+// ── Slice 6: carousel asset creation (image carousel 1080×1350) ──
+export interface CarouselSlideView { slideId: string; order: number; role: string; imageUrl: string | null; canRevise: boolean; headline: string; body: string; cta: string }
+export type CarouselView =
+  | { state: 'ready'; assetId: string; versionId: string; versionNumber: number; direction: string; ready: boolean; slides: CarouselSlideView[]; exportUrl: string | null }
+  | { state: 'unavailable_format'; requested: string }
+  | { state: 'no_strategy' } | { state: 'insufficient' } | { state: 'not_different' }
+  | { state: 'revision_rejected'; reasons: string[] };
+const CR = (b: string) => `v1/businesses/${encodeURIComponent(b)}/carousel`;
+export function generateCarousel(businessId: string, createHandoffId: string): Promise<CarouselView> {
+  return request(`${CR(businessId)}/generate`, { method: 'POST', body: JSON.stringify({ createHandoffId }) });
+}
+export function getCarousel(businessId: string, assetId: string): Promise<CarouselView> {
+  return request(`${CR(businessId)}/${encodeURIComponent(assetId)}`);
+}
+export function reviseCarousel(businessId: string, assetId: string, input: { scope: string; slideId?: string; headline?: string; body?: string; cta?: string; request?: string }): Promise<CarouselView> {
+  return request(`${CR(businessId)}/${encodeURIComponent(assetId)}/revise`, { method: 'POST', body: JSON.stringify(input) });
+}
+export function tryDifferentAngle(businessId: string, assetId: string): Promise<CarouselView> {
+  return request(`${CR(businessId)}/${encodeURIComponent(assetId)}/angle`, { method: 'POST', body: '{}' });
+}
+export function uploadCarouselMedia(businessId: string, dataBase64: string, filename: string): Promise<{ sourceRefId: string }> {
+  return request(`${CR(businessId)}/media`, { method: 'POST', body: JSON.stringify({ dataBase64, filename, reuseRight: 'founder_uploaded' }) });
+}
+// ── Slice 6.1 — Create from Photos ──
+export interface PhotoOpportunity { opportunityId: string; sufficiency: 'sufficient' | 'sufficient_with_gap' | 'insufficient'; recommendation: string; whyPhotos: string; usingPhotos: number; excludedPhotos: number; missing: string[]; alternativeAvailable: boolean; canCreate: boolean }
+export type PhotoSetView =
+  | { state: 'recommended'; photoSetUnderstandingId: string; setSignal: string; opportunity: PhotoOpportunity }
+  | { state: 'no_strategy' } | { state: 'insufficient' } | { state: 'no_images' };
+export function uploadPhotoSet(businessId: string, images: { dataBase64: string; filename?: string }[]): Promise<PhotoSetView> {
+  return request(`${CR(businessId)}/photo-set`, { method: 'POST', body: JSON.stringify({ images }) });
+}
+export function photoAlternative(businessId: string, opportunityId: string): Promise<{ state: 'recommended'; opportunity: PhotoOpportunity } | { state: string }> {
+  return request(`${CR(businessId)}/photo-opportunity/${encodeURIComponent(opportunityId)}/alternative`, { method: 'POST', body: '{}' });
+}
+export function acceptPhotoOpportunity(businessId: string, opportunityId: string): Promise<{ state: 'accepted'; createHandoffId: string } | { state: 'insufficient' | 'invalid' }> {
+  return request(`${CR(businessId)}/photo-opportunity/${encodeURIComponent(opportunityId)}/accept`, { method: 'POST', body: '{}' });
+}
+export const fileToDataUrl = (file: File): Promise<string> => new Promise((res, rej) => {
+  const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(new Error('read failed')); r.readAsDataURL(file);
+});
+/** Authenticated fetch of a rendered PNG / export ZIP → object URL (img/download can't carry the bearer). */
+async function authedObjectUrl(path: string): Promise<string> {
+  const token = localStorage.getItem('bb_access_token');
+  const res = await fetch(path.startsWith('/') ? path : `/${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) throw new ApiError(res.status, 'FETCH_FAILED', 'Could not load the asset.');
+  return URL.createObjectURL(await res.blob());
+}
+export const carouselSlideObjectUrl = (imageUrl: string): Promise<string> => authedObjectUrl(imageUrl);
+export async function downloadCarouselZip(exportUrl: string): Promise<void> {
+  const url = await authedObjectUrl(exportUrl);
+  const a = document.createElement('a'); a.href = url; a.download = 'carousel.zip'; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
 // ─── Founder status ───────────────────────────────────────────────────────────
 
 export interface FounderStatus {

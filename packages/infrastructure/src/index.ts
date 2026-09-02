@@ -39,6 +39,42 @@ export { InProcessEventBus } from './event-bus/in-process-event-bus';
 // Founder auth repository
 export { PgFounderAuthRepository } from './database/repositories/pg-founder-auth.repository';
 
+// Slice 0 — Business + Membership tenancy seam and founder account repositories
+export { PgBusinessRepository } from './database/repositories/pg-business.repository';
+export { PgFounderAccountRepository } from './database/repositories/pg-founder-account.repository';
+
+// Slice 1 — website understanding + Aha persistence
+export {
+  PgBusinessEvidenceLinkRepository,
+  PgDiscoveredProfileRepository,
+  PgUnderstandingSnapshotRepository,
+  PgAhaRepository,
+  PgBusinessWebsiteRepository,
+} from './database/repositories/pg-slice1.repository';
+
+// Slice 2 — conversation + founder model + Aha 2 persistence
+export {
+  PgConversationRepository,
+  PgInformationNeedRepository,
+  PgFounderStateRepository,
+  PgFounderObservationRepository,
+  PgAha2Repository,
+} from './database/repositories/pg-conversation.repository';
+
+// Slice 3 — strategy: immutable versioned bundle + lifecycle pointer
+export {
+  PgStrategyRepository,
+  PgStrategyPointerRepository,
+} from './database/repositories/pg-strategy.repository';
+
+// Slice 4 — voice: example-grounded Voice Model persistence
+export { PgVoiceRepository } from './database/repositories/pg-voice.repository';
+export { PgPlanRepository } from './database/repositories/pg-plan.repository';
+export { PgCarouselRepository } from './database/repositories/pg-carousel.repository';
+export { PgPhotoLedRepository } from './database/repositories/pg-photoled.repository';
+export { ResvgCarouselRenderer } from './render/resvg-carousel.renderer';
+export { FsBlobStore } from './storage/fs-blob-store';
+
 // Internal brief projection
 export { PgInternalBriefProjection } from './database/projections/pg-internal-brief.projection';
 export { PgInternalBriefRepository } from './database/repositories/pg-internal-brief.repository';
@@ -146,3 +182,24 @@ export { DeepgramTranscription, FakeTranscription, type FakeScript } from './ree
 export { LocalObjectStore, S3ObjectStore, type S3ObjectStoreConfig } from './storage/reel-object-store';
 
 export { PgReelRepository } from './database/repositories/pg-reel.repository';
+
+// Slice 7 V2 — "Tell me what to film" persistence
+export { PgReelShootRepository } from './database/repositories/pg-reel-shoot.repository';
+
+// Concrete Anthropic model adapters (relocated from apps/api — they implement @bb/application ports with the
+// Anthropic SDK and contain no API-runtime behavior; shared by both the api and workers runtimes).
+export { AnthropicUnderstandingModel } from './business-intelligence/anthropic-understanding.model';
+export { AnthropicAha2Model } from './business-intelligence/anthropic-aha2.model';
+export { AnthropicConversationModel } from './business-intelligence/anthropic-conversation.model';
+export { AnthropicStrategyModel } from './business-intelligence/anthropic-strategy.model';
+export { AnthropicVoiceModel } from './business-intelligence/anthropic-voice.model';
+export { AnthropicPlanModel, PLAN_SYSTEM } from './business-intelligence/anthropic-plan.model';
+export { AnthropicCarouselModel } from './business-intelligence/anthropic-carousel.model';
+export { AnthropicObservationModel, AnthropicOpportunityModel } from './business-intelligence/anthropic-photoled.model';
+export { AnthropicVideoObservationModel, AnthropicReelOpportunityModel } from './business-intelligence/anthropic-reel.model';
+export { AnthropicConceptPlanModel } from './business-intelligence/anthropic-shoot.model';
+
+// Website ingestion + social-discovery adapters (relocated from apps/api) + the API-agnostic website connector.
+export { WebsiteIngestionAdapter } from './business-intelligence/website-ingestion.adapter';
+export { SocialDiscoveryAdapter } from './business-intelligence/social-discovery.adapter';
+export * from './connectors/website';

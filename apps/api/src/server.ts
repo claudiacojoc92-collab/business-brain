@@ -2,7 +2,27 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import type { KyselyDB } from '@bb/infrastructure';
 import type { RedisClient } from '@bb/infrastructure';
 import type { Logger } from '@bb/infrastructure';
-import type { CommandBus, QueryBus, JwtService, PasswordService } from '@bb/infrastructure';
+import type { CommandBus, QueryBus, JwtService, PasswordService, PgPhotoLedRepository, QueueRegistry } from '@bb/infrastructure';
+import type {
+  BusinessService,
+  FounderAccountService,
+  LearnBusinessService,
+  ConversationService,
+  Aha2Service,
+  StrategyService,
+  VoiceService,
+  PlanService,
+  CarouselService,
+  PhotoLedService,
+  ReelService,
+  ReelShootService,
+  IObjectStore,
+  IReelRepository,
+  IReelShootRepository,
+  IDiscoveredProfileRepository,
+  IUnderstandingSnapshotRepository,
+  IAhaRepository,
+} from '@bb/application';
 import { registerPlugins } from './plugins';
 import { registerRoutes } from './routes';
 
@@ -14,6 +34,26 @@ export interface ServerDeps {
   queryBus:        QueryBus;
   jwtService:      JwtService;
   passwordService: PasswordService;
+  businessService: BusinessService;
+  founderAccountService: FounderAccountService;
+  learnBusinessService: LearnBusinessService;
+  discoveredProfileRepo: IDiscoveredProfileRepository;
+  understandingRepo: IUnderstandingSnapshotRepository;
+  ahaRepo: IAhaRepository;
+  conversationService: ConversationService;
+  aha2Service: Aha2Service;
+  strategyService: StrategyService;
+  voiceService: VoiceService;
+  planService: PlanService;
+  carouselService: CarouselService;
+  photoLedService: PhotoLedService;
+  photoLedRepo: PgPhotoLedRepository;
+  reelService?: ReelService;
+  reelObjectStore?: IObjectStore;
+  reelRepo?: IReelRepository;
+  reelQueue?: QueueRegistry;
+  reelShootService?: ReelShootService;
+  reelShootRepo?: IReelShootRepository;
 }
 
 /**

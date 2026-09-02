@@ -15,6 +15,7 @@ export function registerAuthRoutes(
     deps.queryBus,
     deps.jwtService,
     deps.passwordService,
+    deps.founderAccountService,
   );
 
   server.post('/auth/register', controller.register.bind(controller));

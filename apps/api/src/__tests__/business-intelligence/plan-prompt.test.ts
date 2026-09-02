@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PLAN_SYSTEM } from '../../business-intelligence/anthropic-plan.model';
+import { PLAN_SYSTEM } from '@bb/infrastructure';
 
 describe('Slice 5 — plan model prompt contract', () => {
   const prompt = PLAN_SYSTEM;

@@ -48,7 +48,8 @@ export class SnapshotGenerationService implements ISnapshotGenerationService {
     const rawCaptures = await this.deps.rawCaptures.getByIds(businessRef, observations.map((o) => o.rawCaptureId));
     const scope = buildScope({
       sources: rawCaptures.map((r) => r.source),
-      occurredAts: observations.map((o) => o.payload.occurredAt),
+      // occurredAt is a publication-only content time; web observations do not carry one.
+      occurredAts: observations.flatMap((o) => (o.kind === 'publication' ? [o.payload.occurredAt] : [])),
       corpusSize: observations.length,
     });
 

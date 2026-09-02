@@ -1,10 +1,10 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { ICommandBus } from '@bb/application';
 import type { IQueryBus } from '@bb/application';
-import type { Command } from '@bb/application';
 import type { Query } from '@bb/application';
 import type { JwtService } from '@bb/infrastructure';
 import type { PasswordService } from '@bb/infrastructure';
+import type { FounderAccountService, SupportedLocale } from '@bb/application';
 import { generateId } from '@bb/shared';
 import { ValidationError } from '@bb/shared';
 import { AuthenticationError } from '@bb/shared';
@@ -12,9 +12,8 @@ import { AuthenticationError } from '@bb/shared';
 interface RegisterBody {
   email: string;
   name: string;
-  businessName: string;
-  timezone: string;
   password: string;
+  interfaceLocale?: SupportedLocale;
 }
 
 interface TokenBody {
@@ -32,34 +31,44 @@ export class AuthController {
     private readonly queryBus:   IQueryBus,
     private readonly jwtService: JwtService,
     private readonly passwordService: PasswordService,
+    private readonly founderAccountService: FounderAccountService,
   ) {}
 
+  /**
+   * Real self-registration (Slice 0): creates the founder account AND its password
+   * credential, then returns an access token so the SPA is signed in immediately.
+   * No business name is collected here — the business is created as a separate step.
+   */
   async register(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     const body = request.body as RegisterBody;
 
-    if (!body.email || !body.name || !body.businessName || !body.timezone) {
-      throw new ValidationError('MISSING_REQUIRED_FIELDS', 'email, name, businessName, and timezone are required.');
+    if (!body.email || !body.name || !body.password) {
+      throw new ValidationError('MISSING_REQUIRED_FIELDS', 'email, name, and password are required.');
+    }
+    if (body.password.length < 8) {
+      throw new ValidationError('WEAK_PASSWORD', 'Password must be at least 8 characters.');
     }
 
-    const result = await this.commandBus.dispatch<
-      { founderId: string },
-      import('@bb/shared').ApplicationError
-    >({
-      type:           'RegisterFounder',
-      email:          body.email,
-      name:           body.name,
-      businessName:   body.businessName,
-      timezone:       body.timezone,
-      correlationId:  generateId(),
-      traceId:        generateId(),
-      idempotencyKey: (request.headers['idempotency-key'] as string | undefined) ?? generateId(),
-    } as Command);
+    const passwordHash = await this.passwordService.hash(body.password);
+    const account = await this.founderAccountService.register({
+      email:           body.email,
+      name:            body.name,
+      passwordHash,
+      interfaceLocale: body.interfaceLocale,
+    });
 
-    if (result.isErr) {
-      throw result.error;
-    }
+    const { accessToken, expiresIn } = this.jwtService.sign({
+      sub:    account.founderId,
+      role:   'founder',
+      scopes: ['read', 'write'],
+    });
 
-    await reply.status(201).send({ founder_id: result.value.founderId });
+    await reply.status(201).send({
+      founder_id:   account.founderId,
+      access_token: accessToken,
+      token_type:   'Bearer',
+      expires_in:   expiresIn,
+    });
   }
 
   async token(request: FastifyRequest, reply: FastifyReply): Promise<void> {

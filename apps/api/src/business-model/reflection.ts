@@ -13,7 +13,7 @@
  * partial/failed never fabricate a read.
  */
 import type { EvidenceFragment } from '@bb/domain';
-import type { ConnectionState } from '../connectors/website/website.connector';
+import type { ConnectionState } from '@bb/infrastructure';
 
 export interface ReflectionLine {
   label: string;

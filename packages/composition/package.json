@@ -1,0 +1,16 @@
+{
+  "name": "@bb/composition",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build"
+  },
+  "dependencies": {
+    "@bb/shared": "*",
+    "@bb/domain": "*",
+    "@bb/application": "*",
+    "@bb/infrastructure": "*"
+  }
+}
