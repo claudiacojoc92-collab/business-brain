@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { ServerDeps } from '../server';
+import { recordFounderEvent } from '../telemetry/founder-events';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
 import type { PlanVersion, Priority, Action, ActionOutcome } from '@bb/application';
 
@@ -116,7 +117,7 @@ export function registerPlanRoutes(server: FastifyInstance, deps: ServerDeps): v
 
   // Mark an action done/deferred/skipped — append-only; applies to the Active plan only.
   server.post('/v1/businesses/:id/plan/action/:actionId/outcome', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { business } = await requireBusiness(request);
+    const { founderId, business } = await requireBusiness(request);
     const { actionId } = request.params as { actionId: string };
     const body = (request.body ?? {}) as { outcome?: string; reason?: string };
     const outcome = (['done', 'deferred', 'skipped'].includes(body.outcome ?? '') ? body.outcome : '') as ActionOutcome | '';
@@ -125,16 +126,20 @@ export function registerPlanRoutes(server: FastifyInstance, deps: ServerDeps): v
     if (!active) throw new NotFoundError('NO_ACTIVE_PLAN', 'No active plan.');
     if (!findAction(active.plan, actionId)) throw new NotFoundError('ACTION_NOT_FOUND', 'Action not found in the active plan.');
     await deps.planService.applyOutcome(business.id, active.plan.planVersionId, actionId, outcome, (body.reason ?? '').trim() || null);
+    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: outcome === 'done' ? 'action_marked_done' : 'action_deferred', surface: 'today', metadata: { outcome } });
     const today = await deps.planService.today(business.id);
     await reply.status(200).send(today ? { state: 'active', ...projectToday(today) } : { state: 'none' });
   });
 
   // Create boundary — emits/persists the product-level CreateHandoff. Does NOT generate an asset yet.
   server.post('/v1/businesses/:id/plan/action/:actionId/create', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { business } = await requireBusiness(request);
+    const { founderId, business } = await requireBusiness(request);
     const { actionId } = request.params as { actionId: string };
     const handoff = await deps.planService.emitCreateHandoff(business.id, actionId);
-    // Founder-facing: the honest continuation state, no internal handoff fields.
-    await reply.status(200).send({ state: 'ready_for_create', objective: handoff.executionObjective, note: 'The writing step arrives in the next stage.' });
+    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'create_started', surface: 'create', metadata: { createHandoffId: handoff.createHandoffId } });
+    // Founder-facing: the honest continuation state + the opaque, business-scoped handoff token the Create
+    // surface navigates to (Slice 6 loads the CreateHandoff by this id). Internal provenance fields
+    // (planVersionId / strategyVersionId / traces) stay hidden — only the navigation token is exposed.
+    await reply.status(200).send({ state: 'ready_for_create', createHandoffId: handoff.createHandoffId, objective: handoff.executionObjective, note: 'Ready to turn this into a carousel.' });
   });
 }

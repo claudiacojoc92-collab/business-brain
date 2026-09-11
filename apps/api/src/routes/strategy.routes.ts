@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { ServerDeps } from '../server';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
+import { recordFounderEvent } from '../telemetry/founder-events';
 import type { StrategyVersionRecord, FounderStateKind } from '@bb/application';
 
 interface AuthedUser { sub: string; role: string }
@@ -57,8 +58,9 @@ export function registerStrategyRoutes(server: FastifyInstance, deps: ServerDeps
 
   // Generate (or regenerate) a Strategy Proposal. Never adopts.
   server.post('/v1/businesses/:id/strategy', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { business, language } = await requireBusiness(request);
+    const { founderId, business, language } = await requireBusiness(request);
     const rec = await deps.strategyService.generate(business.id, business.name, language);
+    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'strategy_proposed', surface: 'strategy', metadata: { status: rec.status } });
     await reply.status(200).send(project(rec));
   });
 
@@ -84,6 +86,7 @@ export function registerStrategyRoutes(server: FastifyInstance, deps: ServerDeps
     const body = (request.body ?? {}) as { versionId?: string };
     if (!body.versionId) throw new ValidationError('VERSION_REQUIRED', 'versionId is required.');
     const rec = await deps.strategyService.adopt(business.id, body.versionId, founderId);
+    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'strategy_adopted', surface: 'strategy', metadata: {} });
     const cur = await deps.strategyService.getCurrent(business.id);
     await reply.status(200).send(project(rec, cur?.adoptedAt ?? null));
   });
@@ -98,6 +101,7 @@ export function registerStrategyRoutes(server: FastifyInstance, deps: ServerDeps
     const kind = (body.kind ?? 'constraint') as FounderStateKind;
     if (!STATE_KINDS.includes(kind)) throw new ValidationError('INVALID_KIND', 'Unknown founder-state kind.');
     const rec = await deps.strategyService.recordFounderInput(business.id, founderId, business.name, kind, statement, language);
+    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'strategy_responded', surface: 'strategy', metadata: { kind } });
     await reply.status(200).send(project(rec));
   });
 }

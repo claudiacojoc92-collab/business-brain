@@ -59,6 +59,7 @@ function makeDeps(opts: {
   let pointer: { currentVersionId: string | null; adoptedAt: string | null } = { currentVersionId: null, adoptedAt: null };
   const appended: any[] = [];
   let generateCalls = 0; let repairCalls = 0;
+  let lastInput: any = null;
 
   const deps: StrategyDeps = {
     understanding: { save: async () => { throw new Error('n/a'); }, latest: async () => ({ id: 'snap', understanding: UNDERSTANDING }) as any },
@@ -71,7 +72,7 @@ function makeDeps(opts: {
     aha1: { save: async () => { throw new Error('n/a'); }, latest: async () => ({ findings: [{ finding: 'Homepage has no clear next action' }] }) as any },
     aha2: { save: async () => { throw new Error('n/a'); }, latest: async () => ({ status: 'produced', findings: [{ implication: 'Any strategy cannot assume the homepage qualifies buyers' }] }) as any },
     model: {
-      generate: async () => { generateCalls += 1; return opts.generate(); },
+      generate: async (input: any) => { lastInput = input; generateCalls += 1; return opts.generate(); },
       repair: async () => { repairCalls += 1; return (opts.repair ?? (async () => ({ strategy: validBundle() })))(); },
       judge: opts.judge ?? (async () => ({ verdicts: [{ dimension: 'grounding', pass: true, component: 'coreBet', reason: '' }] })),
     },
@@ -86,7 +87,7 @@ function makeDeps(opts: {
       setCurrent: async (_b: string, versionId: string) => { pointer = { currentVersionId: versionId, adoptedAt: '2026-08-09' }; },
     },
   };
-  return { deps, versions, appended, get: () => pointer, calls: () => ({ generateCalls, repairCalls }) };
+  return { deps, versions, appended, get: () => pointer, calls: () => ({ generateCalls, repairCalls }), lastInput: () => lastInput };
 }
 
 const P = { businessId: 'B', businessName: 'thoughtbot', language: 'en' };
@@ -175,5 +176,50 @@ describe('StrategyService — lifecycle + repair + adoption', () => {
     const rec = await new StrategyService(m.deps).generate(P.businessId, P.businessName, 'ro');
     expect(rec.language).toBe('ro');
     expect(rec.status).toBe('proposal');
+  });
+});
+
+describe('StrategyService — M3.5 founder correction consistency', () => {
+  const CORRECTION = 'We are bespoke-only; we do NOT sell productised packages.';
+
+  it('an active founder correction enters the authoritative businessCorrections channel, not founderState', async () => {
+    const m = makeDeps({
+      generate: async () => ({ strategy: validBundle() }),
+      founder: [
+        { kind: 'goal', statement: 'land 10 recurring retainer clients' },
+        { kind: 'business_correction', statement: CORRECTION },
+      ],
+    });
+    await new StrategyService(m.deps).generate(P.businessId, P.businessName, P.language);
+    const inp = m.lastInput();
+    expect(inp.businessCorrections.map((c: any) => c.statement)).toContain(CORRECTION);
+    expect(inp.businessCorrections[0].ref).toBe('C1');
+    // never leaks into founder-state (preferences) — the fact-vs-preference boundary is preserved
+    expect(inp.founderState.some((f: any) => f.statement === CORRECTION)).toBe(false);
+    expect(inp.founderState.every((f: any) => f.kind !== 'business_correction')).toBe(true);
+  });
+
+  it('a decision grounded in a correction resolves ONLY when the correction is active', async () => {
+    // The default founder set (F1..F4) that validBundle's decisions already cite, so only the C-ref varies.
+    const DF = [
+      { kind: 'goal', statement: 'land 10 recurring retainer clients' },
+      { kind: 'horizon', statement: '6 months' },
+      { kind: 'constraint', statement: 'must not depend on daily personal video' },
+      { kind: 'resource', statement: '8 hours a week and a small budget' },
+    ];
+    const citesC = JSON.parse(JSON.stringify(validBundle()));
+    citesC.decisions[0].sourceRefs = ['C1'];
+    // active correction present → C1 is in the gate business context → grounds → Proposal
+    const withC = makeDeps({ generate: async () => ({ strategy: citesC }), founder: [...DF, { kind: 'business_correction', statement: CORRECTION }] });
+    expect((await new StrategyService(withC.deps).generate(P.businessId, P.businessName, P.language)).status).toBe('proposal');
+    // no correction → C1 dangles → refs_resolvable fails → honest insufficient (fail-closed)
+    const noC = makeDeps({ generate: async () => ({ strategy: citesC }), repair: async () => ({ strategy: citesC }), founder: [...DF] });
+    expect((await new StrategyService(noC.deps).generate(P.businessId, P.businessName, P.language)).status).toBe('insufficient');
+  });
+
+  it('no corrections → businessCorrections is empty (existing behavior unchanged)', async () => {
+    const m = makeDeps({ generate: async () => ({ strategy: validBundle() }) });
+    await new StrategyService(m.deps).generate(P.businessId, P.businessName, P.language);
+    expect(m.lastInput().businessCorrections).toEqual([]);
   });
 });

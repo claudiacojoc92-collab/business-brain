@@ -219,12 +219,17 @@ export interface CarouselBrief {
   readonly strategyVersionId: string;
   readonly founderGoalTrace: string;
   readonly strategicBetTrace: string;
-  readonly communicationJob: string;
+  readonly communicationJob: string;        // the EXECUTION ANGLE actually attempted (may be an adaptation)
   readonly audienceUseContext: string;
   readonly ctaDirection: string;
   readonly channel: string;
   readonly requestedAssetFormat: string;    // resolved (see channel/format resolution)
   readonly language: string;
+  // M5.6 — execution-angle adaptation provenance. When the original Strategy/Today job out-promised the
+  // authorized material, communicationJob above holds the grounded ADAPTED angle; adaptedFrom keeps the
+  // original job (immutable strategic intent) and adaptationReason records why. Absent ⇒ no adaptation.
+  readonly adaptedFrom?: string;
+  readonly adaptationReason?: string;
 }
 
 // ── Render + gates ──
@@ -350,6 +355,16 @@ export interface TargetedRepairTrace {
 
 export interface ICarouselModelPort {
   chooseConcept(input: { brief: CarouselBrief; snapshot: AssetAuthorizationSnapshot; repairReasons?: string[] }): Promise<Concept>;
+  /**
+   * M5.6 — SAFE EXECUTION-ANGLE ADAPTATION. Given the immutable strategic job + the authorized material + the
+   * (already-downgraded) concept, propose ONE `executionAngle`: a communication job that serves the SAME
+   * strategic objective but can be expressed using ONLY the authorized material — no comparison/outcome/causal
+   * claim unless the material authorizes it. It proposes a FRAMING; it does NOT write copy or invent facts.
+   */
+  adaptAngle?(input: {
+    strategicJob: string; strategicBet: string; founderGoal: string; audience: string;
+    concept: Concept; licensedPropositions: { ref: string; text: string }[]; proofFacts: string[]; reasons: string[];
+  }): Promise<{ executionAngle: string; reason: string }>;
   draftCopy(input: CarouselModelInput): Promise<CarouselCopyDraft>;
   /** Optional causal anti-template review (shared mechanic OK when strategy/material entails it). Mode-aware:
    * in constrained_fallback mode simplicity/closeness-to-material is NOT genericity (§6/§7). */

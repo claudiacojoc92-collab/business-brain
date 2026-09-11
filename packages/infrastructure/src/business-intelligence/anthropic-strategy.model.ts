@@ -69,8 +69,9 @@ function rules(l: string): string {
     '  stage. The strategy must FAIL transplantation to an unrelated business. Avoid platitudes ("know your',
     '  audience", "be consistent", "provide value", "build trust").',
     '- STRATEGY = decisions + trade-offs. It is NOT a 30-day plan and NOT assets. Do not list "post 4 reels".',
-    '- Cite evidence by ref: B* = business understanding, F* = founder state, O* = observation. Every material',
-    '  decision cites at least one real ref. Never invent refs. Never put ref tokens in founder-facing prose.',
+    '- Cite evidence by ref: B* = business understanding, C* = founder correction (AUTHORITATIVE world fact that',
+    '  supersedes any conflicting B*), F* = founder state, O* = observation. Every material decision cites at',
+    '  least one real ref. Never invent refs. Never put ref tokens in founder-facing prose.',
   ].join('\n');
 }
 
@@ -78,6 +79,10 @@ function userBlock(input: StrategyModelInput): string {
   return [
     `BUSINESS: ${input.businessName}`,
     '', 'GOVERNED BUSINESS UNDERSTANDING:', ...input.businessElements.map((e) => `${e.ref}: ${e.text}`),
+    '', 'FOUNDER CORRECTIONS (world facts the founder stated directly — AUTHORITATIVE; they SUPERSEDE any',
+    '  conflicting statement in the business understanding above; treat as business truth, cite as their C-ref,',
+    '  and never treat as a stylistic or psychological preference):',
+    ...(input.businessCorrections.length ? input.businessCorrections.map((c) => `${c.ref} (${c.subject || 'business'}): ${c.statement}`) : ['(none)']),
     '', 'FOUNDER-OWNED STATE (respect the kind):', ...input.founderState.map((e) => `${e.ref} (${e.kind}): ${e.statement}`),
     '', 'FOUNDER OBSERVATIONS (optional):', ...(input.observations.length ? input.observations.map((e) => `${e.ref}: ${e.behavior}`) : ['(none)']),
     '', 'AHA 1 (support):', ...(input.aha1.length ? input.aha1.map((a, i) => `${i + 1}. ${a.finding}`) : ['(none)']),

@@ -50,7 +50,9 @@ afterEach(cleanup);
 describe('StrategyPage', () => {
   it('renders the founder-facing proposal hierarchy (bet, not-now, reconsider) — not a tactic pile', async () => {
     render(<StrategyPage />);
-    expect(await screen.findByText('strategy.proposal.title')).toBeInTheDocument();
+    // Current contract (strat2): the proposal opens with "here's the call I'd make", the bet dominates,
+    // and not-now / reconsider hang off it — a held decision, not a tactic pile.
+    expect(await screen.findByText('strat2.recommend')).toBeInTheDocument();
     expect(screen.getByText(bundle.core.coreBet.priority)).toBeInTheDocument();
     expect(screen.getByText(bundle.core.notNow[0]!.item, { exact: false })).toBeInTheDocument();
     expect(screen.getByText(bundle.core.reconsiderTriggers[0]!.condition)).toBeInTheDocument();
@@ -60,22 +62,23 @@ describe('StrategyPage', () => {
 
   it('adopting the proposal transitions to the Current strategy', async () => {
     render(<StrategyPage />);
-    const adopt = await screen.findByText('strategy.adopt');
+    const adopt = await screen.findByText('strat2.adopt');
     fireEvent.click(adopt);
     await waitFor(() => expect(api.adoptStrategy).toHaveBeenCalledWith('b1', 'v1'));
-    expect(await screen.findByText('strategy.current.title')).toBeInTheDocument();
+    // Adopting transitions to the held state ("Adopted · holding").
+    expect(await screen.findByText('strat2.holding')).toBeInTheDocument();
   });
 
   it('reopens straight to Current when one is already adopted (no regeneration)', async () => {
     vi.mocked(api.getCurrentStrategy).mockResolvedValue(current as never);
     render(<StrategyPage />);
-    expect(await screen.findByText('strategy.current.title')).toBeInTheDocument();
+    expect(await screen.findByText('strat2.holding')).toBeInTheDocument();
     expect(api.getStrategyProposal).not.toHaveBeenCalled();
   });
 
   it('shows the insufficient state honestly instead of a fake strategy', async () => {
     vi.mocked(api.getStrategyProposal).mockResolvedValue({ status: 'insufficient' } as never);
     render(<StrategyPage />);
-    expect(await screen.findByText('strategy.insufficient.title')).toBeInTheDocument();
+    expect(await screen.findByText('strat2.insuff')).toBeInTheDocument();
   });
 });

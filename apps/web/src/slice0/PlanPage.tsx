@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import { AppShell } from './AppShell';
+import { isNotFound, LoadError } from './errors';
 import {
   getBusiness, getPlanState, proposePlan, adoptPlan,
   type Business, type PlanView, type PlanPriority,
@@ -19,39 +20,47 @@ export function PlanPage() {
   const [phase, setPhase] = useState<Phase>('loading');
   const [plan, setPlan] = useState<PlanView | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loadErr, setLoadErr] = useState(false);   // B3 — transient load failure, distinct from a true 404
+  const [actionError, setActionError] = useState<string | null>(null); // B1 — a primary action that failed
   const started = useRef(false);
+
+  const load = useCallback(async () => {
+    if (!id) return;
+    setLoadErr(false);
+    try {
+      setBusiness(await getBusiness(id));
+      const s = await getPlanState(id);
+      if (s.active) { setPlan(s.active); setPhase('active'); }
+      else if (s.proposal) { setPlan(s.proposal); setPhase('proposed'); }
+      else setPhase('empty');
+    } catch (e) { if (isNotFound(e)) setBusiness(null); else setLoadErr(true); }
+  }, [id]);
 
   useEffect(() => {
     if (!id || started.current) return;
     started.current = true;
-    (async () => {
-      try {
-        setBusiness(await getBusiness(id));
-        const s = await getPlanState(id);
-        if (s.active) { setPlan(s.active); setPhase('active'); }
-        else if (s.proposal) { setPlan(s.proposal); setPhase('proposed'); }
-        else setPhase('empty');
-      } catch { setBusiness(null); }
-    })();
-  }, [id]);
+    void load();
+  }, [id, load]);
 
   async function generate() {
     if (!id) return;
-    setBusy(true);
+    setBusy(true); setActionError(null);
     try {
       const r = await proposePlan(id);
       if ('planVersionId' in r) { setPlan(r); setPhase('proposed'); }
       else if (r.state === 'no_strategy') setPhase('no_strategy');
       else setPhase('insufficient');
-    } finally { setBusy(false); }
+    } catch { setActionError(t('common.actionFailed')); } finally { setBusy(false); }
   }
   async function accept() {
     if (!id || !plan) return;
-    setBusy(true);
+    setBusy(true); setActionError(null);
     try { const a = await adoptPlan(id, plan.planVersionId); if ('planVersionId' in a) { setPlan(a); setPhase('active'); } }
+    catch { setActionError(t('common.actionFailed')); }
     finally { setBusy(false); }
   }
 
+  if (loadErr) return <LoadError onRetry={() => { if (id) void load(); }} />;
   if (business === undefined || phase === 'loading') {
     return <AppShell showSignOut><div className="s0-loading">{t('common.loading')}</div></AppShell>;
   }
@@ -59,10 +68,8 @@ export function PlanPage() {
 
   return (
     <AppShell showSignOut>
+      {actionError && <div className="s0-error" role="alert">{actionError}</div>}
       <div className="s0-panel s0-panel-wide">
-        <button type="button" className="s0-linkbtn" onClick={() => navigate(`/b/${id}/voice`)} style={{ marginBottom: 18 }}>
-          ← {t('plan.back')}
-        </button>
 
         {phase === 'no_strategy' && (
           <>

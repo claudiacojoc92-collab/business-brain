@@ -30,7 +30,11 @@ function requiredFor(role: SlideRole): MeaningUnitType[] {
     case 'context': return ['business_fact', 'audience_context'];
     case 'insight': return ['founder_insight'];
     case 'step': return ['business_fact'];
-    case 'reframe': return ['business_fact', 'founder_insight'];
+    // A reframe is an INTERPRETIVE/evaluative move ("the real point is…"): it can only be stated truthfully
+    // from a licensed owned stance (founder_insight). Grounding it in a bare business_fact forces the realizer
+    // to INVENT the evaluation (e.g. "worth starting with"), which the proposition kernel then blocks. Without
+    // an owned stance the reframe beat is orphaned and the outline contracts to its factual beats. (M5.7)
+    case 'reframe': return ['founder_insight'];
     default: return ['business_fact', 'founder_insight', 'audience_context', 'proof'];
   }
 }

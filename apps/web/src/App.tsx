@@ -3,11 +3,16 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { LocaleProvider } from './i18n/LocaleContext';
 import type { Locale } from './i18n/messages';
 import { SessionProvider, useSession } from './slice0/session';
+import { ErrorBoundary } from './slice0/ErrorBoundary';
+import { ProductEntry } from './slice0/ProductEntry';
 import { AuthPage } from './slice0/AuthPage';
 import { SigninCallbackPage } from './slice0/SigninCallbackPage';
 import { BusinessHomePage } from './slice0/BusinessHomePage';
-import { BusinessStartPage } from './slice0/BusinessStartPage';
+import { HomePage } from './slice0/HomePage';
+import { BusinessPage } from './slice0/BusinessPage';
+import { CreateIndexPage } from './slice0/CreateIndexPage';
 import { ConversationPage } from './slice0/ConversationPage';
+import { TalkProvider } from './slice0/TalkDrawer';
 import { StrategyPage } from './slice0/StrategyPage';
 import { VoicePage } from './slice0/VoicePage';
 import { PlanPage } from './slice0/PlanPage';
@@ -60,12 +65,18 @@ export function App() {
     <LocaleProvider onLocaleChange={syncLocale}>
       <BrowserRouter>
         <SessionProvider>
+          <TalkProvider>
+          <ErrorBoundary>
           <Routes>
+            {/* Founder product entry — Business Brain owns `/` */}
+            <Route path="/" element={<ProductEntry />} />
             <Route path="/signin" element={<RedirectIfAuthed><AuthPage /></RedirectIfAuthed>} />
             <Route path="/signin/callback" element={<SigninCallbackPage />} />
 
-            {/* Public reviewer/legal pages — no login required (Meta Access Verification) */}
-            <Route path="/" element={<LandingPage />} />
+            {/* Meta reviewer/compliance surface — dedicated route, kept for App Review; not the founder entry */}
+            <Route path="/verify" element={<LandingPage />} />
+
+            {/* Public legal pages — no login required */}
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/privacy-policy" element={<PrivacyPage />} />
             <Route path="/terms" element={<TermsPage />} />
@@ -73,7 +84,9 @@ export function App() {
             <Route path="/contact" element={<ContactPage />} />
 
             <Route path="/home" element={<RequireSession><BusinessHomePage /></RequireSession>} />
-            <Route path="/b/:id" element={<RequireSession><BusinessStartPage /></RequireSession>} />
+            <Route path="/b/:id/home" element={<RequireSession><HomePage /></RequireSession>} />
+            <Route path="/b/:id" element={<RequireSession><BusinessPage /></RequireSession>} />
+            <Route path="/b/:id/create" element={<RequireSession><CreateIndexPage /></RequireSession>} />
             <Route path="/b/:id/talk" element={<RequireSession><ConversationPage /></RequireSession>} />
             <Route path="/b/:id/reel/create" element={<RequireSession><ReelCreatePage /></RequireSession>} />
             <Route path="/b/:id/reel/shoot" element={<RequireSession><ShootPlanPage /></RequireSession>} />
@@ -88,6 +101,8 @@ export function App() {
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </ErrorBoundary>
+          </TalkProvider>
         </SessionProvider>
       </BrowserRouter>
     </LocaleProvider>

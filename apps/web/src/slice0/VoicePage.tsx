@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import { AppShell } from './AppShell';
+import { isNotFound, LoadError } from './errors';
 import {
   getBusiness,
   getVoice,
@@ -26,27 +27,33 @@ export function VoicePage() {
   const [samples, setSamples] = useState<VoiceSample[]>([]);
   const [projection, setProjection] = useState<VoiceProjection | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loadErr, setLoadErr] = useState(false);   // B3 — transient load failure, distinct from a true 404
+  const [actionError, setActionError] = useState<string | null>(null); // B1 — a primary action that failed
   const started = useRef(false);
+
+  const load = useCallback(async () => {
+    if (!id) return;
+    setLoadErr(false);
+    try {
+      const b = await getBusiness(id);
+      setBusiness(b);
+      const v = await getVoice(id);
+      if (v.state === 'none') {
+        const r = await startVoiceCalibration(id);
+        setSamples(r.samples);
+      } else {
+        setSamples(v.samples ?? []);
+        setProjection(v.projection ?? null);
+      }
+      setPhase('ready');
+    } catch (e) { if (isNotFound(e)) setBusiness(null); else setLoadErr(true); }
+  }, [id]);
 
   useEffect(() => {
     if (!id || started.current) return;
     started.current = true;
-    (async () => {
-      try {
-        const b = await getBusiness(id);
-        setBusiness(b);
-        const v = await getVoice(id);
-        if (v.state === 'none') {
-          const r = await startVoiceCalibration(id);
-          setSamples(r.samples);
-        } else {
-          setSamples(v.samples ?? []);
-          setProjection(v.projection ?? null);
-        }
-        setPhase('ready');
-      } catch { setBusiness(null); }
-    })();
-  }, [id]);
+    void load();
+  }, [id, load]);
 
   async function refreshProjection() {
     if (!id) return;
@@ -59,23 +66,24 @@ export function VoicePage() {
 
   async function react(sampleId: string, reaction: string) {
     if (!id || !reaction.trim()) return;
-    setBusy(true);
+    setBusy(true); setActionError(null);
     try {
       const r = await reactToSample(id, sampleId, reaction.trim());
       replaceSample(sampleId, r.sample);
       void refreshProjection();
-    } finally { setBusy(false); }
+    } catch { setActionError(t('common.actionFailed')); } finally { setBusy(false); }
   }
   async function saveEdit(sampleId: string, text: string) {
     if (!id || !text.trim()) return;
-    setBusy(true);
+    setBusy(true); setActionError(null);
     try {
       const r = await editSample(id, sampleId, text.trim());
       replaceSample(sampleId, r.sample);
       void refreshProjection();
-    } finally { setBusy(false); }
+    } catch { setActionError(t('common.actionFailed')); } finally { setBusy(false); }
   }
 
+  if (loadErr) return <LoadError onRetry={() => { if (id) void load(); }} />;
   if (business === undefined || phase === 'loading') {
     return <AppShell showSignOut><div className="s0-loading">{t('common.loading')}</div></AppShell>;
   }
@@ -83,10 +91,8 @@ export function VoicePage() {
 
   return (
     <AppShell showSignOut>
+      {actionError && <div className="s0-error" role="alert">{actionError}</div>}
       <div className="s0-panel s0-panel-wide">
-        <button type="button" className="s0-linkbtn" onClick={() => navigate(`/b/${id}/strategy`)} style={{ marginBottom: 18 }}>
-          ← {t('voice.back')}
-        </button>
         <h1 className="s0-h1">{t('voice.title')}</h1>
         <p className="s0-lede">{t('voice.lede')}</p>
 

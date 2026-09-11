@@ -1,8 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import { CATALOG } from '../i18n/messages';
 
-const css = readFileSync('src/slice0/slice0.css', 'utf8'); // vitest root = apps/web
+// Resolve the stylesheet relative to THIS test file, not the CWD, so the suite passes whether vitest
+// runs from apps/web or from the monorepo root (../slice0/slice0.css from src/test/).
+const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../slice0/slice0.css'), 'utf8');
 
 // Extract the declaration body of a single CSS rule by selector (first match).
 function ruleBody(selector: string): string {

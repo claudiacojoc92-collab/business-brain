@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { ServerDeps } from '../server';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
+import { recordFounderEvent } from '../telemetry/founder-events';
 
 interface AuthedUser { sub: string; role: string }
 function founderOf(request: FastifyRequest): string {
@@ -26,15 +27,19 @@ export function registerConversationRoutes(server: FastifyInstance, deps: Server
   server.post('/v1/businesses/:id/conversation', async (request: FastifyRequest, reply: FastifyReply) => {
     const { founderId, business, language } = await requireBusiness(request);
     const view = await deps.conversationService.startOrResume(business.id, founderId, business.name, language);
+    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'talk_opened', surface: 'talk', metadata: { turns: view.turns.length } });
     await reply.status(200).send(view);
   });
 
   server.post('/v1/businesses/:id/conversation/turn', async (request: FastifyRequest, reply: FastifyReply) => {
     const { founderId, business, language } = await requireBusiness(request);
-    const body = (request.body ?? {}) as { message?: string };
+    const body = (request.body ?? {}) as { message?: string; context?: string };
     const message = (body.message ?? '').trim();
     if (!message) throw new ValidationError('MESSAGE_REQUIRED', 'A message is required.');
-    const view = await deps.conversationService.submitResponse(business.id, founderId, business.name, message, language);
+    // M6: optional, compact current-surface context (never persisted as a turn; grounds "what do you mean by this").
+    const context = typeof body.context === 'string' ? body.context.slice(0, 1500).trim() || null : null;
+    const view = await deps.conversationService.submitResponse(business.id, founderId, business.name, message, language, context);
+    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'talk_turn_submitted', surface: 'talk', metadata: { hasContext: Boolean(context) } });
     await reply.status(200).send(view);
   });
 

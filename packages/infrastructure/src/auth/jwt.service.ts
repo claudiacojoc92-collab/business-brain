@@ -21,11 +21,19 @@ export interface TokenPair {
 /**
  * JWT service using RS256 asymmetric signing.
  * Private key never leaves the auth service.
- * Access token max age: 900 seconds (15 minutes).
+ * Access token max age: bounded, configurable via ACCESS_TOKEN_TTL_SECONDS (M7 founder-test hardening).
+ * The old hard 900s (15m) expired mid-session during real founder use — the default is now a founder-test-safe
+ * 12h, still finite (never indefinite), and overridable per environment. Clamped to [15m, 24h] as a safety rail.
  * Source: Implementation Spec V1 Section 14.
  */
+const DEFAULT_ACCESS_TOKEN_TTL_SECONDS = 43_200; // 12 hours — a full founder session + return, still bounded
+function resolveAccessTtl(): number {
+  const raw = Number(process.env['ACCESS_TOKEN_TTL_SECONDS']);
+  if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_ACCESS_TOKEN_TTL_SECONDS;
+  return Math.min(Math.max(Math.floor(raw), 900), 86_400); // never below 15m, never above 24h
+}
 export class JwtService {
-  private readonly expiresIn = 900; // 15 minutes
+  private readonly expiresIn = resolveAccessTtl();
   private readonly privateKey: string;
   private readonly publicKey: string;
 

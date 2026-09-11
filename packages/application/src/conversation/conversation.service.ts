@@ -27,6 +27,24 @@ export function summarizeUnderstanding(u: GovernedUnderstanding | null): string 
 }
 
 /** The two core needs BB always wants before Aha 2 (goal + horizon are founder-owned, never inferred). */
+// M7 — deterministic transcript budgeting. Keep the most recent turns, bounded by BOTH a turn count and a total
+// character budget, so a long thread of long answer-mode replies can never overflow the model's context (the cause
+// of intermittent malformed-JSON on heavy threads). Persistent high-signal state (understanding + founder-state)
+// is passed separately and is unaffected — only the raw transcript window is trimmed.
+const MAX_TURNS = 16;
+const MAX_TRANSCRIPT_CHARS = 6000;
+function windowTranscript(turns: { role: 'founder' | 'bb'; content: string }[]): { role: 'founder' | 'bb'; content: string }[] {
+  const out: { role: 'founder' | 'bb'; content: string }[] = [];
+  let chars = 0;
+  for (let i = turns.length - 1; i >= 0 && out.length < MAX_TURNS; i--) {
+    const t = turns[i]!;
+    chars += t.content.length;
+    if (chars > MAX_TRANSCRIPT_CHARS && out.length > 0) break;
+    out.push({ role: t.role, content: t.content });
+  }
+  return out.reverse();
+}
+
 const CORE_NEEDS = [
   { key: 'goal', whatMissing: "The founder's primary goal", whyMatters: 'Sets what the whole strategy optimizes for.' },
   { key: 'horizon', whatMissing: "The founder's time horizon", whyMatters: 'Bounds what is realistic to pursue.' },
@@ -80,7 +98,7 @@ export class ConversationService {
     return { session, turns, readyForAha2: session.status === 'ready_for_aha2' };
   }
 
-  async submitResponse(businessId: string, founderId: string, businessName: string, message: string, language: string): Promise<ConversationView> {
+  async submitResponse(businessId: string, founderId: string, businessName: string, message: string, language: string, currentContext?: string | null): Promise<ConversationView> {
     const session = await this.deps.conversations.getByBusiness(businessId);
     if (!session) throw new Error('NO_CONVERSATION');
     if (language !== session.conversationLanguage) await this.deps.conversations.setLanguage(session.id, language);
@@ -89,7 +107,7 @@ export class ConversationService {
       id: generateId(), sessionId: session.id, businessId, role: 'founder', content: message, language, infoNeedKey: null,
     });
 
-    const out = await this.deps.model.step(await this.buildStepInput(businessId, businessName, language, session.id, message));
+    const out = await this.deps.model.step(await this.buildStepInput(businessId, businessName, language, session.id, message, currentContext));
 
     // Route founder response to the correct state type (owned vs correction vs observed).
     for (const d of out.declarations) {
@@ -107,17 +125,35 @@ export class ConversationService {
     for (const oc of out.observationCandidates) {
       await this.deps.observations.observe(businessId, oc.behavior, founderTurn.id);
     }
-    if (out.answeredNeedKeys.length) await this.deps.needs.markAnswered(session.id, out.answeredNeedKeys);
-    if (out.newNeeds.length) await this.deps.needs.seed(session.id, businessId, out.newNeeds);
+    // M6 mode boundary: contextual ANSWER MODE (the founder is looking at a surface and asking about it) vs
+    // the discovery flow (no surface context). The condition is deterministic — the presence of currentContext —
+    // so the interviewer's open-need machinery can never leak a stray onboarding question into a strategist reply.
+    const answerMode = !!(currentContext && currentContext.trim());
 
-    const bbContent = [out.interpretation, out.nextQuestion].filter((s) => s && s.trim()).join('\n\n');
+    // Discovery bookkeeping (open needs) advances ONLY in the discovery flow, never on a contextual answer.
+    if (!answerMode) {
+      if (out.answeredNeedKeys.length) await this.deps.needs.markAnswered(session.id, out.answeredNeedKeys);
+      if (out.newNeeds.length) await this.deps.needs.seed(session.id, businessId, out.newNeeds);
+    }
+
+    // In answer mode the BB reply is the grounded answer ALONE — the next discovery question is dropped, and any
+    // genuinely-needed clarification is already carried inside the answer itself (the model states what it needs).
+    const bbContent = answerMode
+      ? (out.interpretation ?? '').trim()
+      : [out.interpretation, out.nextQuestion].filter((s) => s && s.trim()).join('\n\n');
     if (bbContent) {
       await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: bbContent, language, infoNeedKey: null });
     }
 
-    const openNeeds = await this.deps.needs.listOpen(session.id);
-    const ready = out.readyForAha2 || openNeeds.length === 0;
-    await this.deps.conversations.setStatus(session.id, ready ? 'ready_for_aha2' : 'active', out.nextQuestion ?? null);
+    let ready: boolean;
+    if (answerMode) {
+      // a contextual answer never advances the discovery state machine (status/focus stay as they are)
+      ready = session.status === 'ready_for_aha2';
+    } else {
+      const openNeeds = await this.deps.needs.listOpen(session.id);
+      ready = out.readyForAha2 || openNeeds.length === 0;
+      await this.deps.conversations.setStatus(session.id, ready ? 'ready_for_aha2' : 'active', out.nextQuestion ?? null);
+    }
 
     const turns = await this.deps.conversations.listTurns(session.id);
     const updated = await this.deps.conversations.getByBusiness(businessId);
@@ -158,7 +194,7 @@ export class ConversationService {
     };
   }
 
-  private async buildStepInput(businessId: string, businessName: string, language: string, sessionId: string, latest: string | null) {
+  private async buildStepInput(businessId: string, businessName: string, language: string, sessionId: string, latest: string | null, currentContext?: string | null) {
     const snap = await this.deps.understanding.latest(businessId);
     const aha = await this.deps.aha1.latest(businessId);
     const openNeeds = await this.deps.needs.listOpen(sessionId);
@@ -171,8 +207,9 @@ export class ConversationService {
       aha1: (aha?.findings ?? []).map((f) => ({ finding: f.finding })),
       openNeeds: openNeeds.map((n) => ({ key: n.key, whatMissing: n.whatMissing, whyMatters: n.whyMatters })),
       knownState,
-      transcript: turns.slice(-20).map((t) => ({ role: t.role, content: t.content })),
+      transcript: windowTranscript(turns),
       latestFounderMessage: latest,
+      currentContext: currentContext ?? null,
     };
   }
 }

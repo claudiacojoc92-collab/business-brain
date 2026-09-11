@@ -93,6 +93,10 @@ export interface ConversationStepInput {
   readonly knownState: { kind: string; statement: string }[];
   readonly transcript: { role: 'founder' | 'bb'; content: string }[];
   readonly latestFounderMessage: string | null; // null → generate the opener from Aha 1
+  // M6: a compact, high-signal snapshot of the surface the founder is looking at right now (strategy bet,
+  // today's move, the asset/job in Create). Lets the interviewer ground "what do you mean by this?" without
+  // the founder restating the page. Optional — absent for the pure discovery flow. NOT a strategy engine.
+  readonly currentContext?: string | null;
 }
 
 export interface IConversationModelPort {

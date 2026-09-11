@@ -34,6 +34,25 @@ const CONCEPT_SYSTEM = [
   'renderable","internalFamily":"proof_breakdown|problem_reframe|myth_correction|before_after|founder_insight|checklist|offer_explainer"}.',
 ].join('\n');
 
+const ADAPT_SYSTEM = [
+  'You choose a supportable EXECUTION ANGLE for ONE marketing carousel. You receive a STRATEGIC JOB that MUST be',
+  'preserved, the authorized propositions/proof the business can truthfully assert, and why the original angle',
+  'over-promised. Return ONE executionAngle: a single communication job (≤ ~20 words) that serves the SAME',
+  'strategic objective and the SAME audience, expressible using ONLY the authorized material.',
+  'HARD RULES:',
+  '- PRESERVE the strategic objective and audience. Do NOT switch to a different business priority (e.g. never',
+  '  turn "reduce switching hesitation" into "build brand awareness" or "grow followers"). Same move, new framing.',
+  '- The angle must be sayable from the authorized propositions/proof WITHOUT any comparison, outcome/result',
+  '  claim, causal/mechanism claim, urgency, or superlative — UNLESS the material explicitly authorizes it.',
+  '- Prefer, in order: (1) the SAME angle with weaker claim strength if still useful; (2) a FACTUAL reframe',
+  '  (state what is true — e.g. what the product consolidates); (3) a grounded STRUCTURAL reframe',
+  '  (a "what is included" / "what to check" / questions framing) — only if grounded in real authorized facts.',
+  '- You propose a FRAMING only. You do NOT write slide copy and you do NOT invent facts, comparisons, or results.',
+  '- The framing must be BUSINESS-SPECIFIC (usable only by this business with this material), never a generic tip.',
+  'Return ONLY JSON: {"executionAngle":"...","reason":"one short clause: what the original angle needed that the',
+  'material could not support"}.',
+].join('\n');
+
 const COPY_SYSTEM = [
   'You write ONE coherent carousel — a single communication across slides, in the founder\'s VOICE. You control',
   'rhythm, register, density, the hook and the CTA phrasing. You are NOT the proposition author: EVERY headline',
@@ -184,6 +203,22 @@ export class AnthropicCarouselModel implements ICarouselModelPort {
     };
   }
 
+  async adaptAngle(input: { strategicJob: string; strategicBet: string; founderGoal: string; audience: string; concept: Concept; licensedPropositions: { ref: string; text: string }[]; proofFacts: string[]; reasons: string[] }): Promise<{ executionAngle: string; reason: string }> {
+    const props = input.licensedPropositions.slice(0, 24).map((p) => `${p.ref}: ${p.text}`).join('\n') || '(none)';
+    const proof = input.proofFacts.length ? input.proofFacts.join('\n') : '(none)';
+    const user = [
+      `STRATEGIC JOB (must be preserved — the business objective): ${input.strategicJob}`,
+      `STRATEGIC BET: ${input.strategicBet}`,
+      `FOUNDER GOAL: ${input.founderGoal}`,
+      `AUDIENCE: ${input.audience}`,
+      `WHY THE ORIGINAL ANGLE OUT-PROMISED THE MATERIAL: ${input.reasons.filter(Boolean).join(' | ') || 'the material cannot support the claim type the original angle needs'}`,
+      '', 'AUTHORIZED PROPOSITIONS (the ONLY facts this business can assert):', props,
+      '', 'DOCUMENTED PROOF FACTS:', proof,
+    ].join('\n');
+    const r = (await this.call(ADAPT_SYSTEM, user, 500)) as { executionAngle?: unknown; reason?: unknown };
+    return { executionAngle: str(r?.executionAngle), reason: str(r?.reason) };
+  }
+
   async draftCopy(input: CarouselModelInput): Promise<CarouselCopyDraft> {
     const { brief, snapshot: snap, voiceLines, concept } = input;
     const user = [
@@ -201,7 +236,10 @@ export class AnthropicCarouselModel implements ICarouselModelPort {
         'authorized unit or be non-propositional:',
         ...input.repairReasons.map((r) => `- ${r}`)] : []),
     ].join('\n');
-    const r = (await this.call(COPY_SYSTEM, user, 2000)) as any;
+    // Multi-slide copy + proposition bindings routinely exceed 2000 output tokens; truncation there produced
+    // invalid JSON → a draft "throw" → fail-closed with no gate finding (the same root cause fixed in the
+    // plan model). Raised so the draft completes; every safety / proposition / anti-template gate still runs.
+    const r = (await this.call(COPY_SYSTEM, user, 4000)) as any;
     const slides: SlideCopy[] = (Array.isArray(r?.orderedSlideCopy) ? r.orderedSlideCopy : []).map((s: any, i: number): SlideCopy => ({
       slideKey: str(s?.slideKey) || `s${i + 1}`, role: (ROLES.includes(s?.role) ? s.role : (concept.slideOutline[i] ?? 'context')),
       headline: str(s?.headline) || undefined, body: str(s?.body) || undefined, kicker: str(s?.kicker) || undefined,
@@ -242,7 +280,7 @@ export class AnthropicCarouselModel implements ICarouselModelPort {
       '', 'Return ONLY JSON: {"hook":"...","cta":"...","orderedSlideCopy":[{"slideKey":"s1","role":"hook","headline":"...","body":"...","meaningUnitRefs":[]}],"propositionBindings":[]}.',
       'You may omit propositionBindings; meaningUnitRefs per block is the binding.',
     ].join('\n');
-    const r = (await this.call(CONSTRAINED_SYSTEM, user, 1600)) as any;
+    const r = (await this.call(CONSTRAINED_SYSTEM, user, 3200)) as any;
     const validRefs = new Set([...beats.flatMap((b) => b.units.map((u) => u.ref)), 'CTA']);
     const rawSlides = Array.isArray(r?.orderedSlideCopy) ? r.orderedSlideCopy : [];
     const slides: SlideCopy[] = rawSlides.map((s: any, i: number): SlideCopy => ({

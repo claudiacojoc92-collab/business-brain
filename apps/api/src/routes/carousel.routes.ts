@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { ServerDeps } from '../server';
+import { recordFounderEvent } from '../telemetry/founder-events';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
 import type { CarouselAssetVersion, RenderVersion, RevisionScopeKind } from '@bb/application';
 
@@ -44,7 +45,7 @@ export function registerCarouselRoutes(server: FastifyInstance, deps: ServerDeps
 
   // Generate a carousel from an eligible CreateHandoff (idempotent-ish: reuse the existing asset if present).
   server.post('/v1/businesses/:id/carousel/generate', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { business } = await requireBusiness(request);
+    const { founderId, business } = await requireBusiness(request);
     const createHandoffId = ((request.body as { createHandoffId?: string } | undefined)?.createHandoffId ?? '').trim();
     if (!createHandoffId) throw new ValidationError('CREATE_HANDOFF_REQUIRED', 'A create handoff id is required.');
     const existing = await deps.carouselService.getAssetByHandoff?.(business.id, createHandoffId) ?? null;
@@ -52,7 +53,8 @@ export function registerCarouselRoutes(server: FastifyInstance, deps: ServerDeps
     const res = await deps.carouselService.generate(business.id, createHandoffId);
     if (res.status === 'unavailable_format') { await reply.status(200).send({ state: 'unavailable_format', requested: res.requested }); return; }
     if (res.status === 'no_strategy') { await reply.status(200).send({ state: 'no_strategy' }); return; }
-    if (res.status === 'insufficient') { await reply.status(200).send({ state: 'insufficient' }); return; }
+    if (res.status === 'insufficient') { recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'asset_generation_insufficient_material', surface: 'create', metadata: {} }); await reply.status(200).send({ state: 'insufficient' }); return; }
+    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'asset_generated', surface: 'create', metadata: { adapted: Boolean(res.version.brief.adaptedFrom), slides: res.version.slides.length } });
     await reply.status(200).send({ state: 'ready', ...projectAsset(business.id, res.version, res.render) });
   });
 
@@ -65,13 +67,14 @@ export function registerCarouselRoutes(server: FastifyInstance, deps: ServerDeps
   });
 
   server.post('/v1/businesses/:id/carousel/:assetId/revise', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { business } = await requireBusiness(request);
+    const { founderId, business } = await requireBusiness(request);
     const { assetId } = request.params as { assetId: string };
     const body = (request.body ?? {}) as { scope?: string; slideId?: string; request?: string; headline?: string; body?: string; cta?: string };
     const kind = (['copy_only', 'slide', 'visual_only', 'cta', 'source_swap', 'concept'].includes(body.scope ?? '') ? body.scope : 'copy_only') as RevisionScopeKind;
     const res = await deps.carouselService.revise(business.id, assetId,
       { kind, slideId: body.slideId, request: body.request ?? '' },
       { headline: body.headline, body: body.body, cta: body.cta });
+    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'asset_revision_requested', surface: 'create', metadata: { scope: kind, rejected: res.status === 'revision_rejected' } });
     if (res.status === 'revision_rejected') { await reply.status(200).send({ state: 'revision_rejected', reasons: res.findings.map((f) => f.detail) }); return; }
     const got = await deps.carouselService.getAsset(business.id, assetId);
     await reply.status(200).send({ state: 'ready', ...projectAsset(business.id, got!.version, got!.render) });
@@ -128,10 +131,12 @@ export function registerCarouselRoutes(server: FastifyInstance, deps: ServerDeps
 
   // Serve the export ZIP (real, publishable slides).
   server.get('/v1/businesses/:id/carousel/render/:versionId/export.zip', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { business } = await requireBusiness(request);
+    const { founderId, business } = await requireBusiness(request);
     const { versionId } = request.params as { versionId: string };
     const zip = await deps.carouselService.exportBytes(business.id, versionId);
     if (!zip) { await reply.status(409).send({ error: { code: 'EXPORT_NOT_READY', message: 'The carousel is not ready to export.' } }); return; }
+    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'asset_exported', surface: 'create', metadata: { versionId } });
+    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'strategy_to_asset_completed', surface: 'create', metadata: { versionId } });
     await reply.header('content-type', 'application/zip').header('content-disposition', 'attachment; filename="carousel.zip"').status(200).send(zip);
   });
 }

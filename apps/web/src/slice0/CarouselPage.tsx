@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import { AppShell } from './AppShell';
+import { isNotFound, LoadError } from './errors';
 import {
   getBusiness, generateCarousel, reviseCarousel, tryDifferentAngle, uploadCarouselMedia, fileToDataUrl,
   carouselSlideObjectUrl, downloadCarouselZip,
@@ -24,7 +25,10 @@ export function CarouselPage() {
   const [rejected, setRejected] = useState<string[] | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [phase, setPhase] = useState<'gate' | 'working'>('gate');
+  const [techError, setTechError] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
+  const [loadErr, setLoadErr] = useState(false);   // B3 — transient load failure, distinct from a true 404
+  const [actionError, setActionError] = useState<string | null>(null); // B1 — a primary action that failed
   const started = useRef(false);
 
   async function loadImages(v: CarouselView) {
@@ -34,57 +38,67 @@ export function CarouselPage() {
     setUrls((prev) => { Object.values(prev).forEach((u) => URL.revokeObjectURL(u)); return next; });
   }
 
+  const load = useCallback(async () => {
+    if (!id) return;
+    setLoadErr(false);
+    try { setBusiness(await getBusiness(id)); }
+    catch (e) { if (isNotFound(e)) setBusiness(null); else setLoadErr(true); }
+  }, [id]);
+
   useEffect(() => {
     if (!id || started.current) return;
     started.current = true;
-    (async () => { try { setBusiness(await getBusiness(id)); } catch { setBusiness(null); } })();
-  }, [id]);
+    void load();
+  }, [id, load]);
 
   // Optional media moment (§12): upload any selected visuals, then generate. "Continue without photos" skips upload.
   async function proceed() {
     if (!id || !handoffId) return;
     setPhase('working');
+    setTechError(false);
     try {
       for (const f of files.slice(0, 6)) { try { const d = await fileToDataUrl(f); await uploadCarouselMedia(id, d, f.name); } catch { /* skip a bad file */ } }
       const v = await generateCarousel(id, handoffId);
       setView(v); await loadImages(v);
     } catch {
-      // A couldn't-produce state is honest and calm — never a technical crash. (No internals surfaced.)
-      setView({ state: 'insufficient' });
+      // M7 failure-state distinction: a THROWN request is a TECHNICAL failure (recover by retrying) — distinct from
+      // a returned state:'insufficient', which is a MATERIAL gap (BB needs more business truth). Never a raw crash.
+      setTechError(true);
     }
   }
 
   // Fail-closed recovery: re-run generation (no re-upload); the founder never sees why it failed, only that it did.
   async function retry() {
     if (!id || !handoffId) return;
-    setView(null); setPhase('working');
+    setView(null); setTechError(false); setPhase('working');
     try { const v = await generateCarousel(id, handoffId); setView(v); await loadImages(v); }
-    catch { setView({ state: 'insufficient' }); }
+    catch { setTechError(true); }
   }
   // "Add more source material" returns to the media moment so the founder can supply visuals/assets, then regenerate.
   function addMoreSource() { setView(null); setFiles([]); setPhase('gate'); }
 
   async function applyRevision(slideId: string) {
     if (!id || view?.state !== 'ready') return;
-    setBusy(true); setRejected(null);
+    setBusy(true); setRejected(null); setActionError(null);
     try {
       const v = await reviseCarousel(id, view.assetId, { scope: 'slide', slideId, headline: draft.headline, body: draft.body || undefined, request: 'edit' });
       if (v.state === 'revision_rejected') { setRejected(v.reasons); }
       else { setView(v); setEditing(null); await loadImages(v); }
-    } finally { setBusy(false); }
+    } catch { setActionError(t('common.actionFailed')); } finally { setBusy(false); }
   }
 
   async function angle() {
     if (!id || view?.state !== 'ready') return;
-    setBusy(true); setRejected(null); setNotice(null);
+    setBusy(true); setRejected(null); setNotice(null); setActionError(null);
     try {
       const v = await tryDifferentAngle(id, view.assetId);
       if (v.state === 'not_different') setNotice(t('carousel.angle.same'));
       else if (v.state === 'insufficient') setNotice(t('carousel.angle.insufficient'));
       else { setView(v); setEditing(null); await loadImages(v); }
-    } finally { setBusy(false); }
+    } catch { setActionError(t('common.actionFailed')); } finally { setBusy(false); }
   }
 
+  if (loadErr) return <LoadError onRetry={() => { if (id) void load(); }} />;
   if (business === null) return <Navigate to="/" replace />;
   if (business === undefined) return <AppShell showSignOut><div className="s0-loading">{t('common.loading')}</div></AppShell>;
 
@@ -109,12 +123,26 @@ export function CarouselPage() {
       </AppShell>
     );
   }
+  // M7 — TECHNICAL failure (a thrown request), distinct from a material insufficiency. Honest, recoverable.
+  if (techError) {
+    return (
+      <AppShell showSignOut>
+        <div className="s0-panel s0-panel-wide">
+          <button type="button" className="s0-linkbtn" onClick={() => navigate(`/b/${id}/today`)} style={{ marginBottom: 18 }}>← {t('carousel.back')}</button>
+          <h1 className="s0-h1">{t('carousel.tech.title')}</h1>
+          <p className="s0-lede">{t('carousel.tech.body')}</p>
+          <div className="s0-strat-actions"><button type="button" className="s0-plan-primary" style={{ maxWidth: 320 }} onClick={retry}>{t('carousel.retry')}</button></div>
+        </div>
+      </AppShell>
+    );
+  }
   if (!view) {
     return <AppShell showSignOut><div className="s0-panel s0-panel-wide"><h1 className="s0-h1">{t('carousel.composing.title')}</h1><p className="s0-lede">{t('carousel.composing.body')}</p></div></AppShell>;
   }
 
   return (
     <AppShell showSignOut>
+      {actionError && <div className="s0-error" role="alert">{actionError}</div>}
       <div className="s0-panel s0-panel-wide">
         <button type="button" className="s0-linkbtn" onClick={() => navigate(`/b/${id}/today`)} style={{ marginBottom: 18 }}>← {t('carousel.back')}</button>
 
@@ -134,7 +162,7 @@ export function CarouselPage() {
         {view?.state === 'ready' && (
           <>
             <h1 className="s0-h1">{t('carousel.ready.title')}</h1>
-            <p className="s0-lede">{view.direction}</p>
+            <p className="s0-lede">{t('carousel.ready.sub', { n: String(view.slides.length) })}</p>
             {rejected && <div className="s0-plan-stale"><strong>{t('carousel.rejected.title')}</strong><ul className="s0-strat-list">{rejected.map((r, i) => <li key={i}>{r}</li>)}</ul></div>}
             {notice && <div className="s0-plan-stale">{notice}</div>}
 

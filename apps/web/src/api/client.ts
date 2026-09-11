@@ -199,6 +199,38 @@ export function getAha(businessId: string): Promise<AhaResponse> {
   return request<AhaResponse>(`v1/businesses/${encodeURIComponent(businessId)}/aha`);
 }
 
+/** Standing understanding snapshot (grounded facets + contradictions + unknowns). Read-only; the same
+ *  persisted snapshot the Business surface shows. Home composes this with strategy + today — no new backend. */
+export interface UnderstandingView {
+  state: 'none' | 'present';
+  profileVersion?: string;
+  sourceLanguage?: string;
+  understanding?: {
+    offer?: { summary?: string; explicit?: string[]; unclear?: string[]; sourceRefs?: string[] };
+    positioning?: { summary?: string; evidenceBacked?: string[]; implied?: string[]; sourceRefs?: string[] };
+    audience?: { addressed?: string[]; appearsTargeted?: string[]; unknown?: string[]; sourceRefs?: string[] };
+    contradictions?: { statementA: string; statementB: string; tension: string; sourceRefs?: string[] }[];
+    unknowns?: string[];
+  };
+  createdAt?: string;
+}
+export function getUnderstanding(businessId: string): Promise<UnderstandingView> {
+  return request<UnderstandingView>(`v1/businesses/${encodeURIComponent(businessId)}/understanding`);
+}
+
+/** M2 — founder corrections held for this business (active, scoped by claim subject). Reuses the real
+ *  founder_state path; a correction is consumed downstream by Talk to BB, not a cosmetic flag. */
+export interface BusinessCorrection { id: string; subject: string; statement: string }
+export function getCorrections(businessId: string): Promise<{ corrections: BusinessCorrection[] }> {
+  return request<{ corrections: BusinessCorrection[] }>(`v1/businesses/${encodeURIComponent(businessId)}/corrections`);
+}
+export function submitCorrection(businessId: string, subject: string, statement: string): Promise<{ correction: BusinessCorrection }> {
+  return request<{ correction: BusinessCorrection }>(`v1/businesses/${encodeURIComponent(businessId)}/corrections`, {
+    method: 'POST',
+    body: JSON.stringify({ subject, statement }),
+  });
+}
+
 export function getDiscoveredProfiles(businessId: string): Promise<{ profiles: DiscoveredProfile[] }> {
   return request<{ profiles: DiscoveredProfile[] }>(`v1/businesses/${encodeURIComponent(businessId)}/discovered-profiles`);
 }
@@ -234,8 +266,8 @@ const CONV = (id: string) => `v1/businesses/${encodeURIComponent(id)}/conversati
 export function startConversation(businessId: string): Promise<ConvView> {
   return request<ConvView>(CONV(businessId), { method: 'POST', body: '{}' });
 }
-export function submitTurn(businessId: string, message: string): Promise<ConvView> {
-  return request<ConvView>(`${CONV(businessId)}/turn`, { method: 'POST', body: JSON.stringify({ message }) });
+export function submitTurn(businessId: string, message: string, context?: string): Promise<ConvView> {
+  return request<ConvView>(`${CONV(businessId)}/turn`, { method: 'POST', body: JSON.stringify(context ? { message, context } : { message }) });
 }
 export function pauseConversation(businessId: string): Promise<void> {
   return request<void>(`${CONV(businessId)}/pause`, { method: 'POST', body: '{}' });

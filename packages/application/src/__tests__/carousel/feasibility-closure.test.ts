@@ -48,6 +48,15 @@ describe('Slice 6 — concept material-feasibility', () => {
     const s = snap({ proofFacts: ['a seed-stage SaaS client cut burn 30%'] });
     expect(checkFeasibility(['hook', 'proof', 'cta'], s).outline).toContain('proof');
   });
+
+  it('M5.7: a reframe beat is grounded ONLY by an owned stance (founder_insight), never a bare business_fact', () => {
+    // fact-only material: a reframe would force the realizer to invent the evaluation → orphan the beat
+    const factOnly = snap({ licensedPropositions: [prop('B1', 'we ship every bag within 24 hours of roasting', 'business_evidence')] });
+    expect(checkFeasibility(['hook', 'reframe', 'cta'], factOnly).outline).not.toContain('reframe');
+    // with a licensed owned stance, the reframe is truthful and kept
+    const withStance = snap({ licensedPropositions: [prop('B1', 'we ship every bag within 24 hours of roasting', 'business_evidence'), prop('C1', 'we believe fresh should beat cheap', 'founder_owned')] });
+    expect(checkFeasibility(['hook', 'reframe', 'cta'], withStance).outline).toContain('reframe');
+  });
 });
 
 describe('Slice 6 — communication closure (quality, not safety)', () => {
@@ -65,6 +74,11 @@ describe('Slice 6 — communication closure (quality, not safety)', () => {
   it('passes a concrete, non-redundant CTA (no judge)', async () => {
     const slides = [mk('hook', [tb('headline', 'Runway pressure after raising?')]), mk('cta', [tb('headline', 'See where your numbers stand'), tb('cta', 'Book a 20-minute diagnostic call')])];
     expect(await validateClosure(slides, S)).toHaveLength(0);
+  });
+  it('M5.7: a transactional CTA (shop/order/buy/visit) names a concrete action', async () => {
+    const shopS = snap({ licensedPropositions: [prop('B1', 'handmade ceramic dinnerware sold in eight glaze colors', 'business_evidence')], ctaFunction: 'shop a single piece online' });
+    const slides = [mk('hook', [tb('headline', 'Handmade dinnerware in eight glazes')]), mk('cta', [tb('headline', 'Start your set'), tb('cta', 'Shop a single piece at the online store')])];
+    expect((await validateClosure(slides, shopS)).some((x) => x.code === 'cta_no_action')).toBe(false);
   });
   it('fails when the semantic closure judge says the CTA is not earned', async () => {
     const slides = [mk('hook', [tb('headline', 'Runway pressure after raising?')]), mk('cta', [tb('cta', 'Book a 20-minute diagnostic call')])];

@@ -12,7 +12,9 @@ import { registerInstagramComplianceRoutes } from './instagram-compliance.routes
 import { registerBusinessBrainRoutes } from './businessbrain.routes';
 import { registerBusinessRoutes } from './businesses.routes';
 import { registerBusinessIntelligenceRoutes } from './business-intelligence.routes';
+import { registerBusinessUnderstandingRoutes } from './business-understanding.routes';
 import { registerConversationRoutes } from './conversation.routes';
+import { registerEventsRoutes } from './events.routes';
 import { registerStrategyRoutes } from './strategy.routes';
 import { registerVoiceRoutes } from './voice.routes';
 import { registerPlanRoutes } from './plan.routes';
@@ -40,8 +42,11 @@ export async function registerRoutes(
   registerBusinessRoutes(server, deps);
   // Slice 1 — "BB learned my business": website understanding + Aha (/v1, JWT).
   registerBusinessIntelligenceRoutes(server, deps);
+  // M2 — Business Understanding: founder corrections (reuses the real founder_state path; /v1, JWT).
+  registerBusinessUnderstandingRoutes(server, deps);
   // Slice 2 — "BB understood me": founder conversation + founder model + Aha 2 (/v1, JWT).
   registerConversationRoutes(server, deps);
+  registerEventsRoutes(server, deps); // M7 founder-test telemetry
   // Slice 3 — "BB gave me a real strategy": Strategy Proposal → adopt → Current (/v1, JWT).
   registerStrategyRoutes(server, deps);
   // Slice 4 — "BB learned my voice": example-grounded voice calibration (/v1, JWT).

@@ -107,6 +107,12 @@ export interface StrategyModelInput {
   readonly observations: StrategyObservationElement[];
   readonly aha1: { finding: string }[];
   readonly aha2: { implication: string }[];
+  /**
+   * M3.5 — active founder business corrections (world FACTS the founder stated directly). Distinct from
+   * founderState (preferences/goals): these are AUTHORITATIVE business truth that SUPERSEDES any conflicting
+   * inferred understanding. Only ACTIVE corrections appear here; superseded ones never do.
+   */
+  readonly businessCorrections: { ref: string; subject: string; statement: string }[];
 }
 
 export interface StrategyModelOutput { readonly strategy: StrategyBundle; }

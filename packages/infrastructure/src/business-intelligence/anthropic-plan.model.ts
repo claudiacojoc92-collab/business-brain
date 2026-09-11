@@ -131,7 +131,11 @@ export class AnthropicPlanModel implements IPlanModelPort {
 
   async draftPlan(input: { strategy: PlanStrategyView; envelope: ResourceEnvelope; businessName: string; repairReasons?: string[]; priorDraft?: PlanDraft }): Promise<PlanDraft> {
     const user = buildUser(input.strategy, input.envelope, input.businessName, input.repairReasons, input.priorDraft);
-    const raw = (await this.call(PLAN_SYSTEM, user, 3000)) as Record<string, unknown>;
+    // A governed plan draft (multiple priorities × actions, each with what/why/doneDefinition) routinely exceeds
+    // 3000 output tokens; truncation there produced invalid JSON → a draft "throw" → fail-closed with no gate
+    // finding (the reliability root cause). Match the strategy generator's budget so the draft completes; every
+    // deterministic gate + the genericity judge still run on the full draft, so governance is unchanged.
+    const raw = (await this.call(PLAN_SYSTEM, user, 8000)) as Record<string, unknown>;
     return this.normalize(raw);
   }
 

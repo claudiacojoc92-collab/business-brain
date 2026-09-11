@@ -26,10 +26,12 @@ describe('JwtService', () => {
     expect(decoded.scopes).toEqual(['read', 'write']);
   });
 
-  it('returns expiresIn of 900 seconds', () => {
+  it('returns the founder-test-safe default expiresIn (43200s / 12h)', () => {
+    // M7: ACCESS_TOKEN_TTL_SECONDS default is 43_200 (12h), clamped [900, 86400], so a founder
+    // session does not silently expire mid-test. Absent the env override, sign() uses the default.
     const service = new JwtService(privateKey, publicKey);
     const { expiresIn } = service.sign({ sub: 'f-01', role: 'founder', scopes: [] });
-    expect(expiresIn).toBe(900);
+    expect(expiresIn).toBe(43200);
   });
 
   it('ingests \\n-escaped single-line PEM (env transport) and signs/verifies (RS256)', () => {

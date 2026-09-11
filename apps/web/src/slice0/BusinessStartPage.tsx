@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import { useSession } from './session';
 import { AppShell } from './AppShell';
+import { isNotFound, LoadError } from './errors';
 import {
   getBusiness,
   getAha,
@@ -41,38 +42,34 @@ export function BusinessStartPage() {
   const [findings, setFindings] = useState<AhaFinding[]>([]);
   const [ahaStatus, setAhaStatus] = useState<'produced' | 'insufficient' | null>(null);
   const [discovered, setDiscovered] = useState<DiscoveredProfile[]>([]);
+  const [loadErr, setLoadErr] = useState(false);   // B3 — transient load failure, distinct from a true 404
 
   const firstName = (account?.name ?? '').trim().split(/\s+/)[0] ?? '';
 
   // Load the business, and any prior Aha (persisted → resume straight to the result).
-  useEffect(() => {
-    let alive = true;
+  const load = useCallback(async () => {
     if (!id) return;
-    (async () => {
-      try {
-        const b = await getBusiness(id);
-        if (!alive) return;
-        setBusiness(b);
-        const aha = await getAha(id);
-        if (!alive) return;
-        if (aha.state === 'produced' || aha.state === 'insufficient') {
-          setAhaStatus(aha.state);
-          setFindings(aha.findings ?? []);
-          setResultState('synced');
-          const dp = await getDiscoveredProfiles(id);
-          if (alive) setDiscovered(dp.profiles);
-          setPhase('result');
-        } else {
-          setPhase('intro');
-        }
-      } catch {
-        if (alive) setBusiness(null);
+    setLoadErr(false);
+    try {
+      const b = await getBusiness(id);
+      setBusiness(b);
+      const aha = await getAha(id);
+      if (aha.state === 'produced' || aha.state === 'insufficient') {
+        setAhaStatus(aha.state);
+        setFindings(aha.findings ?? []);
+        setResultState('synced');
+        const dp = await getDiscoveredProfiles(id);
+        setDiscovered(dp.profiles);
+        setPhase('result');
+      } else {
+        setPhase('intro');
       }
-    })();
-    return () => {
-      alive = false;
-    };
+    } catch (e) {
+      if (isNotFound(e)) setBusiness(null); else setLoadErr(true);
+    }
   }, [id]);
+
+  useEffect(() => { void load(); }, [load]);
 
   async function runLearn(e: React.FormEvent) {
     e.preventDefault();
@@ -103,6 +100,7 @@ export function BusinessStartPage() {
     setDiscovered((prev) => prev.filter((d) => d.id !== pid));
   }
 
+  if (loadErr) return <LoadError onRetry={() => { if (id) void load(); }} />;
   if (business === undefined || phase === 'loading') {
     return (
       <AppShell showSignOut>
@@ -116,21 +114,6 @@ export function BusinessStartPage() {
   return (
     <AppShell showSignOut>
       <div className="s0-panel s0-panel-wide">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 }}>
-          <button type="button" className="s0-linkbtn" onClick={() => navigate('/')}>
-            ← {t('start.back')}
-          </button>
-          {/* Slice 7 — Create → Reel: two choices (Use my clips = V1, Tell me what to film = V2) */}
-          <div style={{ display: 'flex', gap: 12 }}>
-            <button type="button" className="s0-linkbtn" onClick={() => navigate(`/b/${business.id}/reel/create`)}>
-              Use my clips →
-            </button>
-            <button type="button" className="s0-linkbtn" onClick={() => navigate(`/b/${business.id}/reel/shoot`)}>
-              Tell me what to film →
-            </button>
-          </div>
-        </div>
-
         {phase === 'intro' && (
           <>
             <h1 className="s0-h1">{t('start.greeting', { name: firstName })}</h1>

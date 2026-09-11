@@ -60,16 +60,26 @@ export class StrategyService {
   }> {
     const snap = await this.deps.understanding.latest(businessId);
     const businessElements = toBusinessElements(snap?.understanding ?? null);
-    const stateItems = (await this.deps.state.listActive(businessId)).filter((s) => s.kind !== 'business_correction');
+    // Founder-OWNED state (preferences/goals) stays distinct from founder business-fact CORRECTIONS. Only
+    // active rows are read, so a superseded correction is never injected as current truth (M3.5).
+    const allActive = await this.deps.state.listActive(businessId);
+    const stateItems = allActive.filter((s) => s.kind !== 'business_correction');
     const founderState = stateItems.map((s, i) => ({ ref: `F${i + 1}`, kind: s.kind, statement: s.statement }));
+    const businessCorrections = allActive
+      .filter((s) => s.kind === 'business_correction')
+      .map((s, i) => ({ ref: `C${i + 1}`, subject: s.scope ?? '', statement: s.statement }));
     const obs = (await this.deps.observations.listActive(businessId)).filter((o) => o.status === 'supported' || o.status === 'confirmed');
     const observations = obs.map((o, i) => ({ ref: `O${i + 1}`, behavior: o.behavior }));
     const aha1rec = await this.deps.aha1.latest(businessId);
     const aha1 = (aha1rec?.findings ?? []).map((f) => ({ finding: f.finding }));
     const aha2rec = await this.deps.aha2.latest(businessId);
     const aha2 = aha2rec?.status === 'produced' ? aha2rec.findings.map((f) => ({ implication: f.implication })) : [];
-    const input: StrategyModelInput = { businessName, interfaceLanguage: language, businessElements, founderState, observations, aha1, aha2 };
-    const ctx: StrategyContextForGate = { business: businessElements, founder: founderState, observation: observations };
+    const input: StrategyModelInput = { businessName, interfaceLanguage: language, businessElements, founderState, observations, aha1, aha2, businessCorrections };
+    // Corrections join the gate's BUSINESS context (authoritative world-facts), so a decision grounded in a
+    // correction resolves its ref and contributes anti-transplant anchors — they are NOT founder-state, so the
+    // founder-state compatibility / hard-constraint gates are unchanged.
+    const correctionElements = businessCorrections.map((c) => ({ ref: c.ref, text: `Founder-corrected (${c.subject || 'business'}): ${c.statement}` }));
+    const ctx: StrategyContextForGate = { business: [...businessElements, ...correctionElements], founder: founderState, observation: observations };
     return { input, ctx, hasGoal: founderState.some((f) => f.kind === 'goal'), snapId: snap?.id ?? null };
   }
 
@@ -146,7 +156,7 @@ export class StrategyService {
     const version = await this.deps.strategy.nextVersion(businessId);
     return this.deps.strategy.save({
       id: generateId(), businessId, version, status, bundle, gateResults,
-      contextHash: sha256(JSON.stringify({ b: input.businessElements, f: input.founderState, o: input.observations })),
+      contextHash: sha256(JSON.stringify({ b: input.businessElements, f: input.founderState, o: input.observations, c: input.businessCorrections })),
       modelId: 'anthropic', language,
     });
   }

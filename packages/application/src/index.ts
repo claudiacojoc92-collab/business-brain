@@ -47,6 +47,9 @@ export * from './business/index';
 // Slice 1 — "BB learned my business": website understanding + Aha 1
 export * from './bi/index';
 
+// M2 — Business Understanding: founder corrections (reuses the real founder_state path)
+export * from './business-understanding/index';
+
 // Slice 2 — "BB understood me": founder conversation + founder model + Aha 2
 export * from './conversation/index';
 

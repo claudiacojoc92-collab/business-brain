@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import { AppShell } from './AppShell';
+import { isNotFound, LoadError } from './errors';
 import {
   getBusiness,
   startConversation,
@@ -34,46 +35,54 @@ export function ConversationPage() {
   const [aha2, setAha2] = useState<{ state: string; findings?: Aha2Finding[] } | null>(null);
   const [model, setModel] = useState<FounderModel | null>(null);
   const [genning, setGenning] = useState(false);
+  const [loadErr, setLoadErr] = useState(false);   // B3 — transient load failure, distinct from a true 404
+  const [actionError, setActionError] = useState<string | null>(null); // B1 — a primary action that failed
   const started = useRef(false);
 
   async function refreshModel(bid: string) {
     try { setModel(await getFounderModel(bid)); } catch { /* ignore */ }
   }
 
+  const load = useCallback(async () => {
+    if (!id) return;
+    setLoadErr(false);
+    try {
+      const b = await getBusiness(id);
+      setBusiness(b);
+      const existing = await getAha2(id);
+      const view = await startConversation(id);
+      setTurns(view.turns);
+      setReady(view.readyForAha2);
+      if (existing.state === 'produced' || existing.state === 'insufficient') {
+        setAha2(existing);
+        setPhase('aha2');
+      } else {
+        setPhase('talk');
+      }
+      void refreshModel(id);
+    } catch (e) {
+      if (isNotFound(e)) setBusiness(null); else setLoadErr(true);
+    }
+  }, [id]);
+
   useEffect(() => {
     if (!id || started.current) return;
     started.current = true;
-    (async () => {
-      try {
-        const b = await getBusiness(id);
-        setBusiness(b);
-        const existing = await getAha2(id);
-        const view = await startConversation(id);
-        setTurns(view.turns);
-        setReady(view.readyForAha2);
-        if (existing.state === 'produced' || existing.state === 'insufficient') {
-          setAha2(existing);
-          setPhase('aha2');
-        } else {
-          setPhase('talk');
-        }
-        void refreshModel(id);
-      } catch {
-        setBusiness(null);
-      }
-    })();
-  }, [id]);
+    void load();
+  }, [id, load]);
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
     if (!id || !input.trim()) return;
-    setSending(true);
+    setSending(true); setActionError(null);
     try {
       const view = await submitTurn(id, input.trim());
       setTurns(view.turns);
       setReady(view.readyForAha2);
       setInput('');
       void refreshModel(id);
+    } catch {
+      setActionError(t('common.actionFailed'));
     } finally {
       setSending(false);
     }
@@ -81,17 +90,20 @@ export function ConversationPage() {
 
   async function toAha2() {
     if (!id) return;
-    setGenning(true);
+    setGenning(true); setActionError(null);
     try {
       const r = await generateAha2(id);
       setAha2(r);
       setPhase('aha2');
       void refreshModel(id);
+    } catch {
+      setActionError(t('common.actionFailed'));
     } finally {
       setGenning(false);
     }
   }
 
+  if (loadErr) return <LoadError onRetry={() => { if (id) void load(); }} />;
   if (business === undefined || phase === 'loading') {
     return <AppShell showSignOut><div className="s0-loading">{t('common.loading')}</div></AppShell>;
   }
@@ -99,10 +111,8 @@ export function ConversationPage() {
 
   return (
     <AppShell showSignOut>
+      {actionError && <div className="s0-error" role="alert">{actionError}</div>}
       <div className="s0-panel s0-panel-wide">
-        <button type="button" className="s0-linkbtn" onClick={() => navigate(`/b/${id}`)} style={{ marginBottom: 18 }}>
-          ← {t('conv.back')}
-        </button>
 
         {phase === 'talk' && (
           <>

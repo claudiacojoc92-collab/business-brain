@@ -92,6 +92,7 @@ import {
   FounderAccountService,
   LearnBusinessService,
   ConversationService,
+  BusinessCorrectionService,
   Aha2Service,
   StrategyService,
   VoiceService,
@@ -133,6 +134,7 @@ export interface CompositionRoot {
   understandingRepo: IUnderstandingSnapshotRepository;
   ahaRepo: IAhaRepository;
   conversationService: ConversationService;
+  businessCorrectionService: BusinessCorrectionService;
   aha2Service: Aha2Service;
   strategyService: StrategyService;
   voiceService: VoiceService;
@@ -312,6 +314,8 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     understanding: understandingRepo,
     aha1: ahaRepo,
   });
+  // M2 — Business corrections reuse the same founder_state the conversation already reads (no new store).
+  const businessCorrectionService = new BusinessCorrectionService({ state: founderStateRepo });
   const aha2Service = new Aha2Service({
     understanding: understandingRepo,
     state: founderStateRepo,
@@ -405,10 +409,15 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
       const active = await founderStateRepo.listActive(bid);
       const proofFacts = active.filter((s) => s.kind === 'resource').map((s) => s.statement.trim()).filter(Boolean);
       const founderProps = active.filter((s) => s.kind !== 'business_correction' && s.kind !== 'resource').map((s) => s.statement.trim()).filter(Boolean);
+      // M5.5 — active founder business CORRECTIONS are founder-authoritative world FACTS (e.g. "we offer one
+      // fixed-price starter audit"). They must be licensable so the carousel can state them, exactly as M3.5
+      // routes them into Strategy. (Only ACTIVE corrections; superseded ones are already excluded upstream.)
+      const founderCorrections = active.filter((s) => s.kind === 'business_correction').map((s) => s.statement.trim()).filter(Boolean);
       const snap = await understandingRepo.latest(bid);
       const businessEvidence = allowedBusinessFacts(snap?.understanding ?? null);
       const licensedPropositions = [
         ...businessEvidence.map((t, i) => ({ ref: `B${i + 1}`, text: t, source: 'business_evidence' as const })),
+        ...founderCorrections.map((t, i) => ({ ref: `C${i + 1}`, text: t, source: 'founder_owned' as const })),
         ...founderProps.map((t, i) => ({ ref: `F${i + 1}`, text: t, source: 'founder_owned' as const })),
       ];
       let voiceLines: string[] = [];
@@ -544,7 +553,7 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     commandBus, queryBus, jwtService, passwordService, internalBriefRepo,
     businessService, founderAccountService,
     learnBusinessService, discoveredProfileRepo, understandingRepo, ahaRepo,
-    conversationService, aha2Service, strategyService, voiceService, planService, carouselService,
+    conversationService, businessCorrectionService, aha2Service, strategyService, voiceService, planService, carouselService,
     photoLedService, photoLedRepo,
     reelService, reelObjectStore, reelRepo,
     reelShootService, reelShootRepo,

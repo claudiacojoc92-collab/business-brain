@@ -120,7 +120,13 @@ describe('Slice 5 — plan routes (founder-visible surface + tenancy)', () => {
     const ok = await server.inject({ method: 'POST', url: `${B}/action/${createAction.actionId}/create`, payload: {} });
     expect(ok.json<any>().state).toBe('ready_for_create');
     // create button must NOT generate an asset — only the honest continuation state
-    expect(ok.json<any>().note).toMatch(/next stage/i);
+    expect(ok.json<any>().note).toMatch(/carousel/i);
+    // M5 seam fix: the opaque, business-scoped handoff token the Create surface navigates to is exposed
+    // (internal provenance fields — planVersionId/strategyVersionId/traces — remain hidden).
+    expect(typeof ok.json<any>().createHandoffId).toBe('string');
+    expect(ok.json<any>().createHandoffId.length).toBeGreaterThan(0);
+    expect(ok.json<any>().planVersionId).toBeUndefined();
+    expect(ok.json<any>().strategyVersionId).toBeUndefined();
     if (nonCreate) {
       const bad = await server.inject({ method: 'POST', url: `${B}/action/${nonCreate.actionId}/create`, payload: {} });
       expect(bad.statusCode).toBeGreaterThanOrEqual(400);

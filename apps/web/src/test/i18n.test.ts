@@ -13,10 +13,11 @@ describe('i18n catalogs (RO / EN / IT)', () => {
     }
   });
 
-  it('translates the headline per locale', () => {
-    expect(translate('en', 'auth.headline')).toMatch(/marketing strategist/i);
-    expect(translate('ro', 'auth.headline')).toMatch(/Strategul/);
-    expect(translate('it', 'auth.headline')).toMatch(/stratega/i);
+  it('translates the decision-framed auth headline per locale', () => {
+    // Category framing: the auth headline is decision-led (marketing decision system), not "strategist".
+    expect(translate('en', 'auth.headline')).toMatch(/marketing decisions/i);
+    expect(translate('ro', 'auth.headline')).toMatch(/decizii/i);
+    expect(translate('it', 'auth.headline')).toMatch(/decisioni/i);
   });
 
   it('interpolates the greeting name', () => {

@@ -29,10 +29,28 @@ function systemPrompt(lang: string): string {
     'No flattery, no therapy language, no psychoanalysis. One question at a time.',
     'Do NOT choose strategy or recommend channels/tactics here — you are still understanding the',
     'founder; strategy comes later.',
+    'BUT when WHAT THE FOUNDER IS LOOKING AT is provided AND the founder asks about it or pushes back on it',
+    '("why this?", "why this over the other option?", "why aren\'t we doing X yet?", "I don\'t agree with this',
+    'part", "is this too aggressive for us?"), the "interpretation" field becomes your DIRECT SPOKEN ANSWER to',
+    'the founder, in first person, as if talking to them ("We\'re holding off on paid because the comparison',
+    'pages don\'t yet convert the traffic we already have…" / "It\'s not too aggressive — the hook names the',
+    'switching pain, which is exactly the moment we\'re speaking to…").',
+    'CRITICAL — NEVER narrate yourself or the question. Do NOT write a sentence that describes what the founder',
+    'is asking or how you answered it. FORBIDDEN openings: "Founder is asking…", "The founder wants…",',
+    '"answered from…", "using the not-now list…", "in context mode". Just say the answer.',
+    'Reason ONLY from the provided context, the business understanding, and the founder\'s own stated facts —',
+    'the current strategy, its not-now list, and the founder\'s constraints/corrections. Do NOT restate the',
+    'context back verbatim. Never invent results, performance, metrics, or a claim that you watched anything or',
+    'changed anything; if the context genuinely does not answer it, say plainly what you\'d need to know.',
+    'In this answer mode set "nextQuestion" to null unless the founder\'s question literally cannot be answered',
+    'without one specific missing fact — do NOT pivot into an interview or re-ask the horizon. Still capture any',
+    'founder-owned fact or correction into declarations/businessCorrections as usual.',
     '',
-    'Route the founder message into typed state. Return ONLY valid JSON with EXACTLY this shape:',
+    'Route the founder message into typed state. Return ONLY strictly-valid JSON — inside every string value use',
+    'SINGLE quotes for any inner quotation and escape any real double-quote; never emit a raw " or newline that',
+    'would break the JSON. Use EXACTLY this shape:',
     '{',
-    '  "interpretation": "one short sentence reflecting what the answer changes (\'\' for the opener)",',
+    '  "interpretation": "opener → \'\'; interview → one short sentence reflecting what the founder\'s answer changes; when the founder ASKS or CHALLENGES the current context → your full direct spoken answer to them (NEVER a description of their question or your process)",',
     '  "nextQuestion": "the next pivotal question, or null when nothing pivotal remains",',
     '  "readyForAha2": false,',
     '  "declarations": [{"kind": "goal|horizon|constraint|preference|decision|intention|challenge_permission|resource", "statement": "the founder-owned fact in their words", "scope": "optional"}],',
@@ -88,6 +106,9 @@ export class AnthropicConversationModel implements IConversationModelPort {
       'TRANSCRIPT SO FAR:',
       ...input.transcript.map((t) => `${t.role === 'bb' ? 'BB' : 'Founder'}: ${t.content}`),
       '',
+      ...(input.currentContext
+        ? ['WHAT THE FOUNDER IS LOOKING AT RIGHT NOW (their current screen — use it to resolve "this"/"this move"/"this bet"/"this slide"; do NOT restate it back verbatim):', input.currentContext, '']
+        : []),
       input.latestFounderMessage === null
         ? 'No founder message yet — produce the opener.'
         : `Latest founder message: ${input.latestFounderMessage}`,
@@ -96,7 +117,7 @@ export class AnthropicConversationModel implements IConversationModelPort {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const resp: any = await client.messages.create({
       model: this.modelId,
-      max_tokens: 1500,
+      max_tokens: 3500, // M6: headroom for a grounded context-mode answer + the state JSON (avoids truncation->no-JSON)
       system: systemPrompt(input.interfaceLanguage),
       messages: [{ role: 'user', content: user }],
     });

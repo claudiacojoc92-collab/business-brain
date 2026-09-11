@@ -1,0 +1,20 @@
+# Dockerfile.migrate-founder — Founder MVP migration (ISOLATED lineage, its own dedicated Postgres).
+#
+# This applies the CANONICAL, COMPLETE migration set — the entire database/migrations directory, V001 → V079
+# and every future V080+ — to the fresh, dedicated Founder-MVP database. It copies the whole folder (never a
+# hand-picked version list), so new migrations are picked up automatically with no Dockerfile edit.
+#
+# It targets ONLY the Founder-MVP Postgres (via FLYWAY_URL from a Railway reference variable). It NEVER runs
+# against the existing Meta/businessbrain production Postgres — that database keeps its own separate
+# Dockerfile.migrate (V060–V063) and lineage, completely untouched. The two lineages are physically separated.
+#
+# Connection + schemas come from env at deploy time:
+#   FLYWAY_URL      = jdbc:postgresql://<founder-mvp-postgres private host>:5432/<db>
+#   FLYWAY_USER / FLYWAY_PASSWORD
+#   FLYWAY_SCHEMAS  = founder,cycle,memory,campaign,outcome,app,audit   (flyway-managed; migrations create the rest)
+#   FLYWAY_LOCATIONS = filesystem:/flyway/sql
+#   FLYWAY_VALIDATE_ON_MIGRATE = true
+#   FLYWAY_PLACEHOLDER_REPLACEMENT = false
+FROM flyway/flyway:10-alpine
+COPY database/migrations/ /flyway/sql/
+CMD ["migrate"]

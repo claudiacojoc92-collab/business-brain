@@ -8,6 +8,7 @@ import type {
   FounderAccountService,
   LearnBusinessService,
   ConversationService,
+  BusinessCorrectionService,
   Aha2Service,
   StrategyService,
   VoiceService,
@@ -41,6 +42,7 @@ export interface ServerDeps {
   understandingRepo: IUnderstandingSnapshotRepository;
   ahaRepo: IAhaRepository;
   conversationService: ConversationService;
+  businessCorrectionService: BusinessCorrectionService;
   aha2Service: Aha2Service;
   strategyService: StrategyService;
   voiceService: VoiceService;

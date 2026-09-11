@@ -9,7 +9,11 @@ import type { Slide, AssetAuthorizationSnapshot, GateFinding, ClosureVerdict } f
 
 type ClosureJudge = (input: { bodyBeats: string[]; cta: string; ctaFunction: string; offerMaterial: string[] }) => Promise<ClosureVerdict>;
 
-const ACTION = /\b(book|schedule|get|start|join|reply|message|dm|download|see|try|talk|call|register|apply|claim|grab|reach|request|subscribe|save|explore|learn|watch|read|follow|sign up|set up)\b/i;
+// Concrete actions a CTA may name. M5.7: added the common TRANSACTIONAL/visit verbs (shop, buy, browse, order,
+// purchase, reserve, visit, stop by, pick up, find) — for a commerce/physical offer these ARE the concrete
+// next step, and their earlier omission made an otherwise-valid transactional CTA fail cta_no_action. This is a
+// QUALITY-gate vocabulary fix, not a claim-safety change (safety still governs every word of the CTA).
+const ACTION = /\b(book|schedule|get|start|join|reply|message|dm|download|see|try|talk|call|register|apply|claim|grab|reach|request|subscribe|save|explore|learn|watch|read|follow|sign up|set up|shop|buy|browse|order|purchase|reserve|visit|stop by|pick up|find)\b/i;
 const STOP = new Set(['the', 'and', 'your', 'with', 'this', 'that', 'for', 'from', 'about', 'into', 'their', 'they', 'them', 'will', 'have', 'what', 'when', 'where', 'which', 'more', 'over', 'next', 'make', 'call', 'book', 'link', 'bio']);
 const nouns = (s: string): Set<string> => new Set((s.toLowerCase().match(/[a-z][a-z-]{3,}/g) ?? []).filter((w) => !STOP.has(w)));
 function jaccard(a: Set<string>, b: Set<string>): number { if (!a.size || !b.size) return 0; let i = 0; for (const x of a) if (b.has(x)) i += 1; return i / (a.size + b.size - i); }

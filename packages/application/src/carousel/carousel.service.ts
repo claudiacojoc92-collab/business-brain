@@ -31,6 +31,10 @@ export interface CarouselJudgePort {
 }
 
 const MAX_CAROUSEL_ATTEMPTS = 5;
+// M5.7: bounded iterative repair rounds for the extractive constrained fallback (each round re-gates against
+// the frozen kernel; only a fully-clean carousel persists). Iterating strips residual unlicensed clauses the
+// single-pass repair could not — a convergence aid, never a safety relaxation.
+const MAX_CONSTRAINED_REPAIR_ROUNDS = 3;
 const CANVAS: CanvasSpec = { width: 1080, height: 1350, margin: 96, minFontPx: 28 };
 const SUPPORTED_FORMAT = 'image_carousel';
 
@@ -40,6 +44,23 @@ interface GenerateShared { assetId: string; businessId: string; createHandoffId:
 interface GateOutcome { version: CarouselAssetVersion; rendered: RenderedSlide[]; visReport: GateReport; copyReport: GateReport; safetyCore: CarouselSafetyTraceCore; antiTemplateFail: string | null; blockingFindings: GateFinding[]; clean: boolean }
 const shaShort = (t: string): string => createHash('sha256').update(t, 'utf8').digest('hex').slice(0, 16);
 const normText = (t: string): string => t.toLowerCase().replace(/\s+/g, ' ').trim();
+
+// M5.6 — strategy-drift guard for an adapted EXECUTION ANGLE. Create may change HOW we communicate but never the
+// WHAT (the strategic move). A crude but honest proxy: the adapted angle must still share vocabulary with the
+// strategic bet / founder goal / audience / original job. An angle that drifts to a different objective (e.g.
+// "build brand awareness" over a "reduce switching hesitation" bet) shares no content tokens and is rejected.
+// This is a coarse gross-drift catch only; the anti-template / genericity / anti-transplant gates downstream do
+// the fine-grained fidelity work. Lenient by design (≥1 shared token) so valid factual reframes are not blocked.
+const ANGLE_STOP = new Set(['the','and','for','with','that','this','your','you','from','into','about','their','make','more','than','what','when','where','which','have','they','them','will','content','carousel','marketing','audience','customers','business','post','posts','social','media']);
+const angleTokens = (s: string): Set<string> => new Set((s.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter((w) => !ANGLE_STOP.has(w)));
+function onStrategy(angle: string, brief: CarouselBrief): boolean {
+  const strat = new Set<string>();
+  for (const src of [brief.strategicBetTrace, brief.founderGoalTrace, brief.communicationJob, brief.audienceUseContext]) {
+    for (const w of angleTokens(src ?? '')) strat.add(w);
+  }
+  for (const w of angleTokens(angle)) if (strat.has(w)) return true;
+  return false;
+}
 
 export interface CarouselDeps {
   readonly repo: ICarouselRepository;
@@ -186,12 +207,12 @@ export class CarouselService {
     const ctx = await this.deps.context(businessId);
     if (!ctx) return { status: 'no_strategy' };
 
-    const brief = this.buildBrief(handoff, ctx);
-    const snapshot = this.buildSnapshot(businessId, handoff, ctx, brief);
+    const origBrief = this.buildBrief(handoff, ctx);
+    const snapshot = this.buildSnapshot(businessId, handoff, ctx, origBrief);
     await this.deps.repo.saveAuthorizationSnapshot(snapshot);
 
     let concept: Concept;
-    try { concept = await this.deps.model.chooseConcept({ brief, snapshot }); }
+    try { concept = await this.deps.model.chooseConcept({ brief: origBrief, snapshot }); }
     catch { this.deps.log?.({ type: 'carousel_concept_threw' }); return { status: 'insufficient' }; }
     if (concept.slideOutline.length < 3 || concept.slideOutline.length > 8) return { status: 'insufficient' };
     // CONCEPT ↔ MATERIAL FEASIBILITY (§1) — a concept may not out-promise the authorized meaning. A decomposition
@@ -218,6 +239,31 @@ export class CarouselService {
     const mediaPlan = this.deps.mediaPlan ? await this.deps.mediaPlan(businessId, createHandoffId).catch(() => null) : null;
     if (mediaPlan?.length) this.deps.log?.({ type: 'carousel_media_plan', detail: `${mediaPlan.length} planned` });
 
+    // M5.6 — SAFE EXECUTION-ANGLE ADAPTATION (pre-copy). The concept downgrade above is the signal that the
+    // original Strategy/Today job out-promised the authorized material. Keep the strategic objective but reframe
+    // the EXECUTION ANGLE to one the material can support, BEFORE spending draft/repair attempts on an impossible
+    // premise. Strategy stays immutable (bet/goal/audience unchanged); a materially-drifting angle is rejected
+    // (fail-closed), never used; the proposition-safety gate still runs on the resulting copy unchanged.
+    let brief = origBrief;
+    if (assessed.downgraded && this.deps.model.adaptAngle) {
+      try {
+        const a = await this.deps.model.adaptAngle({
+          strategicJob: origBrief.communicationJob, strategicBet: origBrief.strategicBetTrace, founderGoal: origBrief.founderGoalTrace,
+          audience: origBrief.audienceUseContext, concept, licensedPropositions: snapshot.licensedPropositions, proofFacts: snapshot.proofFacts,
+          reasons: [assessed.reason ?? '', ...feas.reasons],
+        });
+        const angle = a.executionAngle.trim();
+        if (angle && !onStrategy(angle, origBrief)) {
+          this.deps.log?.({ type: 'carousel_angle_adapt_drift', detail: angle.slice(0, 100) });
+          return { status: 'insufficient' };
+        }
+        if (angle && angle.toLowerCase() !== origBrief.communicationJob.toLowerCase()) {
+          brief = { ...origBrief, communicationJob: angle, adaptedFrom: origBrief.communicationJob, adaptationReason: a.reason };
+          this.deps.log?.({ type: 'carousel_angle_adapted', detail: `${a.reason.slice(0, 80)} → ${angle.slice(0, 90)}` });
+        }
+      } catch { /* adaptation unavailable → keep original (safety gate still governs) */ }
+    }
+
     const assetId = generateId();
     const shared: GenerateShared = { assetId, businessId, createHandoffId, brief, snapshot, concept, ctx, system, mediaPlan };
 
@@ -228,7 +274,7 @@ export class CarouselService {
     for (let attempt = 0; attempt < MAX_CAROUSEL_ATTEMPTS; attempt++) {
       let draft: CarouselCopyDraft;
       try { draft = await this.deps.model.draftCopy({ brief, snapshot, voiceLines: ctx.voiceLines, concept, ...(priorDraft ? { priorDraft } : {}), ...(repairReasons.length ? { repairReasons } : {}) }); }
-      catch { this.deps.log?.({ type: 'carousel_draft_threw', detail: `attempt ${attempt}` }); continue; }
+      catch (e) { this.deps.log?.({ type: 'carousel_draft_threw', detail: `attempt ${attempt}: ${String((e as Error)?.message ?? e).slice(0, 200)}` }); continue; }
       const ev = await this.evaluateDraft(draft, shared, attempt, repairReasons, 'normal', null);
       if (ev.ok) { this.deps.log?.({ type: attempt === 0 ? 'carousel_first_pass_ok' : 'carousel_repaired_ok' }); return ev.result; }
       lastCore = ev.core ?? lastCore;
@@ -253,34 +299,48 @@ export class CarouselService {
         constrainedCore = outcome0.safetyCore;
         if (outcome0.clean) { this.deps.log?.({ type: 'carousel_constrained_ok' }); return await this.persistCreated(shared, outcome0, 'constrained_fallback', MAX_CAROUSEL_ATTEMPTS, repairReasons, fallbackBindingsHash, null); }
 
-        // ── one bounded targeted repair of the local failure(s) ──
+        // ── bounded, ITERATIVE targeted repair of local failure(s). M5.7: the extractive realizer is
+        // proposition-CLOSE but can still leave a few residual unlicensed clauses (e.g. an evaluative
+        // "worth starting with"), and a single repair round cannot always strip them all. Each round re-PLANS
+        // targets from the CURRENT gate outcome and re-GATES against the SAME frozen kernel, so ONLY a fully
+        // clean carousel persists — this is more attempts at faithful extraction, never a safety relaxation.
         if (this.deps.model.repairConstrained) {
-          const plan = await this.planTargetedRepair(shared, slides, outcome0);
-          if (plan.repairable && plan.targets.length === 0) {
-            // the only "failure" was anti-template class-B (simple, faithful — not a defect); accept as-is
-            this.deps.log?.({ type: 'carousel_targeted_repair', detail: 'anti_template_B_not_a_defect' });
-            return await this.persistCreated(shared, outcome0, 'constrained_fallback', MAX_CAROUSEL_ATTEMPTS, repairReasons, fallbackBindingsHash, { triggered: true, repairs: [], result: 'persisted' });
-          }
-          if (plan.repairable) {
-            this.deps.log?.({ type: 'carousel_targeted_repair', detail: plan.targets.map((t) => `${t.gateClass}@${t.blockId}`).join(',') });
+          let curSlides = slides; let curOutcome = outcome0;
+          const allRepairs: TargetedRepairTrace['repairs'] = [];
+          for (let round = 0; round < MAX_CONSTRAINED_REPAIR_ROUNDS; round++) {
+            const plan = await this.planTargetedRepair(shared, curSlides, curOutcome);
+            if (plan.repairable && plan.targets.length === 0) {
+              // the only "failure" was anti-template class-B (simple, faithful — not a defect); accept as-is
+              this.deps.log?.({ type: 'carousel_targeted_repair', detail: 'anti_template_B_not_a_defect' });
+              return await this.persistCreated(shared, curOutcome, 'constrained_fallback', MAX_CAROUSEL_ATTEMPTS, repairReasons, fallbackBindingsHash, { triggered: allRepairs.length > 0, repairs: allRepairs, result: 'persisted' });
+            }
+            if (!plan.repairable) {
+              // Non-LOCAL residual failure (structural / binding / scope / full-asset / unsupported concept).
+              // If we already ATTEMPTED a repair this run, the honest label is fail_closed (we repaired, it is
+              // still unsafe); not_repairable is reserved for the round-0 case where no repair was ever found.
+              const attempted = allRepairs.length > 0;
+              await this.persistTrace(businessId, assetId, null, MAX_CAROUSEL_ATTEMPTS, curOutcome.safetyCore, [...repairReasons, ...findingsToReasons(curOutcome.blockingFindings)], 'fail_closed', 'constrained_fallback', fallbackBindingsHash, { triggered: attempted, repairs: allRepairs, result: attempted ? 'fail_closed' : 'not_repairable' });
+              this.deps.log?.({ type: 'carousel_fail_closed', detail: attempted ? 'unrepairable_after_repair' : 'not_repairable' });
+              return { status: 'insufficient' };
+            }
+            this.deps.log?.({ type: 'carousel_targeted_repair', detail: `r${round}: ` + plan.targets.map((t) => `${t.gateClass}@${t.blockId}`).join(',') });
             const repaired = await this.deps.model.repairConstrained({ targets: plan.targets, snapshot, concept, brief, voiceLines: ctx.voiceLines, ctaFunction: snapshot.ctaFunction }).catch(() => [] as RepairedBlock[]);
-            const slides1 = this.applyRepairs(slides, repaired);
-            const repairs = plan.targets.map((t) => {
-              const before = slides.find((s) => s.slideId === t.slideId)?.textBlocks.find((b) => b.blockId === t.blockId)?.text ?? '';
-              const after = slides1.find((s) => s.slideId === t.slideId)?.textBlocks.find((b) => b.blockId === t.blockId)?.text ?? '';
-              return { gateClass: t.gateClass, slideId: t.slideId, blockId: t.blockId, beforeHash: shaShort(before), afterHash: shaShort(after), meaningUnitRefs: t.meaningUnitRefs };
-            });
-            const outcome1 = await this.gateSlides(shared, slides1, advisories, 'constrained_fallback');
-            constrainedCore = outcome1.safetyCore;
-            if (outcome1.clean) { this.deps.log?.({ type: 'carousel_targeted_repair_ok' }); return await this.persistCreated(shared, outcome1, 'constrained_fallback', MAX_CAROUSEL_ATTEMPTS, repairReasons, fallbackBindingsHash, { triggered: true, repairs, result: 'persisted' }); }
-            this.deps.log?.({ type: 'carousel_targeted_repair_failed', detail: outcome1.blockingFindings.slice(0, 3).map((f) => f.code).join(',') });
-            await this.persistTrace(businessId, assetId, null, MAX_CAROUSEL_ATTEMPTS, constrainedCore, [...repairReasons, ...findingsToReasons(outcome1.blockingFindings)], 'fail_closed', 'constrained_fallback', fallbackBindingsHash, { triggered: true, repairs, result: 'fail_closed' });
-            this.deps.log?.({ type: 'carousel_fail_closed' });
-            return { status: 'insufficient' };
+            const prevSlides = curSlides;
+            curSlides = this.applyRepairs(curSlides, repaired);
+            for (const t of plan.targets) {
+              const before = prevSlides.find((s) => s.slideId === t.slideId)?.textBlocks.find((b) => b.blockId === t.blockId)?.text ?? '';
+              const after = curSlides.find((s) => s.slideId === t.slideId)?.textBlocks.find((b) => b.blockId === t.blockId)?.text ?? '';
+              allRepairs.push({ gateClass: t.gateClass, slideId: t.slideId, blockId: t.blockId, beforeHash: shaShort(before), afterHash: shaShort(after), meaningUnitRefs: t.meaningUnitRefs });
+            }
+            curOutcome = await this.gateSlides(shared, curSlides, advisories, 'constrained_fallback');
+            constrainedCore = curOutcome.safetyCore;
+            if (curOutcome.clean) { this.deps.log?.({ type: 'carousel_targeted_repair_ok' }); return await this.persistCreated(shared, curOutcome, 'constrained_fallback', MAX_CAROUSEL_ATTEMPTS, repairReasons, fallbackBindingsHash, { triggered: true, repairs: allRepairs, result: 'persisted' }); }
+            // still unclean → re-plan against curOutcome on the next round (bounded)
           }
-          // failure is not a LOCAL, block-scoped one (structural / binding / scope / full-asset / unsupported concept) — honest fail closed, no prose repair
-          await this.persistTrace(businessId, assetId, null, MAX_CAROUSEL_ATTEMPTS, outcome0.safetyCore, [...repairReasons, ...findingsToReasons(outcome0.blockingFindings)], 'fail_closed', 'constrained_fallback', fallbackBindingsHash, { triggered: false, repairs: [], result: 'not_repairable' });
-          this.deps.log?.({ type: 'carousel_fail_closed', detail: 'not_repairable' });
+          // exhausted the bounded repair rounds still unclean → honest fail closed
+          this.deps.log?.({ type: 'carousel_targeted_repair_failed', detail: curOutcome.blockingFindings.slice(0, 3).map((f) => f.code).join(',') });
+          await this.persistTrace(businessId, assetId, null, MAX_CAROUSEL_ATTEMPTS, constrainedCore, [...repairReasons, ...findingsToReasons(curOutcome.blockingFindings)], 'fail_closed', 'constrained_fallback', fallbackBindingsHash, { triggered: true, repairs: allRepairs, result: 'fail_closed' });
+          this.deps.log?.({ type: 'carousel_fail_closed' });
           return { status: 'insufficient' };
         }
 

@@ -26,7 +26,7 @@ export function BusinessHomePage() {
     try {
       const b = await createBusiness({ name, defaultConversationLanguage: locale });
       await refresh();
-      navigate(`/b/${b.id}`);
+      navigate(`/b/${b.id}/home`);
     } catch (err) {
       setError(err instanceof ApiError && err.status === 400 ? err.message : t('auth.error.generic'));
     } finally {
@@ -46,7 +46,7 @@ export function BusinessHomePage() {
               {businesses.map((b) => (
                 <div key={b.id} className="s0-biz-row">
                   <span className="s0-biz-name">{b.name}</span>
-                  <button type="button" className="s0-open" onClick={() => navigate(`/b/${b.id}`)}>
+                  <button type="button" className="s0-open" onClick={() => navigate(`/b/${b.id}/home`)}>
                     {t('home.open')}
                   </button>
                 </div>
