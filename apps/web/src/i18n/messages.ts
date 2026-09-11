@@ -61,7 +61,7 @@ const en: Dict = {
   'website.cta': 'Continue',
   'website.nowebsite': 'No website yet?',
   'reading.title': 'Reading {business}…',
-  'reading.sub': 'I’m reading the site now — this takes a moment.',
+  'reading.sub': 'I’m still reading your business — this can take a minute or two. You can leave this open.',
 
   'aha.heading': 'Here’s what I understood about {business}.',
   'aha.why': 'Why I’m saying this',
@@ -370,7 +370,7 @@ const ro: Dict = {
   'website.cta': 'Continuă',
   'website.nowebsite': 'Nu ai încă site?',
   'reading.title': 'Citesc {business}…',
-  'reading.sub': 'Citesc site-ul acum — durează un moment.',
+  'reading.sub': 'Încă îți citesc afacerea — poate dura un minut sau două. Poți lăsa fereastra deschisă.',
 
   'aha.heading': 'Iată ce am înțeles despre {business}.',
   'aha.why': 'De ce spun asta',
@@ -679,7 +679,7 @@ const it: Dict = {
   'website.cta': 'Continua',
   'website.nowebsite': 'Non hai ancora un sito?',
   'reading.title': 'Sto leggendo {business}…',
-  'reading.sub': 'Sto leggendo il sito ora — ci vuole un momento.',
+  'reading.sub': 'Sto ancora leggendo la tua attività — può volerci un minuto o due. Puoi lasciare aperta la finestra.',
 
   'aha.heading': 'Ecco cosa ho capito di {business}.',
   'aha.why': 'Perché lo dico',

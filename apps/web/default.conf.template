@@ -28,6 +28,15 @@ server {
   resolver_timeout 5s;
   set $api_upstream http://api.railway.internal:3000;
 
+  # Long-running LLM generations (learn / strategy / plan / create) legitimately take ~45s–4min.
+  # nginx's default proxy_read_timeout is 60s, so any generation crossing 60s had its upstream
+  # connection closed → the browser saw a 504 and falsely declared failure while the API kept
+  # working and persisted the result. Raise the proxy read/send timeout to 300s to match the
+  # Anthropic client timeout (the API's own max wait) and stay within Railway's ~5min edge, so a
+  # normal generation returns its real result (success OR genuine error) instead of a false 504.
+  proxy_read_timeout 300s;
+  proxy_send_timeout 300s;
+
   location /v1/ {
     proxy_pass $api_upstream;
     proxy_set_header Host              $host;

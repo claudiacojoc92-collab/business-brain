@@ -18,6 +18,14 @@ import {
 
 type Phase = 'loading' | 'intro' | 'website' | 'reading' | 'result';
 
+// A long "read your business" generation legitimately takes ~45s–4min. The request layer (proxy,
+// network) can drop that connection while the API keeps working and persists the result. So a dropped
+// request is NOT proof of failure: we keep the founder in the honest "still reading" state and poll the
+// persisted Aha before deciding. Bounded so a genuine failure still resolves to a real failure state.
+const RECOVERY_WINDOW_MS = 270_000; // ~4.5min — covers the API's max generation (Anthropic 300s)
+const RECOVERY_POLL_MS = 6_000;
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
 const PLATFORM_LABEL: Record<string, string> = {
   instagram: 'Instagram',
   facebook: 'Facebook',
@@ -71,19 +79,52 @@ export function BusinessStartPage() {
 
   useEffect(() => { void load(); }, [load]);
 
+  function applyLearn(
+    state: 'synced' | 'partial' | 'empty' | 'failed',
+    status: 'produced' | 'insufficient',
+    fs: AhaFinding[],
+    dp: DiscoveredProfile[],
+  ): void {
+    setResultState(state);
+    setAhaStatus(status);
+    setFindings(fs);
+    setDiscovered(dp);
+    setPhase('result');
+  }
+
+  // After a dropped/timed-out learn request, poll the persisted Aha. Returns true once the result has
+  // actually landed (the founder sees success), false if nothing landed within the window (real failure).
+  async function recoverLearn(bid: string): Promise<boolean> {
+    const deadline = Date.now() + RECOVERY_WINDOW_MS;
+    while (Date.now() < deadline) {
+      await sleep(RECOVERY_POLL_MS);
+      try {
+        const aha = await getAha(bid);
+        if (aha.state === 'produced' || aha.state === 'insufficient') {
+          let dp: DiscoveredProfile[] = [];
+          try { dp = (await getDiscoveredProfiles(bid)).profiles; } catch { /* best-effort */ }
+          applyLearn('synced', aha.state, aha.findings ?? [], dp.filter((d) => d.status === 'discovered'));
+          return true;
+        }
+      } catch { /* transient — keep polling */ }
+    }
+    return false;
+  }
+
   async function runLearn(e: React.FormEvent) {
     e.preventDefault();
     if (!id) return;
+    const bid = id;
     setError(null);
     setPhase('reading');
     try {
-      const r = await learnBusiness(id, url.trim());
-      setResultState(r.state);
-      setAhaStatus(r.aha.status);
-      setFindings(r.aha.findings);
-      setDiscovered(r.discovered.filter((d) => d.status === 'discovered'));
-      setPhase('result');
+      const r = await learnBusiness(bid, url.trim());
+      applyLearn(r.state, r.aha.status, r.aha.findings, r.discovered.filter((d) => d.status === 'discovered'));
     } catch (err) {
+      // The request dropped — but the API may still be finishing and persisting. Stay in the honest
+      // "still reading" state and confirm whether the result landed before ever declaring failure.
+      const recovered = await recoverLearn(bid);
+      if (recovered) return;
       setResultState('failed');
       setError(err instanceof ApiError ? err.message : t('learn.fail.title'));
       setPhase('result');
