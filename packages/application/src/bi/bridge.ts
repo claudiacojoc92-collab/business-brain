@@ -1,10 +1,20 @@
 import type { EvidenceFragment, WebObservation } from '@bb/domain';
 import type { PageObservation } from './contracts';
 
-/** Host without a leading www. */
+/**
+ * Canonical host for a founder-entered business URL, without a leading www.
+ *
+ * Founders type bare domains ("basecamp.com", "www.basecamp.com") — the onboarding field even
+ * placeholders "yourbusiness.com" with no scheme. `new URL()` throws without a scheme, so a bare
+ * domain previously normalized to '' and silently matched zero stored fragments (all stored under
+ * their real host by ingestion's own normalization). Prepend a scheme when absent so scheme-full and
+ * scheme-less equivalents resolve to the SAME canonical host. Malformed input still fails safely ('').
+ */
 export function hostOf(u: string): string {
   try {
-    return new URL(u).host.replace(/^www\./, '');
+    const trimmed = (u ?? '').trim();
+    const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    return new URL(withScheme).host.replace(/^www\./, '');
   } catch {
     return '';
   }

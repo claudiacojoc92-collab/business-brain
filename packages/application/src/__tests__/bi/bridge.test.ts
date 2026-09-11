@@ -54,3 +54,38 @@ describe('bridgeFragmentsToObservations', () => {
     expect(hostOf('https://www.acme.com/path')).toBe('acme.com');
   });
 });
+
+describe('hostOf — scheme-less normalization (production bind regression)', () => {
+  // Regression: a bare domain used to throw in new URL() → '' → the fragment-host filter matched
+  // zero rows even though ingestion stored fragments under the real host. All valid equivalents must
+  // resolve to the SAME canonical host.
+  it('normalizes bare, www, scheme-full, and path/query variants to one canonical host', () => {
+    expect(hostOf('basecamp.com')).toBe('basecamp.com');
+    expect(hostOf('www.basecamp.com')).toBe('basecamp.com');
+    expect(hostOf('https://basecamp.com')).toBe('basecamp.com');
+    expect(hostOf('http://basecamp.com')).toBe('basecamp.com');
+    expect(hostOf('https://www.basecamp.com')).toBe('basecamp.com');
+    expect(hostOf('basecamp.com/path')).toBe('basecamp.com');
+    expect(hostOf('https://basecamp.com/path?x=1')).toBe('basecamp.com');
+    expect(hostOf('https://www.basecamp.com/path')).toBe('basecamp.com');
+  });
+
+  it('fails safely on malformed input', () => {
+    expect(hostOf('')).toBe('');
+    expect(hostOf('   ')).toBe('');
+    expect(hostOf('http://')).toBe('');
+    expect(hostOf('::::')).toBe('');
+  });
+
+  it('bind seam: a bare-domain input matches fragments stored under the real host', () => {
+    // Fragments as ingestion persists them (platform = real host); founder typed a bare domain.
+    const frags = [
+      frag({ platform: 'basecamp.com', sourceUrl: 'https://basecamp.com/', payload: { text: 'Homepage copy', pageType: 'home', title: 'Basecamp' } }),
+      frag({ platform: 'basecamp.com', sourceUrl: 'https://basecamp.com/pricing', payload: { text: 'Pricing copy', pageType: 'pricing' } }),
+    ];
+    const host = hostOf('basecamp.com'); // the raw founder input
+    const forHost = frags.filter((f) => (f.platform ?? '').replace(/^www\./, '') === host);
+    expect(forHost).toHaveLength(2); // was 0 before the fix
+    expect(bridgeFragmentsToObservations(forHost, host)).toHaveLength(2);
+  });
+});
