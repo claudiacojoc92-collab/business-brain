@@ -39,7 +39,25 @@ function projectPlan(plan: PlanVersion, state: 'proposed' | 'active', stale: boo
   };
 }
 
-function projectToday(today: { ready: Action[]; blockedFallback: { action: Action; blocker: { detail: string } } | null }) {
+function projectToday(
+  today: { ready: Action[]; blockedFallback: { action: Action; blocker: { kind: string; detail: string; ref?: string; material?: string } } | null },
+  plan: PlanVersion,
+) {
+  let blocked = null;
+  if (today.blockedFallback) {
+    const { action, blocker } = today.blockedFallback;
+    // Resolve the prerequisite to its FOUNDER-FACING name (never leak the raw actionId that blocker.detail
+    // carries). `actionId` here is the blocked action itself; `prerequisite.actionId` is the thing to resolve.
+    const prereqAction = blocker.kind === 'prerequisite_unfinished' && blocker.ref ? findAction(plan, blocker.ref) : null;
+    blocked = {
+      actionId: action.actionId,
+      what: action.what,
+      need: blocker.detail,
+      kind: blocker.kind,
+      material: blocker.kind === 'missing_material' ? blocker.material ?? null : null,
+      prerequisite: prereqAction ? { actionId: prereqAction.actionId, what: prereqAction.what } : null,
+    };
+  }
   return {
     ready: today.ready.map((a) => ({
       actionId: a.actionId,
@@ -49,9 +67,7 @@ function projectToday(today: { ready: Action[]; blockedFallback: { action: Actio
       effort: a.effortHint ? EFFORT_LABEL[a.effortHint] ?? null : null,
       canCreate: a.leadsToCreate,
     })),
-    blocked: today.blockedFallback
-      ? { what: today.blockedFallback.action.what, need: today.blockedFallback.blocker.detail }
-      : null,
+    blocked,
   };
 }
 
@@ -110,9 +126,10 @@ export function registerPlanRoutes(server: FastifyInstance, deps: ServerDeps): v
   // Today = derived readiness over the Active plan (≤3 ready, or the single most-relevant blocker).
   server.get('/v1/businesses/:id/plan/today', async (request: FastifyRequest, reply: FastifyReply) => {
     const { business } = await requireBusiness(request);
+    const active = await deps.planService.getActivePlan(business.id);
     const today = await deps.planService.today(business.id);
-    if (!today) { await reply.status(200).send({ state: 'none' }); return; }
-    await reply.status(200).send({ state: 'active', ...projectToday(today) });
+    if (!active || !today) { await reply.status(200).send({ state: 'none' }); return; }
+    await reply.status(200).send({ state: 'active', ...projectToday(today, active.plan) });
   });
 
   // Mark an action done/deferred/skipped — append-only; applies to the Active plan only.
@@ -126,9 +143,32 @@ export function registerPlanRoutes(server: FastifyInstance, deps: ServerDeps): v
     if (!active) throw new NotFoundError('NO_ACTIVE_PLAN', 'No active plan.');
     if (!findAction(active.plan, actionId)) throw new NotFoundError('ACTION_NOT_FOUND', 'Action not found in the active plan.');
     await deps.planService.applyOutcome(business.id, active.plan.planVersionId, actionId, outcome, (body.reason ?? '').trim() || null);
-    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: outcome === 'done' ? 'action_marked_done' : 'action_deferred', surface: 'today', metadata: { outcome } });
+    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: outcome === 'done' ? 'action_marked_done' : 'action_deferred', surface: 'today', metadata: { actionId, outcome } });
     const today = await deps.planService.today(business.id);
-    await reply.status(200).send(today ? { state: 'active', ...projectToday(today) } : { state: 'none' });
+    await reply.status(200).send(today ? { state: 'active', ...projectToday(today, active.plan) } : { state: 'none' });
+  });
+
+  // Kind-specific resolution of a BLOCKED Today move → a durable founder_state fact (resource | constraint |
+  // decision). It NEVER marks the blocked action done and NEVER mutates the plan; terminal outcomes
+  // (done/deferred/skipped) and business-truth corrections keep their own routes. Returns the re-derived Today.
+  server.post('/v1/businesses/:id/plan/action/:actionId/resolve', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { founderId, business } = await requireBusiness(request);
+    const { actionId } = request.params as { actionId: string };
+    const body = (request.body ?? {}) as { kind?: string; statement?: string };
+    const kind = (['resource', 'constraint', 'decision'].includes(body.kind ?? '') ? body.kind : '') as 'resource' | 'constraint' | 'decision' | '';
+    if (!kind) throw new ValidationError('KIND_REQUIRED', 'A resolution kind (resource, constraint, or decision) is required.');
+    const statement = (body.statement ?? '').trim();
+    if (!statement) throw new ValidationError('STATEMENT_REQUIRED', 'A statement is required.');
+    if (statement.length > 2000) throw new ValidationError('STATEMENT_TOO_LONG', 'That is too long.');
+    const active = await deps.planService.getActivePlan(business.id);
+    if (!active) throw new NotFoundError('NO_ACTIVE_PLAN', 'No active plan.');
+    if (!findAction(active.plan, actionId)) throw new NotFoundError('ACTION_NOT_FOUND', 'Action not found in the active plan.');
+    const language = business.defaultConversationLanguage ?? 'en';
+    await deps.planService.recordActionResolution(business.id, founderId, actionId, kind, statement, language);
+    const eventType = kind === 'resource' ? 'blocker_material_confirmed' : kind === 'constraint' ? 'blocker_constraint_recorded' : 'blocker_decision_made';
+    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType, surface: 'today', metadata: { actionId, kind } });
+    const today = await deps.planService.today(business.id);
+    await reply.status(200).send(today ? { state: 'active', ...projectToday(today, active.plan) } : { state: 'none' });
   });
 
   // Create boundary — emits/persists the product-level CreateHandoff. Does NOT generate an asset yet.

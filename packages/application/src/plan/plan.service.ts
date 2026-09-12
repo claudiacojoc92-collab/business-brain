@@ -24,6 +24,9 @@ export interface PlanDeps {
   readonly model: IPlanModelPort;
   readonly currentStrategy: (businessId: string) => Promise<PlanStrategyView | null>;
   readonly founderIntelligence?: (businessId: string) => Promise<Partial<ResourceEnvelope>>;
+  /** Append a founder-owned resolution (resource | constraint | decision) scoped to a blocked action.
+   *  Durable append only — never regenerates the strategy and never mutates the plan. */
+  readonly recordFounderState?: (input: { businessId: string; founderId: string; actionId: string; kind: 'resource' | 'constraint' | 'decision'; statement: string; language: string }) => Promise<void>;
   readonly clock?: () => string;
   readonly log?: (e: { type: string; detail?: string }) => void;
 }
@@ -191,6 +194,20 @@ export class PlanService {
   /** Founder marks an action done/deferred/skipped — append-only, never mutates the plan. */
   async applyOutcome(businessId: string, planVersionId: string, actionId: string, outcome: ActionOutcome, reason: string | null): Promise<void> {
     await this.deps.plan.appendActionState({ businessId, planVersionId, actionId, outcome, reason, at: this.now() });
+  }
+
+  /**
+   * Record a founder's kind-specific resolution of a BLOCKED move as a durable founder_state fact — the ONLY
+   * new write this loop introduces. A `resource` confirmation (the exact required material) folds into the
+   * strategy's licensed material so the action re-derives to READY (the founder then completes it normally — no
+   * auto-done); a `constraint` explains why they can't; a `decision` captures the choice they made. It NEVER
+   * marks the action done, NEVER mutates the plan, and NEVER regenerates the strategy. Terminal outcomes
+   * (done/deferred/skipped) and business-truth corrections keep their own paths. */
+  async recordActionResolution(businessId: string, founderId: string, actionId: string, kind: 'resource' | 'constraint' | 'decision', statement: string, language: string): Promise<void> {
+    if (!this.deps.recordFounderState) throw new ValidationError('RESOLUTION_UNAVAILABLE', 'Resolution recording is not configured.');
+    const s = statement.trim();
+    if (!s) throw new ValidationError('STATEMENT_REQUIRED', 'A statement is required.');
+    await this.deps.recordFounderState({ businessId, founderId, actionId, kind, statement: s, language });
   }
 
   /** Today = derived readiness over the ACTIVE plan → ≤3 ready actions (or the single unblock). */

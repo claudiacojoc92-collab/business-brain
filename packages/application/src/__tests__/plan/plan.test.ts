@@ -247,6 +247,104 @@ describe('Slice 5 — Plan (strategy→execution) corrections', () => {
   });
 });
 
+// ── P0: kind-specific resolution of a BLOCKED move (resource / constraint / decision) ──
+describe('Slice 5 — blocked-move resolution semantics (P0)', () => {
+  // A plan with a single blocked action requiring an unlicensed material, and a resource-union harness that
+  // mirrors composition-root: a recorded `resource` folds into the strategy's licensedMaterial.
+  const materialDraft = (required: string): PlanDraft => validDraft({ priorities: [{ ...validDraft().priorities[0]!, actions: [
+    { key: 'm1', what: 'Publish the proof piece using the brand assets', why: 'proof executes the bet', doneDefinition: 'published', effortHint: 'a_session', leadsToCreate: true, requiredMaterial: [required], prerequisiteKeys: [], planTimeFeasible: true },
+  ] }], currentFocusIndex: 0 });
+
+  function harness(draft: PlanDraft) {
+    const repo = inMemoryRepo();
+    const extraMaterial = new Set<string>();
+    const recorded: Array<{ kind: string; statement: string; actionId: string; founderId: string }> = [];
+    const service = new PlanService({
+      plan: repo.repo,
+      model: modelReturning(draft),
+      currentStrategy: async () => ({ ...STRATEGY, licensedMaterial: [...STRATEGY.licensedMaterial, ...extraMaterial] }),
+      recordFounderState: async (i) => { recorded.push(i); if (i.kind === 'resource') extraMaterial.add(i.statement); },
+      clock: () => '2026-01-01T00:00:00.000Z',
+    });
+    return { service, repo, recorded, extraMaterial };
+  }
+
+  it('C1. missing_material → "I have this" records a RESOURCE (not a correction) and the SAME action re-derives READY', async () => {
+    const { service, recorded } = harness(materialDraft('brand logo files'));
+    const plan = (await service.generateProposedPlan('B'))!;
+    await service.acceptPlan('B', plan.planVersionId);
+    const before = (await service.today('B'))!;
+    expect(before.ready).toHaveLength(0);
+    expect(before.blockedFallback!.blocker.kind).toBe('missing_material');
+    expect(before.blockedFallback!.blocker.material).toBe('brand logo files'); // structured, founder-facing material
+    const blockedId = before.blockedFallback!.action.actionId;
+    await service.recordActionResolution('B', 'f1', blockedId, 'resource', 'brand logo files', 'en');
+    expect(recorded).toEqual([{ businessId: 'B', founderId: 'f1', actionId: blockedId, kind: 'resource', statement: 'brand logo files', language: 'en' }]);
+    const after = (await service.today('B'))!;
+    expect(after.ready.map((a) => a.actionId)).toContain(blockedId); // re-derived READY — completed normally next (no auto-done)
+    // and no terminal outcome was written (the action is not falsely done)
+    expect(after.ready.find((a) => a.actionId === blockedId)).toBeTruthy();
+  });
+
+  it('C2. missing_material → "I can\'t get it" is a constraint + SKIP (never DONE); the move leaves Today', async () => {
+    const { service } = harness(materialDraft('a paid stock-photo subscription'));
+    const plan = (await service.generateProposedPlan('B'))!;
+    await service.acceptPlan('B', plan.planVersionId);
+    const blockedId = (await service.today('B'))!.blockedFallback!.action.actionId;
+    await service.recordActionResolution('B', 'f1', blockedId, 'constraint', 'I won’t buy a stock subscription', 'en');
+    await service.applyOutcome('B', plan.planVersionId, blockedId, 'skipped', 'I won’t buy a stock subscription');
+    const after = (await service.today('B'))!;
+    expect(after.ready.map((a) => a.actionId)).not.toContain(blockedId);
+    expect(after.blockedFallback?.action.actionId).not.toBe(blockedId); // not re-shown as blocked
+  });
+
+  it('D. founder_decision → decision fact + DONE completes the decision action and unblocks dependents', async () => {
+    // an action that needs a decision (not plan-time feasible, no material) blocks a dependent
+    const draft = validDraft({ priorities: [{ ...validDraft().priorities[0]!, actions: [
+      { key: 'dec', what: 'Decide which single audience to lead with', why: 'the plan can’t proceed until you choose', doneDefinition: 'chosen', effortHint: 'quick', leadsToCreate: false, requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: false },
+      { key: 'nxt', what: 'Write the proof piece for the chosen audience', why: 'depends on the choice', doneDefinition: 'drafted', effortHint: 'a_session', leadsToCreate: true, requiredMaterial: [], prerequisiteKeys: ['dec'], planTimeFeasible: true },
+    ] }] });
+    const { service, recorded } = harness(draft);
+    const plan = (await service.generateProposedPlan('B'))!;
+    await service.acceptPlan('B', plan.planVersionId);
+    const t0 = (await service.today('B'))!;
+    expect(t0.blockedFallback!.blocker.kind).toBe('founder_decision');
+    const decId = t0.blockedFallback!.action.actionId;
+    await service.recordActionResolution('B', 'f1', decId, 'decision', 'lead with fractional CFOs', 'en');
+    await service.applyOutcome('B', plan.planVersionId, decId, 'done', 'lead with fractional CFOs');
+    expect(recorded[0]!.kind).toBe('decision');
+    const t1 = (await service.today('B'))!;
+    expect(t1.ready.some((a) => a.what.startsWith('Write the proof'))).toBe(true); // dependent unblocked
+  });
+
+  it('E. prerequisite_unfinished carries the PREREQUISITE ref; "already done" applies to A, never the blocked child', async () => {
+    // B (blocked child) depends on A; A is not plan-time feasible so it needs a decision and B waits on it.
+    const draft = validDraft({ priorities: [{ ...validDraft().priorities[0]!, actions: [
+      { key: 'A', what: 'Confirm the case study is cleared to publish', why: 'gate', doneDefinition: 'cleared', effortHint: 'quick', leadsToCreate: false, requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true },
+      { key: 'Bc', what: 'Publish the cleared case study', why: 'after clearance', doneDefinition: 'published', effortHint: 'a_session', leadsToCreate: true, requiredMaterial: [], prerequisiteKeys: ['A'], planTimeFeasible: true },
+    ] }] });
+    const { service } = harness(draft);
+    const plan = (await service.generateProposedPlan('B'))!;
+    await service.acceptPlan('B', plan.planVersionId);
+    const A = plan.priorities[0]!.actions.find((a) => a.what.startsWith('Confirm'))!;
+    const child = plan.priorities[0]!.actions.find((a) => a.what.startsWith('Publish'))!;
+    // Skip A so it is terminal-non-done → the child becomes blocked on the (unfinished) prerequisite A.
+    await service.applyOutcome('B', plan.planVersionId, A.actionId, 'skipped', 'set aside');
+    const t0 = (await service.today('B'))!;
+    expect(t0.ready).toHaveLength(0);
+    expect(t0.blockedFallback!.blocker.kind).toBe('prerequisite_unfinished');
+    expect(t0.blockedFallback!.blocker.ref).toBe(A.actionId);   // the thing to resolve is A…
+    expect(t0.blockedFallback!.action.actionId).toBe(child.actionId); // …not the blocked child
+  });
+
+  it('F. recordActionResolution requires a non-empty statement and a configured writer', async () => {
+    const { service } = harness(materialDraft('x'));
+    await expect(service.recordActionResolution('B', 'f1', 'a', 'resource', '   ', 'en')).rejects.toThrow(/statement/i);
+    const noWriter = new PlanService({ plan: inMemoryRepo().repo, model: modelReturning(materialDraft('x')), currentStrategy: async () => STRATEGY, clock: () => 't' });
+    await expect(noWriter.recordActionResolution('B', 'f1', 'a', 'resource', 'y', 'en')).rejects.toThrow(/not configured/i);
+  });
+});
+
 // ── Corrected semantic classes: numeric role, urgency, material bridge (deterministic, no model) ──
 describe('Slice 5 — corrected numeric / urgency / material semantics', () => {
   const plan = (what: string, why = 'executes the intro-call conversion bet'): any => ({

@@ -44,9 +44,9 @@ export function deriveReadiness(action: Action, outcomes: Map<string, ActionStat
   if (terminal) return { actionId: action.actionId, readiness: terminal.outcome, blocker: null }; // done|deferred|skipped
   if (inputs.strategyStale) return { actionId: action.actionId, readiness: 'blocked', blocker: { kind: 'strategy_stale', detail: 'Your strategy changed — re-derive the plan before doing this.' } };
   const unmet = action.prerequisites.find((p) => outcomes.get(p)?.outcome !== 'done');
-  if (unmet) return { actionId: action.actionId, readiness: 'blocked', blocker: { kind: 'prerequisite_unfinished', detail: `Do "${unmet}" first.` } };
+  if (unmet) return { actionId: action.actionId, readiness: 'blocked', blocker: { kind: 'prerequisite_unfinished', detail: `Do "${unmet}" first.`, ref: unmet } };
   const missing = action.requiredMaterial.find((m) => !materialAvailable(m, inputs.availableMaterial));
-  if (missing) return { actionId: action.actionId, readiness: 'blocked', blocker: { kind: 'missing_material', detail: `Missing: ${missing}.` } };
+  if (missing) return { actionId: action.actionId, readiness: 'blocked', blocker: { kind: 'missing_material', detail: `Missing: ${missing}.`, material: missing } };
   if (inputs.decisionNeeded.has(action.actionId)) return { actionId: action.actionId, readiness: 'blocked', blocker: { kind: 'founder_decision', detail: 'Needs a decision from you first.' } };
   return { actionId: action.actionId, readiness: 'ready', blocker: null };
 }

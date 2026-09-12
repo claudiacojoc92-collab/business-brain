@@ -384,15 +384,24 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
       };
     },
     // Resource envelope derived from the adopted strategy's constraints/resources/channels (no new questionnaire).
+    // Founder-declared execution constraints (founder_state kind='constraint', e.g. recorded when a founder can't
+    // do a blocked move) are unioned in, so a RESHAPE genuinely routes the next plan around them.
     founderIntelligence: async (bid) => {
       const cur = await strategyService.getCurrent(bid);
       if (!cur) return {};
       const c = cur.record.bundle.core; const br = cur.record.bundle.branch;
+      const declaredConstraints = (await founderStateRepo.listActive(bid)).filter((s) => s.kind === 'constraint').map((s) => s.statement.trim()).filter(Boolean);
       return {
         channels: br.channelPriorities.map((cp) => cp.channel).filter(Boolean),
-        constraints: [...c.founderConstraints].filter(Boolean),
+        constraints: [...c.founderConstraints, ...declaredConstraints].filter(Boolean),
         resources: [...c.resourceEnvelope].filter(Boolean),
       };
+    },
+    // Bounded write for a blocked-move resolution: a durable founder_state fact scoped to the action. No strategy
+    // regeneration (unlike StrategyService.recordFounderInput) — a `resource` statement folds into licensedMaterial
+    // via currentStrategy above, so the action re-derives to READY on the next today() read.
+    recordFounderState: async ({ businessId, founderId, actionId, kind, statement, language }) => {
+      await founderStateRepo.append({ id: generateId(), businessId, founderId, kind, statement, scope: actionId, language, sourceTurnId: null });
     },
     // eslint-disable-next-line no-console
     log: (e) => console.error('[plan]', JSON.stringify(e)),

@@ -660,6 +660,24 @@
 .s0-today2-note { color: var(--s0-ink-4); }
 @media (max-width: 640px) { .s0-today2-move { font-size: 23px; } }
 
+/* Blocked-move responses — calm inline capture (constraint reason / decision / correction). */
+.s0-blk-form { display: flex; flex-direction: column; gap: 14px; max-width: 52ch; }
+.s0-blk-input {
+  width: 100%; box-sizing: border-box; resize: vertical; min-height: 44px;
+  background: var(--s0-bg-3); border: 1px solid var(--s0-line-2); border-radius: 8px;
+  padding: 10px 12px; font-family: var(--s0-sans); font-size: 14px; line-height: 1.5; color: var(--s0-ink);
+}
+.s0-blk-input::placeholder { color: var(--s0-ink-3); }
+.s0-blk-input:focus { outline: none; border-color: var(--s0-clay); }
+.s0-blk-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.s0-chip {
+  background: none; border: 1px solid var(--s0-line-2); border-radius: 999px; padding: 6px 14px;
+  font-family: var(--s0-sans); font-size: 13px; color: var(--s0-ink-2); cursor: pointer;
+  transition: color .15s var(--s0-ease), border-color .15s var(--s0-ease), background .15s var(--s0-ease);
+}
+.s0-chip:hover { color: var(--s0-ink); border-color: var(--s0-line-2); }
+.s0-chip-on { color: var(--s0-clay-ink); background: var(--s0-clay); border-color: var(--s0-clay); }
+
 /* ── M6 — Talk to BB global drawer (overlays the current surface; page stays behind) ── */
 .s0-talk-scrim {
   position: fixed; inset: 0; background: rgba(12, 11, 9, 0.44);

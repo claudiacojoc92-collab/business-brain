@@ -429,10 +429,19 @@ export type PlanProposeResp = PlanView | { state: 'insufficient' | 'no_strategy'
 export interface TodayAction {
   actionId: string; what: string; whyNow: string; doneLooksLike: string; effort: string | null; canCreate: boolean;
 }
+export type BlockerKind = 'missing_material' | 'founder_decision' | 'prerequisite_unfinished' | 'strategy_stale';
+export interface TodayBlocked {
+  what: string;                 // the blocked move, founder-facing
+  need: string;                 // human detail (fallback text)
+  actionId?: string;            // the BLOCKED action itself (target for decision-done / skip / defer)
+  kind?: BlockerKind;           // which kind-specific response to render
+  material?: string | null;     // missing_material → the exact required material to confirm/deny
+  prerequisite?: { actionId: string; what: string } | null; // prerequisite_unfinished → the thing to resolve (NOT the child)
+}
 export interface TodayResp {
   state: 'active' | 'none';
   ready?: TodayAction[];
-  blocked?: { what: string; need: string } | null;
+  blocked?: TodayBlocked | null;
 }
 export type PlanOutcome = 'done' | 'deferred' | 'skipped';
 const PL = (b: string) => `v1/businesses/${encodeURIComponent(b)}/plan`;
@@ -450,6 +459,16 @@ export function getToday(businessId: string): Promise<TodayResp> {
 }
 export function applyActionOutcome(businessId: string, actionId: string, outcome: PlanOutcome, reason?: string): Promise<TodayResp> {
   return request<TodayResp>(`${PL(businessId)}/action/${encodeURIComponent(actionId)}/outcome`, { method: 'POST', body: JSON.stringify({ outcome, reason: reason ?? '' }) });
+}
+/**
+ * Record a founder's kind-specific resolution of a BLOCKED move as a durable founder_state fact — the only
+ * new plan write. `resource` = the exact required material the founder now has (re-derives readiness);
+ * `constraint` = why they can't; `decision` = the choice they made. It NEVER marks the action done and never
+ * mutates the plan — terminal outcomes and business-truth corrections keep their own paths. Returns the
+ * re-derived Today. (For 'resource' the same action then becomes ready and is completed normally.)
+ */
+export function resolveActionState(businessId: string, actionId: string, kind: 'resource' | 'constraint' | 'decision', statement: string): Promise<TodayResp> {
+  return request<TodayResp>(`${PL(businessId)}/action/${encodeURIComponent(actionId)}/resolve`, { method: 'POST', body: JSON.stringify({ kind, statement }) });
 }
 export function createFromAction(businessId: string, actionId: string): Promise<{ state: 'ready_for_create'; objective: string; note: string; createHandoffId: string }> {
   return request(`${PL(businessId)}/action/${encodeURIComponent(actionId)}/create`, { method: 'POST', body: '{}' });

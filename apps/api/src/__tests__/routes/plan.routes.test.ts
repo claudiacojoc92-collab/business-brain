@@ -151,3 +151,85 @@ describe('Slice 5 — plan routes (founder-visible surface + tenancy)', () => {
     expect(bad.statusCode).toBeGreaterThanOrEqual(400);
   });
 });
+
+// ── P0: blocked-move projection + kind-specific resolution over the real routes ──
+describe('Slice 5 — blocked-move routes (kind-specific resolution)', () => {
+  // A one-action plan whose sole action needs an UNLICENSED material → Today has no ready move and falls back
+  // to a missing_material blocker. The rich harness mirrors composition-root: a recorded `resource` folds into
+  // the strategy's licensed material, so the same action re-derives to READY.
+  const missingDraft: PlanDraft = {
+    monthDirection: 'Turn your proof of client outcomes into booked intro calls with fractional CFOs.',
+    priorities: [{ title: 'Publish concrete client-outcome proof', intent: 'content', why: 'executes the bet to win trust with proof of outcomes', betRef: 'lead with proof of outcomes', goalRef: 'win more consulting clients', timeBand: 'weeks 1-2', feasibility: 'feasible', materialGap: null, observableSignal: { description: 'replies from CFOs', source: 'strategy' }, order: 0,
+      actions: [{ key: 'm1', what: 'Publish the proof piece with the brand logo files', why: 'proof executes the bet', doneDefinition: 'published', effortHint: 'a_session', leadsToCreate: true, requiredMaterial: ['brand logo files'], prerequisiteKeys: [], planTimeFeasible: true }] }],
+    currentFocusIndex: 0, notNow: [],
+  };
+
+  function buildRich(asFounder = 'founder-1', ownerId = 'founder-1') {
+    const mem = inMemoryRepo();
+    const extraMaterial = new Set<string>();
+    const recorded: Array<{ kind: string; statement: string; actionId: string; founderId: string }> = [];
+    const planService = new PlanService({
+      plan: mem.repo,
+      model: { draftPlan: async () => missingDraft } as IPlanModelPort,
+      currentStrategy: async () => ({ ...STRATEGY, licensedMaterial: [...STRATEGY.licensedMaterial, ...extraMaterial] }),
+      recordFounderState: async (i) => { recorded.push(i); if (i.kind === 'resource') extraMaterial.add(i.statement); },
+      clock: () => '2026-01-01T00:00:00.000Z',
+    });
+    const businessService = { getBusiness: async (id: string, founderId: string) => (founderId === ownerId ? { id, name: 'Acme', defaultConversationLanguage: 'en' } : null) } as any;
+    const server = Fastify();
+    registerErrorHandler(server, makeLogger());
+    server.addHook('preHandler', async (req) => { (req as any).user = { sub: asFounder, role: 'founder' }; });
+    registerPlanRoutes(server, { planService, businessService } as any);
+    return { server, recorded };
+  }
+
+  async function adoptAndToday(server: any) {
+    const proposed = (await server.inject({ method: 'POST', url: `${B}/propose`, payload: {} })).json();
+    await server.inject({ method: 'POST', url: `${B}/${proposed.planVersionId}/adopt`, payload: {} });
+    return (await server.inject({ method: 'GET', url: `${B}/today` })).json();
+  }
+
+  it('projects a missing_material blocker with kind + actionId + material (founder-facing, no id leak)', async () => {
+    const { server } = buildRich();
+    const today = await adoptAndToday(server);
+    expect(today.ready).toEqual([]);
+    expect(today.blocked).toBeTruthy();
+    expect(today.blocked.kind).toBe('missing_material');
+    expect(today.blocked.material).toBe('brand logo files');
+    expect(typeof today.blocked.actionId).toBe('string');
+    expect(today.blocked.prerequisite).toBeNull();
+  });
+
+  it('"I have this" → resolve(resource) re-derives the SAME action to READY (no auto-done)', async () => {
+    const { server, recorded } = buildRich();
+    const today = await adoptAndToday(server);
+    const actionId = today.blocked.actionId;
+    const r = await server.inject({ method: 'POST', url: `${B}/action/${actionId}/resolve`, payload: { kind: 'resource', statement: today.blocked.material } });
+    expect(r.statusCode).toBe(200);
+    const after = r.json<any>();
+    expect(after.state).toBe('active');
+    expect(after.ready.map((a: any) => a.actionId)).toContain(actionId); // ready, not done
+    expect(after.blocked).toBeNull();
+    expect(recorded[0]).toMatchObject({ kind: 'resource', statement: 'brand logo files', actionId, founderId: 'founder-1' });
+  });
+
+  it('resolve rejects an unknown kind and an empty statement', async () => {
+    const { server } = buildRich();
+    const today = await adoptAndToday(server);
+    const actionId = today.blocked.actionId;
+    const badKind = await server.inject({ method: 'POST', url: `${B}/action/${actionId}/resolve`, payload: { kind: 'nonsense', statement: 'x' } });
+    expect(badKind.statusCode).toBeGreaterThanOrEqual(400);
+    const empty = await server.inject({ method: 'POST', url: `${B}/action/${actionId}/resolve`, payload: { kind: 'constraint', statement: '   ' } });
+    expect(empty.statusCode).toBeGreaterThanOrEqual(400);
+  });
+
+  it('resolve enforces tenancy (404 for a non-member) and a real action id', async () => {
+    const { server } = buildRich('intruder', 'founder-1');
+    const r = await server.inject({ method: 'POST', url: `${B}/action/anything/resolve`, payload: { kind: 'resource', statement: 'x' } });
+    expect(r.statusCode).toBe(404);
+    const { server: s2 } = buildRich();
+    await adoptAndToday(s2);
+    const bad = await s2.inject({ method: 'POST', url: `${B}/action/not-a-real-action/resolve`, payload: { kind: 'resource', statement: 'x' } });
+    expect(bad.statusCode).toBe(404);
+  });
+});

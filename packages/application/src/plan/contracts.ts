@@ -84,7 +84,15 @@ export interface ActionStateEntry { readonly id: string; readonly businessId: st
 // ── Derived readiness (projection; never persisted as action truth) ──
 export type Readiness = 'ready' | 'blocked' | 'done' | 'deferred' | 'skipped';
 export type BlockerKind = 'missing_material' | 'founder_decision' | 'prerequisite_unfinished' | 'strategy_stale';
-export interface ActionReadiness { readonly actionId: string; readonly readiness: Readiness; readonly blocker: { kind: BlockerKind; detail: string } | null }
+/**
+ * A derived blocker. `detail` stays a human string for logs/back-compat. `ref`/`material` are STRUCTURED
+ * handles the Today surface needs to respond kind-specifically WITHOUT parsing prose:
+ *  - prerequisite_unfinished → `ref` = the prerequisite actionId that must be resolved (NEVER the blocked child)
+ *  - missing_material        → `material` = the exact required-material string the founder must confirm/deny
+ * Both are omitted for kinds that don't carry them (strategy_stale, founder_decision).
+ */
+export interface Blocker { readonly kind: BlockerKind; readonly detail: string; readonly ref?: string; readonly material?: string }
+export interface ActionReadiness { readonly actionId: string; readonly readiness: Readiness; readonly blocker: Blocker | null }
 
 // ── CreateHandoff — product-level immutable bridge to Slice 6/7 (NOT a Voice AuthorizedMessageSpec) ──
 export interface CreateHandoff {
