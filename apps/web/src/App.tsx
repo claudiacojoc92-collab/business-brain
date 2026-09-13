@@ -4,7 +4,7 @@ import { LocaleProvider } from './i18n/LocaleContext';
 import type { Locale } from './i18n/messages';
 import { SessionProvider, useSession } from './slice0/session';
 import { ErrorBoundary } from './slice0/ErrorBoundary';
-import { ProductEntry } from './slice0/ProductEntry';
+import { LandingV0 } from './slice0/LandingV0';
 import { AuthPage } from './slice0/AuthPage';
 import { SigninCallbackPage } from './slice0/SigninCallbackPage';
 import { BusinessHomePage } from './slice0/BusinessHomePage';
@@ -69,7 +69,7 @@ export function App() {
           <ErrorBoundary>
           <Routes>
             {/* Founder product entry — Business Brain owns `/` */}
-            <Route path="/" element={<ProductEntry />} />
+            <Route path="/" element={<LandingV0 />} />
             <Route path="/signin" element={<RedirectIfAuthed><AuthPage /></RedirectIfAuthed>} />
             <Route path="/signin/callback" element={<SigninCallbackPage />} />
 
