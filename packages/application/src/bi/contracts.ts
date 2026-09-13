@@ -6,14 +6,24 @@
  * to a real linked page (deterministic grounding), and the immutable fragments are never mutated.
  */
 
-/** A grounded per-page observation the synthesis reads (projected from a linked PAGE fragment). */
+/**
+ * A grounded source observation the synthesis reads. Historically projected only from a linked website
+ * PAGE fragment (`provenance:'observed'`); now also carries founder-SUPPLIED material
+ * (`provenance:'declared'`) through the SAME synthesis path. `provenance` preserves the frozen epistemic
+ * lane end-to-end: OBSERVED = BB fetched it from an external source; DECLARED = the founder supplied text/
+ * material for BB to inspect (NOT authoritative business truth). `url` is a real page URL for observed
+ * material and a stable `founder://supplied/...` URI for declared material (used only for ref-dedup/grounding,
+ * never presented as a fetched page). The name stays `PageObservation` for call-site stability.
+ */
+export type ObservationProvenance = 'observed' | 'declared';
 export interface PageObservation {
-  readonly ref: string; // stable founder-readable label: "Homepage", "Services", "Pricing", or path
+  readonly ref: string; // stable founder-readable label: "Homepage", "Services", or "What you told me"
   readonly url: string;
   readonly pageType: string;
   readonly title: string | null;
   readonly text: string;
   readonly lang: string | null;
+  readonly provenance?: ObservationProvenance; // default 'observed' (back-compat); 'declared' = founder-supplied
 }
 
 export interface SourceRef {
@@ -170,3 +180,19 @@ export interface IBusinessWebsiteRepository {
 }
 
 export const UNDERSTANDING_PROFILE_VERSION = 'website.offer_positioning_audience.v1';
+/**
+ * Source-neutral profile version for understanding built (wholly or partly) from founder-SUPPLIED material,
+ * kept distinct from the website-only version so lineage stays legible and old website snapshots are never
+ * silently reinterpreted. Same understanding SHAPE (offer/positioning/audience/…); only the source lane and
+ * provenance labelling differ. Additive — existing `website.*` snapshots keep their version.
+ */
+export const SUPPLIED_UNDERSTANDING_PROFILE_VERSION = 'sources.offer_positioning_audience.v1';
+
+/** Founder-supplied material learn — one text block the founder pasted for BB to inspect (DECLARED evidence). */
+export interface LearnFromMaterialParams {
+  readonly businessId: string;
+  readonly founderId: string;
+  readonly businessName: string;
+  readonly material: string;
+  readonly interfaceLanguage: string;
+}

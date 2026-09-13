@@ -19,7 +19,7 @@ vi.mock('../api/client', () => {
   return {
     ApiError,
     getBusiness: vi.fn(), getAha: vi.fn(), getDiscoveredProfiles: vi.fn(),
-    learnBusiness: vi.fn(), setDiscoveredProfileStatus: vi.fn(),
+    learnBusiness: vi.fn(), learnFromMaterial: vi.fn(), emitEvent: vi.fn(), setDiscoveredProfileStatus: vi.fn(),
   };
 });
 
@@ -33,12 +33,13 @@ const drain = async (): Promise<void> => {
 
 async function reachWebsiteAndSubmit(): Promise<void> {
   render(<BusinessStartPage />);
-  await drain();                                   // mount load() → intro
-  fireEvent.click(screen.getByText('start.cta'));  // intro → website
+  await drain();                                     // mount load() → intro
+  fireEvent.click(screen.getByText('start.cta'));    // intro → chooser
+  fireEvent.click(screen.getByText(/chooser\.website/)); // chooser → website
   const input = screen.getByRole('textbox');
   fireEvent.change(input, { target: { value: 'acme.com' } });
-  fireEvent.submit(input.closest('form')!);        // → runLearn
-  await drain();                                   // let the rejected learn settle into recovery
+  fireEvent.submit(input.closest('form')!);          // → runLearn
+  await drain();                                      // let the rejected learn settle into recovery
 }
 
 beforeEach(() => {
@@ -97,5 +98,65 @@ describe('BusinessStartPage — learn timeout recovery', () => {
     expect(screen.getByText('aha.heading')).toBeInTheDocument();
     expect(screen.getByText('Clear switcher angle')).toBeInTheDocument();
     expect(api.getAha).toHaveBeenCalledTimes(1); // mount only — no recovery polling on the success path
+  });
+});
+
+describe('BusinessStartPage — source-flexible entry (chooser / supplied / recovery)', () => {
+  async function reachChooser(): Promise<void> {
+    vi.mocked(api.getAha).mockResolvedValue({ state: 'none' } as never);
+    render(<BusinessStartPage />);
+    await drain();
+    fireEvent.click(screen.getByText('start.cta')); // intro → chooser
+  }
+
+  it('the chooser offers a website path, a supplied-material path, and a no-website/Instagram path', async () => {
+    await reachChooser();
+    expect(screen.getByText(/chooser\.website/)).toBeInTheDocument();
+    expect(screen.getByText('chooser.material')).toBeInTheDocument();
+    expect(screen.getByText('chooser.instagram')).toBeInTheDocument();
+  });
+
+  it('the Instagram/no-website path records DEMAND (never a fake OAuth) and routes into supplied material', async () => {
+    await reachChooser();
+    fireEvent.click(screen.getByText('chooser.instagram'));
+    expect(api.emitEvent).toHaveBeenCalledWith('source_instagram_interest', expect.objectContaining({ businessId: 'b1' }));
+    // no connector call exists to fake — assert we landed on the material entry, not a connection
+    expect(screen.getByText('material.title')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('material.placeholder')).toBeInTheDocument();
+  });
+
+  it('supplied material is sent to the founder-supplied learn path and its Aha surfaces', async () => {
+    vi.mocked(api.learnFromMaterial).mockResolvedValue({
+      state: 'synced', pagesRead: 1, discovered: [],
+      aha: { status: 'produced', findings: [{ finding: 'You lead with the Saturday market', sourceRefs: [] }] },
+    } as never);
+    await reachChooser();
+    fireEvent.click(screen.getByText('chooser.material'));
+    const box = screen.getByPlaceholderText('material.placeholder');
+    fireEvent.change(box, { target: { value: 'We bake handmade sourdough and sell at the Saturday market.' } });
+    fireEvent.submit(box.closest('form')!);
+    await drain();
+    expect(api.learnFromMaterial).toHaveBeenCalledWith('b1', expect.stringContaining('sourdough'), 'chooser');
+    expect(api.learnBusiness).not.toHaveBeenCalled();
+    expect(screen.getByText('aha.heading')).toBeInTheDocument();
+    expect(screen.getByText('You lead with the Saturday market')).toBeInTheDocument();
+  });
+
+  it('a thin/empty website does NOT dead-end — it offers a supplied-material continuation', async () => {
+    vi.mocked(api.learnBusiness).mockResolvedValue({ state: 'empty', pagesRead: 1, discovered: [], aha: { status: 'insufficient', findings: [] } } as never);
+    await reachWebsiteAndSubmit();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByText('recover.empty.title')).toBeInTheDocument();
+    expect(screen.getByText(/recover\.supply/)).toBeInTheDocument(); // continuation, not only "try another address"
+    fireEvent.click(screen.getByText(/recover\.supply/));
+    expect(screen.getByText('material.title')).toBeInTheDocument(); // continues into supplied material
+  });
+
+  it('an unreachable website (failure) still offers the supplied-material continuation', async () => {
+    vi.mocked(api.getAha).mockResolvedValue({ state: 'none' } as never);
+    vi.mocked(api.learnBusiness).mockResolvedValue({ state: 'failed', pagesRead: 0, discovered: [], aha: { status: 'insufficient', findings: [] } } as never);
+    await reachWebsiteAndSubmit();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByText(/recover\.supply/)).toBeInTheDocument();
   });
 });

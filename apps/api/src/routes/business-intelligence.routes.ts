@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { ServerDeps } from '../server';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
+import { recordFounderEvent } from '../telemetry/founder-events';
 
 interface AuthedUser {
   sub: string;
@@ -48,6 +49,26 @@ export function registerBusinessIntelligenceRoutes(server: FastifyInstance, deps
       url,
       interfaceLanguage: account?.interfaceLocale ?? 'en',
     });
+    await reply.status(200).send(result);
+  });
+
+  // Founder-supplied material path: the founder pastes text about the business (bio/captions/offer copy).
+  // Persists as DECLARED evidence and runs the SAME synthesis → understanding + Aha. No website required.
+  server.post('/v1/businesses/:id/learn/material', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { founderId, business } = await requireBusiness(request);
+    const body = (request.body ?? {}) as { material?: string; origin?: string };
+    const material = (body.material ?? '').trim();
+    if (!material) throw new ValidationError('MATERIAL_REQUIRED', 'Some material about the business is required.');
+    if (material.length > 20000) throw new ValidationError('MATERIAL_TOO_LONG', 'That is a lot of text — trim it a little.');
+    const account = await deps.founderAccountService.getById(founderId);
+    const result = await deps.learnBusinessService.learnFromMaterial({
+      businessId: business.id,
+      founderId,
+      businessName: business.name,
+      material,
+      interfaceLanguage: account?.interfaceLocale ?? 'en',
+    });
+    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'source_material_submitted', surface: 'onboarding', metadata: { origin: (body.origin ?? 'chooser').slice(0, 32), chars: material.length } });
     await reply.status(200).send(result);
   });
 

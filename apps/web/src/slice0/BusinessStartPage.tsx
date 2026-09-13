@@ -9,14 +9,16 @@ import {
   getAha,
   getDiscoveredProfiles,
   learnBusiness,
+  learnFromMaterial,
   setDiscoveredProfileStatus,
+  emitEvent,
   ApiError,
   type Business,
   type AhaFinding,
   type DiscoveredProfile,
 } from '../api/client';
 
-type Phase = 'loading' | 'intro' | 'website' | 'reading' | 'result';
+type Phase = 'loading' | 'intro' | 'chooser' | 'website' | 'material' | 'reading' | 'result';
 
 // A long "read your business" generation legitimately takes ~45s–4min. The request layer (proxy,
 // network) can drop that connection while the API keeps working and persists the result. So a dropped
@@ -45,6 +47,8 @@ export function BusinessStartPage() {
   const [business, setBusiness] = useState<Business | null | undefined>(undefined);
   const [phase, setPhase] = useState<Phase>('loading');
   const [url, setUrl] = useState('');
+  const [material, setMaterial] = useState('');
+  const [origin, setOrigin] = useState<'chooser' | 'thin_recovery' | 'instagram'>('chooser');
   const [error, setError] = useState<string | null>(null);
   const [resultState, setResultState] = useState<'synced' | 'partial' | 'empty' | 'failed' | null>(null);
   const [findings, setFindings] = useState<AhaFinding[]>([]);
@@ -131,6 +135,33 @@ export function BusinessStartPage() {
     }
   }
 
+  async function runMaterial(e: React.FormEvent) {
+    e.preventDefault();
+    if (!id) return;
+    const bid = id;
+    setError(null);
+    setPhase('reading');
+    try {
+      const r = await learnFromMaterial(bid, material.trim(), origin);
+      applyLearn(r.state, r.aha.status, r.aha.findings, []);
+    } catch (err) {
+      const recovered = await recoverLearn(bid);
+      if (recovered) return;
+      setResultState('failed');
+      setError(err instanceof ApiError ? err.message : t('learn.fail.title'));
+      setPhase('result');
+    }
+  }
+
+  // The founder chose the no-website / Instagram-first path. Record DEMAND only — never connect Instagram —
+  // then route into the founder-supplied material path.
+  function chooseSupplied(from: 'chooser' | 'thin_recovery' | 'instagram') {
+    setOrigin(from);
+    if (from === 'instagram') emitEvent('source_instagram_interest', { businessId: id, surface: 'onboarding' });
+    setError(null);
+    setPhase('material');
+  }
+
   async function confirmProfile(pid: string, status: 'confirmed' | 'rejected') {
     if (!id) return;
     try {
@@ -159,8 +190,26 @@ export function BusinessStartPage() {
           <>
             <h1 className="s0-h1">{t('start.greeting', { name: firstName })}</h1>
             <p className="s0-lede">{t('start.understand', { business: name })}</p>
-            <button type="button" className="s0-btn" style={{ maxWidth: 320 }} onClick={() => setPhase('website')}>
+            <button type="button" className="s0-btn" style={{ maxWidth: 320 }} onClick={() => setPhase('chooser')}>
               {t('start.cta')}
+            </button>
+          </>
+        )}
+
+        {phase === 'chooser' && (
+          <>
+            <h1 className="s0-h1">{t('chooser.title')}</h1>
+            <p className="s0-lede">{t('chooser.sub')}</p>
+            <div className="s0-chooser">
+              <button type="button" className="s0-btn" style={{ maxWidth: 360 }} onClick={() => setPhase('website')}>
+                {t('chooser.website')} →
+              </button>
+              <button type="button" className="s0-btn-ghost" style={{ maxWidth: 360 }} onClick={() => chooseSupplied('chooser')}>
+                {t('chooser.material')}
+              </button>
+            </div>
+            <button type="button" className="s0-today2-defer" style={{ marginTop: 20 }} onClick={() => chooseSupplied('instagram')}>
+              {t('chooser.instagram')}
             </button>
           </>
         )}
@@ -185,7 +234,34 @@ export function BusinessStartPage() {
               <button type="submit" className="s0-btn" disabled={url.trim().length === 0}>
                 {t('website.cta')}
               </button>
+              <button type="button" className="s0-today2-defer" style={{ marginLeft: 16 }} onClick={() => chooseSupplied('chooser')}>
+                {t('chooser.material')}
+              </button>
             </form>
+          </>
+        )}
+
+        {phase === 'material' && (
+          <>
+            <h1 className="s0-h1">{t('material.title')}</h1>
+            <p className="s0-lede">{t(origin === 'instagram' ? 'material.sub.instagram' : 'material.sub')}</p>
+            <form onSubmit={runMaterial} style={{ maxWidth: 560 }}>
+              <div className="s0-field">
+                <textarea
+                  className="s0-blk-input"
+                  rows={7}
+                  placeholder={t('material.placeholder')}
+                  value={material}
+                  onChange={(e) => setMaterial(e.target.value)}
+                  required
+                  autoFocus
+                />
+              </div>
+              <button type="submit" className="s0-btn" disabled={material.trim().length < 20}>
+                {t('material.cta')}
+              </button>
+            </form>
+            <p className="s0-hint" style={{ marginTop: 14, maxWidth: 560 }}>{t('material.note')}</p>
           </>
         )}
 
@@ -206,6 +282,7 @@ export function BusinessStartPage() {
             discovered={discovered}
             error={error}
             onRetry={() => { setPhase('website'); setError(null); }}
+            onSupply={() => chooseSupplied('thin_recovery')}
             onConfirm={confirmProfile}
             onContinue={() => navigate(`/b/${business.id}/talk`)}
             t={t}
@@ -224,33 +301,31 @@ function ResultView(props: {
   discovered: DiscoveredProfile[];
   error: string | null;
   onRetry: () => void;
+  onSupply: () => void;
   onConfirm: (pid: string, status: 'confirmed' | 'rejected') => void;
   onContinue: () => void;
   t: (k: string, v?: Record<string, string>) => string;
 }) {
-  const { name, resultState, ahaStatus, findings, discovered, error, onRetry, onConfirm, onContinue, t } = props;
+  const { name, resultState, ahaStatus, findings, discovered, error, onRetry, onSupply, onConfirm, onContinue, t } = props;
 
-  if (resultState === 'failed') {
-    return (
-      <>
-        <h1 className="s0-h1">{t('learn.fail.title')}</h1>
-        {error && <p className="s0-lede">{error}</p>}
-        <button type="button" className="s0-btn" style={{ maxWidth: 320 }} onClick={onRetry}>
-          {t('learn.fail.retry')}
-        </button>
-      </>
-    );
-  }
-  if (resultState === 'empty' || ahaStatus === 'insufficient') {
-    const title = resultState === 'empty' ? t('learn.empty.title') : t('aha.insufficient.title');
-    const body = resultState === 'empty' ? t('learn.empty.body') : t('aha.insufficient.body');
+  // Unreachable / unreadable / thin extraction: NEVER dead-end. Be honest about what BB could not establish,
+  // and offer a real continuation — supply material — rather than only "try another address".
+  if (resultState === 'failed' || resultState === 'empty' || (ahaStatus === 'insufficient' && findings.length === 0)) {
+    const title = resultState === 'failed' ? t('learn.fail.title') : resultState === 'empty' ? t('recover.empty.title') : t('recover.insufficient.title');
+    const body = resultState === 'failed' ? t('recover.fail.body') : resultState === 'empty' ? t('recover.empty.body') : t('recover.insufficient.body');
     return (
       <>
         <h1 className="s0-h1">{title}</h1>
-        <p className="s0-lede">{body}</p>
-        <button type="button" className="s0-btn" style={{ maxWidth: 320 }} onClick={onRetry}>
-          {t('learn.fail.retry')}
-        </button>
+        {error && resultState === 'failed' ? <p className="s0-lede">{error}</p> : <p className="s0-lede">{body}</p>}
+        <p className="s0-hint" style={{ maxWidth: 520 }}>{t('recover.gaps')}</p>
+        <div className="s0-chooser" style={{ marginTop: 18 }}>
+          <button type="button" className="s0-btn" style={{ maxWidth: 360 }} onClick={onSupply}>
+            {t('recover.supply')} →
+          </button>
+          <button type="button" className="s0-btn-ghost" style={{ maxWidth: 360 }} onClick={onRetry}>
+            {t('recover.retry')}
+          </button>
+        </div>
       </>
     );
   }

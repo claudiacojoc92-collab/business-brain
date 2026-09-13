@@ -1,6 +1,36 @@
 import type { EvidenceFragment, WebObservation } from '@bb/domain';
 import type { PageObservation } from './contracts';
 
+/** Stable, sanitized URI for one piece of founder-supplied material (never a fetched page). */
+export const suppliedUri = (n: number): string => `founder://supplied/${n}`;
+/** True when an observation/source URL is founder-supplied (declared), not an observed web page. */
+export const isSuppliedUrl = (u: string): boolean => (u ?? '').startsWith('founder://supplied/');
+
+/**
+ * Project founder-SUPPLIED material (one pasted text block) into DECLARED source observations for the shared
+ * synthesis path. Splits on blank lines into distinct "pieces the founder gave me" so findings can cite a
+ * specific piece; falls back to one observation. Provenance is 'declared' — never presented as an observed
+ * page. Empty/whitespace input → [] (the caller decides how to continue honestly).
+ */
+export function suppliedMaterialToObservations(material: string, lang: string | null = null): PageObservation[] {
+  const whole = (material ?? '').trim();
+  if (!whole) return [];
+  const MAX_PIECES = 8;
+  const PIECE_CHARS = 4000;
+  const segments = whole.split(/\n\s*\n+/).map((s) => s.trim()).filter((s) => s.length > 0);
+  const pieces = (segments.length > 1 ? segments : [whole]).slice(0, MAX_PIECES);
+  const multi = pieces.length > 1;
+  return pieces.map((text, i) => ({
+    ref: multi ? `What you told me (${i + 1})` : 'What you told me',
+    url: suppliedUri(i + 1),
+    pageType: 'founder_supplied',
+    title: null,
+    text: text.length > PIECE_CHARS ? text.slice(0, PIECE_CHARS) : text,
+    lang,
+    provenance: 'declared' as const,
+  }));
+}
+
 /**
  * Canonical host for a founder-entered business URL, without a leading www.
  *
@@ -64,7 +94,7 @@ function toPageObservations(items: PageItem[]): PageObservation[] {
     if (!it.url || seen.has(it.url)) continue;
     if (it.text.trim().length === 0) continue;
     seen.add(it.url);
-    obs.push({ ref: labelFor(it.pageType, it.url, it.title), url: it.url, pageType: it.pageType, title: it.title, text: it.text, lang: it.lang });
+    obs.push({ ref: labelFor(it.pageType, it.url, it.title), url: it.url, pageType: it.pageType, title: it.title, text: it.text, lang: it.lang, provenance: 'observed' });
   }
   const counts = new Map<string, number>();
   return obs.map((o) => {

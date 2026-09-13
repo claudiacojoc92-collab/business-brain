@@ -10,6 +10,8 @@ import {
   type RawCapture,
   type WebObservation,
   type CorpusRevision,
+  type EvidenceFragment,
+  makeFragment,
   buildRawCapture,
   buildWebObservation,
   corpusRevisionId,
@@ -17,6 +19,7 @@ import {
 } from '@bb/domain';
 import {
   UNDERSTANDING_PROFILE_VERSION,
+  SUPPLIED_UNDERSTANDING_PROFILE_VERSION,
   type IWebsiteIngestionPort,
   type ISocialDiscoveryPort,
   type IUnderstandingModelPort,
@@ -28,8 +31,9 @@ import {
   type DiscoveredProfile,
   type PageObservation,
   type WebsiteIngestionResult,
+  type LearnFromMaterialParams,
 } from './contracts';
-import { bridgeFragmentsToObservations, webObservationsToPageObservations, hostOf } from './bridge';
+import { bridgeFragmentsToObservations, webObservationsToPageObservations, suppliedMaterialToObservations, hostOf } from './bridge';
 import { assertWellFormed, validateAha, type ValidatedFinding } from './validation';
 
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
@@ -147,11 +151,62 @@ export class LearnBusinessService {
       return { state: ing.state, pagesRead: ing.pagesRead, discovered, aha: { status: 'insufficient', findings: [] } };
     }
 
-    const out = await this.deps.model.synthesize({
-      businessName: p.businessName,
-      observations,
-      interfaceLanguage: p.interfaceLanguage,
-    });
+    const persisted = await this.synthesizeAndPersist(p.businessId, p.businessName, observations, p.interfaceLanguage, UNDERSTANDING_PROFILE_VERSION);
+
+    await this.deps.website.setIngestion(p.businessId, ing.state, true);
+    return {
+      state: ing.state,
+      pagesRead: ing.pagesRead,
+      discovered,
+      understandingId: persisted.understandingId,
+      aha: persisted.aha,
+    };
+  }
+
+  /**
+   * Founder-SUPPLIED material path — the founder pastes text describing the business (bio, captions, offer
+   * copy…). It persists as DECLARED evidence (never observed website evidence, never a business correction),
+   * projects into DECLARED source observations, and runs the SAME synthesis + grounding + anti-transplant gate
+   * as the website path. No website, no fetch, no fake page. Provenance stays honest end-to-end.
+   */
+  async learnFromMaterial(p: LearnFromMaterialParams): Promise<LearnBusinessResult> {
+    const observations = suppliedMaterialToObservations(p.material);
+    if (observations.length === 0) {
+      return { state: 'empty', pagesRead: 0, discovered: [], aha: { status: 'insufficient', findings: [] } };
+    }
+
+    // Persist the supplied material as append-only DECLARED evidence (provenance record; private).
+    const fragments: EvidenceFragment[] = observations.map((o) =>
+      makeFragment({
+        founderId: p.founderId,
+        source: 'founder_supplied',
+        platform: null,
+        sourceUrl: o.url, // stable founder://supplied/N URI — declared, never a fetched page
+        confidenceKind: 'declared',
+        visibility: 'private',
+        occurredAt: null,
+        payload: { text: o.text, kind: 'founder_supplied' },
+      }),
+    );
+    await this.deps.evidenceRepo.appendMany(fragments);
+
+    const persisted = await this.synthesizeAndPersist(p.businessId, p.businessName, observations, p.interfaceLanguage, SUPPLIED_UNDERSTANDING_PROFILE_VERSION);
+    return { state: 'synced', pagesRead: observations.length, discovered: [], understandingId: persisted.understandingId, aha: persisted.aha };
+  }
+
+  /**
+   * Shared synthesis + persistence over NORMALIZED SOURCE OBSERVATIONS (observed and/or declared) — one path,
+   * not "Website Brain + Paste Brain". Runs the propose-only model, the fail-closed structural gate, the
+   * deterministic grounding/anti-transplant Aha gate, then persists the governed understanding + Aha.
+   */
+  private async synthesizeAndPersist(
+    businessId: string,
+    businessName: string,
+    observations: PageObservation[],
+    interfaceLanguage: string,
+    profileVersion: string,
+  ): Promise<{ understandingId: string; aha: { status: 'produced' | 'insufficient'; findings: ValidatedFinding[] } }> {
+    const out = await this.deps.model.synthesize({ businessName, observations, interfaceLanguage });
     assertWellFormed(out); // fail closed on malformed synthesis
 
     const modelId = out.modelId ?? 'anthropic';
@@ -159,8 +214,8 @@ export class LearnBusinessService {
 
     const snap = await this.deps.understanding.save({
       id: generateId(),
-      businessId: p.businessId,
-      profileVersion: UNDERSTANDING_PROFILE_VERSION,
+      businessId,
+      profileVersion,
       contentHash,
       sourceRefCount: observations.length,
       sourceLanguage: out.sourceLanguage ?? observations[0]?.lang ?? null,
@@ -171,22 +226,15 @@ export class LearnBusinessService {
     const validated = validateAha(out.aha, observations);
     const ahaRec = await this.deps.aha.save({
       id: generateId(),
-      businessId: p.businessId,
+      businessId,
       understandingSnapshotId: snap.id,
-      language: p.interfaceLanguage,
-      contentHash: sha256(contentHash + '|' + p.interfaceLanguage + '|' + JSON.stringify(validated.findings)),
+      language: interfaceLanguage,
+      contentHash: sha256(contentHash + '|' + interfaceLanguage + '|' + JSON.stringify(validated.findings)),
       status: validated.status,
       findings: validated.findings,
       modelId,
     });
 
-    await this.deps.website.setIngestion(p.businessId, ing.state, true);
-    return {
-      state: ing.state,
-      pagesRead: ing.pagesRead,
-      discovered,
-      understandingId: snap.id,
-      aha: { status: ahaRec.status, findings: ahaRec.findings },
-    };
+    return { understandingId: snap.id, aha: { status: ahaRec.status, findings: ahaRec.findings } };
   }
 }

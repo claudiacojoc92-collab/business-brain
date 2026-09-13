@@ -11,6 +11,8 @@ import type { KyselyDB } from '@bb/infrastructure';
 export type FounderEventType =
   | 'session_started'
   | 'onboarding_url_submitted'
+  | 'source_material_submitted'
+  | 'source_instagram_interest'
   | 'first_understanding_viewed'
   | 'first_value_reached'
   | 'understanding_expanded'
@@ -40,6 +42,9 @@ export type FounderEventType =
 const CLIENT_EMITTABLE = new Set<FounderEventType>([
   'onboarding_url_submitted', 'first_understanding_viewed', 'first_value_reached',
   'understanding_expanded', 'evidence_source_opened', 'correction_held_viewed', 'today_viewed',
+  // Instagram-first DEMAND signal (a founder who has no website but uses Instagram). It records interest so we
+  // can later size the connector; it NEVER connects Instagram or exchanges a token.
+  'source_instagram_interest',
 ]);
 export const isClientEmittable = (t: string): t is FounderEventType => CLIENT_EMITTABLE.has(t as FounderEventType);
 

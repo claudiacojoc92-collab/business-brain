@@ -190,6 +190,23 @@ export function learnBusiness(businessId: string, url: string): Promise<LearnRes
   });
 }
 
+/**
+ * Founder-supplied material path — the founder pastes text about the business (bio/captions/offer copy). It
+ * persists as DECLARED evidence and runs the SAME understanding + Aha synthesis. No website required.
+ * `origin` is a demand/telemetry hint ('chooser' | 'thin_recovery' | 'instagram').
+ */
+export function learnFromMaterial(businessId: string, material: string, origin?: string): Promise<LearnResult> {
+  return request<LearnResult>(`v1/businesses/${encodeURIComponent(businessId)}/learn/material`, {
+    method: 'POST',
+    body: JSON.stringify({ material, ...(origin ? { origin } : {}) }),
+  });
+}
+
+/** Fire-and-forget client-emittable founder event (server ignores non-allowlisted types). Never throws. */
+export function emitEvent(eventType: string, opts: { businessId?: string; surface?: string; metadata?: Record<string, unknown> } = {}): void {
+  void request('v1/events', { method: 'POST', body: JSON.stringify({ eventType, ...opts }) }).catch(() => { /* telemetry never affects UX */ });
+}
+
 export interface AhaResponse {
   state: 'none' | 'produced' | 'insufficient';
   findings?: AhaFinding[];
