@@ -39,6 +39,18 @@ function materialAvailable(required: string, available: ReadonlySet<string>): bo
   return false;
 }
 
+/**
+ * CANONICAL PROJECTION BOUNDARY — which founder-owned state is MATERIAL that can satisfy execution readiness.
+ * ONLY `kind === 'resource'` is material. A `constraint`, `decision`, `preference`, `business_correction`,
+ * `goal`, `horizon`, `intention`, or `challenge_permission` each has its OWN semantic channel and must NEVER
+ * enter availableMaterial — e.g. a constraint "I can't access the color pages" must not make "the color pages"
+ * look available, and a decision "we won't use customer photography" must not license that photography. The
+ * separation is KIND-based, never natural-language guessing about the statement text.
+ */
+export function founderMaterialStatements(states: readonly { kind: string; statement: string }[]): string[] {
+  return states.filter((s) => s.kind === 'resource').map((s) => (s.statement ?? '').trim()).filter(Boolean);
+}
+
 export function deriveReadiness(action: Action, outcomes: Map<string, ActionStateEntry>, inputs: ReadinessInputs): ActionReadiness {
   const terminal = outcomes.get(action.actionId);
   if (terminal) return { actionId: action.actionId, readiness: terminal.outcome, blocker: null }; // done|deferred|skipped

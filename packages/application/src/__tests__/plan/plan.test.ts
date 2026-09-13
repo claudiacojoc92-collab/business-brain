@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect } from 'vitest';
-import { PlanService, validatePlan, deriveReadiness, detectActionKeyLeaks } from '../../plan/index';
+import { PlanService, validatePlan, deriveReadiness, detectActionKeyLeaks, founderMaterialStatements } from '../../plan/index';
 import type { IPlanRepository, IPlanModelPort, PlanStrategyView, PlanDraft, PlanVersion, PlanLifecycleEvent, ActionStateEntry, CreateHandoff, PlanGenerationTrace } from '../../plan/contracts';
 
 function inMemoryRepo() {
@@ -342,6 +342,83 @@ describe('Slice 5 — blocked-move resolution semantics (P0)', () => {
     await expect(service.recordActionResolution('B', 'f1', 'a', 'resource', '   ', 'en')).rejects.toThrow(/statement/i);
     const noWriter = new PlanService({ plan: inMemoryRepo().repo, model: modelReturning(materialDraft('x')), currentStrategy: async () => STRATEGY, clock: () => 't' });
     await expect(noWriter.recordActionResolution('B', 'f1', 'a', 'resource', 'y', 'en')).rejects.toThrow(/not configured/i);
+  });
+});
+
+// ── founder_state KIND BOUNDARY: only RESOURCE is material; constraint/decision/correction never pollute ──
+describe('Slice 5 — founder_state kind boundary (only resource feeds availableMaterial)', () => {
+  const act = (requiredMaterial: string[]): any => ({ actionId: 'a', priorityId: 'p', what: 'x', why: 'y', doneDefinition: 'z', effortHint: null, leadsToCreate: false, requiredMaterial, prerequisites: [], planTimeFeasible: true });
+  const readinessFrom = (required: string, states: { kind: string; statement: string }[]) =>
+    deriveReadiness(act([required]), new Map(), { strategyStale: false, decisionNeeded: new Set<string>(), availableMaterial: new Set(founderMaterialStatements(states)) });
+  // deterministic matcher, exposed to prove the danger is REAL (a poisoned set WOULD match) — so the KIND filter is load-bearing
+  const wouldMatchIfPoisoned = (required: string, statement: string) =>
+    deriveReadiness(act([required]), new Map(), { strategyStale: false, decisionNeeded: new Set<string>(), availableMaterial: new Set([statement]) }).readiness;
+
+  it('CASE A — a RESOURCE for the exact required material makes it AVAILABLE (ready)', () => {
+    const states = [{ kind: 'resource', statement: 'access to East Fork color pages' }];
+    expect(founderMaterialStatements(states)).toEqual(['access to East Fork color pages']);
+    expect(readinessFrom('access to East Fork color pages', states).readiness).toBe('ready');
+  });
+
+  it('CASE B — a CONSTRAINT echoing the material stays BLOCKED (missing_material), though it WOULD match if poisoned', () => {
+    const states = [{ kind: 'constraint', statement: 'I can’t access the East Fork color pages' }];
+    expect(founderMaterialStatements(states)).toEqual([]);                          // kind filter drops the constraint
+    const r = readinessFrom('East Fork color pages', states);
+    expect(r.readiness).toBe('blocked');
+    expect(r.blocker?.kind).toBe('missing_material');
+    // proof the risk was real: had the constraint entered the set, ≥3-token containment WOULD have unblocked it
+    expect(wouldMatchIfPoisoned('East Fork color pages', 'I can’t access the East Fork color pages')).toBe('ready');
+  });
+
+  it('CASE C — a DECISION not to use a material does NOT license it (stays blocked), though it WOULD match if poisoned', () => {
+    const states = [{ kind: 'decision', statement: 'We won’t use customer product photography' }];
+    expect(founderMaterialStatements(states)).toEqual([]);
+    expect(readinessFrom('customer product photography', states).blocker?.kind).toBe('missing_material');
+    expect(wouldMatchIfPoisoned('customer product photography', 'We won’t use customer product photography')).toBe('ready');
+  });
+
+  it('CASE D — a BUSINESS_CORRECTION mentioning the material words is never material availability', () => {
+    const states = [{ kind: 'business_correction', statement: 'We have no customer product photography' }];
+    expect(founderMaterialStatements(states)).toEqual([]);
+    expect(readinessFrom('customer product photography', states).readiness).toBe('blocked');
+  });
+
+  it('mixed kinds: only the resource statement survives; constraint/decision/preference/correction are dropped', () => {
+    expect(founderMaterialStatements([
+      { kind: 'resource', statement: 'the offer one-pager' },
+      { kind: 'constraint', statement: 'I can’t film video' },
+      { kind: 'decision', statement: 'lead with fractional CFOs' },
+      { kind: 'preference', statement: 'I prefer LinkedIn' },
+      { kind: 'goal', statement: 'win 10 clients' },
+      { kind: 'business_correction', statement: 'we only serve seed startups' },
+    ])).toEqual(['the offer one-pager']);
+  });
+
+  // End-to-end through PlanService, mirroring the FIXED composition-root fold (licensedMaterial via founderMaterialStatements).
+  it('E2E — recording a CONSTRAINT that echoes the required material does NOT unblock the action; only a RESOURCE does', async () => {
+    const materialDraft = validDraft({ priorities: [{ ...validDraft().priorities[0]!, actions: [
+      { key: 'm1', what: 'Publish the proof using the color pages', why: 'proof executes the bet', doneDefinition: 'published', effortHint: 'a_session', leadsToCreate: true, requiredMaterial: ['East Fork color pages'], prerequisiteKeys: [], planTimeFeasible: true },
+    ] }], currentFocusIndex: 0 });
+    const repo = inMemoryRepo();
+    const states: { kind: string; statement: string }[] = [];
+    const service = new PlanService({
+      plan: repo.repo, model: modelReturning(materialDraft),
+      // EXACT composition-root projection: only founderMaterialStatements(resource) join licensed material.
+      currentStrategy: async () => ({ ...STRATEGY, licensedMaterial: [...STRATEGY.licensedMaterial, ...founderMaterialStatements(states)] }),
+      recordFounderState: async (i) => { states.push({ kind: i.kind, statement: i.statement }); },
+      clock: () => '2026-01-01T00:00:00.000Z',
+    });
+    const plan = (await service.generateProposedPlan('B'))!;
+    await service.acceptPlan('B', plan.planVersionId);
+    const blockedId = (await service.today('B'))!.blockedFallback!.action.actionId;
+    // founder can't get it → constraint echoing the exact material words
+    await service.recordActionResolution('B', 'f1', blockedId, 'constraint', 'I can’t access the East Fork color pages', 'en');
+    const afterConstraint = (await service.today('B'))!;
+    expect(afterConstraint.ready.map((a) => a.actionId)).not.toContain(blockedId);   // STILL blocked — no pollution
+    expect(afterConstraint.blockedFallback!.blocker.kind).toBe('missing_material');
+    // only a RESOURCE for the material actually unblocks it
+    await service.recordActionResolution('B', 'f1', blockedId, 'resource', 'East Fork color pages', 'en');
+    expect((await service.today('B'))!.ready.map((a) => a.actionId)).toContain(blockedId);
   });
 });
 

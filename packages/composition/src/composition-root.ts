@@ -98,6 +98,7 @@ import {
   VoiceService,
   allowedBusinessFacts,
   PlanService,
+  founderMaterialStatements,
   CarouselService,
   resolveBrandContext,
   PhotoLedService,
@@ -371,7 +372,11 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
       const cur = await strategyService.getCurrent(bid);
       if (!cur) return null;
       const c = cur.record.bundle.core; const br = cur.record.bundle.branch;
-      const licensedMaterial = [c.offerDirection, c.positioningDirection, ...(await founderStateRepo.listActive(bid)).filter((s) => s.kind !== 'business_correction').map((s) => s.statement)].map((s) => s.trim()).filter(Boolean);
+      // KIND BOUNDARY: only `resource` founder-state is material (founderMaterialStatements). A constraint or a
+      // decision must NEVER enter licensedMaterial → availableMaterial and falsely satisfy missing_material
+      // readiness. constraints flow to the planner via founderIntelligence.constraints; decisions live in the
+      // strategy bundle. This mirrors the carousel's proofFacts (resource-only) treatment.
+      const licensedMaterial = [c.offerDirection, c.positioningDirection, ...founderMaterialStatements(await founderStateRepo.listActive(bid))].map((s) => s.trim()).filter(Boolean);
       return {
         strategyVersionId: cur.record.id, goal: c.goal, coreBet: c.coreBet.priority,
         decisions: cur.record.bundle.decisions.map((d) => d.title).filter(Boolean),
@@ -398,8 +403,10 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
       };
     },
     // Bounded write for a blocked-move resolution: a durable founder_state fact scoped to the action. No strategy
-    // regeneration (unlike StrategyService.recordFounderInput) — a `resource` statement folds into licensedMaterial
-    // via currentStrategy above, so the action re-derives to READY on the next today() read.
+    // regeneration (unlike StrategyService.recordFounderInput). ONLY a `resource` statement folds into
+    // licensedMaterial (via founderMaterialStatements in currentStrategy above), so a resource re-derives the
+    // action to READY on the next today() read; a `constraint` feeds the plan envelope and a `decision` feeds
+    // decision context only — neither ever enters availableMaterial.
     recordFounderState: async ({ businessId, founderId, actionId, kind, statement, language }) => {
       await founderStateRepo.append({ id: generateId(), businessId, founderId, kind, statement, scope: actionId, language, sourceTurnId: null });
     },
