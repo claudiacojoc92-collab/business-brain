@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
-import { learnFromMaterial, learnBusiness, submitCorrection } from '../api/client';
+import { learnFromMaterial, learnFromMaterialFile, learnBusiness, submitCorrection } from '../api/client';
 
 /**
  * Add context — the persistent "something changed / add material / add a link" strategist action, a global
@@ -47,6 +47,7 @@ function AddContextDrawer({ onClose }: { onClose: () => void }) {
 
   const [intent, setIntent] = useState<Intent | null>(null);
   const [text, setText] = useState('');
+  const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState('');
   const [subject, setSubject] = useState<Subject>('offer');
   const [busy, setBusy] = useState(false);
@@ -56,8 +57,15 @@ function AddContextDrawer({ onClose }: { onClose: () => void }) {
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
-    try { const raw = await f.text(); setText((prev) => (prev.trim() ? `${prev}\n\n${raw}` : raw).slice(0, 20000)); }
-    catch { setError(t('add.err.file')); }
+    setError(null);
+    // Plain text/markdown → read inline into the box; PDF/Word → send the file (server extracts the text).
+    const isText = /\.(txt|md|markdown)$/i.test(f.name) || f.type.startsWith('text/');
+    if (isText) {
+      try { const raw = await f.text(); setText((prev) => (prev.trim() ? `${prev}\n\n${raw}` : raw).slice(0, 20000)); setFile(null); }
+      catch { setError(t('add.err.file')); }
+    } else {
+      setFile(f);
+    }
   }
 
   async function submit() {
@@ -65,6 +73,11 @@ function AddContextDrawer({ onClose }: { onClose: () => void }) {
     setBusy(true); setError(null);
     try {
       if (intent === 'material') {
+        if (file) {
+          await learnFromMaterialFile(businessId, file);
+          setDone(t('add.done.material'));
+          return;
+        }
         if (text.trim().length < 20) { setError(t('add.err.short')); setBusy(false); return; }
         await learnFromMaterial(businessId, text.trim(), 'add_context');
         setDone(t('add.done.material'));
@@ -80,7 +93,7 @@ function AddContextDrawer({ onClose }: { onClose: () => void }) {
     } catch { setError(t('add.err.generic')); } finally { setBusy(false); }
   }
 
-  const reset = () => { setIntent(null); setText(''); setUrl(''); setDone(null); setError(null); };
+  const reset = () => { setIntent(null); setText(''); setFile(null); setUrl(''); setDone(null); setError(null); };
 
   return (
     <>
@@ -134,9 +147,13 @@ function AddContextDrawer({ onClose }: { onClose: () => void }) {
                 </div>
               ) : intent === 'material' ? (
                 <div className="s0-blk-form">
-                  <textarea className="s0-blk-input" rows={6} placeholder={t('add.material.ph')} value={text} onChange={(e) => setText(e.target.value)} disabled={busy} />
+                  {file ? (
+                    <div className="s0-add-attached">{t('add.material.attached', { name: file.name })} <button type="button" className="s0-today2-defer" onClick={() => setFile(null)} disabled={busy}>{t('add.material.remove')}</button></div>
+                  ) : (
+                    <textarea className="s0-blk-input" rows={6} placeholder={t('add.material.ph')} value={text} onChange={(e) => setText(e.target.value)} disabled={busy} />
+                  )}
                   <label className="s0-add-file">
-                    <input type="file" accept=".txt,.md,text/plain,text/markdown" onChange={onFile} disabled={busy} />
+                    <input type="file" accept=".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown" onChange={onFile} disabled={busy} />
                     <span>{t('add.material.file')}</span>
                   </label>
                 </div>

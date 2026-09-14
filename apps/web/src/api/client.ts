@@ -202,6 +202,25 @@ export function learnFromMaterial(businessId: string, material: string, origin?:
   });
 }
 
+/**
+ * Founder-supplied material as a FILE (PDF / Word / text) — a brochure, offer deck, etc. The API extracts
+ * text safely (server-side pdf-parse/mammoth) and ingests it as DECLARED material (same lane as pasted text).
+ */
+export async function learnFromMaterialFile(businessId: string, file: File): Promise<LearnResult> {
+  const token = getToken();
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch(`${API_BASE}v1/businesses/${encodeURIComponent(businessId)}/learn/material/file`, {
+    method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: fd,
+  });
+  if (!res.ok) {
+    let code = 'UNKNOWN_ERROR'; let message = res.statusText;
+    try { const b = await res.json(); code = b?.error?.code ?? code; message = b?.error?.message ?? message; } catch { /* keep */ }
+    throw new ApiError(res.status, code, message);
+  }
+  return res.json() as Promise<LearnResult>;
+}
+
 /** Fire-and-forget client-emittable founder event (server ignores non-allowlisted types). Never throws. */
 export function emitEvent(eventType: string, opts: { businessId?: string; surface?: string; metadata?: Record<string, unknown> } = {}): void {
   void request('v1/events', { method: 'POST', body: JSON.stringify({ eventType, ...opts }) }).catch(() => { /* telemetry never affects UX */ });

@@ -1,7 +1,10 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import multipart from '@fastify/multipart';
 import type { ServerDeps } from '../server';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
 import { recordFounderEvent } from '../telemetry/founder-events';
+import { detectType, assertWithinBounds, MAX_BYTES } from '../connectors/upload/detect';
+import { extractPdf, extractDocx, extractText } from '../connectors/upload/extract';
 
 interface AuthedUser {
   sub: string;
@@ -70,6 +73,32 @@ export function registerBusinessIntelligenceRoutes(server: FastifyInstance, deps
     });
     recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'source_material_submitted', surface: 'onboarding', metadata: { origin: (body.origin ?? 'chooser').slice(0, 32), chars: material.length } });
     await reply.status(200).send(result);
+  });
+
+  // Founder-supplied material as a FILE (PDF / Word / text) — e.g. a brochure. Reuses the existing safe,
+  // text-only extractors (pdf-parse / mammoth; PDF JS + DOCX macros are never executed) then ingests the
+  // extracted text as DECLARED material — never observed, never business truth. Scoped multipart so it
+  // doesn't collide with the dev upload route's own registration.
+  server.register(async (scope) => {
+    await scope.register(multipart, { limits: { fileSize: MAX_BYTES, files: 1 } });
+    scope.post('/v1/businesses/:id/learn/material/file', async (request: FastifyRequest, reply: FastifyReply) => {
+      const { founderId, business } = await requireBusiness(request);
+      const file = await (request as unknown as { file: () => Promise<{ filename: string; toBuffer: () => Promise<Buffer> } | undefined> }).file();
+      if (!file) throw new ValidationError('FILE_REQUIRED', 'Attach a file.');
+      const bytes = await file.toBuffer();
+      assertWithinBounds(bytes);
+      const type = detectType(bytes);
+      if (type === 'unsupported') throw new ValidationError('UNSUPPORTED_FILE', 'I can read PDF, Word, or text files.');
+      const doc = type === 'pdf' ? await extractPdf(bytes, file.filename) : type === 'docx' ? await extractDocx(bytes, file.filename) : extractText(bytes, file.filename);
+      const material = doc.units.map((u) => u.text).join('\n\n').slice(0, 20000);
+      if (material.trim().length < 20) throw new ValidationError('MATERIAL_EMPTY', 'I couldn’t read enough text from that file.');
+      const account = await deps.founderAccountService.getById(founderId);
+      const result = await deps.learnBusinessService.learnFromMaterial({
+        businessId: business.id, founderId, businessName: business.name, material, interfaceLanguage: account?.interfaceLocale ?? 'en',
+      });
+      recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'source_material_submitted', surface: 'onboarding', metadata: { origin: 'file', filetype: type, chars: material.length } });
+      await reply.status(200).send(result);
+    });
   });
 
   server.get('/v1/businesses/:id/aha', async (request: FastifyRequest, reply: FastifyReply) => {

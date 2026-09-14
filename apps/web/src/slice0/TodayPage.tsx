@@ -238,11 +238,17 @@ export function TodayPage() {
 
             <div className="s0-today2-foot">
               <div className="s0-today2-actions">
+                {/* Capability-aware priority: when BB can help execute (content→Create, otherwise reason it
+                    through in Talk), the primary action is to WORK ON IT, not "mark done". */}
                 {move.canCreate ? (
                   <button type="button" className="s0-btn" disabled={busy === move.actionId} onClick={() => makeIt(move.actionId)}>{busy === move.actionId ? t('today2.working') : `${t('today2.makeit')} →`}</button>
+                ) : (
+                  <button type="button" className="s0-btn" disabled={busy === move.actionId} onClick={() => talk.open()}>{`${t('today2.workwith')} →`}</button>
+                )}
+                <button type="button" className="s0-btn-ghost" disabled={busy === move.actionId} onClick={() => outcome(move.actionId, 'done')}>{t('today2.markdone')}</button>
+                {move.canCreate ? (
+                  <button type="button" className="s0-btn-ghost" disabled={busy === move.actionId} onClick={() => talk.open()}>{t('today2.help')}</button>
                 ) : null}
-                <button type="button" className={move.canCreate ? 's0-btn-ghost' : 's0-btn'} disabled={busy === move.actionId} onClick={() => outcome(move.actionId, 'done')}>{t('today2.markdone')}</button>
-                <button type="button" className="s0-btn-ghost" disabled={busy === move.actionId} onClick={() => talk.open()}>{t('today2.help')}</button>
                 <button type="button" className="s0-today2-defer" disabled={busy === move.actionId} onClick={() => outcome(move.actionId, 'deferred')}>{t('today2.nottoday')}</button>
               </div>
 
