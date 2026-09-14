@@ -45,9 +45,16 @@ function windowTranscript(turns: { role: 'founder' | 'bb'; content: string }[]):
   return out.reverse();
 }
 
+// The interview builds a CURRENT-STATE baseline before any recommendation — not just the founder's goal, but
+// how the business markets itself TODAY, what already works, and what capacity exists. These seed the adaptive
+// conversation (the model still asks only what it can't already observe, and may deem itself ready early).
 const CORE_NEEDS = [
-  { key: 'goal', whatMissing: "The founder's primary goal", whyMatters: 'Sets what the whole strategy optimizes for.' },
+  { key: 'goal', whatMissing: "The founder's primary goal — and roughly where they want the business in 3, 6, and 12 months", whyMatters: 'Sets what the strategy optimizes for, across horizons.' },
   { key: 'horizon', whatMissing: "The founder's time horizon", whyMatters: 'Bounds what is realistic to pursue.' },
+  { key: 'current_marketing', whatMissing: 'What marketing the business does TODAY — channels, what content, who makes it, how often', whyMatters: "So BB builds on what's already running instead of rediscovering it." },
+  { key: 'acquisition_today', whatMissing: 'Where customers come from today, and what currently brings leads', whyMatters: 'Grounds the strategy in the real current acquisition path.' },
+  { key: 'whats_working', whatMissing: "What's already working, and what feels stuck, inconsistent, or has been tried", whyMatters: 'So BB reinforces strengths and targets the real problem — not a generic one.' },
+  { key: 'capacity', whatMissing: 'Capacity and constraints today — founder time, team, budget, content and sales capacity', whyMatters: 'So the plan fits what the founder can actually sustain.' },
 ];
 
 export interface FounderModelProjection {

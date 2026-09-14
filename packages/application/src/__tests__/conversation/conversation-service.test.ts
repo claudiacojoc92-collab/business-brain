@@ -54,7 +54,9 @@ describe('ConversationService', () => {
     const m = makeDeps({});
     const view = await new ConversationService(m.deps).startOrResume(P.businessId, P.founderId, P.businessName, P.language);
     expect(m.sessions).toHaveLength(1);
-    expect(m.needs.map((n) => n.key).sort()).toEqual(['goal', 'horizon']);
+    // R2A: the interview seeds a current-state baseline (founder goal/horizon + how the business markets
+    // itself today, acquisition, what works, capacity) — not just goal/horizon.
+    expect(m.needs.map((n) => n.key).sort()).toEqual(['acquisition_today', 'capacity', 'current_marketing', 'goal', 'horizon', 'whats_working']);
     expect(view.turns.filter((t) => t.role === 'bb')).toHaveLength(1);
   });
 

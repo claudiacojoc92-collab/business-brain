@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import { AppShell } from './AppShell';
+import { useAddContext } from './AddContextDrawer';
 import { isNotFound, LoadError } from './errors';
 import {
   getBusiness,
   startConversation,
   submitTurn,
   getFounderModel,
+  getUnderstanding,
   updateFounderState,
   updateObservation,
   generateAha2,
@@ -17,6 +19,7 @@ import {
   type FounderModel,
   type FounderStateItem,
   type Aha2Finding,
+  type UnderstandingView,
 } from '../api/client';
 
 type T = (k: string, v?: Record<string, string>) => string;
@@ -34,6 +37,8 @@ export function ConversationPage() {
   const [phase, setPhase] = useState<'loading' | 'talk' | 'aha2'>('loading');
   const [aha2, setAha2] = useState<{ state: string; findings?: Aha2Finding[] } | null>(null);
   const [model, setModel] = useState<FounderModel | null>(null);
+  const [understanding, setUnderstanding] = useState<UnderstandingView | null>(null);
+  const addCtx = useAddContext();
   const [genning, setGenning] = useState(false);
   const [loadErr, setLoadErr] = useState(false);   // B3 — transient load failure, distinct from a true 404
   const [actionError, setActionError] = useState<string | null>(null); // B1 — a primary action that failed
@@ -49,6 +54,7 @@ export function ConversationPage() {
     try {
       const b = await getBusiness(id);
       setBusiness(b);
+      try { setUnderstanding(await getUnderstanding(id)); } catch { /* baseline degrades gracefully */ }
       const existing = await getAha2(id);
       const view = await startConversation(id);
       setTurns(view.turns);
@@ -149,12 +155,11 @@ export function ConversationPage() {
         )}
 
         {phase === 'aha2' && (
-          <>
-            <Aha2View aha2={aha2} t={t} />
-            <button type="button" className="s0-btn" style={{ maxWidth: 340, marginTop: 30 }} onClick={() => navigate(`/b/${id}/strategy`)}>
-              {t('strategy.continue')}
-            </button>
-          </>
+          <BaselineView
+            understanding={understanding} model={model} aha2={aha2} t={t}
+            onConfirm={() => navigate(`/b/${id}/strategy`)}
+            onCorrect={() => addCtx.open()}
+          />
         )}
       </div>
     </AppShell>
@@ -210,36 +215,68 @@ function FounderModelPanel(props: { model: FounderModel | null; t: T; businessId
   );
 }
 
-function Aha2View(props: { aha2: { state: string; findings?: Aha2Finding[] } | null; t: T }) {
-  const { aha2, t } = props;
-  if (!aha2 || aha2.state === 'insufficient' || !aha2.findings || aha2.findings.length === 0) {
-    return (
-      <>
-        <h1 className="s0-h1">{t('aha2.insufficient.title')}</h1>
-        <p className="s0-lede">{t('aha2.insufficient.body')}</p>
-      </>
-    );
-  }
+/**
+ * The current-state BASELINE confirmation moment (R2A): "here's where I think the business is today",
+ * projected from what BB OBSERVED (the understanding snapshot) + what the founder TOLD BB (the founder model)
+ * + the cross-source insight (Aha 2). It invents nothing — unknowns stay unknown — and keeps the two lanes
+ * visibly separate. The founder confirms (→ Strategy) or corrects (→ Add context), so recommendation follows
+ * a grounded, confirmed baseline rather than jumping from website → strategy.
+ */
+function BaselineView(props: {
+  understanding: UnderstandingView | null; model: FounderModel | null;
+  aha2: { state: string; findings?: Aha2Finding[] } | null; t: T;
+  onConfirm: () => void; onCorrect: () => void;
+}) {
+  const { understanding, model, aha2, t, onConfirm, onCorrect } = props;
+  const u = understanding?.understanding;
+  const told: string[] = model ? [
+    ...(model.goal ? [model.goal.statement] : []),
+    ...(model.horizon ? [model.horizon.statement] : []),
+    ...model.resources.map((s) => s.statement),
+    ...model.decisions.map((s) => s.statement),
+    ...model.constraints.map((s) => s.statement),
+    ...model.preferences.map((s) => s.statement),
+    ...model.intentions.map((s) => s.statement),
+  ].filter(Boolean) : [];
+  const offer = (u?.offer?.summary ?? '').trim();
+  const audience = (u?.audience?.addressed ?? []).filter(Boolean);
+  const acquisition = (u?.acquisition?.visiblePaths ?? []).filter(Boolean);
+  const unknowns = (u?.unknowns ?? []).filter(Boolean);
+  const insight = (aha2?.state === 'produced' ? aha2.findings : [])?.map((f) => f.implication).filter(Boolean) ?? [];
+
+  const Row = (label: string, items: string[]) => items.length > 0 ? (
+    <div className="s0-base-row"><div className="s0-base-k">{label}</div><ul className="s0-base-list">{items.map((x, i) => <li key={i}>{x}</li>)}</ul></div>
+  ) : null;
+
   return (
     <>
-      <h1 className="s0-h1">{t('aha2.heading')}</h1>
-      <div className="s0-aha">
-        {aha2.findings.map((f, i) => (
-          <div key={i} className="s0-finding">
-            <p className="s0-finding-text">{f.implication}</p>
-            {(f.business.length > 0 || f.founder.length > 0 || f.observations.length > 0) && (
-              <details className="s0-why">
-                <summary>{t('aha2.why')}</summary>
-                <div className="s0-why-body">
-                  {f.founder.map((s, j) => <div key={`f${j}`}>{t('aha2.from.founder')}: {s}</div>)}
-                  {f.business.map((s, j) => <div key={`b${j}`}>{t('aha2.from.business')}: {s}</div>)}
-                  {f.observations.map((s, j) => <div key={`o${j}`}>{t('aha2.from.observed')}: {s}</div>)}
-                </div>
-              </details>
-            )}
-          </div>
-        ))}
+      <h1 className="s0-h1">{t('baseline.title')}</h1>
+      <p className="s0-lede">{t('baseline.sub')}</p>
+
+      <div className="s0-base-observed">
+        <div className="s0-base-lane">{t('baseline.observed')}</div>
+        {offer ? Row(t('baseline.offer'), [offer]) : null}
+        {Row(t('baseline.audience'), audience)}
+        {Row(t('baseline.acquisition'), acquisition)}
+      </div>
+
+      {told.length > 0 ? (
+        <div className="s0-base-told">
+          <div className="s0-base-lane">{t('baseline.told')}</div>
+          {Row(t('baseline.youtold'), told)}
+        </div>
+      ) : null}
+
+      {insight.length > 0 ? Row(t('baseline.standsout'), insight) : null}
+      {Row(t('baseline.unsure'), unknowns)}
+
+      <div className="s0-today2-foot">
+        <div className="s0-today2-actions">
+          <button type="button" className="s0-btn" onClick={onConfirm}>{t('baseline.confirm')} →</button>
+          <button type="button" className="s0-btn-ghost" onClick={onCorrect}>{t('baseline.correct')}</button>
+        </div>
       </div>
     </>
   );
 }
+

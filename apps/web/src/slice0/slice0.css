@@ -364,6 +364,17 @@
 .s0-voice-cta { font-size: 14px; color: var(--s0-ink-3); margin: 10px 0 14px; }
 .s0-voice-card .s0-composer { margin-top: 6px; }
 .s0-voice-card-foot { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 10px; }
+
+/* Current-state baseline — the "here's where the business is today" moment. The two lanes stay visibly
+   distinct: what BB OBSERVED (clay lane) vs what the founder TOLD BB (neutral lane). */
+.s0-base-observed, .s0-base-told { border-top: 1px solid var(--s0-line); padding-top: 18px; margin-top: 20px; }
+.s0-base-lane { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--s0-clay); margin-bottom: 14px; }
+.s0-base-told .s0-base-lane { color: var(--s0-ink-3); }
+.s0-base-row { margin-bottom: 14px; }
+.s0-base-k { font-size: 13px; color: var(--s0-ink-3); margin-bottom: 6px; }
+.s0-base-list { list-style: none; margin: 0; padding: 0; }
+.s0-base-list li { font-size: 15px; line-height: 1.55; color: var(--s0-ink); margin-bottom: 6px; max-width: 62ch; }
+.s0-base-told .s0-base-list li { color: var(--s0-ink-2); }
 .s0-voice-card .s0-linkbtn { margin-top: 10px; }
 .s0-voice-learned-line { font-size: 15px; line-height: 1.5; color: var(--s0-ink-2); padding: 6px 0; border-bottom: 1px solid var(--s0-line); }
 

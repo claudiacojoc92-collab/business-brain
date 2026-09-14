@@ -96,7 +96,7 @@ export function StrategyPage() {
       {banner}
       <StrategyView
         resp={resp!} current={phase === 'current'} from={from} t={t} busy={busy}
-        onAdopt={adopt} onChallenge={challenge} onToday={() => navigate(`/b/${id}/today`)} onCalibrate={() => navigate(`/b/${id}/voice`)}
+        onAdopt={adopt} onChallenge={challenge} onToday={() => navigate(`/b/${id}/today`)}
       />
     </AppShell>
   );
@@ -121,9 +121,9 @@ function InsufficientView({ from, t, busy, onGoal, onRegen }: { from: string; t:
   );
 }
 
-function StrategyView({ resp, current, from, t, busy, onAdopt, onChallenge, onToday, onCalibrate }: {
+function StrategyView({ resp, current, from, t, busy, onAdopt, onChallenge, onToday }: {
   resp: StrategyResp; current: boolean; from: string; t: T; busy: boolean;
-  onAdopt: () => void; onChallenge: (text: string) => void; onToday: () => void; onCalibrate: () => void;
+  onAdopt: () => void; onChallenge: (text: string) => void; onToday: () => void;
 }) {
   const s = resp.strategy!;
   const core = s.core;
@@ -195,10 +195,9 @@ function StrategyView({ resp, current, from, t, busy, onAdopt, onChallenge, onTo
       <div className="s0-strat2-foot">
         <div className="s0-strat2-actions">
           {current ? (
-            <>
-              <button type="button" className="s0-btn" onClick={onCalibrate}>{t('strat2.calibrate')} →</button>
-              <button type="button" className="s0-btn-ghost" onClick={onToday}>{t('strat2.today')} →</button>
-            </>
+            // Execution flows to Today. Content/voice is downstream and CONDITIONAL — BB recommends it when
+            // it's relevant, so Strategy no longer jumps straight into content (R2A journey correction).
+            <button type="button" className="s0-btn" onClick={onToday}>{t('strat2.today')} →</button>
           ) : (
             <button type="button" className="s0-btn" disabled={busy} onClick={onAdopt}>{busy ? t('strat2.forming') : t('strat2.adopt')}</button>
           )}

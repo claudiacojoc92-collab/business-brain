@@ -245,6 +245,8 @@ export interface UnderstandingView {
     offer?: { summary?: string; explicit?: string[]; unclear?: string[]; sourceRefs?: string[] };
     positioning?: { summary?: string; evidenceBacked?: string[]; implied?: string[]; sourceRefs?: string[] };
     audience?: { addressed?: string[]; appearsTargeted?: string[]; unknown?: string[]; sourceRefs?: string[] };
+    acquisition?: { visiblePaths?: string[]; sourceRefs?: string[] };
+    messaging?: { recurringThemes?: string[]; sourceRefs?: string[] };
     contradictions?: { statementA: string; statementB: string; tension: string; sourceRefs?: string[] }[];
     unknowns?: string[];
   };
