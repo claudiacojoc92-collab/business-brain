@@ -4,11 +4,18 @@ import { useLocale } from '../i18n/LocaleContext';
 import { LOCALES, type Locale } from '../i18n/messages';
 import { useSession } from './session';
 import { useTalk } from './TalkDrawer';
+import { useAddContext } from './AddContextDrawer';
 
 /** Talk to BB — the persistent global action. Opens the conversation drawer over the current surface. */
 function TalkButton({ label }: { label: string }) {
   const { open } = useTalk();
   return <button type="button" className="s0-talk" onClick={open}>{label}</button>;
+}
+
+/** Add context — the persistent "something changed / add material / add a link" global action. */
+function AddContextButton({ label }: { label: string }) {
+  const { open } = useAddContext();
+  return <button type="button" className="s0-addctx" onClick={open}>{label}</button>;
 }
 
 export function LanguageSwitcher() {
@@ -69,6 +76,8 @@ export function AppShell({
   const { id } = useParams();
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const { open: openTalk } = useTalk();
+  const { open: openAdd } = useAddContext();
 
   if (id) {
     const base = `/b/${id}`;
@@ -93,11 +102,13 @@ export function AppShell({
             </nav>
           </div>
           <div className="s0-topbar-right">
+            <AddContextButton label={t('nav.addctx')} />
             <TalkButton label={t('nav.talk')} />
             {/* /talk direct route preserved for deep-links/refresh (renders the full-page ConversationPage). */}
             <details className="s0-acct">
               <summary>{t('shell.account')}</summary>
               <div className="s0-acct-menu">
+                <button type="button" className="s0-linkbtn s0-acct-add" onClick={openAdd}>{t('nav.addctx')}</button>
                 <LanguageSwitcher />
                 <button type="button" className="s0-linkbtn" onClick={logout}>
                   {t('shell.signout')}
@@ -117,6 +128,9 @@ export function AppShell({
             </Link>
           ))}
         </nav>
+
+        {/* Mobile: Talk is hidden in the topbar, so surface it as a floating strategist action. */}
+        <button type="button" className="s0-talk-fab" onClick={openTalk} aria-label={t('nav.talk')}>{t('nav.talk')}</button>
       </div>
     );
   }

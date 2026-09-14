@@ -13,6 +13,7 @@ import { BusinessPage } from './slice0/BusinessPage';
 import { CreateIndexPage } from './slice0/CreateIndexPage';
 import { ConversationPage } from './slice0/ConversationPage';
 import { TalkProvider } from './slice0/TalkDrawer';
+import { AddContextProvider } from './slice0/AddContextDrawer';
 import { StrategyPage } from './slice0/StrategyPage';
 import { VoicePage } from './slice0/VoicePage';
 import { PlanPage } from './slice0/PlanPage';
@@ -66,6 +67,7 @@ export function App() {
       <BrowserRouter>
         <SessionProvider>
           <TalkProvider>
+          <AddContextProvider>
           <ErrorBoundary>
           <Routes>
             {/* Founder product entry — Business Brain owns `/` */}
@@ -102,6 +104,7 @@ export function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           </ErrorBoundary>
+          </AddContextProvider>
           </TalkProvider>
         </SessionProvider>
       </BrowserRouter>

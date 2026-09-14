@@ -104,6 +104,17 @@ function compose(
   }
 
   if (!move) {
+    // Today has no ready move but a blocked one is waiting on the founder — say so, don't imply "all set".
+    if (today?.state === 'active' && today.blocked) {
+      return {
+        stage: 'need_today',
+        interp: 'Something needs you before the next move.',
+        why: firstNonEmpty(today.blocked.what, betWhy) || 'A move on Today is waiting on you.',
+        primaryLabel: 'Resolve it on Today',
+        primaryTo: `${base}/today`,
+        tension,
+      };
+    }
     return {
       stage: 'need_today',
       interp: bet ? clip(bet, 150) : 'Your strategic bet is set.',

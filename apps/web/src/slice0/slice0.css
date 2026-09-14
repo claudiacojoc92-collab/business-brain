@@ -467,13 +467,55 @@
 .s0-nav a:hover { color: var(--s0-ink); }
 .s0-nav a.active { color: var(--s0-ink); box-shadow: inset 0 -2px 0 var(--s0-clay); }  /* clay = you-are-here (state) */
 
+/* Talk to BB — the global strategist action. Clay-accented so it reads as active/interactive, not a
+   disabled hairline pill. A leading clay dot signals "you can ask me about this". */
 .s0-talk {
-  font-family: var(--s0-sans); font-size: 13px; color: var(--s0-ink);
-  text-decoration: none; padding: 8px 14px;
-  border: 1px solid var(--s0-line-2); border-radius: 9px;
-  transition: border-color .2s var(--s0-ease), background .2s var(--s0-ease);
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--s0-sans); font-size: 13px; font-weight: 550; color: var(--s0-clay);
+  text-decoration: none; padding: 8px 15px; cursor: pointer; background: none;
+  border: 1px solid var(--s0-clay); border-radius: 9px;
+  transition: color .18s var(--s0-ease), background .18s var(--s0-ease), border-color .18s var(--s0-ease);
 }
-.s0-talk:hover { border-color: var(--s0-ink-3); background: rgba(236,231,221,0.03); }
+.s0-talk::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--s0-clay); flex: 0 0 auto; }
+.s0-talk:hover { color: var(--s0-clay-ink); background: var(--s0-clay); border-color: var(--s0-clay); }
+.s0-talk:hover::before { background: var(--s0-clay-ink); }
+/* Mobile: a compact clay Talk action floating above the bottom tab bar (topbar Talk is hidden on mobile). */
+.s0-talk-fab {
+  display: none; position: fixed; right: 16px; bottom: 76px; z-index: 55;
+  align-items: center; gap: 8px; padding: 11px 16px; border: none; border-radius: 999px; cursor: pointer;
+  background: var(--s0-clay); color: var(--s0-clay-ink); font-family: var(--s0-sans); font-size: 14px; font-weight: 600;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+}
+.s0-talk-fab::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--s0-clay-ink); }
+@media (max-width: 760px) { .s0-talk-fab { display: inline-flex; } }
+
+/* Add context — the secondary global action (ghost + "+"), quieter than the clay Talk action. */
+.s0-addctx {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--s0-sans); font-size: 13px; color: var(--s0-ink-2);
+  background: none; cursor: pointer; padding: 8px 14px;
+  border: 1px solid var(--s0-line-2); border-radius: 9px;
+  transition: color .18s var(--s0-ease), border-color .18s var(--s0-ease), background .18s var(--s0-ease);
+}
+.s0-addctx::before { content: "+"; font-size: 15px; line-height: 1; color: var(--s0-clay); }
+.s0-addctx:hover { color: var(--s0-ink); border-color: var(--s0-ink-3); background: rgba(236,231,221,0.03); }
+@media (max-width: 760px) { .s0-topbar .s0-addctx { display: none; } }
+.s0-acct-add::before { content: "+ "; color: var(--s0-clay); }
+
+/* Add-context drawer — founder-language intents (reuses the Talk drawer chrome). */
+.s0-add-intents { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 16px; }
+.s0-add-intent {
+  display: flex; flex-direction: column; gap: 2px; text-align: left; cursor: pointer;
+  background: var(--s0-bg-2); border: 1px solid var(--s0-line-2); border-radius: 10px; padding: 12px 14px;
+  transition: border-color .15s var(--s0-ease), background .15s var(--s0-ease);
+}
+.s0-add-intent:hover { border-color: var(--s0-ink-3); }
+.s0-add-intent.on { border-color: var(--s0-clay); background: rgba(193,125,79,0.08); }
+.s0-add-intent-t { font-size: 14px; font-weight: 550; color: var(--s0-ink); }
+.s0-add-intent-d { font-size: 12.5px; color: var(--s0-ink-3); line-height: 1.4; }
+.s0-add-file { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--s0-ink-3); cursor: pointer; }
+.s0-add-file input { font-size: 12px; color: var(--s0-ink-3); }
+.s0-add-done .s0-talk-msg { color: var(--s0-ink); }
 
 .s0-acct { position: relative; }
 .s0-acct > summary {
@@ -612,6 +654,17 @@
 .s0-why2-caret { color: var(--s0-ink-3); }
 .s0-why2-body { margin-top: 12px; }
 .s0-why2-body p { font-size: 14.5px; line-height: 1.6; color: var(--s0-ink-2); margin: 0 0 10px; max-width: 60ch; }
+/* Reasoning made visible (not a closed footnote): a clay-marked block whose first reason always shows,
+   with progressive depth for the rest. The clay left rule is the "this is BB's reasoning" cue. */
+.s0-why3 { margin-top: 20px; padding: 14px 16px; background: var(--s0-bg-2); border-radius: 10px; border-left: 2px solid var(--s0-clay); }
+.s0-why3-k { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--s0-clay); margin-bottom: 8px; }
+.s0-why3-lead { font-size: 15px; line-height: 1.6; color: var(--s0-ink); margin: 0; max-width: 60ch; }
+.s0-why3-more { margin-top: 10px; }
+.s0-why3-more summary { cursor: pointer; font-size: 13px; color: var(--s0-ink-3); list-style: none; }
+.s0-why3-more summary::-webkit-details-marker { display: none; }
+.s0-why3-more summary:hover { color: var(--s0-ink); }
+.s0-why3-body { margin-top: 10px; }
+.s0-why3-body p { font-size: 14px; line-height: 1.6; color: var(--s0-ink-2); margin: 0 0 8px; max-width: 60ch; }
 .s0-strat2-sec { border-top: 1px solid var(--s0-line); padding-top: 18px; margin-top: 18px; }
 .s0-strat2-k { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--s0-ink-3); margin-bottom: 12px; }
 .s0-notnow { list-style: none; padding: 0; margin: 0; }
@@ -625,8 +678,9 @@
 .s0-reconsider li::before { content: '→'; position: absolute; left: 0; color: var(--s0-ink-3); }
 .s0-strat2-foot { border-top: 1px solid var(--s0-line); padding-top: 22px; margin-top: 26px; }
 .s0-strat2-actions { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
-.s0-strat2-challenge { background: none; border: none; padding: 0; font-size: 13px; color: var(--s0-ink-3); cursor: pointer; transition: color .15s var(--s0-ease); }
-.s0-strat2-challenge:hover { color: var(--s0-ink); }
+/* Challenge looks like a real secondary action, not a footnote link — the founder must see they can push back. */
+.s0-strat2-challenge { background: none; border: 1px solid var(--s0-line-2); border-radius: 9px; padding: 10px 16px; font-size: 14px; color: var(--s0-ink-2); cursor: pointer; transition: color .15s var(--s0-ease), border-color .15s var(--s0-ease); }
+.s0-strat2-challenge:hover { color: var(--s0-ink); border-color: var(--s0-ink-3); }
 .s0-strat2-forming-note { font-size: 13px; color: var(--s0-ink-3); margin: 12px 0 0; font-style: italic; }
 .s0-challenge { margin-top: 16px; }
 .s0-strat2-q { display: block; font-size: 13px; color: var(--s0-ink-2); margin-bottom: 8px; }
@@ -640,6 +694,8 @@
 .s0-today2-from .em { color: var(--s0-ink-2); }
 .s0-today2-k { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--s0-ink-3); margin-bottom: 10px; }
 .s0-today2-move { font-family: var(--s0-display); font-size: 27px; line-height: 1.26; font-weight: 600; letter-spacing: -.015em; color: var(--s0-ink); margin: 0 0 18px; max-width: 26ch; text-wrap: balance; }
+/* A long action (a paragraph of work) must not behave like a title — step it down to a legible read. */
+.s0-today2-move-long { font-size: 20px; line-height: 1.4; letter-spacing: -.005em; max-width: 52ch; text-wrap: pretty; }
 .s0-today2-why { font-size: 15px; line-height: 1.6; color: var(--s0-ink-2); margin: 0 0 12px; max-width: 60ch; }
 .s0-today2-lab { color: var(--s0-ink-3); }
 .s0-today2-done { font-size: 15px; line-height: 1.6; color: var(--s0-ink-2); margin: 0 0 16px; max-width: 60ch; }

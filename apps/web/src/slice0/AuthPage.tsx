@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import { useSession } from './session';
 import { AppShell } from './AppShell';
@@ -11,8 +11,10 @@ export function AuthPage() {
   const { t, locale } = useLocale();
   const { login } = useSession();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
 
-  const [mode, setMode] = useState<Mode>('signin');
+  // First-time founders arrive from the landing with ?mode=register → open on Create account, not Sign in.
+  const [mode, setMode] = useState<Mode>(params.get('mode') === 'register' ? 'register' : 'signin');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

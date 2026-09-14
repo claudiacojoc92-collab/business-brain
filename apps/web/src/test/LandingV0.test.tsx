@@ -41,7 +41,7 @@ describe('Landing V0', () => {
     render(<LandingV0 />);
     const ctas = Array.from(document.querySelectorAll('a')).filter((a) => /start with your business/i.test(a.textContent ?? ''));
     expect(ctas.length).toBeGreaterThan(0);
-    expect(ctas.every((a) => a.getAttribute('href') === '/signin')).toBe(true);
+    expect(ctas.every((a) => (a.getAttribute('href') ?? '').startsWith('/signin'))).toBe(true);
   });
 
   it('states explicitly that a website is not required', () => {

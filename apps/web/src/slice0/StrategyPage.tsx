@@ -159,10 +159,16 @@ function StrategyView({ resp, current, from, t, busy, onAdopt, onChallenge, onTo
       </div>
 
       {whyBits.length > 0 ? (
-        <details className="s0-why2">
-          <summary>{t('strat2.why')} <span className="s0-why2-caret">↓</span></summary>
-          <div className="s0-why2-body">{whyBits.slice(0, 4).map((w, i) => <p key={i}>{w}</p>)}</div>
-        </details>
+        <div className="s0-why3">
+          <div className="s0-why3-k">{t('strat2.why')}</div>
+          <p className="s0-why3-lead">{whyBits[0]}</p>
+          {whyBits.length > 1 ? (
+            <details className="s0-why3-more">
+              <summary>{t('strat2.whyMore')} <span className="s0-why2-caret">↓</span></summary>
+              <div className="s0-why3-body">{whyBits.slice(1, 4).map((w, i) => <p key={i}>{w}</p>)}</div>
+            </details>
+          ) : null}
+        </div>
       ) : null}
 
       {notNow.length > 0 ? (

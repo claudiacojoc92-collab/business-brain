@@ -225,7 +225,7 @@ export function TodayPage() {
           <>
             {provenance ? <div className="s0-today2-from">{t('today2.because')} <span className="em">{provenance}</span></div> : null}
             <div className="s0-today2-k">{t('today2.donow')}</div>
-            <h1 className="s0-today2-move">{move.what}</h1>
+            <h1 className={`s0-today2-move${(move.what ?? '').length > 90 ? ' s0-today2-move-long' : ''}`}>{move.what}</h1>
 
             {move.whyNow ? (
               <p className="s0-today2-why"><span className="s0-today2-lab">{t('today2.why')}</span> {move.whyNow}</p>
@@ -242,6 +242,7 @@ export function TodayPage() {
                   <button type="button" className="s0-btn" disabled={busy === move.actionId} onClick={() => makeIt(move.actionId)}>{busy === move.actionId ? t('today2.working') : `${t('today2.makeit')} →`}</button>
                 ) : null}
                 <button type="button" className={move.canCreate ? 's0-btn-ghost' : 's0-btn'} disabled={busy === move.actionId} onClick={() => outcome(move.actionId, 'done')}>{t('today2.markdone')}</button>
+                <button type="button" className="s0-btn-ghost" disabled={busy === move.actionId} onClick={() => talk.open()}>{t('today2.help')}</button>
                 <button type="button" className="s0-today2-defer" disabled={busy === move.actionId} onClick={() => outcome(move.actionId, 'deferred')}>{t('today2.nottoday')}</button>
               </div>
 
