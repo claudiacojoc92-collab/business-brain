@@ -509,6 +509,11 @@ export function resolveActionState(businessId: string, actionId: string, kind: '
 export function createFromAction(businessId: string, actionId: string): Promise<{ state: 'ready_for_create'; objective: string; note: string; createHandoffId: string }> {
   return request(`${PL(businessId)}/action/${encodeURIComponent(actionId)}/create`, { method: 'POST', body: '{}' });
 }
+/** Mint a strategy-traced CreateHandoff from an APPROVED content concept (e.g. a voice-calibrated concept)
+ *  so it flows into the real carousel engine without re-entering a brief. */
+export function createFromConcept(businessId: string, input: { objective: string; format: 'carousel' | 'reel'; channel?: string; communicationJob?: string }): Promise<{ state: 'ready_for_create'; createHandoffId: string; format: string }> {
+  return request(`${PL(businessId)}/create-from-concept`, { method: 'POST', body: JSON.stringify(input) });
+}
 
 // ── Slice 6: carousel asset creation (image carousel 1080×1350) ──
 export interface CarouselSlideView { slideId: string; order: number; role: string; imageUrl: string | null; canRevise: boolean; headline: string; body: string; cta: string }

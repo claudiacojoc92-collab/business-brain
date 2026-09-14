@@ -363,6 +363,7 @@
 .s0-voice-caption { font-size: 16px; line-height: 1.55; color: var(--s0-ink); white-space: pre-wrap; margin: 0 0 10px; }
 .s0-voice-cta { font-size: 14px; color: var(--s0-ink-3); margin: 10px 0 14px; }
 .s0-voice-card .s0-composer { margin-top: 6px; }
+.s0-voice-card-foot { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 10px; }
 .s0-voice-card .s0-linkbtn { margin-top: 10px; }
 .s0-voice-learned-line { font-size: 15px; line-height: 1.5; color: var(--s0-ink-2); padding: 6px 0; border-bottom: 1px solid var(--s0-line); }
 

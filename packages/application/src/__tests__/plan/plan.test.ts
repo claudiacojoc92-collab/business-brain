@@ -245,6 +245,19 @@ describe('Slice 5 — Plan (strategy→execution) corrections', () => {
     const nonCreate = plan.priorities[1]!.actions[0]!;          // leadsToCreate false
     await expect(service.emitCreateHandoff('B', nonCreate.actionId)).rejects.toThrow(/does not lead to Create/i);
   });
+
+  it('emitCreateHandoffFromConcept mints a strategy-traced handoff from an approved concept (no plan action needed)', async () => {
+    const { service, repo } = svc(modelReturning(validDraft())); // no active plan adopted
+    const h = await service.emitCreateHandoffFromConcept('B', { objective: 'A carousel on the recent client-outcome proof', channel: 'carousel', format: 'carousel' });
+    expect(h.executionObjective).toBe('A carousel on the recent client-outcome proof');
+    expect(h.strategyVersionId).toBe('sv1');
+    expect(h.strategicBetTrace).toBe(STRATEGY.coreBet);   // traced to the held strategy, not a plan action
+    expect(h.founderGoalTrace).toBe(STRATEGY.goal);
+    expect(h.requestedAssetFormat).toBe('carousel');
+    expect(h.authorizedAudienceUseContext).toBe(STRATEGY.audience);
+    expect(repo.handoffs.some((x) => x.createHandoffId === h.createHandoffId)).toBe(true); // persisted like any handoff
+    await expect(service.emitCreateHandoffFromConcept('B', { objective: '   ', format: 'carousel' })).rejects.toThrow(/objective/i);
+  });
 });
 
 // ── P0: kind-specific resolution of a BLOCKED move (resource / constraint / decision) ──

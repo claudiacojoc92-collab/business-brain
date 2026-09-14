@@ -243,4 +243,32 @@ export class PlanService {
     await this.deps.plan.saveCreateHandoff(handoff);
     return handoff;
   }
+
+  /**
+   * Emit a CreateHandoff from an APPROVED voice/content CONCEPT (the third sanctioned producer, beside the
+   * plan action and the photo-led opportunity). It mints the same product-level bridge the carousel engine
+   * consumes — traced to the current strategy — from a concept objective, so an approved concept flows into
+   * the real Create engine WITHOUT re-entering a brief. Voice conditions the OUTPUT via its projection
+   * downstream; this carries only the objective/job/format, never new truth-conditional propositions.
+   */
+  async emitCreateHandoffFromConcept(businessId: string, input: { objective: string; communicationJob?: string | null; channel?: string; format: string }): Promise<CreateHandoff> {
+    const strategy = await this.strategyOrThrow(businessId);
+    const objective = input.objective.trim();
+    if (!objective) throw new ValidationError('CONCEPT_OBJECTIVE_REQUIRED', 'A concept objective is required.');
+    const active = await this.getActivePlan(businessId);
+    const handoff: CreateHandoff = {
+      createHandoffId: generateId(), actionId: `concept-${generateId()}`,
+      planVersionId: active?.plan.planVersionId ?? '', strategyVersionId: strategy.strategyVersionId,
+      founderGoalTrace: strategy.goal, strategicBetTrace: strategy.coreBet, executionObjective: objective,
+      communicationJob: (input.communicationJob ?? objective) || objective,
+      authorizedAudienceUseContext: strategy.audience,
+      channel: input.channel || active?.plan.resourceEnvelope.channels[0] || 'unspecified',
+      requestedAssetFormat: input.format, ctaDirection: strategy.ctaDirection || null,
+      requiredSourceMaterial: [], knownGapsBlockers: [],
+      relevantConstraints: active ? [...active.plan.resourceEnvelope.constraints] : [],
+      producedAt: this.now(),
+    };
+    await this.deps.plan.saveCreateHandoff(handoff);
+    return handoff;
+  }
 }

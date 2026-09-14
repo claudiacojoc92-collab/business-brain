@@ -10,6 +10,7 @@ import {
   reactToSample,
   editSample,
   getVoiceProjection,
+  createFromConcept,
   type Business,
   type VoiceSample,
   type VoiceProjection,
@@ -83,6 +84,18 @@ export function VoicePage() {
     } catch { setActionError(t('common.actionFailed')); } finally { setBusy(false); }
   }
 
+  // Approved concept → the real Create engine, no re-entering a brief. Carousel mints a strategy-traced
+  // handoff and drops into the carousel flow; reel routes into the real Reel flow (V2 proposes from strategy).
+  async function createConcept(sample: VoiceSample) {
+    if (!id) return;
+    setBusy(true); setActionError(null);
+    try {
+      if (sample.channel === 'reel') { navigate(`/b/${id}/reel/shoot`); return; }
+      const r = await createFromConcept(id, { objective: sample.objective, format: 'carousel', channel: sample.channel });
+      navigate(`/b/${id}/create/${r.createHandoffId}`);
+    } catch { setActionError(t('common.actionFailed')); } finally { setBusy(false); }
+  }
+
   if (loadErr) return <LoadError onRetry={() => { if (id) void load(); }} />;
   if (business === undefined || phase === 'loading') {
     return <AppShell showSignOut><div className="s0-loading">{t('common.loading')}</div></AppShell>;
@@ -98,7 +111,7 @@ export function VoicePage() {
 
         <div className="s0-voice-samples">
           {samples.map((s) => (
-            <SampleCard key={s.id} sample={s} t={t} busy={busy} onReact={react} onEdit={saveEdit} />
+            <SampleCard key={s.id} sample={s} t={t} busy={busy} onReact={react} onEdit={saveEdit} onCreate={createConcept} />
           ))}
         </div>
 
@@ -123,12 +136,13 @@ export function VoicePage() {
   );
 }
 
-function SampleCard(props: { sample: VoiceSample; t: T; busy: boolean; onReact: (id: string, r: string) => void; onEdit: (id: string, text: string) => void }) {
-  const { sample, t, busy, onReact, onEdit } = props;
+function SampleCard(props: { sample: VoiceSample; t: T; busy: boolean; onReact: (id: string, r: string) => void; onEdit: (id: string, text: string) => void; onCreate: (s: VoiceSample) => void }) {
+  const { sample, t, busy, onReact, onEdit, onCreate } = props;
   const [reaction, setReaction] = useState('');
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState('');
   const c = sample.content;
+  const createable = sample.channel === 'reel' || sample.channel === 'carousel';
 
   return (
     <div className="s0-voice-card">
@@ -149,9 +163,14 @@ function SampleCard(props: { sample: VoiceSample; t: T; busy: boolean; onReact: 
             <textarea value={reaction} onChange={(e) => setReaction(e.target.value)} placeholder={t('voice.react.placeholder')} disabled={busy} aria-label={t('voice.react.placeholder')} />
             <button type="submit" className="s0-btn s0-btn-inline" disabled={busy || !reaction.trim()}>{busy ? '…' : t('voice.react.send')}</button>
           </form>
-          <button type="button" className="s0-linkbtn" onClick={() => { setEditing(true); setEditText(c.caption ?? [c.hook, ...(c.beats ?? []), c.cta].filter(Boolean).join('\n')); }}>
-            {t('voice.rewrite')}
-          </button>
+          <div className="s0-voice-card-foot">
+            {createable ? (
+              <button type="button" className="s0-btn s0-btn-inline" disabled={busy} onClick={() => onCreate(sample)}>{t('voice.createthis')} →</button>
+            ) : null}
+            <button type="button" className="s0-linkbtn" onClick={() => { setEditing(true); setEditText(c.caption ?? [c.hook, ...(c.beats ?? []), c.cta].filter(Boolean).join('\n')); }}>
+              {t('voice.rewrite')}
+            </button>
+          </div>
         </>
       ) : (
         <div className="s0-strat-correct">

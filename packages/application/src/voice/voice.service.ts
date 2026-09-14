@@ -223,7 +223,10 @@ export class VoiceService {
     const allowed = await this.allowedFactsFor(businessId, strategy);
     const inv = materialInventory(allowed, strategy);
     const samples: VoiceSample[] = [];
-    for (const channel of ['reel', 'caption'] as SampleChannel[]) {
+    // Calibrate on the two CREATEABLE formats (reel + carousel) so each sample is both a voice probe and a
+    // real content concept the founder can approve → Create. (Each is feasibility-gated below; caption stays
+    // available as an example kind but is not a create target.)
+    for (const channel of ['reel', 'carousel'] as SampleChannel[]) {
       // FEASIBILITY FIRST: only calibrate on an EXTERNALLY-EXECUTABLE message the authorized material can perform.
       const { selected, blocked } = selectFeasibleJob(channel, strategy, inv);
       if (blocked) this.deps.log?.({ type: 'job_blocked', detail: `${blocked} (${channel}): no licensed material${selected ? ` — falling back to ${selected.kind}` : ''}` });

@@ -68,6 +68,17 @@ export function CreateIndexPage() {
               </button>
             </div>
           </>
+        ) : bet ? (
+          <>
+            {bet && <div className="s0-today2-from">{t('today2.because')} <span className="em">{clip(bet, 120)}</span></div>}
+            <h1 className="s0-h1">{t('create.concepts.title')}</h1>
+            <p className="s0-lede">{t('create.concepts.body')}</p>
+            <div className="s0-strat-actions" style={{ marginTop: 18 }}>
+              <button type="button" className="s0-plan-primary" style={{ maxWidth: 320 }} onClick={() => navigate(`/b/${id}/voice`)}>
+                {t('create.concepts.cta')} →
+              </button>
+            </div>
+          </>
         ) : (
           <>
             <h1 className="s0-h1">{t('create.none.title')}</h1>

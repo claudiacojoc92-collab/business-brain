@@ -182,4 +182,17 @@ export function registerPlanRoutes(server: FastifyInstance, deps: ServerDeps): v
     // (planVersionId / strategyVersionId / traces) stay hidden — only the navigation token is exposed.
     await reply.status(200).send({ state: 'ready_for_create', createHandoffId: handoff.createHandoffId, objective: handoff.executionObjective, note: 'Ready to turn this into a carousel.' });
   });
+
+  // Create from an APPROVED concept (e.g. a voice-calibrated content concept) — mints a strategy-traced
+  // CreateHandoff so the concept flows into the real carousel engine without re-entering a brief.
+  server.post('/v1/businesses/:id/plan/create-from-concept', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { founderId, business } = await requireBusiness(request);
+    const body = (request.body ?? {}) as { objective?: string; communicationJob?: string; channel?: string; format?: string };
+    const objective = (body.objective ?? '').trim();
+    if (!objective) throw new ValidationError('CONCEPT_OBJECTIVE_REQUIRED', 'A concept objective is required.');
+    const format = (['carousel', 'reel'].includes(body.format ?? '') ? body.format : 'carousel') as string;
+    const handoff = await deps.planService.emitCreateHandoffFromConcept(business.id, { objective, communicationJob: body.communicationJob ?? null, channel: body.channel, format });
+    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'create_started', surface: 'create', metadata: { createHandoffId: handoff.createHandoffId, format, origin: 'concept' } });
+    await reply.status(200).send({ state: 'ready_for_create', createHandoffId: handoff.createHandoffId, format });
+  });
 }
