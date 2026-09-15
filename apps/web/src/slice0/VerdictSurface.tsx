@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
-import { adoptStrategy, respondToStrategy, type ImpactResult } from '../api/client';
+import { adoptStrategy, respondToStrategy, proposePlan, adoptPlan, type ImpactResult } from '../api/client';
 
 /**
  * LIVING STATE — the verdict surface. The signature moment of the loop: after a new reality is assessed
@@ -50,8 +50,16 @@ export function VerdictSurface(props: {
   async function adopt() {
     if (!strat.newVersion || busy) return;
     setBusy(true); setErr(false);
-    try { await adoptStrategy(businessId, strat.newVersion.id); setPhase('adopted'); onAdopted?.(); }
-    catch { setErr(true); }
+    try {
+      await adoptStrategy(businessId, strat.newVersion.id);
+      // Adopting a new strategy makes the plan stale; reshape it so Today re-derives from the new version.
+      // Best-effort: if the reshape can't produce a clean plan, Today falls back to its stale-reshape prompt.
+      try {
+        const p = await proposePlan(businessId);
+        if (p && 'planVersionId' in p && p.planVersionId) await adoptPlan(businessId, p.planVersionId);
+      } catch { /* leave Today to prompt a reshape */ }
+      setPhase('adopted'); onAdopted?.();
+    } catch { setErr(true); }
     finally { setBusy(false); }
   }
 

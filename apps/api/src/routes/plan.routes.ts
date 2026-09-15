@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { ServerDeps } from '../server';
-import { recordFounderEvent, readReturnSummary } from '../telemetry/founder-events';
+import { recordFounderEvent, readReturnSummary, readTodayNote } from '../telemetry/founder-events';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
 import type { PlanVersion, Priority, Action, ActionOutcome } from '@bb/application';
 
@@ -40,7 +40,7 @@ function projectPlan(plan: PlanVersion, state: 'proposed' | 'active', stale: boo
 }
 
 function projectToday(
-  today: { ready: Action[]; blockedFallback: { action: Action; blocker: { kind: string; detail: string; ref?: string; material?: string } } | null },
+  today: { ready: Action[]; blockedFallback: { action: Action; blocker: { kind: string; detail: string; ref?: string; material?: string } } | null; constraints: string[] },
   plan: PlanVersion,
 ) {
   let blocked = null;
@@ -68,6 +68,7 @@ function projectToday(
       canCreate: a.leadsToCreate,
     })),
     blocked,
+    constraints: today.constraints,
   };
 }
 
@@ -130,12 +131,13 @@ export function registerPlanRoutes(server: FastifyInstance, deps: ServerDeps): v
   server.get('/v1/businesses/:id/plan/today', async (request: FastifyRequest, reply: FastifyReply) => {
     const { founderId, business } = await requireBusiness(request);
     const sinceLastHere = await readReturnSummary(deps.db, business.id, founderId);
+    const todayNote = await readTodayNote(deps.db, business.id, founderId);
     // Advance the anchor AFTER reading, so the next visit's window starts here.
     recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'return_summary_shown', surface: 'today', metadata: {} });
     const active = await deps.planService.getActivePlan(business.id);
     const today = await deps.planService.today(business.id);
-    if (!active || !today) { await reply.status(200).send({ state: 'none', sinceLastHere }); return; }
-    await reply.status(200).send({ state: 'active', ...projectToday(today, active.plan), sinceLastHere });
+    if (!active || !today) { await reply.status(200).send({ state: 'none', sinceLastHere, todayNote }); return; }
+    await reply.status(200).send({ state: 'active', ...projectToday(today, active.plan), sinceLastHere, todayNote });
   });
 
   // Mark an action done/deferred/skipped — append-only; applies to the Active plan only.

@@ -223,7 +223,11 @@ export function TodayPage() {
         ) : (
           <>
             {/* "Since you were last here" — return-loop summary read from founder_event. Lives ON Today. */}
-            {since?.hasChanges ? <SinceBlock since={since} t={t} /> : null}
+            {since?.show ? <SinceBlock since={since} t={t} /> : null}
+            {/* "Today updated because …" — the same-session reason line (a TUNE or a strategy adoption). */}
+            {today?.todayNote ? <TodayNoteLine note={today.todayNote} t={t} /> : null}
+            {/* Persistent operating constraints Today is holding (surfaced from founder_state). */}
+            {(today?.constraints ?? []).length > 0 ? <ConstraintsLine constraints={today!.constraints!} t={t} /> : null}
         {stage === 'no_strategy' ? (
           <Empty from={t('today2.today')} lead={t('today2.needStrategy')} cta={t('today2.toStrategy')} onCta={() => navigate(`${base}/strategy`)} />
         ) : stage === 'shaping' ? (
@@ -313,17 +317,36 @@ export function TodayPage() {
   );
 }
 
-/** "Since you were last here" — a single compact line on Today, never a feed or a page. */
+/** "Since you were last here" — a single compact line on Today, never a feed or a page. Shows after a real
+ *  absence; calm and honest when nothing moved (never invents activity). */
 function SinceBlock({ since, t }: { since: ReturnSummary; t: Tr }) {
-  const changes = since.changes.length > 0 ? since.changes.join(' · ') : t('since.quiet');
+  const changes = since.hasChanges ? since.changes.join(' · ') : t('since.quiet');
   return (
     <div className="s0-since" role="status">
       <div className="s0-since-k">{t('since.k')}</div>
       <p className="s0-since-changes">{changes}</p>
-      <p className="s0-since-line">
-        <span className="s0-since-lab">{t('since.strategy')}</span> {since.strategyMoved ? t('since.revised') : t('since.holds')}
-        {since.oneThing ? <> · <span className="s0-since-lab">{t('since.today')}</span> {since.oneThing}</> : null}
-      </p>
+      {since.hasChanges ? (
+        <p className="s0-since-line">
+          <span className="s0-since-lab">{t('since.strategy')}</span> {since.strategyMoved ? t('since.revised') : t('since.holds')}
+          {since.oneThing ? <> · <span className="s0-since-lab">{t('since.today')}</span> {since.oneThing}</> : null}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** "Today updated because …" — the reason the current Today is what it is (a TUNE or a strategy adoption). */
+function TodayNoteLine({ note, t }: { note: NonNullable<TodayResp['todayNote']>; t: Tr }) {
+  const text = note.kind === 'strategy_adopted' ? t('today2.changedStrategy', { v: String(note.version) }) : t('today2.updatedBecause', { reason: note.reason });
+  return <div className="s0-today2-note" role="status">{text}</div>;
+}
+
+/** The operating constraints Today is respecting, shown as persistent context. */
+function ConstraintsLine({ constraints, t }: { constraints: string[]; t: Tr }) {
+  return (
+    <div className="s0-today2-constraints">
+      <span className="s0-today2-constraints-k">{t('today2.constraintK')}</span>
+      <ul className="s0-today2-constraints-list">{constraints.slice(0, 4).map((c, i) => <li key={i}>{c}</li>)}</ul>
     </div>
   );
 }
@@ -488,6 +511,20 @@ function BlockedMove(props: {
               <button type="button" className="s0-btn" disabled={busy || !choice.trim() || !actionId} onClick={() => props.onDecide(actionId, choice.trim())}>{busy ? t('today2.working') : t('today2.blk.decisionSubmit')}</button>
               {deferBtn}{talkLink}
             </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ── operating_constraint → the move waits while a founder-declared constraint holds; defer or talk it through ──
+  if (blk.kind === 'operating_constraint') {
+    return (
+      <>
+        {head('today2.blk.constraintK', t('today2.blk.constraintLead'), blk.need)}
+        <div className="s0-today2-foot">
+          <div className="s0-today2-actions">
+            {deferBtn}{talkLink}
           </div>
         </div>
       </>

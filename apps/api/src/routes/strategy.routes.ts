@@ -86,7 +86,7 @@ export function registerStrategyRoutes(server: FastifyInstance, deps: ServerDeps
     const body = (request.body ?? {}) as { versionId?: string };
     if (!body.versionId) throw new ValidationError('VERSION_REQUIRED', 'versionId is required.');
     const rec = await deps.strategyService.adopt(business.id, body.versionId, founderId);
-    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'strategy_adopted', surface: 'strategy', metadata: {} });
+    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'strategy_adopted', surface: 'strategy', metadata: { version: rec.version } });
     const cur = await deps.strategyService.getCurrent(business.id);
     await reply.status(200).send(project(rec, cur?.adoptedAt ?? null));
   });

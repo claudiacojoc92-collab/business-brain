@@ -433,6 +433,15 @@
   cursor: pointer; padding: 0 0 12px; text-decoration: underline; text-underline-offset: 3px; }
 .s0-refresh-history:hover { color: var(--s0-ink); }
 
+/* ── Living State — Today "updated because" note + operating constraints ── */
+.s0-today2-note { margin: 0 0 16px; padding: 10px 14px; border-left: 2px solid var(--s0-clay); background: var(--s0-bg-2);
+  border-radius: 0 8px 8px 0; font-size: 14px; color: var(--s0-ink-2); }
+.s0-today2-constraints { margin: 0 0 20px; padding: 12px 14px; border: 1px solid var(--s0-line); border-radius: 10px; background: var(--s0-bg-2); }
+.s0-today2-constraints-k { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--s0-ink-3); }
+.s0-today2-constraints-list { list-style: none; margin: 6px 0 0; padding: 0; }
+.s0-today2-constraints-list li { font-size: 14px; line-height: 1.5; color: var(--s0-ink-2); padding-left: 14px; position: relative; }
+.s0-today2-constraints-list li::before { content: '—'; position: absolute; left: 0; color: var(--s0-clay); }
+
 /* ── Living State — outcome reporter (Today) ── */
 .s0-today2-report { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--s0-line); }
 .s0-today2-report-open { background: none; border: none; color: var(--s0-clay); font-family: var(--s0-sans); font-size: 14px; font-weight: 500;

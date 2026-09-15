@@ -27,6 +27,9 @@ export interface PlanDeps {
   /** Append a founder-owned resolution (resource | constraint | decision) scoped to a blocked action.
    *  Durable append only — never regenerates the strategy and never mutates the plan. */
   readonly recordFounderState?: (input: { businessId: string; founderId: string; actionId: string; kind: 'resource' | 'constraint' | 'decision'; statement: string; language: string }) => Promise<void>;
+  /** Active founder-owned operating constraints (founder_state kind='constraint'). READ-PATH for Today: the
+   *  `scope`, when it is an actionId, binds the constraint to that action so readiness blocks it. */
+  readonly activeConstraints?: (businessId: string) => Promise<{ statement: string; scope: string | null }[]>;
   readonly clock?: () => string;
   readonly log?: (e: { type: string; detail?: string }) => void;
 }
@@ -218,8 +221,15 @@ export class PlanService {
     const ledger = await this.deps.plan.listActionStates(businessId, active.plan.planVersionId);
     const availableMaterial = new Set(strategy?.licensedMaterial ?? []);
     const decisionNeeded = new Set(active.plan.priorities.flatMap((p) => p.actions).filter((a) => !a.planTimeFeasible && a.requiredMaterial.length === 0).map((a) => a.actionId));
-    const readiness = deriveAllReadiness(active.plan.priorities.flatMap((p) => p.actions), ledger, { strategyStale: active.strategyStale, availableMaterial, decisionNeeded });
-    return selectToday(active.plan, readiness);
+    // Living State (TUNE): read persisted operating constraints. Those scoped to an actionId in this plan block
+    // that move (read-path — the move re-derives to the next non-conflicting one); all are surfaced as context.
+    const rawConstraints = this.deps.activeConstraints ? await this.deps.activeConstraints(businessId) : [];
+    const actionIds = new Set(active.plan.priorities.flatMap((p) => p.actions).map((a) => a.actionId));
+    const constrainedActions = new Map<string, string>();
+    for (const c of rawConstraints) if (c.scope && actionIds.has(c.scope) && c.statement.trim()) constrainedActions.set(c.scope, c.statement.trim());
+    const constraints = rawConstraints.map((c) => c.statement.trim()).filter(Boolean);
+    const readiness = deriveAllReadiness(active.plan.priorities.flatMap((p) => p.actions), ledger, { strategyStale: active.strategyStale, availableMaterial, decisionNeeded, constrainedActions });
+    return selectToday(active.plan, readiness, constraints);
   }
 
   /** Emit the product-level CreateHandoff for a Create-eligible, ready action (no Voice internals). */

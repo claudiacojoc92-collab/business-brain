@@ -17,6 +17,8 @@ vi.mock('../api/client', () => ({
   adoptStrategy: vi.fn(), respondToStrategy: vi.fn(),
 }));
 
+const noSince = { show: false, hasChanges: false, changes: [], strategyMoved: false, todayChanged: false, oneThing: null, since: null, awayHours: null };
+
 import * as api from '../api/client';
 import { TodayPage } from '../slice0/TodayPage';
 
@@ -37,10 +39,10 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('TodayPage — Living State (return loop + outcome report)', () => {
-  it('renders "since you were last here" when there are changes, with strategy + one-thing', async () => {
+  it('renders "since you were last here" after a real absence, with strategy + one-thing', async () => {
     vi.mocked(api.getToday).mockResolvedValue(todayWith({
-      hasChanges: true, changes: ['You completed a move.'], strategyMoved: false, todayChanged: true,
-      oneThing: 'Follow up with the doctor.', since: '2026-09-10T00:00:00.000Z',
+      show: true, hasChanges: true, changes: ['You completed a move.'], strategyMoved: false, todayChanged: true,
+      oneThing: 'Follow up with the doctor.', since: '2026-09-10T00:00:00.000Z', awayHours: 120,
     }));
     render(<TodayPage />);
     expect(await screen.findByText('since.k')).toBeInTheDocument();
@@ -51,15 +53,23 @@ describe('TodayPage — Living State (return loop + outcome report)', () => {
     expect(line?.textContent).toContain('Follow up with the doctor.');   // the one thing
   });
 
-  it('no "since" block on a first visit (no changes)', async () => {
-    vi.mocked(api.getToday).mockResolvedValue(todayWith({ hasChanges: false, changes: [], strategyMoved: false, todayChanged: false, oneThing: null, since: null }));
+  it('no "since" block on a first visit / same session (show=false)', async () => {
+    vi.mocked(api.getToday).mockResolvedValue(todayWith({ show: false, hasChanges: false, changes: [], strategyMoved: false, todayChanged: false, oneThing: null, since: null, awayHours: null }));
     render(<TodayPage />);
     await screen.findByText('today2.donow');
     expect(screen.queryByText('since.k')).toBeNull();
   });
 
+  it('a quiet week shows the block calmly (no invented activity)', async () => {
+    vi.mocked(api.getToday).mockResolvedValue(todayWith({ show: true, hasChanges: false, changes: [], strategyMoved: false, todayChanged: false, oneThing: null, since: '2026-09-08T00:00:00.000Z', awayHours: 168 }));
+    render(<TodayPage />);
+    expect(await screen.findByText('since.k')).toBeInTheDocument();
+    expect(screen.getByText('since.quiet')).toBeInTheDocument();       // calm, honest
+    expect(screen.queryByText('since.revised')).toBeNull();            // nothing invented
+  });
+
   it('reporting an outcome calls the evaluator and shows the verdict surface', async () => {
-    vi.mocked(api.getToday).mockResolvedValue(todayWith({ hasChanges: false, changes: [], strategyMoved: false, todayChanged: false, oneThing: null, since: null }));
+    vi.mocked(api.getToday).mockResolvedValue(todayWith({ show: false, hasChanges: false, changes: [], strategyMoved: false, todayChanged: false, oneThing: null, since: null, awayHours: null }));
     const verdict: ImpactResult = {
       verdict: 'STILL_HOLDS', whatChanged: ['Outcome evidence exists.'], whatDidNotChange: ['Your bet.'],
       assumptionImpacts: [], todayImpact: { changes: true, reason: 'a follow-up exists', newMove: 'Email the interested doctor.' },
@@ -73,5 +83,18 @@ describe('TodayPage — Living State (return loop + outcome report)', () => {
     await waitFor(() => expect(api.evaluateImpact).toHaveBeenCalledWith('b1', 'outcome_report', 'Visited five clinics; one wants a follow-up.'));
     expect(await screen.findByText('verdict.badge.STILL_HOLDS')).toBeInTheDocument();
     expect(screen.getByText('Email the interested doctor.')).toBeInTheDocument();
+  });
+
+  it('TUNE reaches Today: the operating constraint is shown as a persistent line', async () => {
+    vi.mocked(api.getToday).mockResolvedValue({ state: 'active', ready: [readyMove], blocked: null, sinceLastHere: noSince, constraints: ['No kinetotherapy Tue/Thu evenings'], todayNote: null });
+    render(<TodayPage />);
+    expect(await screen.findByText('today2.constraintK')).toBeInTheDocument();
+    expect(screen.getByText('No kinetotherapy Tue/Thu evenings')).toBeInTheDocument();
+  });
+
+  it('REVISE→adopt reaches Today: "Changed because: strategy vN adopted" is shown', async () => {
+    vi.mocked(api.getToday).mockResolvedValue({ state: 'active', ready: [readyMove], blocked: null, sinceLastHere: noSince, constraints: [], todayNote: { kind: 'strategy_adopted', version: 2 } });
+    render(<TodayPage />);
+    expect(await screen.findByText('today2.changedStrategy:2')).toBeInTheDocument(); // {v} interpolated by the identity t
   });
 });

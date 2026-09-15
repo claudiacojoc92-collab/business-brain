@@ -72,6 +72,9 @@ export interface ImpactSignal {
   readonly todayReason: string;
   /** how the input should be persisted as founder-owned state. */
   readonly founderStateKind: FounderStateKind;
+  /** TUNE: whether this operating constraint makes the CURRENT Today move inappropriate now, so it should be
+   *  bound to that move (blocking it) rather than held as general context. */
+  readonly conflictsWithCurrentMove: boolean;
 }
 
 export interface ImpactAssessInput {
@@ -88,6 +91,8 @@ export interface ImpactAssessInput {
   readonly baseline: {
     offer: string; audience: string[]; acquisition: string[]; toldStatements: string[]; unknowns: string[];
   };
+  /** the founder's current Today move, so the model can judge whether a new constraint conflicts with it. */
+  readonly currentMove: { what: string } | null;
 }
 
 export interface IImpactModelPort {

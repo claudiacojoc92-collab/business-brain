@@ -11,9 +11,11 @@ const TODAY_MAX = 3;
 export interface TodayResult {
   readonly ready: Action[];                 // ≤ 3, all readiness==='ready', strategy-ranked
   readonly blockedFallback: { action: Action; blocker: NonNullable<ActionReadiness['blocker']> } | null; // when nothing is ready
+  // Living State: active operating constraints (kind='constraint'), surfaced as persistent Today context.
+  readonly constraints: string[];
 }
 
-export function selectToday(plan: PlanVersion, readiness: Map<string, ActionReadiness>): TodayResult {
+export function selectToday(plan: PlanVersion, readiness: Map<string, ActionReadiness>, constraints: string[] = []): TodayResult {
   const orderOf = new Map(plan.priorities.map((p) => [p.priorityId, p.order]));
   const allActions = plan.priorities.flatMap((p) => p.actions);
   // how many OTHER actions this one unblocks (prerequisite leverage)
@@ -33,7 +35,7 @@ export function selectToday(plan: PlanVersion, readiness: Map<string, ActionRead
     // NOTE: leadsToCreate is intentionally NOT a ranking signal.
   });
 
-  if (ready.length > 0) return { ready: ready.slice(0, TODAY_MAX), blockedFallback: null };
+  if (ready.length > 0) return { ready: ready.slice(0, TODAY_MAX), blockedFallback: null, constraints };
 
   // Nothing ready → the single most-relevant blocker (current focus first, then priority order).
   const blockedSorted = allActions
@@ -46,5 +48,5 @@ export function selectToday(plan: PlanVersion, readiness: Map<string, ActionRead
       return (orderOf.get(x.a.priorityId) ?? 99) - (orderOf.get(y.a.priorityId) ?? 99);
     });
   const top = blockedSorted[0];
-  return { ready: [], blockedFallback: top && top.r?.blocker ? { action: top.a, blocker: top.r.blocker } : null };
+  return { ready: [], blockedFallback: top && top.r?.blocker ? { action: top.a, blocker: top.r.blocker } : null, constraints };
 }

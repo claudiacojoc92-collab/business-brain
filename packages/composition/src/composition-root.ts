@@ -428,6 +428,9 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     recordFounderState: async ({ businessId, founderId, actionId, kind, statement, language }) => {
       await founderStateRepo.append({ id: generateId(), businessId, founderId, kind, statement, scope: actionId, language, sourceTurnId: null });
     },
+    // Living State (TUNE read-path): active operating constraints with their scope, so Today can surface them
+    // and block a move scoped to a specific actionId — no plan mutation.
+    activeConstraints: async (bid) => (await founderStateRepo.listActive(bid)).filter((s) => s.kind === 'constraint').map((s) => ({ statement: s.statement, scope: s.scope })),
     // eslint-disable-next-line no-console
     log: (e) => console.error('[plan]', JSON.stringify(e)),
   });

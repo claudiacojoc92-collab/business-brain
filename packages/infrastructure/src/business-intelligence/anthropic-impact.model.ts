@@ -24,7 +24,8 @@ const SHAPE = `{
   "whatDidNotChange": ["what still holds — name the strategic bet and any not-now that is untouched"],
   "todayNextMove": "the single most concrete next action this input implies, or null",
   "todayReason": "one sentence: why Today does or does not change",
-  "founderStateKind": "constraint | resource | decision | business_correction | preference | intention"
+  "founderStateKind": "constraint | resource | decision | business_correction | preference | intention",
+  "conflictsWithCurrentMove": false
 }`;
 
 function rules(l: string): string {
@@ -47,6 +48,9 @@ function rules(l: string): string {
     '- Do NOT predict outcomes ("this will get clients"). Describe what changed and what it means.',
     '- founderStateKind: how to hold this input — a world-fact about the business = business_correction; a',
     '  hard limit = constraint; a new capability/asset = resource; a founder choice = decision.',
+    '- conflictsWithCurrentMove: true ONLY when the input is an operating constraint that makes the CURRENT',
+    '  Today move (below) inappropriate to do now (e.g. constraint bans exactly what the move asks). If there',
+    '  is no current move, or the constraint does not touch it, set false.',
     '- Be conservative: only call something strategic when it genuinely undermines the bet or an assumption.',
   ].join('\n');
 }
@@ -73,6 +77,7 @@ function userBlock(input: ImpactAssessInput): string {
     `How it reaches customers: ${input.baseline.acquisition.join('; ') || '(unknown)'}`,
     `The founder has told BB: ${input.baseline.toldStatements.join(' | ') || '(nothing yet)'}`,
     `Still unknown: ${input.baseline.unknowns.join('; ') || '(none)'}`,
+    '', 'THE FOUNDER\'S CURRENT TODAY MOVE:', input.currentMove?.what || '(none right now)',
   ].join('\n');
 }
 
@@ -95,6 +100,7 @@ function safeSignal(): ImpactSignal {
     todayNextMove: null,
     todayReason: '',
     founderStateKind: 'constraint',
+    conflictsWithCurrentMove: false,
   };
 }
 
@@ -154,5 +160,6 @@ function normalize(p: Record<string, unknown>, input: ImpactAssessInput): Impact
     todayReason: String(p['todayReason'] ?? '').trim(),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     founderStateKind: (KINDS.includes(kindRaw) ? kindRaw : 'constraint') as any,
+    conflictsWithCurrentMove: Boolean(p['conflictsWithCurrentMove']) && input.currentMove !== null,
   };
 }

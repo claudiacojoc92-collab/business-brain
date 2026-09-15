@@ -83,7 +83,7 @@ export interface ActionStateEntry { readonly id: string; readonly businessId: st
 
 // ── Derived readiness (projection; never persisted as action truth) ──
 export type Readiness = 'ready' | 'blocked' | 'done' | 'deferred' | 'skipped';
-export type BlockerKind = 'missing_material' | 'founder_decision' | 'prerequisite_unfinished' | 'strategy_stale';
+export type BlockerKind = 'missing_material' | 'founder_decision' | 'prerequisite_unfinished' | 'strategy_stale' | 'operating_constraint';
 /**
  * A derived blocker. `detail` stays a human string for logs/back-compat. `ref`/`material` are STRUCTURED
  * handles the Today surface needs to respond kind-specifically WITHOUT parsing prose:

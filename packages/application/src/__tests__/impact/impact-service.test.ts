@@ -18,6 +18,7 @@ function makeDeps(signal: Partial<ImpactSignal>, opts: { hasStrategy?: boolean }
   const full: ImpactSignal = {
     changeKind: 'none', matchedReconsider: null, contradictsAssumption: false, assumptionImpacts: [],
     whatChanged: ['x'], whatDidNotChange: ['the bet'], todayNextMove: null, todayReason: '', founderStateKind: 'constraint',
+    conflictsWithCurrentMove: false,
     ...signal,
   };
   const deps = {
@@ -68,12 +69,30 @@ describe('ImpactService — evaluate wires the classifier to the strategy engine
     expect(m.appended).toHaveLength(0);
   });
 
-  it('a non-strategic Add Context (persistInput=false) neither appends nor regenerates', async () => {
-    const m = makeDeps({ changeKind: 'none' });
-    const { result } = await new ImpactService(m.deps).evaluate('B', 'F', 'Acme', 'add_context', 'Minor note.', 'en', { persistInput: false });
+  it('Add Context business_correction is NOT re-appended (its submitCorrection primitive already wrote it)', async () => {
+    const m = makeDeps({ changeKind: 'none', founderStateKind: 'business_correction' });
+    const { result } = await new ImpactService(m.deps).evaluate('B', 'F', 'Acme', 'add_context', 'We renamed the offer.', 'en', { persistInput: false });
     expect(result.verdict).toBe('STILL_HOLDS');
     expect(m.regenCalls).toHaveLength(0);
-    expect(m.appended).toHaveLength(0);                         // the drawer's primitive owns persistence
+    expect(m.appended).toHaveLength(0);                         // dedup: the drawer already wrote the correction
+  });
+
+  it('a TUNE constraint from Add Context IS appended (no primitive writes the operating-constraint channel)', async () => {
+    const m = makeDeps({ changeKind: 'execution', founderStateKind: 'constraint' });
+    const { result } = await new ImpactService(m.deps).evaluate('B', 'F', 'Acme', 'add_context', 'No capacity Tue/Thu evenings.', 'en', { persistInput: false });
+    expect(result.verdict).toBe('TUNE');
+    expect(m.regenCalls).toHaveLength(0);
+    expect(m.appended).toHaveLength(1);
+    expect(m.appended[0].kind).toBe('constraint');
+    expect(m.appended[0].scope).toBe('add_context');           // general context (no current-move conflict)
+  });
+
+  it('a TUNE constraint that conflicts with the current move is scoped to that move (readiness blocks it)', async () => {
+    const m = makeDeps({ changeKind: 'execution', founderStateKind: 'constraint', conflictsWithCurrentMove: true });
+    await new ImpactService(m.deps).evaluate('B', 'F', 'Acme', 'add_context', 'No kineto Tue/Thu evenings.', 'en',
+      { persistInput: false, currentMove: { actionId: 'act1', what: 'Run kineto ads Tue evening' } });
+    expect(m.appended).toHaveLength(1);
+    expect(m.appended[0].scope).toBe('act1');                   // bound to the conflicting action
   });
 
   it('RECONSIDER (a named trigger met) also regenerates', async () => {

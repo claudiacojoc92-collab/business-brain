@@ -383,6 +383,26 @@ describe('Slice 5 — founder_state kind boundary (only resource feeds available
     expect(wouldMatchIfPoisoned('East Fork color pages', 'I can’t access the East Fork color pages')).toBe('ready');
   });
 
+  // Living State (TUNE read-path): an operating constraint SCOPED to an action blocks that action so Today
+  // re-derives to the next non-conflicting move — no plan mutation.
+  it('CASE C — an operating constraint scoped to an action BLOCKS it (operating_constraint), untouched otherwise', () => {
+    const noConstraint = deriveReadiness(act([]), new Map(), { strategyStale: false, decisionNeeded: new Set<string>(), availableMaterial: new Set<string>() });
+    expect(noConstraint.readiness).toBe('ready');
+    const constrained = deriveReadiness(act([]), new Map(), {
+      strategyStale: false, decisionNeeded: new Set<string>(), availableMaterial: new Set<string>(),
+      constrainedActions: new Map([['a', 'No kinetotherapy Tue/Thu evenings']]),
+    });
+    expect(constrained.readiness).toBe('blocked');
+    expect(constrained.blocker?.kind).toBe('operating_constraint');
+    expect(constrained.blocker?.detail).toBe('No kinetotherapy Tue/Thu evenings');
+    // a constraint scoped to a DIFFERENT action leaves this one ready
+    const other = deriveReadiness(act([]), new Map(), {
+      strategyStale: false, decisionNeeded: new Set<string>(), availableMaterial: new Set<string>(),
+      constrainedActions: new Map([['other', 'x']]),
+    });
+    expect(other.readiness).toBe('ready');
+  });
+
   it('CASE C — a DECISION not to use a material does NOT license it (stays blocked), though it WOULD match if poisoned', () => {
     const states = [{ kind: 'decision', statement: 'We won’t use customer product photography' }];
     expect(founderMaterialStatements(states)).toEqual([]);

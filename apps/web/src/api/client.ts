@@ -488,7 +488,7 @@ export type PlanProposeResp = PlanView | { state: 'insufficient' | 'no_strategy'
 export interface TodayAction {
   actionId: string; what: string; whyNow: string; doneLooksLike: string; effort: string | null; canCreate: boolean;
 }
-export type BlockerKind = 'missing_material' | 'founder_decision' | 'prerequisite_unfinished' | 'strategy_stale';
+export type BlockerKind = 'missing_material' | 'founder_decision' | 'prerequisite_unfinished' | 'strategy_stale' | 'operating_constraint';
 export interface TodayBlocked {
   what: string;                 // the blocked move, founder-facing
   need: string;                 // human detail (fallback text)
@@ -498,18 +498,26 @@ export interface TodayBlocked {
   prerequisite?: { actionId: string; what: string } | null; // prerequisite_unfinished → the thing to resolve (NOT the child)
 }
 export interface ReturnSummary {
+  show: boolean;
   hasChanges: boolean;
   changes: string[];
   strategyMoved: boolean;
   todayChanged: boolean;
   oneThing: string | null;
   since: string | null;
+  awayHours: number | null;
 }
+export type TodayNote =
+  | { kind: 'strategy_adopted'; version: number }
+  | { kind: 'impact'; reason: string }
+  | null;
 export interface TodayResp {
   state: 'active' | 'none';
   ready?: TodayAction[];
   blocked?: TodayBlocked | null;
+  constraints?: string[];
   sinceLastHere?: ReturnSummary;
+  todayNote?: TodayNote;
 }
 export type PlanOutcome = 'done' | 'deferred' | 'skipped';
 const PL = (b: string) => `v1/businesses/${encodeURIComponent(b)}/plan`;

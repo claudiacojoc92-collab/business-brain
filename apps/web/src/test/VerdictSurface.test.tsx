@@ -10,7 +10,7 @@ vi.mock('react-router-dom', async (orig) => {
   const actual = await (orig() as Promise<Record<string, unknown>>);
   return { ...actual, useNavigate: () => navigate };
 });
-vi.mock('../api/client', () => ({ adoptStrategy: vi.fn(), respondToStrategy: vi.fn() }));
+vi.mock('../api/client', () => ({ adoptStrategy: vi.fn(), respondToStrategy: vi.fn(), proposePlan: vi.fn(), adoptPlan: vi.fn() }));
 
 import * as api from '../api/client';
 import { VerdictSurface } from '../slice0/VerdictSurface';
@@ -50,8 +50,10 @@ describe('VerdictSurface', () => {
     expect(screen.getByText('verdict.dismiss')).toBeInTheDocument();
   });
 
-  it('REVISE surfaces the weakened assumption and offers adopt / challenge; adopt calls adoptStrategy', async () => {
+  it('REVISE offers adopt/challenge; adopt adopts the version AND reshapes the plan so Today re-derives', async () => {
     vi.mocked(api.adoptStrategy).mockResolvedValue({} as never);
+    vi.mocked(api.proposePlan).mockResolvedValue({ planVersionId: 'pv2' } as never);
+    vi.mocked(api.adoptPlan).mockResolvedValue({} as never);
     render(<VerdictSurface businessId="b1" result={revise} onDismiss={vi.fn()} onAdopted={vi.fn()} />);
     expect(screen.getByText('verdict.badge.REVISE')).toBeInTheDocument();
     expect(screen.getByText('referrals will respond')).toBeInTheDocument();
@@ -59,6 +61,7 @@ describe('VerdictSurface', () => {
     expect(screen.getByText('verdict.newStrategy:2')).toBeInTheDocument();                  // {v} interpolated
     fireEvent.click(screen.getByText('verdict.adopt'));
     await waitFor(() => expect(api.adoptStrategy).toHaveBeenCalledWith('b1', 'v2'));
+    await waitFor(() => expect(api.adoptPlan).toHaveBeenCalledWith('b1', 'pv2'));            // plan reshaped → Today re-derives
     expect(await screen.findByText('verdict.adopted')).toBeInTheDocument();
   });
 

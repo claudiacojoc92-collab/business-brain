@@ -24,12 +24,18 @@ export interface ImpactStrategyPort {
 
 export interface EvaluateOptions {
   /**
-   * Whether the evaluator should persist the input as founder-owned state. Default true (outcome report /
-   * baseline refresh have no prior write). Add Context passes false — its own primitive (submitCorrection /
-   * learnFromMaterial / learnBusiness) already wrote the input into the state the strategy engine reads, so
-   * the evaluator must not double-write; on a strategic shift it regenerates over that already-updated state.
+   * Whether the evaluator owns persisting the STRATEGIC input. Default true (outcome report / baseline refresh
+   * have no prior write → recordFounderInput appends + regenerates). Add Context passes false — its own
+   * primitive already wrote the input into the state the strategy engine reads, so on a strategic shift the
+   * evaluator regenerates over that already-updated state instead of re-appending.
+   *
+   * NOTE: a non-strategic TUNE constraint (kind='constraint') is ALWAYS persisted regardless of this flag,
+   * because no Add Context primitive writes a kind='constraint' — that operating-constraint channel is what
+   * Today's readiness reads. The only skip is a business_correction from Add Context (already written).
    */
   persistInput?: boolean;
+  /** The founder's current Today move — lets a TUNE constraint bind to (and block) the move it conflicts with. */
+  currentMove?: { actionId: string; what: string } | null;
 }
 
 export type ImpactEvent =
@@ -101,6 +107,7 @@ export class ImpactService {
       reconsiderTriggers: (core?.reconsiderTriggers ?? []).map((r) => r.condition).filter(Boolean),
       notNow: (core?.notNow ?? []).map((n) => n.item).filter(Boolean),
       baseline: baselineOf(snap?.understanding ?? null, active),
+      currentMove: opts.currentMove ? { what: opts.currentMove.what } : null,
     };
 
     const signal = await this.deps.model.assess(assess);
@@ -119,10 +126,19 @@ export class ImpactService {
         : await this.deps.strategy.regenerate(businessId, businessName, language);
       result.strategyImpact.newVersion = { id: newVersion.id, version: newVersion.version, status: newVersion.status, strategy: newVersion.bundle };
       this.deps.log?.({ type: 'regenerated', verdict: result.verdict, version: newVersion.version });
-    } else if (input && persistInput) {
-      // No strategic change → persist the input as founder-owned state (never regenerate), so it is not lost
-      // and future planning/derivation can read it. `scope` records the surface the input arrived through.
-      await this.deps.state.append({ id: generateId(), businessId, founderId, kind, statement: input, scope: source, language, sourceTurnId: null });
+    } else if (input) {
+      // No strategic change → persist the input as founder-owned state (never regenerate) so it is not lost and
+      // Today/plan derivation can read it. Skip ONLY a business_correction from Add Context, which its own
+      // submitCorrection primitive already wrote. A TUNE constraint that conflicts with the current move is
+      // SCOPED to that move's actionId so readiness blocks it (Today re-derives to the next non-conflicting one);
+      // otherwise it is scoped to the arriving surface and surfaced as general Today context.
+      const alreadyWrittenByDrawer = source === 'add_context' && kind === 'business_correction';
+      if (!alreadyWrittenByDrawer) {
+        const scope = (kind === 'constraint' && signal.conflictsWithCurrentMove && opts.currentMove?.actionId)
+          ? opts.currentMove.actionId
+          : source;
+        await this.deps.state.append({ id: generateId(), businessId, founderId, kind, statement: input, scope, language, sourceTurnId: null });
+      }
     }
 
     return { result, newVersion };

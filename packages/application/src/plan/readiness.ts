@@ -10,6 +10,10 @@ export interface ReadinessInputs {
   readonly strategyStale: boolean;
   readonly availableMaterial: ReadonlySet<string>; // material the strategy currently licenses
   readonly decisionNeeded: ReadonlySet<string>;    // actionIds that require a founder decision first
+  // Living State (TUNE): actionId → the operating constraint that makes this move inappropriate now. Populated
+  // from a persisted founder_state constraint scoped to the action (by the impact evaluator). READ-PATH ONLY —
+  // no plan mutation; the constrained move is simply blocked so Today re-derives to the next non-conflicting one.
+  readonly constrainedActions?: ReadonlyMap<string, string>;
 }
 
 /** Latest terminal outcome per action from the append-only ledger (last write wins by order). */
@@ -60,6 +64,8 @@ export function deriveReadiness(action: Action, outcomes: Map<string, ActionStat
   const missing = action.requiredMaterial.find((m) => !materialAvailable(m, inputs.availableMaterial));
   if (missing) return { actionId: action.actionId, readiness: 'blocked', blocker: { kind: 'missing_material', detail: `Missing: ${missing}.`, material: missing } };
   if (inputs.decisionNeeded.has(action.actionId)) return { actionId: action.actionId, readiness: 'blocked', blocker: { kind: 'founder_decision', detail: 'Needs a decision from you first.' } };
+  const constraint = inputs.constrainedActions?.get(action.actionId);
+  if (constraint) return { actionId: action.actionId, readiness: 'blocked', blocker: { kind: 'operating_constraint', detail: constraint } };
   return { actionId: action.actionId, readiness: 'ready', blocker: null };
 }
 

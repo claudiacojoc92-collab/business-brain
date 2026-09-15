@@ -11,6 +11,7 @@ const base: ImpactSignal = {
   todayNextMove: null,
   todayReason: '',
   founderStateKind: 'constraint',
+  conflictsWithCurrentMove: false,
 };
 
 const held = { hasHeldStrategy: true, source: 'add_context' as const };

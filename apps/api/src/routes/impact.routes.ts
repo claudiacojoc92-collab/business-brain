@@ -65,7 +65,14 @@ export function registerImpactRoutes(server: FastifyInstance, deps: ServerDeps):
     // calling here, so the evaluator must not double-write; outcome reports & baseline refreshes have no prior
     // write, so the evaluator persists them.
     const persistInput = source !== 'add_context';
-    const { result, newVersion } = await deps.impactService.evaluate(business.id, founderId, business.name, source, text, language, { persistInput });
+    // Fetch the founder's current Today move so a TUNE constraint can bind to (and block) the move it conflicts with.
+    let currentMove: { actionId: string; what: string } | null = null;
+    try {
+      const today = await deps.planService.today(business.id);
+      const first = today?.ready?.[0];
+      if (first) currentMove = { actionId: first.actionId, what: first.what };
+    } catch { /* no plan / no move — the evaluator handles a null current move */ }
+    const { result, newVersion } = await deps.impactService.evaluate(business.id, founderId, business.name, source, text, language, { persistInput, currentMove });
 
     // Project (scrub) the regenerated bundle for the founder, keeping the version handle for adopt/challenge.
     const projected = newVersion
@@ -79,6 +86,7 @@ export function registerImpactRoutes(server: FastifyInstance, deps: ServerDeps):
         verdict: result.verdict, source,
         whatChanged: result.whatChanged.slice(0, 4),
         todayChanges: result.todayImpact.changes,
+        todayReason: result.todayImpact.reason,
         newMove: result.todayImpact.newMove,
         strategyChanges: result.strategyImpact.changes,
         newVersionId: newVersion?.id ?? null,

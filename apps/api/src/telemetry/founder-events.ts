@@ -82,7 +82,9 @@ export interface ReturnEvent {
 }
 
 export interface ReturnSummary {
-  /** true only when there is a previous visit AND something meaningful happened since it. */
+  /** whether to render the block at all: a prior visit exists AND the gap is a real absence (not same-session). */
+  readonly show: boolean;
+  /** true when the block has real content; false ⇒ a calm "nothing moved" after a genuine absence. */
   readonly hasChanges: boolean;
   readonly changes: string[];
   readonly strategyMoved: boolean;
@@ -91,17 +93,30 @@ export interface ReturnSummary {
   readonly oneThing: string | null;
   /** ISO timestamp of the previous visit, or null on a first visit. */
   readonly since: string | null;
+  /** whole hours since the previous visit, or null on a first visit. */
+  readonly awayHours: number | null;
 }
 
 const asStrings = (v: unknown): string[] =>
   Array.isArray(v) ? v.map((x) => String(x ?? '').trim()).filter(Boolean) : [];
 
+// A gap below this is treated as the SAME working session (a refresh / a return minutes later) → no block.
+// Above it is a real absence worth summarizing. (>24h absences, the acceptance case, clear it comfortably.)
+const SESSION_GAP_MS = 30 * 60 * 1000;
+
 /**
- * Pure aggregation (unit-tested): fold the events since the previous visit into a return summary. `since`
- * null ⇒ first visit ⇒ never reports changes. Newest-relevant "one thing" wins; changes are deduped + capped.
+ * Pure aggregation (unit-tested): fold the events since the previous visit into a return summary.
+ * - No prior visit (since null) ⇒ never show (first ever visit).
+ * - Gap < SESSION_GAP_MS ⇒ same session ⇒ never show (no "since you were last here" on a quick return).
+ * - A real absence ⇒ show; if events happened, summarize them (deduped + capped, freshest one-thing wins);
+ *   if nothing happened, show calmly (hasChanges=false) — never invent activity.
  */
-export function summarizeReturn(events: ReturnEvent[], since: string | null): ReturnSummary {
-  if (!since) return { hasChanges: false, changes: [], strategyMoved: false, todayChanged: false, oneThing: null, since: null };
+export function summarizeReturn(events: ReturnEvent[], since: string | null, nowIso: string): ReturnSummary {
+  const empty = { show: false, hasChanges: false, changes: [], strategyMoved: false, todayChanged: false, oneThing: null };
+  if (!since) return { ...empty, since: null, awayHours: null };
+  const awayMs = Math.max(0, new Date(nowIso).getTime() - new Date(since).getTime());
+  const awayHours = Math.floor(awayMs / 3_600_000);
+  if (awayMs < SESSION_GAP_MS) return { ...empty, since, awayHours }; // same session — suppress
 
   const changes: string[] = [];
   let strategyMoved = false;
@@ -129,7 +144,38 @@ export function summarizeReturn(events: ReturnEvent[], since: string | null): Re
 
   const capped = changes.slice(0, 4);
   const hasChanges = capped.length > 0 || strategyMoved || todayChanged;
-  return { hasChanges, changes: capped, strategyMoved, todayChanged, oneThing, since };
+  return { show: true, hasChanges, changes: capped, strategyMoved, todayChanged, oneThing, since, awayHours };
+}
+
+// ── "Today updated because …" — the same-session reason line on Today (distinct from the return block) ──
+
+export type TodayNote =
+  | { readonly kind: 'strategy_adopted'; readonly version: number }
+  | { readonly kind: 'impact'; readonly reason: string }
+  | null;
+
+const TODAY_NOTE_WINDOW_MS = 24 * 3_600_000;
+
+/**
+ * Pure (unit-tested): the most recent Today-changing event within the window becomes the "Today updated
+ * because" note — a strategy adoption (→ "strategy vN adopted") or a TUNE/impact with a real Today change.
+ * Events must be ascending; the last qualifying one wins.
+ */
+export function summarizeTodayNote(events: ReturnEvent[], nowIso: string): TodayNote {
+  const now = new Date(nowIso).getTime();
+  let note: TodayNote = null;
+  for (const ev of events) {
+    if (now - new Date(ev.occurredAt).getTime() > TODAY_NOTE_WINDOW_MS) continue;
+    const m = ev.metadata ?? {};
+    if (ev.eventType === 'strategy_adopted') {
+      const v = Number(m['version']);
+      if (Number.isFinite(v) && v > 0) note = { kind: 'strategy_adopted', version: v };
+    } else if (ev.eventType === 'impact_evaluated' && m['todayChanges'] === true) {
+      const reason = String(m['todayReason'] ?? '').trim();
+      if (reason) note = { kind: 'impact', reason };
+    }
+  }
+  return note;
 }
 
 /**
@@ -138,6 +184,7 @@ export function summarizeReturn(events: ReturnEvent[], since: string | null): Re
  * error yields an empty (no-changes) summary so Today never fails on telemetry.
  */
 export async function readReturnSummary(db: KyselyDB, businessId: string, accountId: string): Promise<ReturnSummary> {
+  const nowIso = new Date().toISOString();
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const anchorRow: any = await sql`
@@ -164,8 +211,32 @@ export async function readReturnSummary(db: KyselyDB, businessId: string, accoun
         occurredAt: new Date(r.occurred_at).toISOString(),
       }));
     }
-    return summarizeReturn(events, since);
+    return summarizeReturn(events, since, nowIso);
   } catch {
-    return { hasChanges: false, changes: [], strategyMoved: false, todayChanged: false, oneThing: null, since: null };
+    return { show: false, hasChanges: false, changes: [], strategyMoved: false, todayChanged: false, oneThing: null, since: null, awayHours: null };
+  }
+}
+
+/** Read the "Today updated because …" note — the most recent Today-changing event within the last 24h. */
+export async function readTodayNote(db: KyselyDB, businessId: string, accountId: string): Promise<TodayNote> {
+  const nowIso = new Date().toISOString();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any = await sql`
+      SELECT event_type, metadata, occurred_at FROM app.founder_event
+      WHERE business_id = ${businessId} AND account_id = ${accountId}
+        AND event_type IN ('strategy_adopted', 'impact_evaluated')
+        AND occurred_at > ${new Date(Date.now() - TODAY_NOTE_WINDOW_MS).toISOString()}
+      ORDER BY occurred_at ASC LIMIT 50
+    `.execute(db);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const events: ReturnEvent[] = (rows?.rows ?? []).map((r: any) => ({
+      eventType: String(r.event_type),
+      metadata: (typeof r.metadata === 'object' && r.metadata) ? r.metadata : {},
+      occurredAt: new Date(r.occurred_at).toISOString(),
+    }));
+    return summarizeTodayNote(events, nowIso);
+  } catch {
+    return null;
   }
 }
