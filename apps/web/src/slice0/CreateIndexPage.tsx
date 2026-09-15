@@ -10,8 +10,9 @@ const clip = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n -
 /**
  * Create entry (M5B) — the honest top-level Create surface. Create is NOT a tool menu or a blank generator:
  * it leads with the ONE strategic move that can become something publishable, framed by the strategy that
- * produced it. When BB is not holding a creation job it says so plainly and points back to Today — it never
- * offers a bare generator or a module picker (carousel/photos/reel), and it never biases Today toward content.
+ * produced it. When the held strategy does not call for content right now, Create says so PLAINLY, explains
+ * why (the strategy's own stance), and links back to the strategy — it never contradicts the strategy by
+ * pushing "turn this into content", never offers a bare generator/module picker, never biases Today.
  */
 export function CreateIndexPage() {
   const { id } = useParams<{ id: string }>();
@@ -21,6 +22,7 @@ export function CreateIndexPage() {
   const [business, setBusiness] = useState<Business | null | undefined>(undefined);
   const [move, setMove] = useState<TodayAction | null>(null);
   const [bet, setBet] = useState('');
+  const [contentRole, setContentRole] = useState('');
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loadErr, setLoadErr] = useState(false);   // B3 — transient load failure, distinct from a true 404
@@ -33,7 +35,10 @@ export function CreateIndexPage() {
     catch (e) { if (isNotFound(e)) setBusiness(null); else setLoadErr(true); return; }
     const [td, st] = await Promise.allSettled([getToday(id), getCurrentStrategy(id)]);
     if (td.status === 'fulfilled') setMove((td.value.ready ?? []).find((a) => a.canCreate) ?? null);
-    if (st.status === 'fulfilled') setBet(st.value.strategy?.core?.coreBet?.priority ?? '');
+    if (st.status === 'fulfilled') {
+      setBet(st.value.strategy?.core?.coreBet?.priority ?? '');
+      setContentRole((st.value.strategy?.branch?.contentRole ?? '').trim());
+    }
     setLoaded(true);
   }, [id]);
 
@@ -69,13 +74,19 @@ export function CreateIndexPage() {
             </div>
           </>
         ) : bet ? (
+          // A strategy is held but it is NOT calling for content right now (no create-capable move). Say so
+          // plainly and explain with the strategy's OWN stance — never contradict it by pushing content.
           <>
             {bet && <div className="s0-today2-from">{t('today2.because')} <span className="em">{clip(bet, 120)}</span></div>}
-            <h1 className="s0-h1">{t('create.concepts.title')}</h1>
-            <p className="s0-lede">{t('create.concepts.body')}</p>
-            <div className="s0-strat-actions" style={{ marginTop: 18 }}>
-              <button type="button" className="s0-plan-primary" style={{ maxWidth: 320 }} onClick={() => navigate(`/b/${id}/voice`)}>
-                {t('create.concepts.cta')} →
+            <h1 className="s0-h1">{t('create.notnow.title')}</h1>
+            <p className="s0-lede">{t('create.notnow.body')}</p>
+            {contentRole ? <p className="s0-hint" style={{ marginTop: 8 }}>{t('create.notnow.role', { role: clip(contentRole, 200) })}</p> : null}
+            <div className="s0-strat-actions" style={{ marginTop: 18, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <button type="button" className="s0-plan-primary" style={{ maxWidth: 320 }} onClick={() => navigate(`/b/${id}/strategy`)}>
+                {t('create.notnow.toStrategy')} →
+              </button>
+              <button type="button" className="s0-btn-ghost" style={{ maxWidth: 240 }} onClick={() => navigate(`/b/${id}/today`)}>
+                {t('create.notnow.toToday')}
               </button>
             </div>
           </>
