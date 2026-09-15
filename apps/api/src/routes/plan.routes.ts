@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { ServerDeps } from '../server';
-import { recordFounderEvent } from '../telemetry/founder-events';
+import { recordFounderEvent, readReturnSummary } from '../telemetry/founder-events';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
 import type { PlanVersion, Priority, Action, ActionOutcome } from '@bb/application';
 
@@ -124,12 +124,18 @@ export function registerPlanRoutes(server: FastifyInstance, deps: ServerDeps): v
   });
 
   // Today = derived readiness over the Active plan (≤3 ready, or the single most-relevant blocker).
+  // Living State: it also carries "since you were last here" — the return-loop summary read from
+  // founder_event since the previous visit — then advances the visit anchor. No new state model; it lives
+  // ON Today, never as a separate page or feed.
   server.get('/v1/businesses/:id/plan/today', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { business } = await requireBusiness(request);
+    const { founderId, business } = await requireBusiness(request);
+    const sinceLastHere = await readReturnSummary(deps.db, business.id, founderId);
+    // Advance the anchor AFTER reading, so the next visit's window starts here.
+    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'return_summary_shown', surface: 'today', metadata: {} });
     const active = await deps.planService.getActivePlan(business.id);
     const today = await deps.planService.today(business.id);
-    if (!active || !today) { await reply.status(200).send({ state: 'none' }); return; }
-    await reply.status(200).send({ state: 'active', ...projectToday(today, active.plan) });
+    if (!active || !today) { await reply.status(200).send({ state: 'none', sinceLastHere }); return; }
+    await reply.status(200).send({ state: 'active', ...projectToday(today, active.plan), sinceLastHere });
   });
 
   // Mark an action done/deferred/skipped — append-only; applies to the Active plan only.

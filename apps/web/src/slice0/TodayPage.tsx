@@ -4,10 +4,12 @@ import { useLocale } from '../i18n/LocaleContext';
 import { AppShell } from './AppShell';
 import { useTalk } from './TalkDrawer';
 import { isNotFound, LoadError } from './errors';
+import { VerdictSurface } from './VerdictSurface';
 import {
   getBusiness, getToday, getPlanState, proposePlan, adoptPlan, getCurrentStrategy,
-  applyActionOutcome, createFromAction, resolveActionState, submitCorrection,
+  applyActionOutcome, createFromAction, resolveActionState, submitCorrection, evaluateImpact,
   type Business, type TodayResp, type TodayBlocked, type PlanActiveResp, type StrategyResp,
+  type ImpactResult, type ReturnSummary,
 } from '../api/client';
 
 /**
@@ -42,6 +44,9 @@ export function TodayPage() {
   const [loaded, setLoaded] = useState(false);
   const [loadErr, setLoadErr] = useState(false);   // B3 — transient load failure, distinct from a true 404
   const [actionError, setActionError] = useState<string | null>(null); // B1 — a primary action that failed
+  const [verdict, setVerdict] = useState<ImpactResult | null>(null); // Living State: the last impact verdict
+  const [reporting, setReporting] = useState(false);
+  const [outcomeText, setOutcomeText] = useState('');
   const started = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -91,6 +96,20 @@ export function TodayPage() {
     try { const r = await createFromAction(id, actionId); navigate(`/b/${id}/create/${r.createHandoffId}`); }
     catch { setActionError(t('common.actionFailed')); }
     finally { setBusy(null); }
+  }
+  // Living State: the founder reports an outcome of their work → assessed against the held strategy + baseline,
+  // returning the shared verdict surface (STILL_HOLDS / TUNE / REVISE / RECONSIDER).
+  async function reportOutcome() {
+    if (!id || !outcomeText.trim()) return;
+    setBusy('report'); setActionError(null);
+    try {
+      const r = await evaluateImpact(id, 'outcome_report', outcomeText.trim());
+      setVerdict(r); setReporting(false); setOutcomeText('');
+    } catch { setActionError(t('common.actionFailed')); } finally { setBusy(null); }
+  }
+  async function dismissVerdict() {
+    setVerdict(null);
+    await refresh(); // a regenerated/adopted strategy or a new next move re-derives Today
   }
 
   // ── Kind-specific responses to a BLOCKED move. Each maps to its own correct primitive; none marks the
@@ -188,11 +207,23 @@ export function TodayPage() {
   const move = ready[0];
   const others = ready.slice(1);
   const base = `/b/${id}`;
+  const since = today?.sinceLastHere;
+  // The outcome reporter is offered wherever there is a held strategy to assess a result against.
+  const canReport = strategyAdopted && stage !== 'shaping';
 
   return (
     <AppShell>
       {actionError && <div className="s0-error" role="alert">{actionError}</div>}
       <div className="s0-today2">
+        {/* Living State — the verdict surface takes over Today until dismissed (an outcome/impact was just assessed). */}
+        {verdict ? (
+          <div className="s0-today2-verdict">
+            <VerdictSurface businessId={id ?? ''} result={verdict} onDismiss={dismissVerdict} onAdopted={dismissVerdict} />
+          </div>
+        ) : (
+          <>
+            {/* "Since you were last here" — return-loop summary read from founder_event. Lives ON Today. */}
+            {since?.hasChanges ? <SinceBlock since={since} t={t} /> : null}
         {stage === 'no_strategy' ? (
           <Empty from={t('today2.today')} lead={t('today2.needStrategy')} cta={t('today2.toStrategy')} onCta={() => navigate(`${base}/strategy`)} />
         ) : stage === 'shaping' ? (
@@ -269,8 +300,56 @@ export function TodayPage() {
         ) : (
           <Empty from={t('today2.today')} lead={t('today2.allclear')} />
         )}
+            {canReport ? (
+              <OutcomeReporter
+                reporting={reporting} onOpen={() => setReporting(true)} onCancel={() => { setReporting(false); setOutcomeText(''); }}
+                text={outcomeText} setText={setOutcomeText} onSubmit={reportOutcome} busy={busy === 'report'} t={t}
+              />
+            ) : null}
+          </>
+        )}
       </div>
     </AppShell>
+  );
+}
+
+/** "Since you were last here" — a single compact line on Today, never a feed or a page. */
+function SinceBlock({ since, t }: { since: ReturnSummary; t: Tr }) {
+  const changes = since.changes.length > 0 ? since.changes.join(' · ') : t('since.quiet');
+  return (
+    <div className="s0-since" role="status">
+      <div className="s0-since-k">{t('since.k')}</div>
+      <p className="s0-since-changes">{changes}</p>
+      <p className="s0-since-line">
+        <span className="s0-since-lab">{t('since.strategy')}</span> {since.strategyMoved ? t('since.revised') : t('since.holds')}
+        {since.oneThing ? <> · <span className="s0-since-lab">{t('since.today')}</span> {since.oneThing}</> : null}
+      </p>
+    </div>
+  );
+}
+
+/** The outcome-report entry: a founder reports a result of their work → the impact evaluator (source=outcome_report). */
+function OutcomeReporter(props: {
+  reporting: boolean; onOpen: () => void; onCancel: () => void;
+  text: string; setText: (s: string) => void; onSubmit: () => void; busy: boolean; t: Tr;
+}) {
+  const { reporting, text, setText, busy, t } = props;
+  if (!reporting) {
+    return (
+      <div className="s0-today2-report">
+        <button type="button" className="s0-today2-report-open" onClick={props.onOpen}>{t('today2.report')}</button>
+      </div>
+    );
+  }
+  return (
+    <div className="s0-today2-report s0-today2-report-open-form">
+      <div className="s0-today2-k">{t('today2.reportK')}</div>
+      <textarea className="s0-blk-input" rows={3} placeholder={t('today2.reportPh')} value={text} onChange={(e) => setText(e.target.value)} disabled={busy} autoFocus />
+      <div className="s0-today2-actions">
+        <button type="button" className="s0-btn" disabled={busy || !text.trim()} onClick={props.onSubmit}>{busy ? t('today2.working') : t('today2.reportSubmit')}</button>
+        <button type="button" className="s0-today2-defer" disabled={busy} onClick={props.onCancel}>{t('today2.blk.cancel')}</button>
+      </div>
+    </div>
   );
 }
 

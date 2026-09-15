@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
-import { learnFromMaterial, learnFromMaterialFile, learnBusiness, submitCorrection } from '../api/client';
+import { learnFromMaterial, learnFromMaterialFile, learnBusiness, submitCorrection, evaluateImpact, type ImpactResult } from '../api/client';
+import { VerdictSurface } from './VerdictSurface';
 
 /**
  * Add context — the persistent "something changed / add material / add a link" strategist action, a global
@@ -53,6 +54,7 @@ function AddContextDrawer({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [verdict, setVerdict] = useState<ImpactResult | null>(null);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -68,6 +70,15 @@ function AddContextDrawer({ onClose }: { onClose: () => void }) {
     }
   }
 
+  // After the primitive writes the input, assess its impact against the held strategy + baseline and show the
+  // shared verdict surface — never a bare "Saved". `text` is the founder's stated change; the primitive has
+  // already persisted it, so the evaluator assesses without double-writing (server passes persistInput=false).
+  async function assess(assessText: string) {
+    if (!businessId) return;
+    try { setVerdict(await evaluateImpact(businessId, 'add_context', assessText)); }
+    catch { /* the write succeeded; if assessment fails, fall back to the static confirmation */ }
+  }
+
   async function submit() {
     if (!businessId || !intent) return;
     setBusy(true); setError(null);
@@ -81,6 +92,7 @@ function AddContextDrawer({ onClose }: { onClose: () => void }) {
         if (text.trim().length < 20) { setError(t('add.err.short')); setBusy(false); return; }
         await learnFromMaterial(businessId, text.trim(), 'add_context');
         setDone(t('add.done.material'));
+        await assess(text.trim());
       } else if (intent === 'link') {
         if (!url.trim()) { setError(t('add.err.url')); setBusy(false); return; }
         await learnBusiness(businessId, url.trim());
@@ -89,11 +101,12 @@ function AddContextDrawer({ onClose }: { onClose: () => void }) {
         if (text.trim().length < 3) { setError(t('add.err.short')); setBusy(false); return; }
         await submitCorrection(businessId, subject, text.trim());
         setDone(t('add.done.changed'));
+        await assess(text.trim());
       }
     } catch { setError(t('add.err.generic')); } finally { setBusy(false); }
   }
 
-  const reset = () => { setIntent(null); setText(''); setFile(null); setUrl(''); setDone(null); setError(null); };
+  const reset = () => { setIntent(null); setText(''); setFile(null); setUrl(''); setDone(null); setError(null); setVerdict(null); };
 
   return (
     <>
@@ -107,6 +120,12 @@ function AddContextDrawer({ onClose }: { onClose: () => void }) {
         <div className="s0-talk-scroll">
           {!businessId ? (
             <p className="s0-talk-note">{t('add.nobiz')}</p>
+          ) : verdict ? (
+            <div className="s0-add-done">
+              <div className="s0-lp-k">{t('add.updated')}</div>
+              <VerdictSurface businessId={businessId} result={verdict} onDismiss={onClose} onAdopted={onClose} />
+              <button type="button" className="s0-today2-defer" style={{ marginTop: 12 }} onClick={reset}>{t('add.another')}</button>
+            </div>
           ) : done ? (
             <div className="s0-add-done">
               <div className="s0-lp-k">{t('add.updated')}</div>

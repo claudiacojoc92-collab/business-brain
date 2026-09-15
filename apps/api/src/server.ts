@@ -11,6 +11,7 @@ import type {
   BusinessCorrectionService,
   Aha2Service,
   StrategyService,
+  ImpactService,
   VoiceService,
   PlanService,
   CarouselService,
@@ -45,6 +46,7 @@ export interface ServerDeps {
   businessCorrectionService: BusinessCorrectionService;
   aha2Service: Aha2Service;
   strategyService: StrategyService;
+  impactService: ImpactService;
   voiceService: VoiceService;
   planService: PlanService;
   carouselService: CarouselService;

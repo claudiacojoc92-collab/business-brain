@@ -426,6 +426,23 @@ export function respondToStrategy(businessId: string, kind: string, statement: s
   return request<StrategyResp>(`${S(businessId)}/respond`, { method: 'POST', body: JSON.stringify({ kind, statement }) });
 }
 
+// ── Living State: the impact evaluator (new reality → held state → explicit verdict) ──
+export type ImpactVerdict = 'STILL_HOLDS' | 'TUNE' | 'REVISE' | 'RECONSIDER';
+export type ImpactSource = 'baseline_refresh' | 'add_context' | 'outcome_report';
+export interface AssumptionImpact { assumption: string; direction: 'stronger' | 'weaker' | 'unchanged'; note: string }
+export interface ImpactResult {
+  verdict: ImpactVerdict;
+  whatChanged: string[];
+  whatDidNotChange: string[];
+  assumptionImpacts: AssumptionImpact[];
+  todayImpact: { changes: boolean; reason: string; newMove: string | null };
+  strategyImpact: { changes: boolean; reason: string; newVersion: { id: string; version: number; status: string; strategy: StrategyBundle } | null };
+  source: ImpactSource;
+}
+export function evaluateImpact(businessId: string, source: ImpactSource, text: string): Promise<ImpactResult> {
+  return request<ImpactResult>(`v1/businesses/${encodeURIComponent(businessId)}/impact/evaluate`, { method: 'POST', body: JSON.stringify({ source, text }) });
+}
+
 // ── Slice 4: voice calibration ──
 export interface VoiceSampleContent { hook?: string; beats?: string[]; caption?: string; cta?: string }
 export interface VoiceSample {
@@ -480,10 +497,19 @@ export interface TodayBlocked {
   material?: string | null;     // missing_material → the exact required material to confirm/deny
   prerequisite?: { actionId: string; what: string } | null; // prerequisite_unfinished → the thing to resolve (NOT the child)
 }
+export interface ReturnSummary {
+  hasChanges: boolean;
+  changes: string[];
+  strategyMoved: boolean;
+  todayChanged: boolean;
+  oneThing: string | null;
+  since: string | null;
+}
 export interface TodayResp {
   state: 'active' | 'none';
   ready?: TodayAction[];
   blocked?: TodayBlocked | null;
+  sinceLastHere?: ReturnSummary;
 }
 export type PlanOutcome = 'done' | 'deferred' | 'skipped';
 const PL = (b: string) => `v1/businesses/${encodeURIComponent(b)}/plan`;

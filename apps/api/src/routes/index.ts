@@ -16,6 +16,7 @@ import { registerBusinessUnderstandingRoutes } from './business-understanding.ro
 import { registerConversationRoutes } from './conversation.routes';
 import { registerEventsRoutes } from './events.routes';
 import { registerStrategyRoutes } from './strategy.routes';
+import { registerImpactRoutes } from './impact.routes';
 import { registerVoiceRoutes } from './voice.routes';
 import { registerPlanRoutes } from './plan.routes';
 import { registerCarouselRoutes } from './carousel.routes';
@@ -49,6 +50,8 @@ export async function registerRoutes(
   registerEventsRoutes(server, deps); // M7 founder-test telemetry
   // Slice 3 — "BB gave me a real strategy": Strategy Proposal → adopt → Current (/v1, JWT).
   registerStrategyRoutes(server, deps);
+  // Living State — impact evaluator (new reality → held state → explicit verdict) (/v1, JWT).
+  registerImpactRoutes(server, deps);
   // Slice 4 — "BB learned my voice": example-grounded voice calibration (/v1, JWT).
   registerVoiceRoutes(server, deps);
   registerPlanRoutes(server, deps);       // Slice 5

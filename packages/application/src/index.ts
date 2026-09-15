@@ -68,3 +68,6 @@ export * from './reel/index';
 
 // Slice 7 V2 — "Tell me what to film" (upstream shoot planning → frozen V1)
 export * from './reel-shoot/index';
+
+// Living State — impact evaluator + return loop (new reality → held state → explicit impact)
+export * from './impact/index';

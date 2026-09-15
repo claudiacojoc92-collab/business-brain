@@ -3,6 +3,7 @@ import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-
 import { useLocale } from '../i18n/LocaleContext';
 import { AppShell } from './AppShell';
 import { useAddContext } from './AddContextDrawer';
+import { VerdictSurface } from './VerdictSurface';
 import { isNotFound, LoadError } from './errors';
 import {
   getBusiness,
@@ -15,12 +16,14 @@ import {
   updateObservation,
   generateAha2,
   getAha2,
+  evaluateImpact,
   type Business,
   type ConvTurn,
   type FounderModel,
   type FounderStateItem,
   type Aha2Finding,
   type UnderstandingView,
+  type ImpactResult,
 } from '../api/client';
 
 type T = (k: string, v?: Record<string, string>) => string;
@@ -45,6 +48,8 @@ export function ConversationPage() {
   const [genning, setGenning] = useState(false);
   const [loadErr, setLoadErr] = useState(false);   // B3 — transient load failure, distinct from a true 404
   const [actionError, setActionError] = useState<string | null>(null); // B1 — a primary action that failed
+  const [showHistory, setShowHistory] = useState(false); // R2B refresh: history is collapsed, not dumped
+  const [verdict, setVerdict] = useState<ImpactResult | null>(null); // Living State: baseline-refresh impact
   const started = useRef(false);
 
   async function refreshModel(bid: string) {
@@ -112,6 +117,18 @@ export function ConversationPage() {
     }
   }
 
+  // Living State: confirming an updated baseline on a deliberate REFRESH assesses what the founder just told
+  // BB against the held strategy → the verdict surface. A first-time baseline (no refresh) goes to Strategy.
+  async function confirmBaseline() {
+    if (!id) return;
+    if (!refreshMode) { navigate(`/b/${id}/strategy`); return; }
+    const answers = turns.filter((tn) => tn.role === 'founder').map((tn) => tn.content).join('\n').trim();
+    if (!answers) { navigate(`/b/${id}/strategy`); return; }
+    setActionError(null);
+    try { setVerdict(await evaluateImpact(id, 'baseline_refresh', answers)); }
+    catch { navigate(`/b/${id}/strategy`); }
+  }
+
   if (loadErr) return <LoadError onRetry={() => { if (id) void load(); }} />;
   if (business === undefined || phase === 'loading') {
     return <AppShell showSignOut><div className="s0-loading">{t('common.loading')}</div></AppShell>;
@@ -123,10 +140,19 @@ export function ConversationPage() {
       {actionError && <div className="s0-error" role="alert">{actionError}</div>}
       <div className="s0-panel s0-panel-wide">
 
-        {phase === 'talk' && (
+        {phase === 'talk' && (() => {
+          // R2B refresh UX: don't dump the whole historical transcript above the refresh question. Lead with a
+          // compact current-state summary + the latest question; keep history one click away.
+          const refreshCollapsed = refreshMode && !showHistory && turns.length > 1;
+          const visibleTurns = refreshCollapsed ? turns.slice(-1) : turns;
+          return (
           <>
+            {refreshMode ? <RefreshSummary understanding={understanding} t={t} /> : null}
+            {refreshCollapsed ? (
+              <button type="button" className="s0-refresh-history" onClick={() => setShowHistory(true)}>{t('refresh.showHistory')}</button>
+            ) : null}
             <div className="s0-thread">
-              {turns.map((tn) => (
+              {visibleTurns.map((tn) => (
                 <div key={tn.id} className={tn.role === 'bb' ? 's0-turn-bb' : 's0-turn-founder'}>{tn.content}</div>
               ))}
             </div>
@@ -155,17 +181,39 @@ export function ConversationPage() {
 
             <FounderModelPanel model={model} t={t} businessId={id ?? ''} onChanged={() => id && refreshModel(id)} />
           </>
-        )}
+          );
+        })()}
 
-        {phase === 'aha2' && (
+        {phase === 'aha2' && verdict && (
+          <VerdictSurface businessId={id ?? ''} result={verdict} onDismiss={() => navigate(`/b/${id}/strategy`)} onAdopted={() => navigate(`/b/${id}/strategy`)} />
+        )}
+        {phase === 'aha2' && !verdict && (
           <BaselineView
             understanding={understanding} model={model} aha2={aha2} t={t}
-            onConfirm={() => navigate(`/b/${id}/strategy`)}
+            onConfirm={confirmBaseline}
             onCorrect={() => addCtx.open()}
           />
         )}
       </div>
     </AppShell>
+  );
+}
+
+/** R2B refresh: a compact "here's what I currently hold" summary shown above the refreshed interview, so the
+ * founder re-enters against their known state instead of scrolling a replayed transcript. */
+function RefreshSummary({ understanding, t }: { understanding: UnderstandingView | null; t: T }) {
+  const u = understanding?.understanding;
+  const offer = (u?.offer?.summary ?? '').trim();
+  const audience = (u?.audience?.addressed ?? []).filter(Boolean).slice(0, 3);
+  const acquisition = (u?.acquisition?.visiblePaths ?? []).filter(Boolean).slice(0, 3);
+  if (!offer && audience.length === 0 && acquisition.length === 0) return null;
+  return (
+    <div className="s0-refresh-summary">
+      <div className="s0-refresh-summary-k">{t('refresh.current')}</div>
+      {offer ? <p className="s0-refresh-summary-offer">{offer}</p> : null}
+      {audience.length > 0 ? <p className="s0-refresh-summary-line"><span>{t('baseline.audience')}</span> {audience.join(' · ')}</p> : null}
+      {acquisition.length > 0 ? <p className="s0-refresh-summary-line"><span>{t('baseline.acquisition')}</span> {acquisition.join(' · ')}</p> : null}
+    </div>
   );
 }
 
