@@ -48,6 +48,21 @@ function windowTranscript(turns: { role: 'founder' | 'bb'; content: string }[]):
 // The interview builds a CURRENT-STATE baseline before any recommendation — not just the founder's goal, but
 // how the business markets itself TODAY, what already works, and what capacity exists. These seed the adaptive
 // conversation (the model still asks only what it can't already observe, and may deem itself ready early).
+/**
+ * The founder-self needs — keys prefixed `self_` so the model tags their answers scope='founder_self' and the
+ * service can deterministically fall back to that tag. These surface ONLY in the mirror; never as a profile.
+ */
+export const FOUNDER_SELF_NEEDS = [
+  { key: 'self_hidden_truth', whatMissing: "What the founder believes is true about the business that BB couldn't see from the website", whyMatters: 'Surfaces conviction the sources cannot show — the mirror contrasts it with the observed.' },
+  { key: 'self_stopped', whatMissing: 'What the founder tried in marketing and stopped doing — and what made them stop', whyMatters: 'A stopped effort + its reason often contradicts a stated belief; the mirror holds them together.' },
+  { key: 'self_refused', whatMissing: 'What the founder has deliberately decided NOT to do even though it might work — and why', whyMatters: 'A refusal the strategy may nonetheless depend on is the sharpest mirror contrast.' },
+  { key: 'self_losing', whatMissing: 'Where the founder thinks they lose customers today', whyMatters: 'A believed leak the sources do not corroborate is a real mismatch to reflect.' },
+  { key: 'self_unsure', whatMissing: "What the founder wants to be true about the business but isn't fully sure is true", whyMatters: 'Names an assumption the founder half-holds — the mirror asks whether the evidence supports it.' },
+  { key: 'self_avoided_decision', whatMissing: 'A decision the founder has been putting off', whyMatters: 'An avoided decision the strategy forces is a contrast worth surfacing calmly.' },
+  { key: 'self_wrong_if_fails', whatMissing: 'What the founder would have to admit they were wrong about if the current direction fails', whyMatters: 'Names the load-bearing belief — the mirror checks it against what BB observed.' },
+];
+const isSelfNeed = (key: string): boolean => key.startsWith('self_');
+
 const CORE_NEEDS = [
   { key: 'goal', whatMissing: "The founder's primary goal — and roughly where they want the business in 3, 6, and 12 months", whyMatters: 'Sets what the strategy optimizes for, across horizons.' },
   { key: 'horizon', whatMissing: "The founder's time horizon", whyMatters: 'Bounds what is realistic to pursue.' },
@@ -55,6 +70,10 @@ const CORE_NEEDS = [
   { key: 'acquisition_today', whatMissing: 'Where customers come from today, and what currently brings leads', whyMatters: 'Grounds the strategy in the real current acquisition path.' },
   { key: 'whats_working', whatMissing: "What's already working, and what feels stuck, inconsistent, or has been tried", whyMatters: 'So BB reinforces strengths and targets the real problem — not a generic one.' },
   { key: 'capacity', whatMissing: 'Capacity and constraints today — founder time, team, budget, content and sales capacity', whyMatters: 'So the plan fits what the founder can actually sustain.' },
+  // Founder-self lanes (the MIRROR's Lane 3): how the founder thinks, decides, and gets stuck. Asked
+  // adaptively as a strategist would — not a form, not a test. Answers persist with scope='founder_self' so
+  // the mirror can reflect them back distinctly and contrast them with the observed + declared-business lanes.
+  ...FOUNDER_SELF_NEEDS,
 ];
 
 export interface FounderModelProjection {
@@ -140,11 +159,15 @@ export class ConversationService {
 
     const out = await this.deps.model.step(await this.buildStepInput(businessId, businessName, language, session.id, message, currentContext));
 
-    // Route founder response to the correct state type (owned vs correction vs observed).
+    // Route founder response to the correct state type (owned vs correction vs observed). A turn that answers
+    // ONLY founder-self needs is self-narrative: its declarations are tagged scope='founder_self' (Lane 3 of the
+    // mirror) even when the model omits the tag — a deterministic fallback so the self lane never silently empties.
+    const selfTurn = out.answeredNeedKeys.length > 0 && out.answeredNeedKeys.every(isSelfNeed);
     for (const d of out.declarations) {
+      const scope = d.scope ?? (selfTurn ? 'founder_self' : null);
       await this.deps.state.append({
         id: generateId(), businessId, founderId,
-        kind: d.kind, statement: d.statement, scope: d.scope ?? null, language, sourceTurnId: founderTurn.id,
+        kind: d.kind, statement: d.statement, scope, language, sourceTurnId: founderTurn.id,
       });
     }
     for (const c of out.businessCorrections) {

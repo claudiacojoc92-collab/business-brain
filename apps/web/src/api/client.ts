@@ -443,6 +443,24 @@ export function evaluateImpact(businessId: string, source: ImpactSource, text: s
   return request<ImpactResult>(`v1/businesses/${encodeURIComponent(businessId)}/impact/evaluate`, { method: 'POST', body: JSON.stringify({ source, text }) });
 }
 
+// ── The Mirror: three lanes (observed / told-business / told-self) + grounded contrast ──
+export interface MirrorLaneItem { label: string; statement: string; provenance?: 'observed' | 'declared' | 'inferred' | 'unknown'; sources?: string[] }
+export interface MirrorMismatch { founderWords: string; founderLane: 'business' | 'self'; against: string; againstLane: 'observed' | 'business' | 'self' | 'strategy'; tension: string }
+export interface MirrorView {
+  observed: MirrorLaneItem[];
+  business: MirrorLaneItem[];
+  self: MirrorLaneItem[];
+  contrasts: MirrorMismatch[];
+  hasSelf: boolean;
+}
+const MIR = (b: string) => `v1/businesses/${encodeURIComponent(b)}/mirror`;
+export function getMirror(businessId: string): Promise<MirrorView> {
+  return request<MirrorView>(MIR(businessId));
+}
+export function correctMirror(businessId: string, subject: string, statement: string): Promise<MirrorView> {
+  return request<MirrorView>(`${MIR(businessId)}/correct`, { method: 'POST', body: JSON.stringify({ subject, statement }) });
+}
+
 // ── Slice 4: voice calibration ──
 export interface VoiceSampleContent { hook?: string; beats?: string[]; caption?: string; cta?: string }
 export interface VoiceSample {

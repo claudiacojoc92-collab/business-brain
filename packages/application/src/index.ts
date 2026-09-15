@@ -71,3 +71,6 @@ export * from './reel-shoot/index';
 
 // Living State — impact evaluator + return loop (new reality → held state → explicit impact)
 export * from './impact/index';
+
+// The Mirror — three lanes (observed / told-business / told-self) + grounded contrast (the differentiator)
+export * from './mirror/index';

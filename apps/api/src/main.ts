@@ -20,7 +20,7 @@ async function main(): Promise<void> {
   const {
     commandBus, queryBus, jwtService, passwordService, businessService, founderAccountService,
     learnBusinessService, discoveredProfileRepo, understandingRepo, ahaRepo,
-    conversationService, businessCorrectionService, aha2Service, strategyService, impactService, voiceService, planService, carouselService,
+    conversationService, businessCorrectionService, aha2Service, strategyService, impactService, mirrorService, voiceService, planService, carouselService,
     photoLedService, photoLedRepo, reelService, reelObjectStore, reelRepo, reelShootService, reelShootRepo,
   } = buildCompositionRoot(db);
 
@@ -29,7 +29,7 @@ async function main(): Promise<void> {
     commandBus, queryBus, jwtService, passwordService,
     businessService, founderAccountService,
     learnBusinessService, discoveredProfileRepo, understandingRepo, ahaRepo,
-    conversationService, businessCorrectionService, aha2Service, strategyService, impactService, voiceService, planService, carouselService,
+    conversationService, businessCorrectionService, aha2Service, strategyService, impactService, mirrorService, voiceService, planService, carouselService,
     photoLedService, photoLedRepo, reelService, reelObjectStore, reelRepo, reelQueue, reelShootService, reelShootRepo,
   });
 

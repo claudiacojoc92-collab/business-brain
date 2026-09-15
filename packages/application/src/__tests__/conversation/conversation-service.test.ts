@@ -54,9 +54,12 @@ describe('ConversationService', () => {
     const m = makeDeps({});
     const view = await new ConversationService(m.deps).startOrResume(P.businessId, P.founderId, P.businessName, P.language);
     expect(m.sessions).toHaveLength(1);
-    // R2A: the interview seeds a current-state baseline (founder goal/horizon + how the business markets
-    // itself today, acquisition, what works, capacity) — not just goal/horizon.
-    expect(m.needs.map((n) => n.key).sort()).toEqual(['acquisition_today', 'capacity', 'current_marketing', 'goal', 'horizon', 'whats_working']);
+    // R2A baseline domains + Block 2 founder-self lanes (self_*, the mirror's Lane 3) — 6 + 7 = 13.
+    expect(m.needs.map((n) => n.key).sort()).toEqual([
+      'acquisition_today', 'capacity', 'current_marketing', 'goal', 'horizon',
+      'self_avoided_decision', 'self_hidden_truth', 'self_losing', 'self_refused', 'self_stopped', 'self_unsure', 'self_wrong_if_fails',
+      'whats_working',
+    ]);
     expect(view.turns.filter((t) => t.role === 'bb')).toHaveLength(1);
   });
 
@@ -66,7 +69,12 @@ describe('ConversationService', () => {
     m.sessions.push({ id: 's1', businessId: P.businessId, conversationLanguage: 'en', status: 'ready_for_aha2', currentFocus: null });
     m.needs.push({ id: 'goal', key: 'goal', status: 'answered' }, { id: 'horizon', key: 'horizon', status: 'answered' });
     const view = await new ConversationService(m.deps).reopen(P.businessId, P.founderId, P.businessName, P.language);
-    expect(m.needs.map((n) => n.key).sort()).toEqual(['acquisition_today', 'capacity', 'current_marketing', 'goal', 'horizon', 'whats_working']); // 4 added, goal/horizon untouched
+    // The 11 not-yet-seeded domains (4 baseline + 7 self) get added; goal/horizon untouched.
+    expect(m.needs.map((n) => n.key).sort()).toEqual([
+      'acquisition_today', 'capacity', 'current_marketing', 'goal', 'horizon',
+      'self_avoided_decision', 'self_hidden_truth', 'self_losing', 'self_refused', 'self_stopped', 'self_unsure', 'self_wrong_if_fails',
+      'whats_working',
+    ]);
     expect(m.getStatus()).toBe('active');        // interview reactivated
     expect(view.readyForAha2).toBe(false);       // reopened → interview, not baseline
     expect(m.sessions).toHaveLength(1);          // same session — nothing reset
@@ -75,9 +83,12 @@ describe('ConversationService', () => {
   it('R2B reopen with every domain already known leaves the session ready (baseline shown directly)', async () => {
     const m = makeDeps({});
     m.sessions.push({ id: 's1', businessId: P.businessId, conversationLanguage: 'en', status: 'ready_for_aha2', currentFocus: null });
-    for (const k of ['goal', 'horizon', 'current_marketing', 'acquisition_today', 'whats_working', 'capacity']) m.needs.push({ id: k, key: k, status: 'answered' });
+    for (const k of ['goal', 'horizon', 'current_marketing', 'acquisition_today', 'whats_working', 'capacity',
+      'self_hidden_truth', 'self_stopped', 'self_refused', 'self_losing', 'self_unsure', 'self_avoided_decision', 'self_wrong_if_fails']) {
+      m.needs.push({ id: k, key: k, status: 'answered' });
+    }
     const view = await new ConversationService(m.deps).reopen(P.businessId, P.founderId, P.businessName, P.language);
-    expect(view.readyForAha2).toBe(true);        // nothing new to ask
+    expect(view.readyForAha2).toBe(true);        // nothing new to ask (all 13 domains known)
     expect(m.getStatus()).toBeNull();            // never reactivated (no open needs)
   });
 
@@ -95,6 +106,42 @@ describe('ConversationService', () => {
     expect(kinds).toContain('business_correction'); // NOT a preference
     expect(kinds).not.toContain('preference');
     expect(m.observeCalls).toHaveLength(1);
+  });
+
+  it('captures a founder-SELF answer as founder_state scope=founder_self (mirror Lane 3), via the model tag', async () => {
+    const m = makeDeps({
+      declarations: [{ kind: 'decision', statement: 'I stopped Instagram because it felt like shouting into the void', scope: 'founder_self' }],
+      answeredNeedKeys: ['self_stopped'],
+    });
+    const svc = new ConversationService(m.deps);
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'I stopped posting on Instagram', P.language);
+    const self = m.stateAppends.find((s) => s.scope === 'founder_self');
+    expect(self).toBeTruthy();
+    expect(self.statement).toMatch(/Instagram/);
+  });
+
+  it('tags an untagged declaration founder_self when the turn answered ONLY self needs (deterministic fallback)', async () => {
+    const m = makeDeps({
+      declarations: [{ kind: 'constraint', statement: 'I refuse to cold-call clinics' }], // model omitted scope
+      answeredNeedKeys: ['self_refused'],
+    });
+    const svc = new ConversationService(m.deps);
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'I won’t cold-call', P.language);
+    expect(m.stateAppends.find((s) => s.scope === 'founder_self')?.statement).toMatch(/cold-call/);
+  });
+
+  it('does NOT self-tag a business-fact turn (answered a business need) — Lane 2 stays scope-null', async () => {
+    const m = makeDeps({
+      declarations: [{ kind: 'goal', statement: 'Twenty members in three months' }],
+      answeredNeedKeys: ['goal'],
+    });
+    const svc = new ConversationService(m.deps);
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'I want 20 members', P.language);
+    const goal = m.stateAppends.find((s) => s.kind === 'goal');
+    expect(goal?.scope ?? null).toBeNull();
   });
 
   it('marks ready_for_aha2 when the model signals readiness', async () => {

@@ -99,6 +99,7 @@ import {
   allowedBusinessFacts,
   PlanService,
   ImpactService,
+  MirrorService,
   founderMaterialStatements,
   CarouselService,
   resolveBrandContext,
@@ -117,6 +118,7 @@ import { AnthropicStrategyModel } from '@bb/infrastructure';
 import { AnthropicVoiceModel } from '@bb/infrastructure';
 import { AnthropicPlanModel } from '@bb/infrastructure';
 import { AnthropicImpactModel } from '@bb/infrastructure';
+import { AnthropicMirrorModel } from '@bb/infrastructure';
 import { AnthropicCarouselModel } from '@bb/infrastructure';
 import { AnthropicObservationModel, AnthropicOpportunityModel } from '@bb/infrastructure';
 import { AnthropicVideoObservationModel, AnthropicReelOpportunityModel } from '@bb/infrastructure';
@@ -141,6 +143,7 @@ export interface CompositionRoot {
   aha2Service: Aha2Service;
   strategyService: StrategyService;
   impactService: ImpactService;
+  mirrorService: MirrorService;
   voiceService: VoiceService;
   planService: PlanService;
   carouselService: CarouselService;
@@ -359,6 +362,16 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     model: new AnthropicImpactModel(anthropicKey),
     // eslint-disable-next-line no-console
     log: (e) => console.error('[impact]', JSON.stringify(e)),
+  });
+
+  // ── The Mirror: three lanes (observed / told-business / told-self) + grounded contrast ──
+  const mirrorService = new MirrorService({
+    understanding: understandingRepo,
+    state: founderStateRepo,
+    strategy: { getCurrent: (bid) => strategyService.getCurrent(bid) },
+    model: new AnthropicMirrorModel(anthropicKey),
+    // eslint-disable-next-line no-console
+    log: (e) => console.error('[mirror]', JSON.stringify(e)),
   });
 
   // ── Slice 4: voice (example-grounded Voice Model + calibration) ──
@@ -590,7 +603,7 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     commandBus, queryBus, jwtService, passwordService, internalBriefRepo,
     businessService, founderAccountService,
     learnBusinessService, discoveredProfileRepo, understandingRepo, ahaRepo,
-    conversationService, businessCorrectionService, aha2Service, strategyService, impactService, voiceService, planService, carouselService,
+    conversationService, businessCorrectionService, aha2Service, strategyService, impactService, mirrorService, voiceService, planService, carouselService,
     photoLedService, photoLedRepo,
     reelService, reelObjectStore, reelRepo,
     reelShootService, reelShootRepo,

@@ -40,7 +40,9 @@ export type FounderEventType =
   // Living State — impact evaluator + return loop.
   | 'impact_evaluated'       // a new reality was assessed against the held strategy (carries the verdict)
   | 'outcome_reported'       // a founder reported an outcome of their work
-  | 'return_summary_shown';  // the anchor for "since you were last here" (server-recorded on each Today visit)
+  | 'return_summary_shown'   // the anchor for "since you were last here" (server-recorded on each Today visit)
+  | 'mirror_viewed'          // the founder opened the mirror (three lanes + contrast)
+  | 'mirror_corrected';      // the founder corrected a lane, and the mirror recomputed
 
 // Client-emittable events only (server-authoritative milestones are never accepted from the browser, so a
 // founder can't fake "I adopted a strategy / exported an asset / completed the loop").

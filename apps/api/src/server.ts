@@ -12,6 +12,7 @@ import type {
   Aha2Service,
   StrategyService,
   ImpactService,
+  MirrorService,
   VoiceService,
   PlanService,
   CarouselService,
@@ -47,6 +48,7 @@ export interface ServerDeps {
   aha2Service: Aha2Service;
   strategyService: StrategyService;
   impactService: ImpactService;
+  mirrorService: MirrorService;
   voiceService: VoiceService;
   planService: PlanService;
   carouselService: CarouselService;
