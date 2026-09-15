@@ -304,6 +304,10 @@ const CONV = (id: string) => `v1/businesses/${encodeURIComponent(id)}/conversati
 export function startConversation(businessId: string): Promise<ConvView> {
   return request<ConvView>(CONV(businessId), { method: 'POST', body: '{}' });
 }
+/** Living baseline (R2B): reopen the interview to refresh the current-state baseline (never resets). */
+export function reopenConversation(businessId: string): Promise<ConvView> {
+  return request<ConvView>(`${CONV(businessId)}/reopen`, { method: 'POST', body: '{}' });
+}
 export function submitTurn(businessId: string, message: string, context?: string): Promise<ConvView> {
   return request<ConvView>(`${CONV(businessId)}/turn`, { method: 'POST', body: JSON.stringify(context ? { message, context } : { message }) });
 }

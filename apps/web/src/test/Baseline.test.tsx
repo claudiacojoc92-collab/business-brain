@@ -6,17 +6,18 @@ import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/re
 
 const navigate = vi.fn();
 const openAdd = vi.fn();
+let search = '';
 vi.mock('../i18n/LocaleContext', () => ({ useLocale: () => ({ t: (k: string) => k }) }));
 vi.mock('react-router-dom', async (orig) => {
   const actual = await (orig() as Promise<Record<string, unknown>>);
-  return { ...actual, useParams: () => ({ id: 'b1' }), useNavigate: () => navigate, Navigate: () => null };
+  return { ...actual, useParams: () => ({ id: 'b1' }), useNavigate: () => navigate, useSearchParams: () => [new URLSearchParams(search), vi.fn()], Navigate: () => null };
 });
 vi.mock('../slice0/AppShell', () => ({ AppShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 vi.mock('../slice0/AddContextDrawer', () => ({ useAddContext: () => ({ open: openAdd, close: vi.fn(), isOpen: false }) }));
 vi.mock('../slice0/errors', () => ({ isNotFound: () => false, LoadError: () => <div>err</div> }));
 vi.mock('../api/client', () => ({
   getBusiness: vi.fn(), startConversation: vi.fn(), submitTurn: vi.fn(), getFounderModel: vi.fn(),
-  getUnderstanding: vi.fn(), updateFounderState: vi.fn(), updateObservation: vi.fn(), generateAha2: vi.fn(), getAha2: vi.fn(),
+  getUnderstanding: vi.fn(), reopenConversation: vi.fn(), updateFounderState: vi.fn(), updateObservation: vi.fn(), generateAha2: vi.fn(), getAha2: vi.fn(),
 }));
 
 import * as api from '../api/client';
@@ -26,6 +27,7 @@ const emptyModel = { goal: null, horizon: null, constraints: [], preferences: []
 
 beforeEach(() => {
   vi.clearAllMocks();
+  search = '';
   vi.mocked(api.getBusiness).mockResolvedValue({ id: 'b1', name: 'Acme' } as never);
   vi.mocked(api.startConversation).mockResolvedValue({ session: { id: 's1', status: 'ready_for_aha2', conversationLanguage: 'en' }, turns: [], readyForAha2: true } as never);
   vi.mocked(api.getAha2).mockResolvedValue({ state: 'produced', findings: [{ implication: 'Your referral channel is your real growth path.', business: [], founder: [], observations: [] }] } as never);
@@ -59,5 +61,16 @@ describe('ConversationPage — current-state baseline confirmation (R2A)', () =>
     expect(openAdd).toHaveBeenCalled();
     fireEvent.click(screen.getByText(/baseline\.confirm/));
     expect(navigate).toHaveBeenCalledWith('/b/b1/strategy');
+  });
+
+  it('R2B refresh mode REOPENS the interview (not the baseline) even though an old Aha2 exists — no reset', async () => {
+    search = 'refresh=1';
+    // reopen returns an active session (new domain to ask) with a fresh opener turn
+    vi.mocked(api.reopenConversation).mockResolvedValue({ session: { id: 's1', status: 'active', conversationLanguage: 'en' }, turns: [{ id: 't1', role: 'bb', content: 'What marketing are you doing today?', language: 'en', seq: 1, createdAt: 't' }], readyForAha2: false } as never);
+    render(<ConversationPage />);
+    await waitFor(() => expect(api.reopenConversation).toHaveBeenCalledWith('b1'));
+    expect(api.startConversation).not.toHaveBeenCalled();                 // reopened, not a fresh start
+    expect(screen.getByText('What marketing are you doing today?')).toBeInTheDocument(); // interview, not baseline
+    expect(screen.queryByText('baseline.title')).toBeNull();               // Aha2 exists but interview takes precedence
   });
 });

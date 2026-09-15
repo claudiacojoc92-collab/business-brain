@@ -105,6 +105,30 @@ export class ConversationService {
     return { session, turns, readyForAha2: session.status === 'ready_for_aha2' };
   }
 
+  /**
+   * REOPEN the interview to refresh the baseline for an EXISTING business — the living-baseline entry (R2B).
+   * It NEVER resets: it reactivates the session (ready_for_aha2 → active) and idempotently re-seeds the
+   * baseline domains (needs.seed is onConflict-doNothing, so only domains never asked — e.g. the current
+   * marketing/capacity/goal-horizon needs added after this business first onboarded — get added). All prior
+   * turns and founder_state are preserved. If there is nothing new to ask, it stays ready (→ shows the
+   * refreshed baseline directly). Then a fresh Aha2 + baseline projection reflect the updated state.
+   */
+  async reopen(businessId: string, founderId: string, businessName: string, language: string): Promise<ConversationView> {
+    const session = await this.deps.conversations.getByBusiness(businessId);
+    if (!session) return this.startOrResume(businessId, founderId, businessName, language);
+    await this.deps.needs.seed(session.id, businessId, CORE_NEEDS); // adds only baseline domains not already present
+    const open = await this.deps.needs.listOpen(session.id);
+    if (open.length > 0) {
+      await this.deps.conversations.setStatus(session.id, 'active', null); // reopen the interview
+      const out = await this.deps.model.step(await this.buildStepInput(businessId, businessName, language, session.id, null));
+      const opener = out.nextQuestion ?? out.interpretation;
+      if (opener) await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: opener, language, infoNeedKey: null });
+    }
+    const fresh = (await this.deps.conversations.getByBusiness(businessId)) ?? session;
+    const turns = await this.deps.conversations.listTurns(fresh.id);
+    return { session: fresh, turns, readyForAha2: fresh.status === 'ready_for_aha2' };
+  }
+
   async submitResponse(businessId: string, founderId: string, businessName: string, message: string, language: string, currentContext?: string | null): Promise<ConversationView> {
     const session = await this.deps.conversations.getByBusiness(businessId);
     if (!session) throw new Error('NO_CONVERSATION');

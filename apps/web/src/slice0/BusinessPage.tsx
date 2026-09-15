@@ -197,6 +197,16 @@ export function BusinessPage(): React.ReactElement {
         <div className="s0-biz2-eyebrow">{t('biz.eyebrow')}</div>
         <h1 className="s0-biz2-h1">Here’s what I understand about {name}.</h1>
 
+        {/* Living baseline re-entry (R2B): a deliberate, discoverable way to revisit/update current state —
+            reopens the adaptive interview for what's changed, never resets. NOT "Talk to BB". */}
+        <Link className="s0-biz2-state" to={`${base}/talk?refresh=1`}>
+          <div className="s0-biz2-state-main">
+            <span className="s0-biz2-state-k">{t('biz.state.k')}</span>
+            <span className="s0-biz2-state-review">{t('biz.state.review')} →</span>
+          </div>
+          {u.createdAt ? <span className="s0-biz2-state-when">{t('biz.state.updated', { when: new Date(u.createdAt).toLocaleDateString() })}</span> : null}
+        </Link>
+
         <div className="s0-claims">
           {claims.map((c) => (
             <ClaimBlock key={c.subject} claim={c} correction={corrections[c.subject]} onSubmit={onSubmit} />

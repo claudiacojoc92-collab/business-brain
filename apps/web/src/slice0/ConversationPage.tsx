@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import { AppShell } from './AppShell';
 import { useAddContext } from './AddContextDrawer';
@@ -10,6 +10,7 @@ import {
   submitTurn,
   getFounderModel,
   getUnderstanding,
+  reopenConversation,
   updateFounderState,
   updateObservation,
   generateAha2,
@@ -28,6 +29,8 @@ export function ConversationPage() {
   const { id } = useParams<{ id: string }>();
   const { t } = useLocale();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const refreshMode = params.get('refresh') === '1';
 
   const [business, setBusiness] = useState<Business | null | undefined>(undefined);
   const [turns, setTurns] = useState<ConvTurn[]>([]);
@@ -56,15 +59,15 @@ export function ConversationPage() {
       setBusiness(b);
       try { setUnderstanding(await getUnderstanding(id)); } catch { /* baseline degrades gracefully */ }
       const existing = await getAha2(id);
-      const view = await startConversation(id);
+      // Refresh mode (R2B): reopen the interview to update the baseline; else resume normally.
+      const view = refreshMode ? await reopenConversation(id) : await startConversation(id);
       setTurns(view.turns);
       setReady(view.readyForAha2);
-      if (existing.state === 'produced' || existing.state === 'insufficient') {
-        setAha2(existing);
-        setPhase('aha2');
-      } else {
-        setPhase('talk');
-      }
+      const hasAha2 = existing.state === 'produced' || existing.state === 'insufficient';
+      // Show the baseline only when the interview is settled (ready) AND an Aha2 exists. A reopened refresh
+      // with new domains to ask (readyForAha2 === false) re-shows the interview even though an old Aha2 exists.
+      if (view.readyForAha2 && hasAha2) { setAha2(existing); setPhase('aha2'); }
+      else { setPhase('talk'); }
       void refreshModel(id);
     } catch (e) {
       if (isNotFound(e)) setBusiness(null); else setLoadErr(true);

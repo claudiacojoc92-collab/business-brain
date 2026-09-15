@@ -35,7 +35,8 @@ export type FounderEventType =
   | 'strategy_to_asset_completed'
   | 'asset_generation_insufficient_material'
   | 'talk_opened'
-  | 'talk_turn_submitted';
+  | 'talk_turn_submitted'
+  | 'baseline_reopened';
 
 // Client-emittable events only (server-authoritative milestones are never accepted from the browser, so a
 // founder can't fake "I adopted a strategy / exported an asset / completed the loop").

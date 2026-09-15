@@ -375,6 +375,16 @@
 .s0-base-list { list-style: none; margin: 0; padding: 0; }
 .s0-base-list li { font-size: 15px; line-height: 1.55; color: var(--s0-ink); margin-bottom: 6px; max-width: 62ch; }
 .s0-base-told .s0-base-list li { color: var(--s0-ink-2); }
+
+/* Living-baseline re-entry card on Business — a deliberate "revisit current state" affordance (clay-marked). */
+.s0-biz2-state { display: flex; flex-direction: column; gap: 4px; text-decoration: none; margin: 0 0 26px;
+  padding: 14px 16px; border: 1px solid var(--s0-line-2); border-left: 2px solid var(--s0-clay); border-radius: 10px;
+  background: var(--s0-bg-2); transition: border-color .15s var(--s0-ease); }
+.s0-biz2-state:hover { border-color: var(--s0-clay); }
+.s0-biz2-state-main { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.s0-biz2-state-k { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--s0-clay); }
+.s0-biz2-state-review { font-size: 15px; font-weight: 550; color: var(--s0-ink); }
+.s0-biz2-state-when { font-size: 12.5px; color: var(--s0-ink-3); }
 .s0-voice-card .s0-linkbtn { margin-top: 10px; }
 .s0-voice-learned-line { font-size: 15px; line-height: 1.5; color: var(--s0-ink-2); padding: 6px 0; border-bottom: 1px solid var(--s0-line); }
 

@@ -31,6 +31,15 @@ export function registerConversationRoutes(server: FastifyInstance, deps: Server
     await reply.status(200).send(view);
   });
 
+  // Living baseline (R2B): reopen the interview to refresh the current-state baseline for an existing
+  // business — reactivates the session + seeds only baseline domains never asked. Never resets.
+  server.post('/v1/businesses/:id/conversation/reopen', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { founderId, business, language } = await requireBusiness(request);
+    const view = await deps.conversationService.reopen(business.id, founderId, business.name, language);
+    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'baseline_reopened', surface: 'business', metadata: { readyForAha2: view.readyForAha2 } });
+    await reply.status(200).send(view);
+  });
+
   server.post('/v1/businesses/:id/conversation/turn', async (request: FastifyRequest, reply: FastifyReply) => {
     const { founderId, business, language } = await requireBusiness(request);
     const body = (request.body ?? {}) as { message?: string; context?: string };

@@ -60,6 +60,27 @@ describe('ConversationService', () => {
     expect(view.turns.filter((t) => t.role === 'bb')).toHaveLength(1);
   });
 
+  it('R2B reopen re-seeds only missing baseline domains and reactivates the interview — no reset', async () => {
+    const m = makeDeps({});
+    // an existing, completed pre-R2A business: session ready_for_aha2, only goal+horizon ever seeded (answered)
+    m.sessions.push({ id: 's1', businessId: P.businessId, conversationLanguage: 'en', status: 'ready_for_aha2', currentFocus: null });
+    m.needs.push({ id: 'goal', key: 'goal', status: 'answered' }, { id: 'horizon', key: 'horizon', status: 'answered' });
+    const view = await new ConversationService(m.deps).reopen(P.businessId, P.founderId, P.businessName, P.language);
+    expect(m.needs.map((n) => n.key).sort()).toEqual(['acquisition_today', 'capacity', 'current_marketing', 'goal', 'horizon', 'whats_working']); // 4 added, goal/horizon untouched
+    expect(m.getStatus()).toBe('active');        // interview reactivated
+    expect(view.readyForAha2).toBe(false);       // reopened → interview, not baseline
+    expect(m.sessions).toHaveLength(1);          // same session — nothing reset
+  });
+
+  it('R2B reopen with every domain already known leaves the session ready (baseline shown directly)', async () => {
+    const m = makeDeps({});
+    m.sessions.push({ id: 's1', businessId: P.businessId, conversationLanguage: 'en', status: 'ready_for_aha2', currentFocus: null });
+    for (const k of ['goal', 'horizon', 'current_marketing', 'acquisition_today', 'whats_working', 'capacity']) m.needs.push({ id: k, key: k, status: 'answered' });
+    const view = await new ConversationService(m.deps).reopen(P.businessId, P.founderId, P.businessName, P.language);
+    expect(view.readyForAha2).toBe(true);        // nothing new to ask
+    expect(m.getStatus()).toBeNull();            // never reactivated (no open needs)
+  });
+
   it('routes a goal declaration to founder-owned state and a correction to business_correction', async () => {
     const m = makeDeps({
       declarations: [{ kind: 'goal', statement: 'Twenty qualified leads in three months' }],
