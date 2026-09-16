@@ -74,3 +74,6 @@ export * from './impact/index';
 
 // The Mirror — three lanes (observed / told-business / told-self) + grounded contrast (the differentiator)
 export * from './mirror/index';
+
+// The Home surface — the strategist's briefing (delivery projection over held state)
+export * from './home/index';

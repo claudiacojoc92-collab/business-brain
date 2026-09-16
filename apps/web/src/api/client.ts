@@ -453,6 +453,19 @@ export interface MirrorView {
   contrasts: MirrorMismatch[];
   hasSelf: boolean;
 }
+// ── The Home surface: the strategist's briefing (message + three actions) ──
+export interface HomeLine { key: string; vars?: Record<string, string> }
+export interface HomeAction { kind: 'do' | 'talk' | 'why'; labelKey: string; to: string | null }
+export interface HomeBriefing {
+  phase: 'empty' | 'briefing';
+  context: { name: string; day: number | null; bet: string | null };
+  lines: HomeLine[];
+  actions: HomeAction[];
+}
+export function getHomeBriefing(businessId: string): Promise<HomeBriefing> {
+  return request<HomeBriefing>(`v1/businesses/${encodeURIComponent(businessId)}/home`);
+}
+
 const MIR = (b: string) => `v1/businesses/${encodeURIComponent(b)}/mirror`;
 export function getMirror(businessId: string): Promise<MirrorView> {
   return request<MirrorView>(MIR(businessId));

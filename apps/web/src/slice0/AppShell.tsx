@@ -67,9 +67,12 @@ function navItems(base: string, t: (k: string) => string) {
 export function AppShell({
   children,
   showSignOut = false,
+  home = false,
 }: {
   children: React.ReactNode;
   showSignOut?: boolean;
+  /** The strategist home surface: a tab-free presence — wordmark + "Talk to BB · Account" only, no nav/tabbar. */
+  home?: boolean;
 }) {
   const { t } = useLocale();
   const { logout, businesses } = useSession();
@@ -78,6 +81,29 @@ export function AppShell({
   const navigate = useNavigate();
   const { open: openTalk } = useTalk();
   const { open: openAdd } = useAddContext();
+
+  // The strategist home: no tabs, no dashboard chrome — just the wordmark and the "Talk to BB · Account"
+  // escape hatch top-right. The founder sees a presence, not a menu.
+  if (id && home) {
+    return (
+      <div className="s0-root">
+        <header className="s0-topbar s0-topbar-home">
+          <Wordmark to="/home" />
+          <div className="s0-topbar-right">
+            <TalkButton label={t('nav.talk')} />
+            <details className="s0-acct">
+              <summary>{t('shell.account')}</summary>
+              <div className="s0-acct-menu">
+                <LanguageSwitcher />
+                <button type="button" className="s0-linkbtn" onClick={logout}>{t('shell.signout')}</button>
+              </div>
+            </details>
+          </div>
+        </header>
+        <main className="s0-main s0-main-home">{children}</main>
+      </div>
+    );
+  }
 
   if (id) {
     const base = `/b/${id}`;

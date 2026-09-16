@@ -386,6 +386,21 @@
 .s0-biz2-state-review { font-size: 15px; font-weight: 550; color: var(--s0-ink); }
 .s0-biz2-state-when { font-size: 12.5px; color: var(--s0-ink-3); }
 
+/* ── Surface Correction — the strategist home surface (a presence, not a dashboard) ── */
+.s0-topbar-home { border-bottom: 1px solid var(--s0-line); }
+.s0-main-home { max-width: 680px; margin: 0 auto; padding: 8vh 20px 40px; width: 100%; box-sizing: border-box; }
+.s0-strat { display: flex; flex-direction: column; gap: 22px; }
+.s0-strat-ctx { font-size: 12.5px; letter-spacing: .04em; color: var(--s0-ink-3); }
+.s0-strat-msg { display: flex; flex-direction: column; gap: 10px; }
+.s0-strat-msg-line { font-family: var(--s0-display); font-size: 21px; line-height: 1.45; color: var(--s0-ink); margin: 0; max-width: 40ch; text-wrap: balance; }
+.s0-strat-msg-line.s0-strat-msg-sub { font-size: 16px; color: var(--s0-ink-2); }
+.s0-strat-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.s0-strat-actions .s0-btn, .s0-strat-actions .s0-btn-ghost { width: auto; }
+.s0-strat-input { display: flex; gap: 10px; align-items: flex-end; margin-top: 6px; border-top: 1px solid var(--s0-line); padding-top: 20px; }
+.s0-strat-input textarea { flex: 1; resize: none; background: var(--s0-bg-3); color: var(--s0-ink); border: 1px solid var(--s0-line-2); border-radius: 12px; padding: 12px 14px; font-family: var(--s0-sans); font-size: 15px; line-height: 1.5; }
+.s0-strat-input textarea:focus { outline: none; border-color: var(--s0-clay); }
+.s0-strat-input .s0-btn-inline { width: auto; align-self: stretch; }
+
 /* ── THE MIRROR — three lanes + contrast (the differentiator; the most polished surface) ── */
 .s0-mirror { }
 .s0-mirror-lanes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 24px 0 8px; }
