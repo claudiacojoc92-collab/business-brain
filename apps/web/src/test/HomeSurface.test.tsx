@@ -99,25 +99,57 @@ describe('HomePage — the strategist home surface', () => {
     expect(screen.getAllByText('home.empty.wiring')).toHaveLength(1);                        // exactly one, under the tapped one
   });
 
-  it('BUG 1: a real read (synced) bridges into the arc', async () => {
-    vi.mocked(api.getHomeBriefing).mockResolvedValue({ phase: 'empty', context: { name: 'Body Move', day: null, bet: null }, lines: [], actions: [] });
+  const empty = { phase: 'empty' as const, context: { name: 'Body Move', day: null, bet: null }, lines: [], actions: [] };
+  const addSite = async (value: string) => {
+    const field = await screen.findByPlaceholderText('home.empty.website.ph');
+    fireEvent.change(field, { target: { value } });
+    fireEvent.click(screen.getByText('home.empty.website.add'));
+  };
+
+  it('POUR-IN IS A PHASE: adding a website marks it added ✓, keeps the connectors, and does NOT end the pour-in', async () => {
+    vi.mocked(api.getHomeBriefing).mockResolvedValue(empty);
     vi.mocked(api.learnBusiness).mockResolvedValue({ state: 'synced', pagesRead: 10, discovered: [], aha: { status: 'produced', findings: [] } } as never);
     render(<HomePage />);
-    const field = await screen.findByPlaceholderText('home.empty.website.ph');
-    fireEvent.change(field, { target: { value: 'www.bodymovestudio.ro' } });
-    fireEvent.click(screen.getByText('home.empty.website.add'));
+    await addSite('www.bodymovestudio.ro');
     await waitFor(() => expect(api.learnBusiness).toHaveBeenCalledWith('b1', 'www.bodymovestudio.ro'));
-    expect(await screen.findByText('home.empty.bridge')).toBeInTheDocument();
+    expect(await screen.findByText('home.empty.added')).toBeInTheDocument();       // added ✓ on the source
+    expect(screen.getByText('www.bodymovestudio.ro')).toBeInTheDocument();
+    expect(screen.getByText('home.empty.done')).toBeInTheDocument();               // quiet "Done adding — start" revealed
+    expect(screen.queryByText('home.empty.bridge')).toBeNull();                    // pour-in NOT over
+    expect(screen.getByText('home.empty.ig')).toBeInTheDocument();                 // connectors still there for more
+    expect(screen.getByPlaceholderText('home.empty.website.ph')).toBeInTheDocument(); // field stays open
   });
 
-  it('BUG 1: a graceful failure surfaces the ENGINE\'s real reason, not a generic retry, and does NOT bridge', async () => {
-    vi.mocked(api.getHomeBriefing).mockResolvedValue({ phase: 'empty', context: { name: 'Body Move', day: null, bet: null }, lines: [], actions: [] });
+  it('multiple sources: two websites can be added in sequence, both marked added', async () => {
+    vi.mocked(api.getHomeBriefing).mockResolvedValue(empty);
+    vi.mocked(api.learnBusiness).mockResolvedValue({ state: 'synced', pagesRead: 5, discovered: [], aha: { status: 'produced', findings: [] } } as never);
+    render(<HomePage />);
+    await addSite('www.bodymovestudio.ro');
+    await screen.findByText('www.bodymovestudio.ro');
+    await addSite('bodymovestudio.ro/kinetoterapie');
+    await waitFor(() => expect(screen.getByText('bodymovestudio.ro/kinetoterapie')).toBeInTheDocument());
+    expect(screen.getAllByText('home.empty.added')).toHaveLength(2);               // both added ✓
+    expect(screen.getByText('home.empty.done')).toBeInTheDocument();
+  });
+
+  it('the bridge fires ONLY when "Done adding — start" is clicked', async () => {
+    vi.mocked(api.getHomeBriefing).mockResolvedValue(empty);
+    vi.mocked(api.learnBusiness).mockResolvedValue({ state: 'synced', pagesRead: 10, discovered: [], aha: { status: 'produced', findings: [] } } as never);
+    render(<HomePage />);
+    await addSite('www.bodymovestudio.ro');
+    const done = await screen.findByText('home.empty.done');
+    expect(screen.queryByText('home.empty.bridge')).toBeNull();                    // not before Done
+    fireEvent.click(done);
+    expect(await screen.findByText('home.empty.bridge')).toBeInTheDocument();      // only on Done
+  });
+
+  it('BUG 1: a failed source shows the engine\'s real reason and does NOT enable Done or bridge', async () => {
+    vi.mocked(api.getHomeBriefing).mockResolvedValue(empty);
     vi.mocked(api.learnBusiness).mockResolvedValue({ state: 'failed', pagesRead: 0, error: 'I couldn’t reach that URL (getaddrinfo ENOTFOUND).', discovered: [], aha: { status: 'insufficient', findings: [] } } as never);
     render(<HomePage />);
-    const field = await screen.findByPlaceholderText('home.empty.website.ph');
-    fireEvent.change(field, { target: { value: 'not-a-real-site.invalid' } });               // an unreachable URL
-    fireEvent.click(screen.getByText('home.empty.website.add'));
-    expect(await screen.findByText(/couldn’t reach that URL/)).toBeInTheDocument();          // the real reason
-    expect(screen.queryByText('home.empty.bridge')).toBeNull();                              // never a false success
+    await addSite('not-a-real-site.invalid');
+    expect(await screen.findByText(/couldn’t reach that URL/)).toBeInTheDocument(); // the real reason
+    expect(screen.queryByText('home.empty.done')).toBeNull();                       // a failed-only source can't start
+    expect(screen.queryByText('home.empty.bridge')).toBeNull();
   });
 });

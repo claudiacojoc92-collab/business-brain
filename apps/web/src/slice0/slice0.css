@@ -416,6 +416,14 @@
 .s0-pourin-item-hint { color: var(--s0-ink-3); font-size: 13px; }
 .s0-pourin-soon { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--s0-ink-3); border: 1px solid var(--s0-line-2); border-radius: 999px; padding: 2px 9px; }
 .s0-pourin-wiring { font-size: 13.5px; color: var(--s0-ink-2); margin: 2px 0 0; }
+.s0-pourin-sources { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.s0-pourin-source { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: 13.5px; }
+.s0-pourin-source-url { color: var(--s0-ink); }
+.s0-pourin-source-status { color: var(--s0-ink-3); font-size: 12.5px; }
+.s0-pourin-added { color: var(--s0-clay); }
+.s0-pourin-source-err { color: var(--s0-danger); font-size: 12.5px; flex-basis: 100%; }
+.s0-pourin-done { align-self: flex-start; margin-top: 4px; background: none; border: none; color: var(--s0-ink-2); font-family: var(--s0-sans); font-size: 14px; cursor: pointer; padding: 4px 0; text-decoration: underline; text-underline-offset: 3px; }
+.s0-pourin-done:hover { color: var(--s0-ink); }
 .s0-pourin-words { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--s0-line); }
 .s0-pourin-words .s0-linkbtn { font-size: 14px; color: var(--s0-ink-2); }
 .s0-pourin-words .s0-linkbtn:hover { color: var(--s0-ink); }

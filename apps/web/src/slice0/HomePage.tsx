@@ -117,30 +117,34 @@ type Tf = (k: string, v?: Record<string, string>) => string;
  * Only the website backend works for Day One (the real learn flow); the others are visible and lead to a
  * calm "wiring this up" note. Once a website is read, the strategist bridges into the arc.
  */
+type Source = { id: number; url: string; status: 'reading' | 'done' | 'failed'; error?: string };
+
 function EmptyState({ t, businessId, onFocusInput }: { t: Tf; businessId: string; onFocusInput: () => void }) {
   const [url, setUrl] = useState('');
-  const [adding, setAdding] = useState(false);
   const [bridged, setBridged] = useState(false);
-  const [errMsg, setErrMsg] = useState<string | null>(null);
   const [soonKey, setSoonKey] = useState<string | null>(null); // WHICH not-yet-wired connector was tapped
+  const [sources, setSources] = useState<Source[]>([]);        // the pour-in is a PHASE: many sources, one at a time
+  const nextId = useRef(0);
 
-  async function addWebsite(e: React.FormEvent) {
+  // Adding a website does NOT end the pour-in. It appends a source, reads it in the BACKGROUND (so the founder
+  // can keep adding), and marks it added ✓ / the real reason on failure. The phase ends only on "Done adding".
+  function addWebsite(e: React.FormEvent) {
     e.preventDefault();
     const u = url.trim();
-    if (!u || adding || !businessId) return;
-    setAdding(true); setErrMsg(null);
-    try {
-      const res = await learnBusiness(businessId, u);
-      // Only a real read bridges into the arc. A graceful failure (bad URL / unreachable / too thin) carries a
-      // real reason from the engine — surface it, never a bland "try again" and never a false success.
-      if (res.state === 'synced' || res.state === 'partial') { setBridged(true); onFocusInput(); }
-      else if (res.state === 'empty') { setErrMsg(res.error?.trim() || t('home.empty.readfail')); }
-      else { setErrMsg(res.error?.trim() || t('home.empty.unreachable')); } // 'failed'
-    } catch { setErrMsg(t('home.empty.unreachable')); }
-    finally { setAdding(false); }
+    if (!u || !businessId) return;
+    const id = nextId.current++;
+    setSources((prev) => [...prev, { id, url: u, status: 'reading' }]);
+    setUrl('');
+    const settle = (patch: Partial<Source>) => setSources((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    learnBusiness(businessId, u)
+      .then((res) => {
+        if (res.state === 'synced' || res.state === 'partial') settle({ status: 'done' });
+        else settle({ status: 'failed', error: res.error?.trim() || (res.state === 'empty' ? t('home.empty.readfail') : t('home.empty.unreachable')) });
+      })
+      .catch(() => settle({ status: 'failed', error: t('home.empty.unreachable') }));
   }
 
-  // Once a source is read, the strategist responds and invites a few words — the bridge into the arc.
+  // Once a source is added, the strategist responds and invites a few words — the bridge into the arc.
   if (bridged) {
     return (
       <div className="s0-strat-msg">
@@ -155,6 +159,9 @@ function EmptyState({ t, businessId, onFocusInput }: { t: Tf; businessId: string
     { key: 'home.empty.doc', hint: 'home.empty.doc.hint' },
     { key: 'home.empty.link' },
   ];
+  // "Done adding — start" appears as soon as at least one source is in (reading or read) — the founder chooses
+  // when the pour-in ends. A source that only failed doesn't count.
+  const canStart = sources.some((s) => s.status !== 'failed');
 
   return (
     <>
@@ -164,24 +171,32 @@ function EmptyState({ t, businessId, onFocusInput }: { t: Tf; businessId: string
       </div>
 
       <div className="s0-pourin">
-        {/* Website — the primary path, a real field that runs the learn engine. */}
+        {/* Website — the primary path, a real field that runs the learn engine. It stays open to add more. */}
         <form className="s0-pourin-web" onSubmit={addWebsite}>
           <label className="s0-pourin-web-k">{t('home.empty.website')}</label>
           <div className="s0-pourin-web-row">
             <input
               className="s0-pourin-web-input" type="text" inputMode="url" value={url}
-              placeholder={t('home.empty.website.ph')} onChange={(e) => setUrl(e.target.value)} disabled={adding}
+              placeholder={t('home.empty.website.ph')} onChange={(e) => setUrl(e.target.value)}
               aria-label={t('home.empty.website')}
             />
-            <button type="submit" className="s0-btn s0-btn-inline" disabled={adding || !url.trim()}>
-              {adding ? t('home.empty.adding') : t('home.empty.website.add')}
-            </button>
+            <button type="submit" className="s0-btn s0-btn-inline" disabled={!url.trim()}>{t('home.empty.website.add')}</button>
           </div>
-          {errMsg ? <div className="s0-error" role="alert">{errMsg}</div> : null}
+          {sources.length > 0 ? (
+            <ul className="s0-pourin-sources">
+              {sources.map((s) => (
+                <li key={s.id} className={`s0-pourin-source s0-pourin-source-${s.status}`}>
+                  <span className="s0-pourin-source-url">{s.url}</span>
+                  {s.status === 'reading' ? <span className="s0-pourin-source-status">{t('home.empty.reading')}</span> : null}
+                  {s.status === 'done' ? <span className="s0-pourin-source-status s0-pourin-added">{t('home.empty.added')}</span> : null}
+                  {s.status === 'failed' ? <span className="s0-pourin-source-err">{s.error}</span> : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </form>
 
-        {/* The other connectors — visible, ordered, marked "next". The wiring note is PER-CONNECTOR: it
-            appears only under the specific one the founder taps, and nothing shows on the default screen. */}
+        {/* The other connectors — visible, ordered, marked "next". The wiring note is PER-CONNECTOR. */}
         <ul className="s0-pourin-list">
           {soonConnectors.map((c) => (
             <li key={c.key}>
@@ -193,6 +208,11 @@ function EmptyState({ t, businessId, onFocusInput }: { t: Tf; businessId: string
             </li>
           ))}
         </ul>
+
+        {/* Quiet "I'm finished, start" — appears once a source is in; the founder ends the pour-in, not the product. */}
+        {canStart ? (
+          <button type="button" className="s0-pourin-done" onClick={() => { setBridged(true); onFocusInput(); }}>{t('home.empty.done')}</button>
+        ) : null}
       </div>
 
       {/* Demoted: the words fallback for a founder with no live business yet. */}
