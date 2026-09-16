@@ -115,7 +115,7 @@ describe('HomePage — the strategist home surface', () => {
     vi.mocked(api.learnBusiness).mockResolvedValue({ state: 'failed', pagesRead: 0, error: 'I couldn’t reach that URL (getaddrinfo ENOTFOUND).', discovered: [], aha: { status: 'insufficient', findings: [] } } as never);
     render(<HomePage />);
     const field = await screen.findByPlaceholderText('home.empty.website.ph');
-    fireEvent.change(field, { target: { value: 'body-move.ro' } });
+    fireEvent.change(field, { target: { value: 'not-a-real-site.invalid' } });               // an unreachable URL
     fireEvent.click(screen.getByText('home.empty.website.add'));
     expect(await screen.findByText(/couldn’t reach that URL/)).toBeInTheDocument();          // the real reason
     expect(screen.queryByText('home.empty.bridge')).toBeNull();                              // never a false success
