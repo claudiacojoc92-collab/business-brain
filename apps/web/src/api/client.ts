@@ -466,6 +466,39 @@ export function getHomeBriefing(businessId: string): Promise<HomeBriefing> {
   return request<HomeBriefing>(`v1/businesses/${encodeURIComponent(businessId)}/home`);
 }
 
+// ── Day One: the nine-moment arc ──
+export type ArcMoment = 'pour_in' | 'reading' | 'understanding' | 'conversation' | 'mirror' | 'strategy' | 'week_day' | 'email' | 'container' | 'done';
+export interface ArcTurn { id: string; role: 'founder' | 'bb'; content: string }
+export interface ArcView {
+  moment: ArcMoment;
+  businessName: string;
+  sources?: { url: string }[];
+  understanding?: { does: string; serves: string; standsOut: string; confident: string[]; unsure: string[] };
+  turns?: ArcTurn[];
+  mirror?: { founderWords: string; against: string; tension: string } | null;
+  strategy?: { bet: string; over: string; horizon: string; reconsider: string[]; proposalId: string | null; adoptable: boolean };
+  weekDay?: { week: string[]; today: string | null; canCreate: boolean };
+  email?: { subject: string; body: string } | null;
+  container?: { items: { label: string; statement: string; provenance: 'observed' | 'declared' | 'inferred' | 'unknown' }[] };
+}
+const ARC = (b: string) => `v1/businesses/${encodeURIComponent(b)}/arc`;
+const arcPost = <T = ArcView>(b: string, path: string, body?: unknown): Promise<T> =>
+  request<T>(`${ARC(b)}/${path}`, { method: 'POST', body: JSON.stringify(body ?? {}) });
+export const getArc = (b: string): Promise<ArcView> => request<ArcView>(ARC(b));
+export const arcAddSource = (b: string, url: string): Promise<LearnResult> => arcPost<LearnResult>(b, 'source', { url });
+export const arcPourInDone = (b: string): Promise<ArcView> => arcPost(b, 'pour-in/done');
+export const arcReading = (b: string, message: string): Promise<ArcView> => arcPost(b, 'reading', { message });
+export const arcConversation = (b: string, message: string): Promise<ArcView> => arcPost(b, 'conversation', { message });
+export const arcConfirmUnderstanding = (b: string): Promise<ArcView> => arcPost(b, 'understanding/confirm');
+export const arcMirrorSeen = (b: string, answer?: string): Promise<ArcView> => arcPost(b, 'mirror/seen', { answer: answer ?? '' });
+export const arcAdoptStrategy = (b: string, versionId: string): Promise<ArcView> => arcPost(b, 'strategy/adopt', { versionId });
+export const arcChallengeStrategy = (b: string, statement: string): Promise<ArcView> => arcPost(b, 'strategy/challenge', { statement });
+export const arcAdoptWeekDay = (b: string): Promise<ArcView> => arcPost(b, 'week-day/adopt');
+export const arcGenerateEmail = (b: string): Promise<{ email: { subject: string; body: string } }> => arcPost<{ email: { subject: string; body: string } }>(b, 'email/generate');
+export const arcSaveEmail = (b: string, subject: string, body: string): Promise<{ ok: boolean }> => arcPost<{ ok: boolean }>(b, 'email/save', { subject, body });
+export const arcExportEmail = (b: string): Promise<ArcView> => arcPost(b, 'email/export');
+export const arcContainerSeen = (b: string): Promise<ArcView> => arcPost(b, 'container/seen');
+
 const MIR = (b: string) => `v1/businesses/${encodeURIComponent(b)}/mirror`;
 export function getMirror(businessId: string): Promise<MirrorView> {
   return request<MirrorView>(MIR(businessId));

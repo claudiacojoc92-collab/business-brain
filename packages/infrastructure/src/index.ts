@@ -200,6 +200,7 @@ export { AnthropicVideoObservationModel, AnthropicReelOpportunityModel } from '.
 export { AnthropicConceptPlanModel } from './business-intelligence/anthropic-shoot.model';
 export { AnthropicImpactModel } from './business-intelligence/anthropic-impact.model';
 export { AnthropicMirrorModel } from './business-intelligence/anthropic-mirror.model';
+export { AnthropicEmailModel } from './business-intelligence/anthropic-email.model';
 
 // Website ingestion + social-discovery adapters (relocated from apps/api) + the API-agnostic website connector.
 export { WebsiteIngestionAdapter } from './business-intelligence/website-ingestion.adapter';

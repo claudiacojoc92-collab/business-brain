@@ -100,6 +100,7 @@ import {
   PlanService,
   ImpactService,
   MirrorService,
+  ArcService,
   founderMaterialStatements,
   CarouselService,
   resolveBrandContext,
@@ -119,6 +120,7 @@ import { AnthropicVoiceModel } from '@bb/infrastructure';
 import { AnthropicPlanModel } from '@bb/infrastructure';
 import { AnthropicImpactModel } from '@bb/infrastructure';
 import { AnthropicMirrorModel } from '@bb/infrastructure';
+import { AnthropicEmailModel } from '@bb/infrastructure';
 import { AnthropicCarouselModel } from '@bb/infrastructure';
 import { AnthropicObservationModel, AnthropicOpportunityModel } from '@bb/infrastructure';
 import { AnthropicVideoObservationModel, AnthropicReelOpportunityModel } from '@bb/infrastructure';
@@ -144,6 +146,7 @@ export interface CompositionRoot {
   strategyService: StrategyService;
   impactService: ImpactService;
   mirrorService: MirrorService;
+  arcService: ArcService;
   voiceService: VoiceService;
   planService: PlanService;
   carouselService: CarouselService;
@@ -448,6 +451,28 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     log: (e) => console.error('[plan]', JSON.stringify(e)),
   });
 
+  // ── Day One: the arc (nine moments over the existing engines + the one new email) ──
+  const arcService = new ArcService({
+    understanding: { latest: (bid) => understandingRepo.latest(bid) },
+    aha1: { latest: (bid) => ahaRepo.latest(bid) },
+    conversation: {
+      status: async (bid) => (await convRepo.getByBusiness(bid))?.status ?? null,
+      turns: async (bid) => { const s = await convRepo.getByBusiness(bid); if (!s) return []; return (await convRepo.listTurns(s.id)).map((t) => ({ id: t.id, role: t.role, content: t.content })); },
+    },
+    mirror: { build: (bid, name, lang) => mirrorService.build(bid, name, lang) },
+    strategy: {
+      getCurrent: (bid) => strategyService.getCurrent(bid),
+      proposalOrGenerate: async (bid, name, lang) => (await strategyService.getProposal(bid)) ?? (await strategyService.generate(bid, name, lang)),
+    },
+    plan: {
+      getActive: (bid) => planService.getActivePlan(bid),
+      proposalOrGenerate: async (bid) => (await planService.getLatestProposed(bid)) ?? (await planService.generateProposedPlan(bid)),
+    },
+    voiceBoundaries: async (bid) => { const cur = await strategyService.getCurrent(bid); if (!cur) return []; const br = cur.record.bundle.branch; return [br.messagingDirection, br.ctaDirection].map((s) => (s ?? '').trim()).filter(Boolean); },
+    founderContext: async (bid) => (await founderStateRepo.listActive(bid)).filter((s) => s.kind === 'resource' || s.kind === 'decision' || s.kind === 'preference').map((s) => s.statement.trim()).filter(Boolean),
+    email: new AnthropicEmailModel(anthropicKey),
+  });
+
   // ── Slice 6: carousel (CreateHandoff → governed asset-level copy → deterministic render → export) ──
   const carouselRepo = new PgCarouselRepository(db);
   // Carousel governance context — reused by both the carousel service (claim authority) and the Slice-6.1
@@ -603,7 +628,7 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     commandBus, queryBus, jwtService, passwordService, internalBriefRepo,
     businessService, founderAccountService,
     learnBusinessService, discoveredProfileRepo, understandingRepo, ahaRepo,
-    conversationService, businessCorrectionService, aha2Service, strategyService, impactService, mirrorService, voiceService, planService, carouselService,
+    conversationService, businessCorrectionService, aha2Service, strategyService, impactService, mirrorService, arcService, voiceService, planService, carouselService,
     photoLedService, photoLedRepo,
     reelService, reelObjectStore, reelRepo,
     reelShootService, reelShootRepo,

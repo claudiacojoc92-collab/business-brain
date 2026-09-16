@@ -13,6 +13,7 @@ import type {
   StrategyService,
   ImpactService,
   MirrorService,
+  ArcService,
   VoiceService,
   PlanService,
   CarouselService,
@@ -49,6 +50,7 @@ export interface ServerDeps {
   strategyService: StrategyService;
   impactService: ImpactService;
   mirrorService: MirrorService;
+  arcService: ArcService;
   voiceService: VoiceService;
   planService: PlanService;
   carouselService: CarouselService;

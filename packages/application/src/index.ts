@@ -77,3 +77,6 @@ export * from './mirror/index';
 
 // The Home surface — the strategist's briefing (delivery projection over held state)
 export * from './home/index';
+
+// Day One — the nine-moment arc (state machine over the existing engines + the one new email)
+export * from './arc/index';

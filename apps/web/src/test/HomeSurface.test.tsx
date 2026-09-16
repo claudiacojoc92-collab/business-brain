@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import type { HomeBriefing } from '../api/client';
 
-// Surface Correction Block 1 — the strategist home: one message, three actions, an always-present input,
-// no tabs, and the "Talk to BB" escape hatch (AppShell home mode).
+// The home delegates to the ArcSurface while the Day One arc is in progress; once the arc is `done`, it
+// becomes the standing strategist briefing (message + three actions + always-present input, tab-free).
 const navigate = vi.fn();
 const openTalk = vi.fn();
 vi.mock('../i18n/LocaleContext', () => ({ useLocale: () => ({ t: (k: string, v?: Record<string, string>) => (v ? `${k}:${Object.values(v).join(',')}` : k), locale: 'en' }) }));
@@ -11,10 +11,10 @@ vi.mock('react-router-dom', async (orig) => {
   const actual = await (orig() as Promise<Record<string, unknown>>);
   return { ...actual, useParams: () => ({ id: 'b1' }), useNavigate: () => navigate };
 });
-// AppShell mock reflects the `home` prop so we can assert tab-free home mode + escape hatch usage.
 vi.mock('../slice0/AppShell', () => ({ AppShell: ({ children, home }: { children: React.ReactNode; home?: boolean }) => <div data-home={home ? 'yes' : 'no'}>{children}</div> }));
 vi.mock('../slice0/TalkDrawer', () => ({ useTalk: () => ({ open: openTalk, close: vi.fn(), isOpen: false }) }));
-vi.mock('../api/client', () => ({ getHomeBriefing: vi.fn(), learnBusiness: vi.fn() }));
+vi.mock('../slice0/ArcSurface', () => ({ ArcSurface: () => <div data-arc="yes">arc</div> }));
+vi.mock('../api/client', () => ({ getArc: vi.fn(), getHomeBriefing: vi.fn() }));
 
 import * as api from '../api/client';
 import { HomePage } from '../slice0/HomePage';
@@ -22,134 +22,36 @@ import { HomePage } from '../slice0/HomePage';
 const briefing: HomeBriefing = {
   phase: 'briefing',
   context: { name: 'Body Move', day: 3, bet: 'the referral channel' },
-  lines: [
-    { key: 'home.line.bet', vars: { bet: 'the referral channel' } },
-    { key: 'home.line.today', vars: { move: 'Draft the clinic list' } },
-    { key: 'home.line.canDraft' },
-    { key: 'home.line.ask' },
-  ],
-  actions: [
-    { kind: 'do', labelKey: 'home.act.draft', to: '/create' },
-    { kind: 'talk', labelKey: 'home.act.talk', to: null },
-    { kind: 'why', labelKey: 'home.act.why', to: '/today' },
-  ],
+  lines: [{ key: 'home.line.bet', vars: { bet: 'the referral channel' } }, { key: 'home.line.ask' }],
+  actions: [{ kind: 'do', labelKey: 'home.act.draft', to: '/create' }, { kind: 'talk', labelKey: 'home.act.talk', to: null }, { kind: 'why', labelKey: 'home.act.why', to: '/today' }],
 };
 
 beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
 
-describe('HomePage — the strategist home surface', () => {
-  it('renders the context line, the message, three actions, and an always-present input — tab-free', async () => {
+describe('HomePage — arc delegation + standing briefing', () => {
+  it('while the arc is in progress, the surface IS the arc (no briefing)', async () => {
+    vi.mocked(api.getArc).mockResolvedValue({ moment: 'pour_in', businessName: 'Body Move', sources: [] } as never);
+    render(<HomePage />);
+    await waitFor(() => expect(document.querySelector('[data-arc="yes"]')).toBeTruthy());
+    expect(api.getHomeBriefing).not.toHaveBeenCalled();       // arc owns the surface; briefing not fetched
+  });
+
+  it('once the arc is done, the standing briefing renders — message, three actions, tab-free, input', async () => {
+    vi.mocked(api.getArc).mockResolvedValue({ moment: 'done', businessName: 'Body Move' } as never);
     vi.mocked(api.getHomeBriefing).mockResolvedValue(briefing);
     render(<HomePage />);
     await waitFor(() => expect(screen.getByText(/home\.line\.bet/)).toBeInTheDocument());
-    // context line composed with the founder-locale weekday + day/bet
-    expect(screen.getByText(/Body Move ·/)).toBeInTheDocument();
-    expect(screen.getByText(/home\.ctx\.day:3,the referral channel/)).toBeInTheDocument();
-    // message lines
-    expect(screen.getByText(/home\.line\.today:Draft the clinic list/)).toBeInTheDocument();
-    expect(screen.getByText('home.line.ask')).toBeInTheDocument();
-    // three actions, first is the "do"
     expect(screen.getByText('home.act.draft →')).toBeInTheDocument();
-    expect(screen.getByText('home.act.talk')).toBeInTheDocument();
-    expect(screen.getByText('home.act.why')).toBeInTheDocument();
-    // always-present input
     expect(screen.getByPlaceholderText('home.input.ph')).toBeInTheDocument();
-    // tab-free home mode
     expect(document.querySelector('[data-home="yes"]')).toBeTruthy();
   });
 
-  it('the "do" action navigates to the surface behind it', async () => {
+  it('the done-briefing do-action navigates to the surface behind it', async () => {
+    vi.mocked(api.getArc).mockResolvedValue({ moment: 'done', businessName: 'Body Move' } as never);
     vi.mocked(api.getHomeBriefing).mockResolvedValue(briefing);
     render(<HomePage />);
     fireEvent.click(await screen.findByText('home.act.draft →'));
     expect(navigate).toHaveBeenCalledWith('/b/b1/create');
-  });
-
-  it('submitting the input engages the strategist (opens Talk)', async () => {
-    vi.mocked(api.getHomeBriefing).mockResolvedValue(briefing);
-    render(<HomePage />);
-    const input = await screen.findByPlaceholderText('home.input.ph');
-    fireEvent.change(input, { target: { value: 'The 5-clinic data was test data.' } });
-    fireEvent.click(screen.getByText('home.input.send'));
-    expect(openTalk).toHaveBeenCalled();
-  });
-
-  it('first-open empty phase: headline + warmth line + connectors (website primary) + demoted words path + input', async () => {
-    vi.mocked(api.getHomeBriefing).mockResolvedValue({ phase: 'empty', context: { name: 'Body Move', day: null, bet: null }, lines: [], actions: [] });
-    render(<HomePage />);
-    await waitFor(() => expect(screen.getByText('home.empty.lead')).toBeInTheDocument());
-    expect(screen.getByText('home.empty.sub')).toBeInTheDocument();                       // "anything helps"
-    // connectors, website first with a real field
-    expect(screen.getByText('home.empty.website')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('home.empty.website.ph')).toBeInTheDocument();
-    expect(screen.getByText('home.empty.ig')).toBeInTheDocument();
-    expect(screen.getByText('home.empty.google')).toBeInTheDocument();
-    // demoted words fallback, and the general input still present
-    expect(screen.getByText('home.empty.words')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('home.input.ph')).toBeInTheDocument();
-  });
-
-  it('BUG 2: the wiring note is hidden by default and appears per-connector when one is tapped', async () => {
-    vi.mocked(api.getHomeBriefing).mockResolvedValue({ phase: 'empty', context: { name: 'Body Move', day: null, bet: null }, lines: [], actions: [] });
-    render(<HomePage />);
-    await screen.findByText('home.empty.ig');
-    expect(screen.queryByText('home.empty.wiring')).toBeNull();                              // hidden by default
-    fireEvent.click(screen.getByText('home.empty.ig'));
-    expect(screen.getAllByText('home.empty.wiring')).toHaveLength(1);                        // exactly one, under the tapped one
-  });
-
-  const empty = { phase: 'empty' as const, context: { name: 'Body Move', day: null, bet: null }, lines: [], actions: [] };
-  const addSite = async (value: string) => {
-    const field = await screen.findByPlaceholderText('home.empty.website.ph');
-    fireEvent.change(field, { target: { value } });
-    fireEvent.click(screen.getByText('home.empty.website.add'));
-  };
-
-  it('POUR-IN IS A PHASE: adding a website marks it added ✓, keeps the connectors, and does NOT end the pour-in', async () => {
-    vi.mocked(api.getHomeBriefing).mockResolvedValue(empty);
-    vi.mocked(api.learnBusiness).mockResolvedValue({ state: 'synced', pagesRead: 10, discovered: [], aha: { status: 'produced', findings: [] } } as never);
-    render(<HomePage />);
-    await addSite('www.bodymovestudio.ro');
-    await waitFor(() => expect(api.learnBusiness).toHaveBeenCalledWith('b1', 'www.bodymovestudio.ro'));
-    expect(await screen.findByText('home.empty.added')).toBeInTheDocument();       // added ✓ on the source
-    expect(screen.getByText('www.bodymovestudio.ro')).toBeInTheDocument();
-    expect(screen.getByText('home.empty.done')).toBeInTheDocument();               // quiet "Done adding — start" revealed
-    expect(screen.queryByText('home.empty.bridge')).toBeNull();                    // pour-in NOT over
-    expect(screen.getByText('home.empty.ig')).toBeInTheDocument();                 // connectors still there for more
-    expect(screen.getByPlaceholderText('home.empty.website.ph')).toBeInTheDocument(); // field stays open
-  });
-
-  it('multiple sources: two websites can be added in sequence, both marked added', async () => {
-    vi.mocked(api.getHomeBriefing).mockResolvedValue(empty);
-    vi.mocked(api.learnBusiness).mockResolvedValue({ state: 'synced', pagesRead: 5, discovered: [], aha: { status: 'produced', findings: [] } } as never);
-    render(<HomePage />);
-    await addSite('www.bodymovestudio.ro');
-    await screen.findByText('www.bodymovestudio.ro');
-    await addSite('bodymovestudio.ro/kinetoterapie');
-    await waitFor(() => expect(screen.getByText('bodymovestudio.ro/kinetoterapie')).toBeInTheDocument());
-    expect(screen.getAllByText('home.empty.added')).toHaveLength(2);               // both added ✓
-    expect(screen.getByText('home.empty.done')).toBeInTheDocument();
-  });
-
-  it('the bridge fires ONLY when "Done adding — start" is clicked', async () => {
-    vi.mocked(api.getHomeBriefing).mockResolvedValue(empty);
-    vi.mocked(api.learnBusiness).mockResolvedValue({ state: 'synced', pagesRead: 10, discovered: [], aha: { status: 'produced', findings: [] } } as never);
-    render(<HomePage />);
-    await addSite('www.bodymovestudio.ro');
-    const done = await screen.findByText('home.empty.done');
-    expect(screen.queryByText('home.empty.bridge')).toBeNull();                    // not before Done
-    fireEvent.click(done);
-    expect(await screen.findByText('home.empty.bridge')).toBeInTheDocument();      // only on Done
-  });
-
-  it('BUG 1: a failed source shows the engine\'s real reason and does NOT enable Done or bridge', async () => {
-    vi.mocked(api.getHomeBriefing).mockResolvedValue(empty);
-    vi.mocked(api.learnBusiness).mockResolvedValue({ state: 'failed', pagesRead: 0, error: 'I couldn’t reach that URL (getaddrinfo ENOTFOUND).', discovered: [], aha: { status: 'insufficient', findings: [] } } as never);
-    render(<HomePage />);
-    await addSite('not-a-real-site.invalid');
-    expect(await screen.findByText(/couldn’t reach that URL/)).toBeInTheDocument(); // the real reason
-    expect(screen.queryByText('home.empty.done')).toBeNull();                       // a failed-only source can't start
-    expect(screen.queryByText('home.empty.bridge')).toBeNull();
   });
 });

@@ -428,6 +428,28 @@
 .s0-pourin-words .s0-linkbtn { font-size: 14px; color: var(--s0-ink-2); }
 .s0-pourin-words .s0-linkbtn:hover { color: var(--s0-ink); }
 
+/* ── Day One — the arc surface (per-moment blocks over the shared strategist layout) ── */
+.s0-arc-block { margin-top: 4px; }
+.s0-arc-k { font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--s0-ink-3); margin-bottom: 8px; }
+.s0-arc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.s0-arc-list li { font-size: 15px; line-height: 1.5; color: var(--s0-ink); padding-left: 14px; position: relative; max-width: 60ch; }
+.s0-arc-list li::before { content: '·'; position: absolute; left: 2px; color: var(--s0-clay); }
+.s0-arc-thread { margin-top: 4px; }
+.s0-arc-thread summary { font-size: 13px; color: var(--s0-ink-3); cursor: pointer; }
+.s0-arc-thread .s0-turn-bb, .s0-arc-thread .s0-turn-founder { margin-top: 8px; }
+.s0-arc-q { font-family: var(--s0-display); font-size: 17px; color: var(--s0-ink); margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--s0-line); }
+.s0-arc-email { display: flex; flex-direction: column; gap: 10px; }
+.s0-arc-email-subject { background: var(--s0-bg-3); color: var(--s0-ink); border: 1px solid var(--s0-line-2); border-radius: 10px; padding: 11px 13px; font-family: var(--s0-sans); font-size: 15px; font-weight: 550; }
+.s0-arc-email-body { background: var(--s0-bg-3); color: var(--s0-ink); border: 1px solid var(--s0-line-2); border-radius: 12px; padding: 13px 15px; font-family: var(--s0-sans); font-size: 15px; line-height: 1.6; resize: vertical; }
+.s0-arc-email-subject:focus, .s0-arc-email-body:focus { outline: none; border-color: var(--s0-clay); }
+.s0-arc-copied { font-size: 13px; color: var(--s0-clay); margin: 0; }
+.s0-arc-container { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.s0-arc-container li { display: flex; flex-direction: column; gap: 3px; }
+.s0-arc-container-label { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--s0-ink-3); }
+.s0-arc-container-stmt { font-size: 15px; line-height: 1.5; color: var(--s0-ink); max-width: 62ch; }
+.s0-arc-prov { align-self: flex-start; font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--s0-ink-3); border: 1px solid var(--s0-line-2); border-radius: 999px; padding: 1px 8px; margin-top: 2px; }
+.s0-arc-prov-observed { color: var(--s0-clay); border-color: var(--s0-clay); }
+
 /* ── THE MIRROR — three lanes + contrast (the differentiator; the most polished surface) ── */
 .s0-mirror { }
 .s0-mirror-lanes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 24px 0 8px; }

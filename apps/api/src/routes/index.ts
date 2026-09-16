@@ -19,6 +19,7 @@ import { registerStrategyRoutes } from './strategy.routes';
 import { registerImpactRoutes } from './impact.routes';
 import { registerMirrorRoutes } from './mirror.routes';
 import { registerHomeRoutes } from './home.routes';
+import { registerArcRoutes } from './arc.routes';
 import { registerVoiceRoutes } from './voice.routes';
 import { registerPlanRoutes } from './plan.routes';
 import { registerCarouselRoutes } from './carousel.routes';
@@ -58,6 +59,8 @@ export async function registerRoutes(
   registerMirrorRoutes(server, deps);
   // The Home surface — the strategist's briefing (/v1, JWT).
   registerHomeRoutes(server, deps);
+  // Day One — the nine-moment arc (/v1, JWT).
+  registerArcRoutes(server, deps);
   // Slice 4 — "BB learned my voice": example-grounded voice calibration (/v1, JWT).
   registerVoiceRoutes(server, deps);
   registerPlanRoutes(server, deps);       // Slice 5
