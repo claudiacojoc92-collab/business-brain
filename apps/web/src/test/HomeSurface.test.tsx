@@ -90,21 +90,34 @@ describe('HomePage — the strategist home surface', () => {
     expect(screen.getByPlaceholderText('home.input.ph')).toBeInTheDocument();
   });
 
-  it('a not-yet-wired connector shows a calm "wiring this up" note, not an error', async () => {
+  it('BUG 2: the wiring note is hidden by default and appears per-connector when one is tapped', async () => {
     vi.mocked(api.getHomeBriefing).mockResolvedValue({ phase: 'empty', context: { name: 'Body Move', day: null, bet: null }, lines: [], actions: [] });
     render(<HomePage />);
-    fireEvent.click(await screen.findByText('home.empty.ig'));
-    expect(screen.getByText('home.empty.wiring')).toBeInTheDocument();
+    await screen.findByText('home.empty.ig');
+    expect(screen.queryByText('home.empty.wiring')).toBeNull();                              // hidden by default
+    fireEvent.click(screen.getByText('home.empty.ig'));
+    expect(screen.getAllByText('home.empty.wiring')).toHaveLength(1);                        // exactly one, under the tapped one
   });
 
-  it('adding a website runs the learn engine and bridges into the arc', async () => {
+  it('BUG 1: a real read (synced) bridges into the arc', async () => {
     vi.mocked(api.getHomeBriefing).mockResolvedValue({ phase: 'empty', context: { name: 'Body Move', day: null, bet: null }, lines: [], actions: [] });
-    vi.mocked(api.learnBusiness).mockResolvedValue({} as never);
+    vi.mocked(api.learnBusiness).mockResolvedValue({ state: 'synced', pagesRead: 10, discovered: [], aha: { status: 'produced', findings: [] } } as never);
+    render(<HomePage />);
+    const field = await screen.findByPlaceholderText('home.empty.website.ph');
+    fireEvent.change(field, { target: { value: 'www.bodymovestudio.ro' } });
+    fireEvent.click(screen.getByText('home.empty.website.add'));
+    await waitFor(() => expect(api.learnBusiness).toHaveBeenCalledWith('b1', 'www.bodymovestudio.ro'));
+    expect(await screen.findByText('home.empty.bridge')).toBeInTheDocument();
+  });
+
+  it('BUG 1: a graceful failure surfaces the ENGINE\'s real reason, not a generic retry, and does NOT bridge', async () => {
+    vi.mocked(api.getHomeBriefing).mockResolvedValue({ phase: 'empty', context: { name: 'Body Move', day: null, bet: null }, lines: [], actions: [] });
+    vi.mocked(api.learnBusiness).mockResolvedValue({ state: 'failed', pagesRead: 0, error: 'I couldn’t reach that URL (getaddrinfo ENOTFOUND).', discovered: [], aha: { status: 'insufficient', findings: [] } } as never);
     render(<HomePage />);
     const field = await screen.findByPlaceholderText('home.empty.website.ph');
     fireEvent.change(field, { target: { value: 'body-move.ro' } });
     fireEvent.click(screen.getByText('home.empty.website.add'));
-    await waitFor(() => expect(api.learnBusiness).toHaveBeenCalledWith('b1', 'body-move.ro'));
-    expect(await screen.findByText('home.empty.bridge')).toBeInTheDocument();              // the strategist bridge
+    expect(await screen.findByText(/couldn’t reach that URL/)).toBeInTheDocument();          // the real reason
+    expect(screen.queryByText('home.empty.bridge')).toBeNull();                              // never a false success
   });
 });

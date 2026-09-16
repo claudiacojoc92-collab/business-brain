@@ -16,7 +16,9 @@ export function registerErrorHandler(
       const traceId   = (request.headers['x-trace-id'] as string | undefined) ?? 'unknown';
       const timestamp = new Date().toISOString();
 
-      logger.warn({ error, traceId, url: request.url }, 'Request error');
+      // Log under the `err` key (pino's serializer expands Error → name/message/stack). A plain `error` key
+      // serialized a standard Error to `{}` (message/stack are non-enumerable), masking real failures.
+      logger.warn({ err: error, errMessage: error?.message, errName: error?.name, traceId, url: request.url }, 'Request error');
 
       const isProd  = process.env['NODE_ENV'] === 'production';
       const message = isProd ? 'An error occurred.' : error.message;

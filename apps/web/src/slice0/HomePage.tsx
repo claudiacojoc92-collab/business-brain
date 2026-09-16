@@ -121,16 +121,22 @@ function EmptyState({ t, businessId, onFocusInput }: { t: Tf; businessId: string
   const [url, setUrl] = useState('');
   const [adding, setAdding] = useState(false);
   const [bridged, setBridged] = useState(false);
-  const [err, setErr] = useState(false);
-  const [soon, setSoon] = useState(false); // a not-yet-wired connector was tapped
+  const [errMsg, setErrMsg] = useState<string | null>(null);
+  const [soonKey, setSoonKey] = useState<string | null>(null); // WHICH not-yet-wired connector was tapped
 
   async function addWebsite(e: React.FormEvent) {
     e.preventDefault();
     const u = url.trim();
     if (!u || adding || !businessId) return;
-    setAdding(true); setErr(false);
-    try { await learnBusiness(businessId, u); setBridged(true); onFocusInput(); }
-    catch { setErr(true); }
+    setAdding(true); setErrMsg(null);
+    try {
+      const res = await learnBusiness(businessId, u);
+      // Only a real read bridges into the arc. A graceful failure (bad URL / unreachable / too thin) carries a
+      // real reason from the engine — surface it, never a bland "try again" and never a false success.
+      if (res.state === 'synced' || res.state === 'partial') { setBridged(true); onFocusInput(); }
+      else if (res.state === 'empty') { setErrMsg(res.error?.trim() || t('home.empty.readfail')); }
+      else { setErrMsg(res.error?.trim() || t('home.empty.unreachable')); } // 'failed'
+    } catch { setErrMsg(t('home.empty.unreachable')); }
     finally { setAdding(false); }
   }
 
@@ -171,21 +177,22 @@ function EmptyState({ t, businessId, onFocusInput }: { t: Tf; businessId: string
               {adding ? t('home.empty.adding') : t('home.empty.website.add')}
             </button>
           </div>
-          {err ? <div className="s0-error" role="alert">{t('common.actionFailed')}</div> : null}
+          {errMsg ? <div className="s0-error" role="alert">{errMsg}</div> : null}
         </form>
 
-        {/* The other connectors — visible, ordered, marked "next"; they lead to a calm wiring-up note. */}
+        {/* The other connectors — visible, ordered, marked "next". The wiring note is PER-CONNECTOR: it
+            appears only under the specific one the founder taps, and nothing shows on the default screen. */}
         <ul className="s0-pourin-list">
           {soonConnectors.map((c) => (
             <li key={c.key}>
-              <button type="button" className="s0-pourin-item" onClick={() => setSoon(true)}>
+              <button type="button" className="s0-pourin-item" onClick={() => setSoonKey(c.key)}>
                 <span className="s0-pourin-item-label">{t(c.key)}{c.hint ? <span className="s0-pourin-item-hint"> · {t(c.hint)}</span> : null}</span>
                 <span className="s0-pourin-soon">{t('home.empty.soon')}</span>
               </button>
+              {soonKey === c.key ? <p className="s0-pourin-wiring">{t('home.empty.wiring')}</p> : null}
             </li>
           ))}
         </ul>
-        {soon ? <p className="s0-pourin-wiring">{t('home.empty.wiring')}</p> : null}
       </div>
 
       {/* Demoted: the words fallback for a founder with no live business yet. */}
