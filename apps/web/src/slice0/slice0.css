@@ -401,6 +401,25 @@
 .s0-strat-input textarea:focus { outline: none; border-color: var(--s0-clay); }
 .s0-strat-input .s0-btn-inline { width: auto; align-self: stretch; }
 
+/* ── Surface Correction — the pour-in (empty state): connectors first, website primary ── */
+.s0-pourin { display: flex; flex-direction: column; gap: 14px; margin-top: 4px; }
+.s0-pourin-web { display: flex; flex-direction: column; gap: 8px; padding: 16px; border: 1px solid var(--s0-line-2); border-left: 2px solid var(--s0-clay); border-radius: 12px; background: var(--s0-bg-2); }
+.s0-pourin-web-k { font-size: 13px; font-weight: 550; color: var(--s0-ink); }
+.s0-pourin-web-row { display: flex; gap: 10px; align-items: stretch; }
+.s0-pourin-web-input { flex: 1; background: var(--s0-bg-3); color: var(--s0-ink); border: 1px solid var(--s0-line-2); border-radius: 10px; padding: 11px 13px; font-family: var(--s0-sans); font-size: 15px; }
+.s0-pourin-web-input:focus { outline: none; border-color: var(--s0-clay); }
+.s0-pourin-web .s0-btn-inline { width: auto; }
+.s0-pourin-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.s0-pourin-item { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: transparent; border: 1px solid var(--s0-line); border-radius: 10px; padding: 13px 16px; cursor: pointer; font-family: var(--s0-sans); transition: border-color .15s var(--s0-ease); }
+.s0-pourin-item:hover { border-color: var(--s0-line-2); }
+.s0-pourin-item-label { font-size: 15px; color: var(--s0-ink); }
+.s0-pourin-item-hint { color: var(--s0-ink-3); font-size: 13px; }
+.s0-pourin-soon { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--s0-ink-3); border: 1px solid var(--s0-line-2); border-radius: 999px; padding: 2px 9px; }
+.s0-pourin-wiring { font-size: 13.5px; color: var(--s0-ink-2); margin: 2px 0 0; }
+.s0-pourin-words { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--s0-line); }
+.s0-pourin-words .s0-linkbtn { font-size: 14px; color: var(--s0-ink-2); }
+.s0-pourin-words .s0-linkbtn:hover { color: var(--s0-ink); }
+
 /* ── THE MIRROR — three lanes + contrast (the differentiator; the most polished surface) ── */
 .s0-mirror { }
 .s0-mirror-lanes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 24px 0 8px; }

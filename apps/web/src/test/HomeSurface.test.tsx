@@ -14,7 +14,7 @@ vi.mock('react-router-dom', async (orig) => {
 // AppShell mock reflects the `home` prop so we can assert tab-free home mode + escape hatch usage.
 vi.mock('../slice0/AppShell', () => ({ AppShell: ({ children, home }: { children: React.ReactNode; home?: boolean }) => <div data-home={home ? 'yes' : 'no'}>{children}</div> }));
 vi.mock('../slice0/TalkDrawer', () => ({ useTalk: () => ({ open: openTalk, close: vi.fn(), isOpen: false }) }));
-vi.mock('../api/client', () => ({ getHomeBriefing: vi.fn() }));
+vi.mock('../api/client', () => ({ getHomeBriefing: vi.fn(), learnBusiness: vi.fn() }));
 
 import * as api from '../api/client';
 import { HomePage } from '../slice0/HomePage';
@@ -75,11 +75,36 @@ describe('HomePage — the strategist home surface', () => {
     expect(openTalk).toHaveBeenCalled();
   });
 
-  it('first-open empty phase shows the pour-in lead, not a briefing', async () => {
+  it('first-open empty phase: headline + warmth line + connectors (website primary) + demoted words path + input', async () => {
     vi.mocked(api.getHomeBriefing).mockResolvedValue({ phase: 'empty', context: { name: 'Body Move', day: null, bet: null }, lines: [], actions: [] });
     render(<HomePage />);
     await waitFor(() => expect(screen.getByText('home.empty.lead')).toBeInTheDocument());
-    expect(screen.getByText('home.empty.sub')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('home.input.ph')).toBeInTheDocument(); // input still present
+    expect(screen.getByText('home.empty.sub')).toBeInTheDocument();                       // "anything helps"
+    // connectors, website first with a real field
+    expect(screen.getByText('home.empty.website')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('home.empty.website.ph')).toBeInTheDocument();
+    expect(screen.getByText('home.empty.ig')).toBeInTheDocument();
+    expect(screen.getByText('home.empty.google')).toBeInTheDocument();
+    // demoted words fallback, and the general input still present
+    expect(screen.getByText('home.empty.words')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('home.input.ph')).toBeInTheDocument();
+  });
+
+  it('a not-yet-wired connector shows a calm "wiring this up" note, not an error', async () => {
+    vi.mocked(api.getHomeBriefing).mockResolvedValue({ phase: 'empty', context: { name: 'Body Move', day: null, bet: null }, lines: [], actions: [] });
+    render(<HomePage />);
+    fireEvent.click(await screen.findByText('home.empty.ig'));
+    expect(screen.getByText('home.empty.wiring')).toBeInTheDocument();
+  });
+
+  it('adding a website runs the learn engine and bridges into the arc', async () => {
+    vi.mocked(api.getHomeBriefing).mockResolvedValue({ phase: 'empty', context: { name: 'Body Move', day: null, bet: null }, lines: [], actions: [] });
+    vi.mocked(api.learnBusiness).mockResolvedValue({} as never);
+    render(<HomePage />);
+    const field = await screen.findByPlaceholderText('home.empty.website.ph');
+    fireEvent.change(field, { target: { value: 'body-move.ro' } });
+    fireEvent.click(screen.getByText('home.empty.website.add'));
+    await waitFor(() => expect(api.learnBusiness).toHaveBeenCalledWith('b1', 'body-move.ro'));
+    expect(await screen.findByText('home.empty.bridge')).toBeInTheDocument();              // the strategist bridge
   });
 });
