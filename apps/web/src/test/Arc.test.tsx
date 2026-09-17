@@ -12,7 +12,7 @@ vi.mock('react-router-dom', async (orig) => {
 vi.mock('../api/client', () => ({
   getArc: vi.fn(), arcAddSource: vi.fn(), arcAddLink: vi.fn(), arcAddInstagram: vi.fn(), arcAddFile: vi.fn(),
   getInstagramConnectUrl: vi.fn(), arcPourInDone: vi.fn(), arcReading: vi.fn(), arcConversation: vi.fn(),
-  arcConfirmUnderstanding: vi.fn(), arcMirrorSeen: vi.fn(), arcAdoptStrategy: vi.fn(), arcChallengeStrategy: vi.fn(),
+  arcConfirmUnderstanding: vi.fn(), arcCorrectUnderstanding: vi.fn(), arcMirrorSeen: vi.fn(), arcAdoptStrategy: vi.fn(), arcChallengeStrategy: vi.fn(),
   arcAdoptWeekDay: vi.fn(), arcGenerateEmail: vi.fn(), arcSaveEmail: vi.fn(), arcExportEmail: vi.fn(), arcContainerSeen: vi.fn(),
 }));
 
@@ -102,6 +102,32 @@ describe('ArcSurface — one surface, nine moments', () => {
     expect(screen.getByText('corporate partnerships?')).toBeInTheDocument();
     expect(screen.getByText('arc.understanding.confirm →')).toBeInTheDocument();
     expect(screen.queryByText('arc.strategy.adopt →')).toBeNull();                 // no "See the strategy" before Moment 3/4
+  });
+
+  it('Moment 3: a correction goes to the correction endpoint, is acknowledged, and the field clears (not silent)', async () => {
+    const u = { does: 'Physio memberships', serves: 'post-op patients', standsOut: 'recovery-led', confident: [], unsure: [] };
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: u }));
+    vi.mocked(api.arcCorrectUnderstanding).mockResolvedValue(v({ moment: 'understanding', understanding: u })); // moment unchanged
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    const ta = await screen.findByPlaceholderText('arc.understanding.ph') as HTMLTextAreaElement;
+    fireEvent.change(ta, { target: { value: 'We focus on post-op recovery, not general fitness.' } });
+    fireEvent.click(screen.getByText('arc.send'));
+    await waitFor(() => expect(api.arcCorrectUnderstanding).toHaveBeenCalledWith('b1', 'We focus on post-op recovery, not general fitness.'));
+    expect(api.arcConversation).not.toHaveBeenCalled();                       // NOT routed through the conversation engine
+    expect(await screen.findByText('arc.noted')).toBeInTheDocument();         // acknowledged (moment didn't advance)
+    expect((screen.getByPlaceholderText('arc.understanding.ph') as HTMLTextAreaElement).value).toBe(''); // field cleared
+  });
+
+  it('a send that fails surfaces an error and KEEPS the founder\'s text — never a silent no-op [regression]', async () => {
+    const u = { does: 'Physio memberships', serves: 'post-op patients', standsOut: 'recovery-led', confident: [], unsure: [] };
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: u }));
+    vi.mocked(api.arcCorrectUnderstanding).mockRejectedValue(new Error('boom'));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    const ta = await screen.findByPlaceholderText('arc.understanding.ph') as HTMLTextAreaElement;
+    fireEvent.change(ta, { target: { value: 'my correction' } });
+    fireEvent.click(screen.getByText('arc.send'));
+    expect(await screen.findByText('arc.senderror')).toBeInTheDocument();     // error surfaced, not swallowed
+    expect((screen.getByPlaceholderText('arc.understanding.ph') as HTMLTextAreaElement).value).toBe('my correction'); // text kept
   });
 
   it('Moment 4: conversation shows BB\'s question + input — still no strategy', async () => {

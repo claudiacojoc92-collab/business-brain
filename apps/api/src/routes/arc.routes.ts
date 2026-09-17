@@ -178,6 +178,17 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
     await reply.status(200).send(await viewFor(business.id, business.name, language, founderId));
   });
 
+  // Moment 3: the founder corrects what BB understood. HELD as founder-owned state (business_correction),
+  // deterministically — NO conversation model step (that belongs to Moment 4 and could fail/advance the
+  // interview prematurely). Returns the fresh view; the moment stays 'understanding' and the web acknowledges it.
+  server.post('/v1/businesses/:id/arc/understanding/correct', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { founderId, business, language } = await requireBusiness(request);
+    const statement = ((request.body as { message?: string })?.message ?? '').trim();
+    if (!statement) throw new ValidationError('MESSAGE_REQUIRED', 'A correction is required.');
+    await deps.businessCorrectionService.record(business.id, founderId, 'understanding', statement, language);
+    await reply.status(200).send(await viewFor(business.id, business.name, language, founderId));
+  });
+
   flagRoute('understanding/confirm', 'arc_understanding_confirmed'); // Moment 3 → 4
   flagRoute('email/export', 'arc_email_exported');          // Moment 8 → 9
   flagRoute('container/seen', 'arc_container_seen');        // Moment 9 → done

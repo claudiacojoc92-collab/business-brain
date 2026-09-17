@@ -220,6 +220,16 @@
   font-size: 13px;
   margin-bottom: 18px;
 }
+/* "Got it — noted" acknowledgment after a send that doesn't advance the moment (Moment 3 correction, Moment 6 challenge). */
+.s0-arc-ack {
+  margin-top: 12px;
+  color: var(--s0-clay);
+  font-size: 13.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.s0-arc-ack::before { content: "✓"; font-weight: 700; }
 
 .s0-stack > * + * { margin-top: 12px; }
 

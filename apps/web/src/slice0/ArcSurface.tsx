@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import {
   getArc, arcAddSource, arcAddLink, arcAddFile,
-  arcPourInDone, arcReading, arcConversation, arcConfirmUnderstanding,
+  arcPourInDone, arcReading, arcConversation, arcConfirmUnderstanding, arcCorrectUnderstanding,
   arcMirrorSeen, arcAdoptStrategy, arcChallengeStrategy, arcAdoptWeekDay, arcGenerateEmail,
   arcSaveEmail, arcExportEmail, arcContainerSeen, type ArcView,
 } from '../api/client';
@@ -48,16 +48,31 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
   const [view, setView] = useState<ArcView | null>(null);
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+  const [ack, setAck] = useState<string | null>(null);
   const started = useRef(false);
 
   const apply = useCallback((v: ArcView) => { if (v.moment === 'done') onDone(); else setView(v); }, [onDone]);
   const load = useCallback(async () => { apply(await getArc(businessId)); }, [businessId, apply]);
   useEffect(() => { if (started.current) return; started.current = true; void load(); }, [load]);
 
-  // Run an arc action, replace the view (or hand off to the briefing when the arc completes).
+  // Run an arc action, replace the view (or hand off when the arc completes). A send must NEVER fail silently:
+  // on error, surface a message and KEEP the founder's text; on success, clear the text and — when the moment
+  // does not advance (a correction at Moment 3, a challenge at Moment 6) — acknowledge that BB received it, so
+  // the founder always sees a response instead of "nothing happened".
   async function act(run: () => Promise<ArcView>) {
-    setBusy(true);
-    try { apply(await run()); setText(''); } finally { setBusy(false); }
+    setBusy(true); setErr(null); setAck(null);
+    const prevMoment = view?.moment;
+    try {
+      const v = await run();
+      if (v.moment !== 'done' && v.moment === prevMoment) setAck(t('arc.noted'));
+      apply(v);
+      setText('');
+    } catch {
+      setErr(t('arc.senderror'));
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (!view) return <div className="s0-loading">{t('common.loading')}</div>;
@@ -67,6 +82,8 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
     <div className="s0-strat">
       <div className="s0-strat-ctx">{view.businessName} · {weekday}</div>
       {renderMoment()}
+      {ack ? <div className="s0-arc-ack" role="status">{ack}</div> : null}
+      {err ? <div className="s0-error" role="alert">{err}</div> : null}
     </div>
   );
 
@@ -89,7 +106,7 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
           <div className="s0-strat-actions">
             <button type="button" className="s0-btn" disabled={busy} onClick={() => act(() => arcConfirmUnderstanding(businessId))}>{t('arc.understanding.confirm')} →</button>
           </div>
-          <ArcInput ph={t('arc.understanding.ph')} onSend={(m) => arcConversation(businessId, m)} t={t} text={text} setText={setText} busy={busy} act={act} />
+          <ArcInput ph={t('arc.understanding.ph')} onSend={(m) => arcCorrectUnderstanding(businessId, m)} t={t} text={text} setText={setText} busy={busy} act={act} />
         </>);
       }
 

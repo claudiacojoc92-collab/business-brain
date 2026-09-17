@@ -511,6 +511,7 @@ export const arcPourInDone = (b: string): Promise<ArcView> => arcPost(b, 'pour-i
 export const arcReading = (b: string, message: string): Promise<ArcView> => arcPost(b, 'reading', { message });
 export const arcConversation = (b: string, message: string): Promise<ArcView> => arcPost(b, 'conversation', { message });
 export const arcConfirmUnderstanding = (b: string): Promise<ArcView> => arcPost(b, 'understanding/confirm');
+export const arcCorrectUnderstanding = (b: string, message: string): Promise<ArcView> => arcPost(b, 'understanding/correct', { message }); // Moment 3 correction — held, deterministic, no model step
 export const arcMirrorSeen = (b: string, answer?: string): Promise<ArcView> => arcPost(b, 'mirror/seen', { answer: answer ?? '' });
 export const arcAdoptStrategy = (b: string, versionId: string): Promise<ArcView> => arcPost(b, 'strategy/adopt', { versionId });
 export const arcChallengeStrategy = (b: string, statement: string): Promise<ArcView> => arcPost(b, 'strategy/challenge', { statement });
