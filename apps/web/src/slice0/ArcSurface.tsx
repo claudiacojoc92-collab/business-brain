@@ -2,11 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import {
-  getArc, arcAddSource, arcAddLink, arcAddInstagram, arcAddFile, getInstagramConnectUrl,
+  getArc, arcAddSource, arcAddLink, arcAddFile,
   arcPourInDone, arcReading, arcConversation, arcConfirmUnderstanding,
   arcMirrorSeen, arcAdoptStrategy, arcChallengeStrategy, arcAdoptWeekDay, arcGenerateEmail,
   arcSaveEmail, arcExportEmail, arcContainerSeen, type ArcView,
 } from '../api/client';
+// NOTE: Instagram is intentionally HIDDEN from the pour-in until after MVP validation (founder decision).
+// The direct Instagram Login connector + the /arc/source/instagram route are left in place, unused, for when
+// we return to it (via Facebook Login for Business). See docs/sources/instagram-arc-connector-later.md.
 
 type T = (k: string, v?: Record<string, string>) => string;
 
@@ -177,11 +180,10 @@ function PourInAdded({ items, t }: { items: { url: string; type: string; detail?
 function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: string; view: ArcView; busy: boolean; onReload: () => Promise<void>; onDone: () => void; t: T }) {
   const [url, setUrl] = useState('');
   const [link, setLink] = useState('');
-  const [adding, setAdding] = useState<null | 'website' | 'link' | 'file' | 'instagram'>(null);
+  const [adding, setAdding] = useState<null | 'website' | 'link' | 'file'>(null);
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const sources = view.sources ?? [];
-  const igConnected = view.igConnected ?? false;
   const disabled = adding !== null || busy;
   const addedOf = (types: string[]) => sources.filter((s) => types.includes(s.type));
 
@@ -214,26 +216,6 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
       const res = await arcAddFile(businessId, file);
       if (ok(res.state)) await onReload(); else setErr(res.error?.trim() || t('home.empty.filefail'));
     } catch { setErr(t('home.empty.filefail')); } finally { setAdding(null); if (fileRef.current) fileRef.current.value = ''; }
-  }
-
-  async function addInstagram() {
-    if (disabled) return;
-    setAdding('instagram'); setErr(null);
-    try {
-      const res = await arcAddInstagram(businessId);
-      if (ok(res.state)) await onReload();
-      else setErr(res.error?.trim() || t('home.empty.igfail'));
-    } catch { setErr(t('home.empty.igfail')); } finally { setAdding(null); }
-  }
-
-  async function connectInstagram() {
-    if (disabled) return;
-    setErr(null);
-    try {
-      const res = await getInstagramConnectUrl();
-      if (res.authUrl) window.location.href = res.authUrl;
-      else setErr(res.error?.trim() || t('home.empty.igfail'));
-    } catch { setErr(t('home.empty.igfail')); }
   }
 
   return (
@@ -273,16 +255,7 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
           </div>
         </div>
 
-        {/* INSTAGRAM — connect (OAuth) then read the account's profile + captions */}
-        <div className={`s0-pourin-web${addedOf(['instagram']).length ? ' s0-pourin-web-has' : ''}`}>
-          <label className="s0-pourin-web-k">{t('home.empty.ig')}{igConnected ? <span className="s0-pourin-item-hint"> · {t('home.empty.ig.connected')}</span> : null}</label>
-          <PourInAdded items={addedOf(['instagram'])} t={t} />
-          <div className="s0-pourin-web-row">
-            {igConnected
-              ? <button type="button" className="s0-btn s0-btn-inline" disabled={disabled} onClick={addInstagram}>{adding === 'instagram' ? t('home.empty.adding') : t('home.empty.ig.add')}</button>
-              : <button type="button" className="s0-btn-ghost" disabled={disabled} onClick={connectInstagram}>{t('home.empty.ig.connect')}</button>}
-          </div>
-        </div>
+        {/* Instagram is intentionally NOT rendered here — hidden until after MVP validation (see note at top). */}
 
         {err ? <div className="s0-error" role="alert">{err}</div> : null}
 

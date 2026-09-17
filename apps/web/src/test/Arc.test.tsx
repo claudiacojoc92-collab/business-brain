@@ -38,28 +38,20 @@ describe('ArcSurface — one surface, nine moments', () => {
     noTabs();
   });
 
-  it('Moment 1: every connector is a REAL affordance — no NEXT pills, no "coming soon" stubs (regression)', async () => {
-    // Regression guard against the amputated pour-in: website, paste-a-link, file upload, and Instagram are all
-    // functional; there is NO "Next" pill and NO "wiring up" note; unbuilt connectors (Google) are not shown.
-    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [], igConnected: false }));
+  it('Moment 1: exactly three real connectors — website, paste-a-link, upload; Instagram is HIDDEN; no NEXT/stubs', async () => {
+    // Post-decision: Instagram is hidden until after MVP validation. The pour-in shows ONLY the three working,
+    // no-OAuth connectors — each a real affordance, no "Next" pill, no "coming soon", no Instagram entry point.
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [] }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
     expect(await screen.findByText('home.empty.website')).toBeInTheDocument();
     expect(screen.getByText('home.empty.link')).toBeInTheDocument();
     expect(screen.getByText('home.empty.upload')).toBeInTheDocument();
-    expect(screen.getByText('home.empty.ig.connect')).toBeInTheDocument();          // not connected → connect affordance
-    expect(screen.queryByText('home.empty.soon')).toBeNull();                       // no "Next" pill anywhere
-    expect(screen.queryByText('home.empty.wiring')).toBeNull();                     // no "coming soon" note
-    expect(screen.queryByText('home.empty.google')).toBeNull();                     // unbuilt connector is hidden, not stubbed
-  });
-
-  it('Moment 1: once Instagram is connected, the founder can read it in (Add my Instagram)', async () => {
-    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [], igConnected: true }));
-    vi.mocked(api.arcAddInstagram).mockResolvedValue({ state: 'synced' });
-    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
-    const add = await screen.findByText('home.empty.ig.add');
+    expect(screen.queryByText('home.empty.ig')).toBeNull();                          // Instagram hidden entirely
     expect(screen.queryByText('home.empty.ig.connect')).toBeNull();
-    fireEvent.click(add);
-    await waitFor(() => expect(api.arcAddInstagram).toHaveBeenCalledWith('b1'));
+    expect(screen.queryByText('home.empty.ig.add')).toBeNull();
+    expect(screen.queryByText('home.empty.soon')).toBeNull();                        // no "Next" pill anywhere
+    expect(screen.queryByText('home.empty.wiring')).toBeNull();                      // no "coming soon" note
+    expect(screen.queryByText('home.empty.google')).toBeNull();                      // unbuilt connectors hidden, not stubbed
   });
 
   it('Moment 2: reading asks for a few words', async () => {
