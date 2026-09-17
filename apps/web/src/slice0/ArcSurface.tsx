@@ -152,6 +152,25 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
   }
 }
 
+// The prominent "✓ Added" state, shown INSIDE each connector card so the founder sees, at a glance, exactly
+// what BB took in from that source (the URL/file + a short confirmation like "10 pages read").
+function PourInAdded({ items, t }: { items: { url: string; type: string; detail?: string }[]; t: T }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="s0-pourin-added-list">
+      {items.map((s, i) => (
+        <div key={i} className="s0-pourin-added-card">
+          <span className="s0-pourin-added-check" aria-hidden="true">✓</span>
+          <div className="s0-pourin-added-body">
+            <div className="s0-pourin-added-url">{s.url}</div>
+            <div className="s0-pourin-added-detail">{t('home.empty.added')}{s.detail ? ` · ${s.detail}` : ''}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Moment 1: the multi-source pour-in. Every connector shown is REAL and functional (website, paste-a-link,
 //    file upload, Instagram); nothing is a "coming soon" stub. Durable sources come from the server view. Adding
 //    only INGESTS — the strategist synthesizes over the union when the founder clicks "Done adding — start". ──
@@ -164,6 +183,7 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
   const sources = view.sources ?? [];
   const igConnected = view.igConnected ?? false;
   const disabled = adding !== null || busy;
+  const addedOf = (types: string[]) => sources.filter((s) => types.includes(s.type));
 
   const ok = (state: string) => state === 'synced' || state === 'partial';
 
@@ -224,26 +244,29 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
       </div>
       <div className="s0-pourin">
         {/* WEBSITE */}
-        <form className="s0-pourin-web" onSubmit={addWebsite}>
+        <div className={`s0-pourin-web${addedOf(['website']).length ? ' s0-pourin-web-has' : ''}`}>
           <label className="s0-pourin-web-k">{t('home.empty.website')}</label>
-          <div className="s0-pourin-web-row">
+          <PourInAdded items={addedOf(['website'])} t={t} />
+          <form className="s0-pourin-web-row" onSubmit={addWebsite}>
             <input className="s0-pourin-web-input" type="text" inputMode="url" value={url} placeholder={t('home.empty.website.ph')} onChange={(e) => setUrl(e.target.value)} aria-label={t('home.empty.website')} />
             <button type="submit" className="s0-btn s0-btn-inline" disabled={disabled || !url.trim()}>{adding === 'website' ? t('home.empty.adding') : t('home.empty.website.add')}</button>
-          </div>
-        </form>
+          </form>
+        </div>
 
         {/* PASTE A LINK — the universal catch-all (a competitor page, a testimonial, any page) */}
-        <form className="s0-pourin-web" onSubmit={addLink}>
+        <div className={`s0-pourin-web${addedOf(['link']).length ? ' s0-pourin-web-has' : ''}`}>
           <label className="s0-pourin-web-k">{t('home.empty.link')} <span className="s0-pourin-item-hint">· {t('home.empty.link.hint')}</span></label>
-          <div className="s0-pourin-web-row">
+          <PourInAdded items={addedOf(['link'])} t={t} />
+          <form className="s0-pourin-web-row" onSubmit={addLink}>
             <input className="s0-pourin-web-input" type="text" inputMode="url" value={link} placeholder={t('home.empty.link.ph')} onChange={(e) => setLink(e.target.value)} aria-label={t('home.empty.link')} />
             <button type="submit" className="s0-btn s0-btn-inline" disabled={disabled || !link.trim()}>{adding === 'link' ? t('home.empty.adding') : t('home.empty.website.add')}</button>
-          </div>
-        </form>
+          </form>
+        </div>
 
         {/* UPLOAD A FILE — PDF / Word / text (offer, brochure, proposal, case study) */}
-        <div className="s0-pourin-web">
+        <div className={`s0-pourin-web${addedOf(['pdf', 'docx', 'text']).length ? ' s0-pourin-web-has' : ''}`}>
           <label className="s0-pourin-web-k" htmlFor="s0-pourin-file">{t('home.empty.upload')} <span className="s0-pourin-item-hint">· {t('home.empty.upload.hint')}</span></label>
+          <PourInAdded items={addedOf(['pdf', 'docx', 'text'])} t={t} />
           <div className="s0-pourin-web-row">
             <input id="s0-pourin-file" ref={fileRef} className="s0-pourin-file" type="file" accept=".pdf,.docx,.doc,.txt,.md" onChange={addFile} disabled={disabled} aria-label={t('home.empty.upload')} />
             {adding === 'file' ? <span className="s0-pourin-adding-tag">{t('home.empty.adding')}</span> : null}
@@ -251,8 +274,9 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
         </div>
 
         {/* INSTAGRAM — connect (OAuth) then read the account's profile + captions */}
-        <div className="s0-pourin-web">
+        <div className={`s0-pourin-web${addedOf(['instagram']).length ? ' s0-pourin-web-has' : ''}`}>
           <label className="s0-pourin-web-k">{t('home.empty.ig')}{igConnected ? <span className="s0-pourin-item-hint"> · {t('home.empty.ig.connected')}</span> : null}</label>
+          <PourInAdded items={addedOf(['instagram'])} t={t} />
           <div className="s0-pourin-web-row">
             {igConnected
               ? <button type="button" className="s0-btn s0-btn-inline" disabled={disabled} onClick={addInstagram}>{adding === 'instagram' ? t('home.empty.adding') : t('home.empty.ig.add')}</button>
@@ -261,18 +285,6 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
         </div>
 
         {err ? <div className="s0-error" role="alert">{err}</div> : null}
-
-        {sources.length > 0 ? (
-          <ul className="s0-pourin-sources">
-            {sources.map((s, i) => (
-              <li key={i} className="s0-pourin-source s0-pourin-source-done">
-                <span className="s0-pourin-source-type">{t(`home.empty.type.${s.type}`)}</span>
-                <span className="s0-pourin-source-url">{s.url}</span>
-                <span className="s0-pourin-source-status s0-pourin-added">{t('home.empty.added')}</span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
 
         {sources.length > 0 ? <button type="button" className="s0-pourin-done" disabled={disabled} onClick={onDone}>{t('home.empty.done')}</button> : null}
       </div>

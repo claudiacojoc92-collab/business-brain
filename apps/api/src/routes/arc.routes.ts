@@ -60,7 +60,7 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
     const url = ((request.body as { url?: string })?.url ?? '').trim();
     if (!url) throw new ValidationError('WEBSITE_REQUIRED', 'A website URL is required.');
     const result = await deps.learnBusinessService.ingestWebsiteForPourIn({ businessId: business.id, founderId, url });
-    if (result.state === 'synced' || result.state === 'partial') mark(founderId, business.id, 'arc_source_added', { url, type: 'website' });
+    if (result.state === 'synced' || result.state === 'partial') mark(founderId, business.id, 'arc_source_added', { url, type: 'website', detail: result.pagesRead > 0 ? `${result.pagesRead} page${result.pagesRead === 1 ? '' : 's'} read` : 'added' });
     await reply.status(200).send({ state: result.state, pagesRead: result.pagesRead, error: result.error }); // web shows added ✓ / the real reason
   });
 
@@ -78,7 +78,7 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
       businessId: business.id, founderId, source: 'founder_supplied', provenance: 'declared',
       items: [{ ref: `Link: ${host}`, url: doc.finalUrl || url, text, pageType: 'link' }],
     });
-    if (stored > 0) mark(founderId, business.id, 'arc_source_added', { url, type: 'link' });
+    if (stored > 0) mark(founderId, business.id, 'arc_source_added', { url, type: 'link', detail: host });
     await reply.status(200).send({ state: stored > 0 ? 'synced' : 'empty' });
   });
 
@@ -108,7 +108,8 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
         items.push({ ref: `Instagram post ${i + 1}`, url: post.permalink || `${profileUrl}/p/${post.postExternalId}`, text: eng ? `${caption}\n(${eng})` : caption, pageType: 'instagram_post' });
       });
       const { stored } = await deps.learnBusinessService.ingestTextForPourIn({ businessId: business.id, founderId, source: 'instagram', provenance: 'observed', items });
-      if (stored > 0) mark(founderId, business.id, 'arc_source_added', { url: `@${username}`, type: 'instagram' });
+      const postCount = items.filter((it) => it.pageType === 'instagram_post').length;
+      if (stored > 0) mark(founderId, business.id, 'arc_source_added', { url: `@${username}`, type: 'instagram', detail: `${postCount} post${postCount === 1 ? '' : 's'} read` });
       await reply.status(200).send({ state: stored > 0 ? 'synced' : 'empty', error: stored > 0 ? undefined : 'I connected but found no post captions to read.' });
     } catch (e) {
       await reply.status(200).send({ state: 'failed', error: e instanceof Error ? e.message : 'Instagram read failed.' });
@@ -131,7 +132,8 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
       const slug = (file.filename.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase().slice(0, 60)) || 'file';
       const items = doc.units.slice(0, 20).map((u, i) => ({ ref: `${file.filename} · ${u.anchor.label}`, url: `founder://file/${slug}/${i + 1}`, text: u.text, pageType: 'founder_supplied' }));
       const { stored } = await deps.learnBusinessService.ingestTextForPourIn({ businessId: business.id, founderId, source: 'founder_supplied', provenance: 'declared', items });
-      if (stored > 0) mark(founderId, business.id, 'arc_source_added', { url: file.filename, type });
+      const partWord = type === 'pdf' ? 'page' : 'section';
+      if (stored > 0) mark(founderId, business.id, 'arc_source_added', { url: file.filename, type, detail: `${doc.units.length} ${partWord}${doc.units.length === 1 ? '' : 's'} read` });
       await reply.status(200).send({ state: stored > 0 ? 'synced' : 'empty', error: stored > 0 ? undefined : 'That file had no readable text.' });
     });
   });

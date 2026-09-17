@@ -262,7 +262,7 @@ export async function readArcFlags(db: KyselyDB, businessId: string, accountId: 
 
 /** The durable pour-in source list — every url the founder added, in order, deduped. */
 export type ArcSourceType = 'website' | 'link' | 'pdf' | 'docx' | 'text' | 'instagram';
-export interface ArcSourceRow { readonly url: string; readonly type: ArcSourceType }
+export interface ArcSourceRow { readonly url: string; readonly type: ArcSourceType; readonly detail?: string }
 
 const ARC_SOURCE_TYPES: ReadonlySet<string> = new Set(['website', 'link', 'pdf', 'docx', 'text', 'instagram']);
 
@@ -279,7 +279,8 @@ export async function readArcSources(db: KyselyDB, businessId: string, accountId
       if (!u || seen.has(u)) continue;
       seen.add(u);
       const t = String(meta.type ?? '').trim();
-      out.push({ url: u, type: (ARC_SOURCE_TYPES.has(t) ? t : 'website') as ArcSourceType });
+      const detail = String(meta.detail ?? '').trim();
+      out.push({ url: u, type: (ARC_SOURCE_TYPES.has(t) ? t : 'website') as ArcSourceType, ...(detail ? { detail } : {}) });
     }
     return out;
   } catch { return []; }

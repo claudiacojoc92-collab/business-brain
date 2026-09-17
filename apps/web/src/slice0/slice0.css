@@ -426,6 +426,14 @@
 .s0-pourin-file { flex: 1; color: var(--s0-ink-2); font-family: var(--s0-sans); font-size: 14px; }
 .s0-pourin-file::file-selector-button { background: var(--s0-bg-3); color: var(--s0-ink); border: 1px solid var(--s0-line-2); border-radius: 8px; padding: 8px 12px; font-family: var(--s0-sans); font-size: 14px; cursor: pointer; margin-right: 10px; }
 .s0-pourin-adding-tag { align-self: center; color: var(--s0-clay); font-size: 13px; }
+/* Prominent "✓ Added" state, shown inside the connector card (Issue 1 fix). */
+.s0-pourin-web-has { background: var(--s0-bg-3); }
+.s0-pourin-added-list { display: flex; flex-direction: column; gap: 8px; }
+.s0-pourin-added-card { display: flex; align-items: flex-start; gap: 11px; padding: 12px 14px; border: 1px solid var(--s0-clay); border-radius: 10px; background: color-mix(in srgb, var(--s0-clay) 8%, transparent); }
+.s0-pourin-added-check { flex: none; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 999px; background: var(--s0-clay); color: var(--s0-bg); font-size: 13px; font-weight: 700; line-height: 1; }
+.s0-pourin-added-body { min-width: 0; }
+.s0-pourin-added-url { color: var(--s0-ink); font-size: 14.5px; font-weight: 550; overflow-wrap: anywhere; }
+.s0-pourin-added-detail { color: var(--s0-ink-2); font-size: 12.5px; margin-top: 2px; }
 .s0-pourin-done { align-self: flex-start; margin-top: 4px; background: none; border: none; color: var(--s0-ink-2); font-family: var(--s0-sans); font-size: 14px; cursor: pointer; padding: 4px 0; text-decoration: underline; text-underline-offset: 3px; }
 .s0-pourin-done:hover { color: var(--s0-ink); }
 .s0-pourin-words { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--s0-line); }

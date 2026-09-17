@@ -38,7 +38,7 @@ export interface ArcState {
 
 // ── per-moment payloads (only the current moment's field is populated) ──
 export type ArcSourceType = 'website' | 'link' | 'pdf' | 'docx' | 'text' | 'instagram';
-export interface ArcSource { readonly url: string; readonly type: ArcSourceType }
+export interface ArcSource { readonly url: string; readonly type: ArcSourceType; readonly detail?: string }
 export interface ArcUnderstanding { readonly does: string; readonly serves: string; readonly standsOut: string; readonly confident: string[]; readonly unsure: string[] }
 export interface ArcTurn { readonly id: string; readonly role: 'founder' | 'bb'; readonly content: string }
 export interface ArcMirror { readonly founderWords: string; readonly against: string; readonly tension: string }

@@ -26,14 +26,14 @@ beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
 
 describe('ArcSurface — one surface, nine moments', () => {
-  it('Moment 1: pour-in lists persisted typed sources (survives refresh) + Done; no tabs', async () => {
-    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [{ url: 'www.bodymovestudio.ro', type: 'website' }, { url: 'brochure.pdf', type: 'pdf' }] }));
+  it('Moment 1: each added source shows prominently IN its connector card (url + confirmation), survives refresh; Done; no tabs', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [{ url: 'www.bodymovestudio.ro', type: 'website', detail: '10 pages read' }, { url: 'brochure.pdf', type: 'pdf', detail: '4 pages read' }] }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
-    expect(await screen.findByText('www.bodymovestudio.ro')).toBeInTheDocument();  // durable source shown
+    // The added source (url) is shown, with a prominent per-card confirmation — not a tiny row below.
+    expect(await screen.findByText('www.bodymovestudio.ro')).toBeInTheDocument();
     expect(screen.getByText('brochure.pdf')).toBeInTheDocument();
-    expect(screen.getByText('home.empty.type.website')).toBeInTheDocument();       // typed tag
-    expect(screen.getByText('home.empty.type.pdf')).toBeInTheDocument();
-    expect(screen.getAllByText('home.empty.added')).toHaveLength(2);
+    expect(screen.getByText(/10 pages read/)).toBeInTheDocument();                 // confirmation detail, in-card
+    expect(screen.getByText(/4 pages read/)).toBeInTheDocument();
     expect(screen.getByText('home.empty.done')).toBeInTheDocument();               // Done adding present (sources are in)
     noTabs();
   });

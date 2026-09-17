@@ -475,7 +475,7 @@ export interface AddSourceResult { state: 'synced' | 'partial' | 'empty' | 'fail
 export interface ArcView {
   moment: ArcMoment;
   businessName: string;
-  sources?: { url: string; type: ArcSourceType }[];
+  sources?: { url: string; type: ArcSourceType; detail?: string }[];
   igConnected?: boolean;
   understanding?: { does: string; serves: string; standsOut: string; confident: string[]; unsure: string[] };
   turns?: ArcTurn[];
