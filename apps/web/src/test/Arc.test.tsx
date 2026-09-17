@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 import type { ArcView } from '../api/client';
 
 // Day One — the arc surface: each moment's message renders; one surface, no tabs/panels; the pour-in
@@ -133,7 +133,13 @@ describe('ArcSurface — one surface, nine moments', () => {
     expect(await screen.findByText(/Schroth Therapy is more central/)).toBeInTheDocument(); // substantive reflection
     expect(screen.getByText(/what I think you should lead with/)).toBeInTheDocument();     // what changes
     expect(screen.getByText(/referral direction — that holds/)).toBeInTheDocument();       // what holds
-    expect(screen.getByText(/What else should I know/)).toBeInTheDocument();               // the ask
+    // The question is UNMISSABLE: its own labelled ArcQuestion card, visually SEPARATE from the reflection.
+    const qCard = screen.getByText('arc.question.label').closest('.s0-arc-question') as HTMLElement;
+    expect(qCard).toBeTruthy();
+    expect(within(qCard).getByText(/What else should I know/)).toBeInTheDocument();         // the ask lives in the question card
+    const reflectionCard = screen.getByText(/Schroth Therapy is more central/).closest('.s0-arc-reflection') as HTMLElement;
+    expect(reflectionCard).toBeTruthy();
+    expect(within(reflectionCard).queryByText(/What else should I know/)).toBeNull();       // the question is NOT buried in the reflection
     expect(screen.queryByText('arc.noted')).toBeNull();                                    // NOT the tiny generic ack
     expect((screen.getByPlaceholderText('arc.understanding.ph') as HTMLTextAreaElement).value).toBe(''); // field cleared
   });
@@ -153,7 +159,10 @@ describe('ArcSurface — one surface, nine moments', () => {
   it('Moment 4: conversation shows BB\'s question + input — still no strategy', async () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'conversation', turns: [{ id: 't1', role: 'bb', content: 'What have you tried and stopped?' }] }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
-    expect(await screen.findByText('What have you tried and stopped?')).toBeInTheDocument();
+    // the BB question renders via the shared, unmissable ArcQuestion (labelled, its own card)
+    const q = await screen.findByText('What have you tried and stopped?');
+    expect(q.closest('.s0-arc-question')).toBeTruthy();
+    expect(screen.getByText('arc.question.label')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('arc.conversation.ph')).toBeInTheDocument();
     expect(screen.queryByText('arc.strategy.adopt →')).toBeNull();
   });
@@ -163,7 +172,10 @@ describe('ArcSurface — one surface, nine moments', () => {
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
     expect(await screen.findByText(/recovery is the priority/)).toBeInTheDocument();
     expect(screen.getByText(/six categories equally/)).toBeInTheDocument();
-    expect(screen.getByText('arc.mirror.which')).toBeInTheDocument();
+    // the mirror question renders via the SAME shared ArcQuestion component (labelled, its own card)
+    const mq = screen.getByText('arc.mirror.which');
+    expect(mq.closest('.s0-arc-question')).toBeTruthy();
+    expect(screen.getByText('arc.question.label')).toBeInTheDocument();
   });
 
   it('Moment 6: strategy shows the bet + reconsider; Adopt drives the engine', async () => {

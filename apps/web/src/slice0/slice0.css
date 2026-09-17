@@ -230,12 +230,20 @@
   gap: 8px;
 }
 .s0-arc-ack::before { content: "✓"; font-weight: 700; }
-/* Moment 3 — the substantive reply to a founder correction (reflection / changes / holds / ask). */
-.s0-arc-reflection { margin-top: 14px; padding: 14px 16px; border: 1px solid var(--s0-clay); border-radius: 12px; background: color-mix(in srgb, var(--s0-clay) 8%, transparent); display: flex; flex-direction: column; gap: 8px; }
-.s0-arc-reflection-lead { color: var(--s0-ink); font-size: 15px; margin: 0; }
-.s0-arc-reflection-line { color: var(--s0-ink-2); font-size: 14px; margin: 0; }
-.s0-arc-reflection-tag { color: var(--s0-clay); font-weight: 600; margin-right: 4px; }
-.s0-arc-reflection-ask { color: var(--s0-ink); font-size: 14.5px; margin: 4px 0 0; font-style: italic; }
+/* Moment 3 — the substantive reply to a founder correction. Neutral card (so the clay QUESTION below stands
+   out): the reflection is the prominent lead; "what changes"/"what holds" are labelled and muted below it. */
+.s0-arc-reflection { margin-top: 14px; padding: 15px 17px; border: 1px solid var(--s0-line-2); border-radius: 12px; background: var(--s0-bg-2); display: flex; flex-direction: column; gap: 12px; }
+.s0-arc-reflection-lead { color: var(--s0-ink); font-size: 15.5px; line-height: 1.5; margin: 0; }
+.s0-arc-reflection-part { display: flex; flex-direction: column; gap: 3px; }
+.s0-arc-reflection-label { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--s0-ink-3); }
+.s0-arc-reflection-body { color: var(--s0-ink-2); font-size: 14px; line-height: 1.5; margin: 0; }
+
+/* THE shared "strategist asks a question" card — UNMISSABLE and identical everywhere it is used (Moment 3
+   reflection, Moment 4 conversation, Moment 5 mirror). Clay border + label + larger prominent text, standing
+   alone with clear spacing, so the founder can never miss the invitation to continue. */
+.s0-arc-question { margin: 16px 0 6px; padding: 15px 17px; border: 1px solid var(--s0-clay); border-left: 3px solid var(--s0-clay); border-radius: 12px; background: color-mix(in srgb, var(--s0-clay) 10%, var(--s0-bg-2)); display: flex; flex-direction: column; gap: 7px; }
+.s0-arc-question-tag { font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--s0-clay); }
+.s0-arc-question-text { margin: 0; color: var(--s0-ink); font-size: 16.5px; font-weight: 500; line-height: 1.45; }
 
 .s0-stack > * + * { margin-top: 12px; }
 

@@ -36,6 +36,20 @@ function ArcInput({ ph, onSend, cta, t, text, setText, busy, act }: {
   );
 }
 
+// THE shared "the strategist asks the founder a question" component. A question is the start of the next turn —
+// it must be UNMISSABLE (its own bordered card + a "Question for you" label + prominent text), never quiet
+// italic prose. Used everywhere the strategist asks: the Moment 3 correction reflection, the Moment 4
+// conversation question, the Moment 5 mirror question — one place, so every question looks the same.
+function ArcQuestion({ text, t }: { text: string; t: T }) {
+  if (!text.trim()) return null;
+  return (
+    <div className="s0-arc-question" role="group" aria-label={t('arc.question.label')}>
+      <div className="s0-arc-question-tag">{t('arc.question.label')}</div>
+      <p className="s0-arc-question-text">{text}</p>
+    </div>
+  );
+}
+
 /**
  * DAY ONE — the arc, one surface. The strategist carries the founder through nine moments; the surface never
  * changes shape (context line · message · actions · input) — only the message does. No tabs, no panels, no
@@ -109,14 +123,14 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
           <ArcBullets k="arc.understanding.confident" items={u.confident} t={t} />
           <ArcBullets k="arc.understanding.inferring" items={u.inferring} t={t} />
           <ArcBullets k="arc.understanding.unanswered" items={u.unanswered} t={t} />
-          {cr ? (
+          {cr ? (<>
             <div className="s0-arc-reflection" role="status">
               <p className="s0-arc-reflection-lead">{cr.reflection}</p>
-              {cr.changes ? <p className="s0-arc-reflection-line"><span className="s0-arc-reflection-tag">{t('arc.correct.changes')}</span> {cr.changes}</p> : null}
-              {cr.holds ? <p className="s0-arc-reflection-line"><span className="s0-arc-reflection-tag">{t('arc.correct.holds')}</span> {cr.holds}</p> : null}
-              {cr.ask ? <p className="s0-arc-reflection-ask">{cr.ask}</p> : null}
+              {cr.changes ? <div className="s0-arc-reflection-part"><div className="s0-arc-reflection-label">{t('arc.correct.changes')}</div><p className="s0-arc-reflection-body">{cr.changes}</p></div> : null}
+              {cr.holds ? <div className="s0-arc-reflection-part"><div className="s0-arc-reflection-label">{t('arc.correct.holds')}</div><p className="s0-arc-reflection-body">{cr.holds}</p></div> : null}
             </div>
-          ) : null}
+            {cr.ask ? <ArcQuestion text={cr.ask} t={t} /> : null}
+          </>) : null}
           <div className="s0-strat-actions">
             <button type="button" className="s0-btn" disabled={busy} onClick={() => act(() => arcConfirmUnderstanding(businessId))}>{t('arc.understanding.confirm')} →</button>
           </div>
@@ -128,7 +142,8 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
         const turns = view!.turns ?? [];
         const lastBb = [...turns].reverse().find((x) => x.role === 'bb');
         return (<>
-          {lastBb ? <ArcMsg lines={[lastBb.content]} /> : <ArcMsg lines={[t('arc.conversation.opener')]} />}
+          {/* the strategist's current question — rendered by the shared, unmissable ArcQuestion */}
+          <ArcQuestion text={lastBb ? lastBb.content : t('arc.conversation.opener')} t={t} />
           {turns.length > 1 ? (
             <details className="s0-arc-thread"><summary>{t('arc.conversation.history')}</summary>
               {turns.map((tn) => <p key={tn.id} className={tn.role === 'bb' ? 's0-turn-bb' : 's0-turn-founder'}>{tn.content}</p>)}
@@ -150,8 +165,8 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
             <p className="s0-mirror-said"><span className="s0-mirror-side-tag">{t('arc.mirror.yousaid')}</span> {m.founderWords}</p>
             <p className="s0-mirror-against"><span className="s0-mirror-side-tag">{t('arc.mirror.isaw')}</span> {m.against}</p>
             <p className="s0-mirror-tension">{m.tension}</p>
-            <p className="s0-arc-q">{t('arc.mirror.which')}</p>
           </div>
+          <ArcQuestion text={t('arc.mirror.which')} t={t} />
           <ArcInput ph={t('arc.mirror.ph')} onSend={(ans) => arcMirrorSeen(businessId, ans)} cta={t('arc.send')} t={t} text={text} setText={setText} busy={busy} act={act} />
           <div className="s0-strat-actions"><button type="button" className="s0-linkbtn" disabled={busy} onClick={() => act(() => arcMirrorSeen(businessId))}>{t('arc.mirror.skip')}</button></div>
         </>);
