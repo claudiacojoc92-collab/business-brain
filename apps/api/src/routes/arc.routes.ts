@@ -116,25 +116,49 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
     }
   });
 
-  // PDF / DOCX / TEXT upload — extract text (declared). Multipart is scoped to this route (mirrors the
-  // business-intelligence file route) so it never collides with the JSON body parser on the other routes.
+  // PDF / DOCX / TEXT upload — extract text (declared). ONE file per request; the web fires one request per
+  // selected file so each becomes its own source with its own ✓/error. Multipart is scoped to this route so it
+  // never collides with the JSON body parser. Every failure returns a SPECIFIC message as a 200 body (the prod
+  // error-handler masks thrown errors to "An error occurred.", so specific reasons must be returned, not thrown).
+  const TOO_LARGE = 'That file is too large — the maximum is 15 MB.';
   server.register(async (scope) => {
     await scope.register(multipart, { limits: { fileSize: MAX_BYTES, files: 1 } });
     scope.post('/v1/businesses/:id/arc/source/file', async (request: FastifyRequest, reply: FastifyReply) => {
       const { founderId, business } = await requireBusiness(request);
-      const file = await request.file();
-      if (!file) throw new ValidationError('FILE_REQUIRED', 'A file is required.');
-      const bytes = await file.toBuffer();
-      assertWithinBounds(bytes);
+      let file;
+      try { file = await request.file(); }
+      catch { await reply.status(200).send({ state: 'failed', error: TOO_LARGE }); return; }
+      if (!file) { await reply.status(200).send({ state: 'failed', error: 'No file came through — please try again.' }); return; }
+
+      let bytes: Buffer;
+      try { bytes = await file.toBuffer(); }
+      catch { await reply.status(200).send({ state: 'failed', error: TOO_LARGE }); return; } // multipart throws when it exceeds the fileSize limit
+      try { assertWithinBounds(bytes); }
+      catch { await reply.status(200).send({ state: 'failed', error: TOO_LARGE }); return; }
+
       const type = detectType(bytes);
-      if (type === 'unsupported') throw new ValidationError('UNSUPPORTED_FILE', 'That file type is not supported. Upload a PDF, Word, or text file.');
-      const doc = type === 'pdf' ? await extractPdf(bytes, file.filename) : type === 'docx' ? await extractDocx(bytes, file.filename) : extractText(bytes, file.filename);
+      if (type === 'unsupported') { await reply.status(200).send({ state: 'failed', error: "That file type isn't supported — upload a PDF, Word (.docx), or text file." }); return; }
+
+      let doc;
+      try { doc = type === 'pdf' ? await extractPdf(bytes, file.filename) : type === 'docx' ? await extractDocx(bytes, file.filename) : extractText(bytes, file.filename); }
+      catch { await reply.status(200).send({ state: 'failed', error: "I couldn't read that file — it may be corrupted or password-protected." }); return; }
+
       const slug = (file.filename.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase().slice(0, 60)) || 'file';
       const items = doc.units.slice(0, 20).map((u, i) => ({ ref: `${file.filename} · ${u.anchor.label}`, url: `founder://file/${slug}/${i + 1}`, text: u.text, pageType: 'founder_supplied' }));
       const { stored } = await deps.learnBusinessService.ingestTextForPourIn({ businessId: business.id, founderId, source: 'founder_supplied', provenance: 'declared', items });
-      const partWord = type === 'pdf' ? 'page' : 'section';
-      if (stored > 0) mark(founderId, business.id, 'arc_source_added', { url: file.filename, type, detail: `${doc.units.length} ${partWord}${doc.units.length === 1 ? '' : 's'} read` });
-      await reply.status(200).send({ state: stored > 0 ? 'synced' : 'empty', error: stored > 0 ? undefined : 'That file had no readable text.' });
+      if (stored > 0) {
+        const partWord = type === 'pdf' ? 'page' : 'section';
+        mark(founderId, business.id, 'arc_source_added', { url: file.filename, type, detail: `${doc.units.length} ${partWord}${doc.units.length === 1 ? '' : 's'} read` });
+        await reply.status(200).send({ state: 'synced' });
+        return;
+      }
+      // Reached the file but extracted no text. For a PDF this is almost always a scanned/image-only PDF.
+      await reply.status(200).send({
+        state: 'empty',
+        error: type === 'pdf'
+          ? 'This looks like a scanned PDF (no text layer) — I can only read text-based PDFs. Export a text PDF, or paste the text with "Paste a link" or in the conversation.'
+          : 'That file had no readable text.',
+      });
     });
   });
 

@@ -54,6 +54,20 @@ describe('ArcSurface — one surface, nine moments', () => {
     expect(screen.queryByText('home.empty.google')).toBeNull();                      // unbuilt connectors hidden, not stubbed
   });
 
+  it('Moment 1: selecting several files uploads each as its own source (multi-file, one action)', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [] }));
+    vi.mocked(api.arcAddFile).mockResolvedValue({ state: 'synced' });
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    await screen.findByText('home.empty.upload');
+    const input = document.getElementById('s0-pourin-file') as HTMLInputElement;
+    const f1 = new File(['brochure text'], 'brochure.pdf', { type: 'application/pdf' });
+    const f2 = new File(['offer text'], 'offer.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    fireEvent.change(input, { target: { files: [f1, f2] } });
+    await waitFor(() => expect(api.arcAddFile).toHaveBeenCalledTimes(2)); // one request per file, from one selection
+    expect(api.arcAddFile).toHaveBeenCalledWith('b1', f1);
+    expect(api.arcAddFile).toHaveBeenCalledWith('b1', f2);
+  });
+
   it('Moment 2: reading asks for a few words', async () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'reading', turns: [] }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);

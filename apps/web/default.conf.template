@@ -28,6 +28,13 @@ server {
   resolver_timeout 5s;
   set $api_upstream http://api.railway.internal:3000;
 
+  # File uploads (pour-in brochures/PDFs, founder-supplied material) can be several MB. nginx's DEFAULT
+  # client_max_body_size is 1MB — so any real PDF was rejected here with a 413 (HTML, not JSON) BEFORE it
+  # ever reached the api, and the browser fell back to a generic "couldn't read that file" error. Raise it
+  # comfortably past the api's own 15MB upload cap (apps/api .../upload/detect.ts MAX_BYTES) so the api's
+  # bound is the binding one and returns a clean, specific message; anything larger still 413s here.
+  client_max_body_size 20m;
+
   # Long-running LLM generations (learn / strategy / plan / create) legitimately take ~45s–4min.
   # nginx's default proxy_read_timeout is 60s, so any generation crossing 60s had its upstream
   # connection closed → the browser saw a 504 and falsely declared failure while the API kept

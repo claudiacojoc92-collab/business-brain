@@ -209,13 +209,24 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
     } catch { setErr(t('home.empty.unreachable')); } finally { setAdding(null); }
   }
 
-  async function addFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]; if (!file || disabled) return;
+  // Multi-file: the founder can select several documents at once (brochures, offers, a case study). Each is
+  // uploaded as its OWN source (one request per file, in parallel) → its own added ✓ card, or its own error line.
+  async function addFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0 || disabled) return;
     setAdding('file'); setErr(null);
-    try {
-      const res = await arcAddFile(businessId, file);
-      if (ok(res.state)) await onReload(); else setErr(res.error?.trim() || t('home.empty.filefail'));
-    } catch { setErr(t('home.empty.filefail')); } finally { setAdding(null); if (fileRef.current) fileRef.current.value = ''; }
+    const results = await Promise.allSettled(files.map((f) => arcAddFile(businessId, f)));
+    const failures: string[] = [];
+    results.forEach((r, i) => {
+      const name = files[i]?.name ?? 'file';
+      if (r.status === 'fulfilled' && ok(r.value.state)) return; // success → appears as its own added card after reload
+      const msg = r.status === 'fulfilled' ? (r.value.error?.trim() || t('home.empty.filefail')) : t('home.empty.filefail');
+      failures.push(`${name}: ${msg}`);
+    });
+    await onReload();
+    setErr(failures.length ? failures.join(' · ') : null);
+    setAdding(null);
+    if (fileRef.current) fileRef.current.value = '';
   }
 
   return (
@@ -250,7 +261,7 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
           <label className="s0-pourin-web-k" htmlFor="s0-pourin-file">{t('home.empty.upload')} <span className="s0-pourin-item-hint">· {t('home.empty.upload.hint')}</span></label>
           <PourInAdded items={addedOf(['pdf', 'docx', 'text'])} t={t} />
           <div className="s0-pourin-web-row">
-            <input id="s0-pourin-file" ref={fileRef} className="s0-pourin-file" type="file" accept=".pdf,.docx,.doc,.txt,.md" onChange={addFile} disabled={disabled} aria-label={t('home.empty.upload')} />
+            <input id="s0-pourin-file" ref={fileRef} className="s0-pourin-file" type="file" multiple accept=".pdf,.docx,.doc,.txt,.md" onChange={addFiles} disabled={disabled} aria-label={t('home.empty.upload')} />
             {adding === 'file' ? <span className="s0-pourin-adding-tag">{t('home.empty.adding')}</span> : null}
           </div>
         </div>
