@@ -27,8 +27,13 @@ export interface WebsiteReadResult {
   error?: string;
 }
 
-const PAGE_TIMEOUT_MS = 6000;
-const TOTAL_BUDGET_MS = 25_000; // inside the 30s promise
+// The ENTRY-page fetch is the fatal path: if it exceeds this, readWebsite returns state 'failed' and the
+// founder sees "I couldn't reach that site." Real founder sites (e.g. bodymovestudio.ro measured ~4.2s and
+// spiking) sit close to the old 6s ceiling, so a slow-but-reachable homepage was intermittently mislabelled
+// unreachable. 12s gives ~3x headroom; there is no outer promise to overrun (nginx allows 300s) and the loop
+// is still capped by TOTAL_BUDGET_MS. Per-page failures inside the loop stay non-fatal (honest gaps).
+const PAGE_TIMEOUT_MS = 12_000;
+const TOTAL_BUDGET_MS = 25_000; // discovery-loop wall-clock cap (checked before each subsequent page fetch)
 const PAYLOAD_TEXT_CAP = 12_000;
 
 function occurredAtFromJsonLd(jsonld: unknown[]): Date | null {

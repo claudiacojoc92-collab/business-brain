@@ -35,6 +35,19 @@ describe('ArcSurface — one surface, nine moments', () => {
     noTabs();
   });
 
+  it('Moment 1: the wiring note is HIDDEN by default and appears only under the tapped NEXT connector (regression)', async () => {
+    // Regression guard: the "I'm wiring this one up" note must never render by default — only when a
+    // specific NEXT connector is tapped, and only under that one. This has regressed twice on live.
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [] }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    const igButton = await screen.findByText('home.empty.ig');           // the first NEXT connector (Instagram)
+    expect(screen.queryByText('home.empty.wiring')).toBeNull();          // hidden by default — nothing tapped yet
+    fireEvent.click(igButton);
+    expect(screen.getAllByText('home.empty.wiring')).toHaveLength(1);    // appears exactly once, under the tapped connector
+    fireEvent.click(screen.getByText('home.empty.google'));              // tap a different connector
+    expect(screen.getAllByText('home.empty.wiring')).toHaveLength(1);    // still exactly one (moves, never duplicates/persists everywhere)
+  });
+
   it('Moment 2: reading asks for a few words', async () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'reading', turns: [] }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);

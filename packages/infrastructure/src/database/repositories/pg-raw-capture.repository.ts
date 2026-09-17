@@ -4,8 +4,10 @@ import { businessRefKey } from '@bb/domain';
 
 /**
  * Append-only RawCapture store (understanding.raw_capture). Business-scoped (business_ref, id).
- * Identical content-addressed ids dedupe (idempotent no-op); a DIFFERENT payload under the same id
- * fails loudly (content-addressing makes this impossible unless something is wrong — belt-and-suspenders).
+ * The id is a canonical content hash (rawCaptureId over the canonicalized payload), so an existing id means
+ * the SAME content is already captured — the write is an idempotent no-op (onConflict doNothing). Re-ingesting
+ * the same page must NOT fail: an earlier version compared a jsonb round-trip (Postgres reorders keys) against
+ * a fresh JSON.stringify and threw a false "content conflict" on every re-ingest — removed.
  */
 export class PgRawCaptureRepository implements RawCaptureRepository {
   constructor(private readonly db: KyselyDB) {}
@@ -16,21 +18,6 @@ export class PgRawCaptureRepository implements RawCaptureRepository {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = this.db as any;
     for (const c of captures) {
-      const existing = await db
-        .selectFrom('understanding.raw_capture')
-        .select(['captured_payload'])
-        .where('business_ref', '=', brk)
-        .where('id', '=', c.id)
-        .executeTakeFirst();
-      if (existing) {
-        const stored = typeof existing.captured_payload === 'string'
-          ? existing.captured_payload
-          : JSON.stringify(existing.captured_payload);
-        if (stored !== JSON.stringify(c.capturedPayload)) {
-          throw new Error(`raw_capture content conflict for id ${c.id} (business ${brk})`);
-        }
-        continue;
-      }
       await db
         .insertInto('understanding.raw_capture')
         .values({

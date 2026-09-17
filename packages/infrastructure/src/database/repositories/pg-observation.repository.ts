@@ -9,8 +9,11 @@ import { businessRefKey } from '@bb/domain';
 
 /**
  * Append-only NormalizedObservation store (understanding.normalized_observation). Business-scoped;
- * observations are never overwritten. `listByCorpus` returns observations in the corpus's recorded
- * (source) order.
+ * observations are never overwritten. The id is a canonical content hash, so an existing id means the
+ * SAME observation is already stored — the write is an idempotent no-op (onConflict doNothing). An
+ * earlier version compared a jsonb round-trip (Postgres reorders keys) against a fresh JSON.stringify and
+ * threw a false "content conflict" on every re-ingest — removed. `listByCorpus` returns observations in
+ * the corpus's recorded (source) order.
  */
 export class PgObservationRepository implements ObservationRepository {
   constructor(private readonly db: KyselyDB) {}
@@ -21,19 +24,6 @@ export class PgObservationRepository implements ObservationRepository {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = this.db as any;
     for (const o of observations) {
-      const existing = await db
-        .selectFrom('understanding.normalized_observation')
-        .select(['payload', 'extraction'])
-        .where('business_ref', '=', brk)
-        .where('id', '=', o.id)
-        .executeTakeFirst();
-      if (existing) {
-        const storedPayload = typeof existing.payload === 'string' ? existing.payload : JSON.stringify(existing.payload);
-        if (storedPayload !== JSON.stringify(o.payload)) {
-          throw new Error(`observation content conflict for id ${o.id} (business ${brk})`);
-        }
-        continue;
-      }
       await db
         .insertInto('understanding.normalized_observation')
         .values({
