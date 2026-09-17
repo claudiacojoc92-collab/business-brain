@@ -156,6 +156,20 @@ describe('ArcSurface — one surface, nine moments', () => {
     expect((screen.getByPlaceholderText('arc.understanding.ph') as HTMLTextAreaElement).value).toBe('my correction'); // text kept
   });
 
+  it('Moment 3: a persisted correction reflection RE-SHOWS on refresh (the view carries it on load)', async () => {
+    // Refresh = a fresh getArc. The backend re-attaches the persisted reflection to the understanding view, so
+    // the reflection + its question must render on initial load — not only in the just-submitted response.
+    const u = { does: 'Physio memberships', serves: 'post-op patients', standsOut: 'recovery-led', tensions: [], confident: [], inferring: [], unanswered: [] };
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: u, correctionReflection: {
+      reflection: 'Schroth is your core specialty.', changes: 'lead with Schroth', holds: 'referrals hold', ask: 'Who finds you for Schroth right now?',
+    } }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    expect(await screen.findByText('Schroth is your core specialty.')).toBeInTheDocument();     // reflection persists on load
+    const q = screen.getByText('Who finds you for Schroth right now?');
+    expect(q.closest('.s0-arc-question')).toBeTruthy();                                          // the question persists, in its card
+    expect(screen.getByText('arc.question.label')).toBeInTheDocument();
+  });
+
   it('Moment 4: conversation shows BB\'s question + input — still no strategy', async () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'conversation', turns: [{ id: 't1', role: 'bb', content: 'What have you tried and stopped?' }] }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);

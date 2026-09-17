@@ -1,6 +1,7 @@
 import { sql } from 'kysely';
 import { generateId } from '@bb/shared';
 import type { KyselyDB } from '@bb/infrastructure';
+import type { CorrectionReflection } from '@bb/application';
 
 /**
  * M7 founder-test observability. A thin, fire-and-forget recorder for FOUNDER-BEHAVIOR events into
@@ -48,6 +49,7 @@ export type FounderEventType =
   | 'arc_pour_in_done'       // Moment 1 → 2: the founder clicked "Done adding — start"
   | 'arc_reading_done'       // Moment 2 → 3: the founder gave their few words while BB read
   | 'arc_understanding_confirmed' // Moment 3 → 4: the founder confirmed what BB understood
+  | 'arc_correction_reflected' // Moment 3: the substantive reply to the LATEST correction (persisted so it survives refresh)
   | 'arc_mirror_seen'        // Moment 5 → 6: the founder answered the mirror
   | 'arc_email_saved'        // Moment 8: the current email draft (subject+body in metadata)
   | 'arc_email_exported'     // Moment 8 → 9: the founder exported the email
@@ -284,6 +286,31 @@ export async function readArcSources(db: KyselyDB, businessId: string, accountId
     }
     return out;
   } catch { return []; }
+}
+
+// ── Moment 3 correction reflection — persisted so the substantive reply + question survive a refresh ──
+const CAP = 700; // per field; keeps the whole JSON under recordFounderEvent's ~2000-char metadata cap
+const clip = (s: unknown): string => String(s ?? '').slice(0, CAP);
+
+/** Persist the LATEST correction reflection (the reply the founder sees at Moment 3), so a reload re-shows it. */
+export function recordArcCorrectionReflection(db: KyselyDB, accountId: string, businessId: string, r: CorrectionReflection): void {
+  recordFounderEvent(db, {
+    accountId, businessId, eventType: 'arc_correction_reflected', surface: 'arc',
+    metadata: { reflection: clip(r.reflection), changes: clip(r.changes), holds: clip(r.holds), ask: clip(r.ask) },
+  });
+}
+
+/** The most recent correction reflection for this business (null if the founder hasn't corrected yet). */
+export async function readArcCorrectionReflection(db: KyselyDB, businessId: string, accountId: string): Promise<CorrectionReflection | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r: any = await sql`SELECT metadata FROM app.founder_event WHERE business_id=${businessId} AND account_id=${accountId} AND event_type='arc_correction_reflected' ORDER BY occurred_at DESC LIMIT 1`.execute(db);
+    const meta = r?.rows?.[0]?.metadata;
+    if (!meta || typeof meta !== 'object') return null;
+    const reflection = String(meta.reflection ?? '').trim();
+    if (!reflection) return null;
+    return { reflection, changes: String(meta.changes ?? '').trim(), holds: String(meta.holds ?? '').trim(), ask: String(meta.ask ?? '').trim() };
+  } catch { return null; }
 }
 
 /** The latest saved email draft (Moment 8), from the most recent `arc_email_saved` event's metadata. */

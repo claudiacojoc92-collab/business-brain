@@ -3,7 +3,7 @@ import multipart from '@fastify/multipart';
 import type { ServerDeps } from '../server';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
 import { fetchDocument, extractReadableText } from '@bb/infrastructure';
-import { recordFounderEvent, readArcFlags, readArcSources, readArcEmail, type FounderEventType } from '../telemetry/founder-events';
+import { recordFounderEvent, readArcFlags, readArcSources, readArcEmail, recordArcCorrectionReflection, readArcCorrectionReflection, type FounderEventType } from '../telemetry/founder-events';
 import { detectType, assertWithinBounds, MAX_BYTES } from '../connectors/upload/detect';
 import { extractPdf, extractDocx, extractText } from '../connectors/upload/extract';
 import { getInstagramConnector } from '../connectors/instagram/instagram-connector.instance';
@@ -33,13 +33,17 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
 
   async function viewFor(businessId: string, businessName: string, language: string, founderId: string) {
     const ig = getInstagramConnector();
-    const [flags, sources, email, igState] = await Promise.all([
+    const [flags, sources, email, reflection, igState] = await Promise.all([
       readArcFlags(deps.db, businessId, founderId),
       readArcSources(deps.db, businessId, founderId),
       readArcEmail(deps.db, businessId, founderId),
+      readArcCorrectionReflection(deps.db, businessId, founderId),
       ig ? ig.status(founderId).catch(() => 'disconnected' as const) : Promise.resolve('disconnected' as const),
     ]);
-    return deps.arcService.view(businessId, businessName, language, flags, sources, email, igState === 'connected');
+    const view = await deps.arcService.view(businessId, businessName, language, flags, sources, email, igState === 'connected');
+    // The Moment 3 reply is durable: if the founder has corrected, re-attach the persisted reflection so a
+    // refresh re-shows the reflection + its question (they clear only when the founder confirms → the moment advances).
+    return view.moment === 'understanding' && reflection ? { ...view, correctionReflection: reflection } : view;
   }
 
   const mark = (founderId: string, businessId: string, type: FounderEventType, metadata: Record<string, unknown> = {}) =>
@@ -189,8 +193,9 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
     // The SUBSTANTIVE reply (what BB understood / what it changes / what still holds / what else) — grounded in
     // the correction + the current understanding, generated fresh. Fails safe (never throws).
     const correctionReflection = await deps.arcService.reflectCorrection(business.id, business.name, language, statement);
+    recordArcCorrectionReflection(deps.db, founderId, business.id, correctionReflection); // persist → survives refresh
     const view = await viewFor(business.id, business.name, language, founderId);
-    await reply.status(200).send({ ...view, correctionReflection });
+    await reply.status(200).send({ ...view, correctionReflection }); // fresh reflection on the immediate response (no read-after-write race)
   });
 
   flagRoute('understanding/confirm', 'arc_understanding_confirmed'); // Moment 3 → 4
