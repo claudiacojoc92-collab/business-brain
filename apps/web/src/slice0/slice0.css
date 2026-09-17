@@ -230,6 +230,12 @@
   gap: 8px;
 }
 .s0-arc-ack::before { content: "✓"; font-weight: 700; }
+/* Moment 3 — the substantive reply to a founder correction (reflection / changes / holds / ask). */
+.s0-arc-reflection { margin-top: 14px; padding: 14px 16px; border: 1px solid var(--s0-clay); border-radius: 12px; background: color-mix(in srgb, var(--s0-clay) 8%, transparent); display: flex; flex-direction: column; gap: 8px; }
+.s0-arc-reflection-lead { color: var(--s0-ink); font-size: 15px; margin: 0; }
+.s0-arc-reflection-line { color: var(--s0-ink-2); font-size: 14px; margin: 0; }
+.s0-arc-reflection-tag { color: var(--s0-clay); font-weight: 600; margin-right: 4px; }
+.s0-arc-reflection-ask { color: var(--s0-ink); font-size: 14.5px; margin: 4px 0 0; font-style: italic; }
 
 .s0-stack > * + * { margin-top: 12px; }
 

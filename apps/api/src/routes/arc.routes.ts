@@ -186,7 +186,11 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
     const statement = ((request.body as { message?: string })?.message ?? '').trim();
     if (!statement) throw new ValidationError('MESSAGE_REQUIRED', 'A correction is required.');
     await deps.businessCorrectionService.record(business.id, founderId, 'understanding', statement, language);
-    await reply.status(200).send(await viewFor(business.id, business.name, language, founderId));
+    // The SUBSTANTIVE reply (what BB understood / what it changes / what still holds / what else) — grounded in
+    // the correction + the current understanding, generated fresh. Fails safe (never throws).
+    const correctionReflection = await deps.arcService.reflectCorrection(business.id, business.name, language, statement);
+    const view = await viewFor(business.id, business.name, language, founderId);
+    await reply.status(200).send({ ...view, correctionReflection });
   });
 
   flagRoute('understanding/confirm', 'arc_understanding_confirmed'); // Moment 3 → 4

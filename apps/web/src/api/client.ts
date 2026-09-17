@@ -477,7 +477,8 @@ export interface ArcView {
   businessName: string;
   sources?: { url: string; type: ArcSourceType; detail?: string }[];
   igConnected?: boolean;
-  understanding?: { does: string; serves: string; standsOut: string; confident: string[]; unsure: string[] };
+  understanding?: { does: string; serves: string; standsOut: string; tensions: string[]; confident: string[]; inferring: string[]; unanswered: string[] };
+  correctionReflection?: { reflection: string; changes: string; holds: string; ask: string };
   turns?: ArcTurn[];
   mirror?: { founderWords: string; against: string; tension: string } | null;
   strategy?: { bet: string; over: string; horizon: string; reconsider: string[]; proposalId: string | null; adoptable: boolean };

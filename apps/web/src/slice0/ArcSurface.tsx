@@ -65,7 +65,9 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
     const prevMoment = view?.moment;
     try {
       const v = await run();
-      if (v.moment !== 'done' && v.moment === prevMoment) setAck(t('arc.noted'));
+      // A same-moment send gets a light "noted" — UNLESS it carried a substantive reply (a Moment 3 correction
+      // reflection), which is the acknowledgment and renders in the moment itself.
+      if (v.moment !== 'done' && v.moment === prevMoment && !v.correctionReflection) setAck(t('arc.noted'));
       apply(v);
       setText('');
     } catch {
@@ -99,10 +101,22 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
 
       case 'understanding': {
         const u = view!.understanding!;
+        const cr = view!.correctionReflection;
         return (<>
-          <ArcMsg lines={[t('arc.understanding.title', { name: view!.businessName }), u.does, u.serves, u.standsOut]} />
+          <ArcMsg lines={[t('arc.understanding.title', { name: view!.businessName }), [u.does, u.serves].filter(Boolean).join(' · ')]} />
+          {u.standsOut ? <div className="s0-arc-block"><div className="s0-arc-k">{t('arc.understanding.standsout')}</div><p className="s0-strat-msg-line">{u.standsOut}</p></div> : null}
+          <ArcBullets k="arc.understanding.tensions" items={u.tensions} t={t} />
           <ArcBullets k="arc.understanding.confident" items={u.confident} t={t} />
-          <ArcBullets k="arc.understanding.unsure" items={u.unsure} t={t} />
+          <ArcBullets k="arc.understanding.inferring" items={u.inferring} t={t} />
+          <ArcBullets k="arc.understanding.unanswered" items={u.unanswered} t={t} />
+          {cr ? (
+            <div className="s0-arc-reflection" role="status">
+              <p className="s0-arc-reflection-lead">{cr.reflection}</p>
+              {cr.changes ? <p className="s0-arc-reflection-line"><span className="s0-arc-reflection-tag">{t('arc.correct.changes')}</span> {cr.changes}</p> : null}
+              {cr.holds ? <p className="s0-arc-reflection-line"><span className="s0-arc-reflection-tag">{t('arc.correct.holds')}</span> {cr.holds}</p> : null}
+              {cr.ask ? <p className="s0-arc-reflection-ask">{cr.ask}</p> : null}
+            </div>
+          ) : null}
           <div className="s0-strat-actions">
             <button type="button" className="s0-btn" disabled={busy} onClick={() => act(() => arcConfirmUnderstanding(businessId))}>{t('arc.understanding.confirm')} →</button>
           </div>

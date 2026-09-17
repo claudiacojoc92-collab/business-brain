@@ -94,32 +94,52 @@ describe('ArcSurface — one surface, nine moments', () => {
     expect(document.activeElement).toBe(ta);
   });
 
-  it('Moment 3: understanding speaks what BB saw, with confident + unsure — and NO strategy yet', async () => {
-    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: { does: 'Physio memberships', serves: 'post-op patients', standsOut: 'recovery-led', confident: ['Referrals drive members'], unsure: ['corporate partnerships?'] } }));
+  it('Moment 3: understanding is DIAGNOSTIC — tensions, confident vs inferring, unanswered; NO strategy yet', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: {
+      does: 'Physio memberships', serves: 'post-op patients', standsOut: 'recovery-led',
+      tensions: ['Six categories shown equally, but kinetotherapy is far more detailed'],
+      confident: ['Referrals drive members'], inferring: ['Aimed at athletes, not just patients'],
+      unanswered: ['What do customers actually value most?'],
+    } }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
-    expect(await screen.findByText('Physio memberships')).toBeInTheDocument();
-    expect(screen.getByText('Referrals drive members')).toBeInTheDocument();
-    expect(screen.getByText('corporate partnerships?')).toBeInTheDocument();
+    expect(await screen.findByText(/Physio memberships/)).toBeInTheDocument();
+    expect(screen.getByText('arc.understanding.tensions')).toBeInTheDocument();     // the diagnostic section is present
+    expect(screen.getByText('Six categories shown equally, but kinetotherapy is far more detailed')).toBeInTheDocument();
+    expect(screen.getByText('Referrals drive members')).toBeInTheDocument();        // confident (from evidence)
+    expect(screen.getByText('Aimed at athletes, not just patients')).toBeInTheDocument(); // inferring (from pattern)
+    expect(screen.getByText('What do customers actually value most?')).toBeInTheDocument(); // unanswered
     expect(screen.getByText('arc.understanding.confirm →')).toBeInTheDocument();
-    expect(screen.queryByText('arc.strategy.adopt →')).toBeNull();                 // no "See the strategy" before Moment 3/4
+    expect(screen.queryByText('arc.strategy.adopt →')).toBeNull();                 // no strategy before Moment 3/4
   });
 
-  it('Moment 3: a correction goes to the correction endpoint, is acknowledged, and the field clears (not silent)', async () => {
-    const u = { does: 'Physio memberships', serves: 'post-op patients', standsOut: 'recovery-led', confident: [], unsure: [] };
+  it('Moment 3: a correction gets a SUBSTANTIVE grounded reply (reflection/changes/holds/ask), not "✓ Got it"', async () => {
+    const u = { does: 'Physio memberships', serves: 'post-op patients', standsOut: 'recovery-led', tensions: [], confident: [], inferring: [], unanswered: [] };
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: u }));
-    vi.mocked(api.arcCorrectUnderstanding).mockResolvedValue(v({ moment: 'understanding', understanding: u })); // moment unchanged
+    vi.mocked(api.arcCorrectUnderstanding).mockResolvedValue(v({
+      moment: 'understanding', understanding: u,
+      correctionReflection: {
+        reflection: 'Noted — Schroth Therapy is more central than the site suggests.',
+        changes: 'That changes what I think you should lead with.',
+        holds: 'It doesn’t change the referral direction — that holds.',
+        ask: 'What else should I know that the site can’t show?',
+      },
+    }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
     const ta = await screen.findByPlaceholderText('arc.understanding.ph') as HTMLTextAreaElement;
-    fireEvent.change(ta, { target: { value: 'We focus on post-op recovery, not general fitness.' } });
+    fireEvent.change(ta, { target: { value: 'Schroth Therapy is central.' } });
     fireEvent.click(screen.getByText('arc.send'));
-    await waitFor(() => expect(api.arcCorrectUnderstanding).toHaveBeenCalledWith('b1', 'We focus on post-op recovery, not general fitness.'));
-    expect(api.arcConversation).not.toHaveBeenCalled();                       // NOT routed through the conversation engine
-    expect(await screen.findByText('arc.noted')).toBeInTheDocument();         // acknowledged (moment didn't advance)
+    await waitFor(() => expect(api.arcCorrectUnderstanding).toHaveBeenCalledWith('b1', 'Schroth Therapy is central.'));
+    expect(api.arcConversation).not.toHaveBeenCalled();                                   // not via the conversation engine
+    expect(await screen.findByText(/Schroth Therapy is more central/)).toBeInTheDocument(); // substantive reflection
+    expect(screen.getByText(/what I think you should lead with/)).toBeInTheDocument();     // what changes
+    expect(screen.getByText(/referral direction — that holds/)).toBeInTheDocument();       // what holds
+    expect(screen.getByText(/What else should I know/)).toBeInTheDocument();               // the ask
+    expect(screen.queryByText('arc.noted')).toBeNull();                                    // NOT the tiny generic ack
     expect((screen.getByPlaceholderText('arc.understanding.ph') as HTMLTextAreaElement).value).toBe(''); // field cleared
   });
 
   it('a send that fails surfaces an error and KEEPS the founder\'s text — never a silent no-op [regression]', async () => {
-    const u = { does: 'Physio memberships', serves: 'post-op patients', standsOut: 'recovery-led', confident: [], unsure: [] };
+    const u = { does: 'Physio memberships', serves: 'post-op patients', standsOut: 'recovery-led', tensions: [], confident: [], inferring: [], unanswered: [] };
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: u }));
     vi.mocked(api.arcCorrectUnderstanding).mockRejectedValue(new Error('boom'));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);

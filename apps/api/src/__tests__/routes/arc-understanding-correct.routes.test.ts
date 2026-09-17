@@ -21,7 +21,12 @@ function buildServer() {
     businessService: { getBusiness: async (id: string) => ({ id, name: 'Body Move' }) },
     founderAccountService: { getById: async () => ({ interfaceLocale: 'en' }) },
     businessCorrectionService: { record },
-    arcService: { view: async (_id: string, name: string) => ({ moment: 'understanding', businessName: name, understanding }) },
+    arcService: {
+      view: async (_id: string, name: string) => ({ moment: 'understanding', businessName: name, understanding }),
+      reflectCorrection: async (_id: string, _name: string, _lang: string, correction: string) => ({
+        reflection: `Noted — ${correction}`, changes: 'shifts what to lead with', holds: 'referrals hold', ask: 'what else?',
+      }),
+    },
   } as any;
   const server = Fastify();
   registerErrorHandler(server, makeLogger());
@@ -38,7 +43,13 @@ describe('arc Moment 3 — understanding correction route', () => {
       payload: { message: 'We focus on post-op recovery, not general fitness.' },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json().moment).toBe('understanding');
+    const body = res.json();
+    expect(body.moment).toBe('understanding');
+    // A SUBSTANTIVE reflection rides back on the view (not a "✓ Got it" stub).
+    expect(body.correctionReflection?.reflection).toMatch(/post-op recovery/);
+    expect(body.correctionReflection?.changes).toBeTruthy();
+    expect(body.correctionReflection?.holds).toBeTruthy();
+    expect(body.correctionReflection?.ask).toBeTruthy();
     // Held deterministically as a business_correction under the 'understanding' subject — no model step.
     expect(record).toHaveBeenCalledWith('b1', 'founder-1', 'understanding', 'We focus on post-op recovery, not general fitness.', 'en');
     await server.close();

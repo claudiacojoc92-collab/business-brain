@@ -39,7 +39,43 @@ export interface ArcState {
 // ── per-moment payloads (only the current moment's field is populated) ──
 export type ArcSourceType = 'website' | 'link' | 'pdf' | 'docx' | 'text' | 'instagram';
 export interface ArcSource { readonly url: string; readonly type: ArcSourceType; readonly detail?: string }
-export interface ArcUnderstanding { readonly does: string; readonly serves: string; readonly standsOut: string; readonly confident: string[]; readonly unsure: string[] }
+/**
+ * Moment 3 — a DIAGNOSTIC reading, not a description. `does`/`serves` are brief context; the strategist's real
+ * work is in the rest: what STANDS OUT (unusual within this business), what does NOT line up across the sources
+ * (tensions — the diagnostic core, projected from the engine's contradictions), what BB is CONFIDENT about from
+ * evidence vs. what it is INFERRING from pattern (which may be wrong), and what the sources CANNOT answer (what
+ * BB needs the founder to say).
+ */
+export interface ArcUnderstanding {
+  readonly does: string;
+  readonly serves: string;
+  readonly standsOut: string;
+  readonly tensions: string[];
+  readonly confident: string[];
+  readonly inferring: string[];
+  readonly unanswered: string[];
+}
+
+/** Moment 3 — the strategist's SUBSTANTIVE reply to a founder correction (grounded in real state, not "✓ Got it"). */
+export interface CorrectionReflection {
+  readonly reflection: string; // what BB understood from the correction, in the founder's own terms
+  readonly changes: string;    // what the correction changes about the understanding
+  readonly holds: string;      // what it does NOT change — what still holds
+  readonly ask: string;        // the invitation to add anything else
+}
+export interface CorrectionReflectionInput {
+  readonly businessName: string;
+  readonly language: string;
+  readonly correction: string;
+  readonly does: string;
+  readonly standsOut: string;
+  readonly tensions: string[];
+  readonly confident: string[];
+}
+export interface ICorrectionReflectionModel {
+  /** Grounded reflection on a founder correction. Never throws — fails safe to a plain, honest acknowledgment. */
+  reflect(input: CorrectionReflectionInput): Promise<CorrectionReflection>;
+}
 export interface ArcTurn { readonly id: string; readonly role: 'founder' | 'bb'; readonly content: string }
 export interface ArcMirror { readonly founderWords: string; readonly against: string; readonly tension: string }
 export interface ArcStrategy { readonly bet: string; readonly over: string; readonly horizon: string; readonly reconsider: string[]; readonly proposalId: string | null; readonly adoptable: boolean }
@@ -59,6 +95,7 @@ export interface ArcView {
   readonly strategy?: ArcStrategy;         // strategy
   readonly weekDay?: ArcWeekDay;           // week_day
   readonly email?: ArcEmail | null;        // email (null → not drafted yet)
+  readonly correctionReflection?: CorrectionReflection; // understanding — the reply to a just-sent correction (transient)
   readonly container?: ArcContainer;       // container
 }
 

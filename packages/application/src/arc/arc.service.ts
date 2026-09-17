@@ -4,6 +4,7 @@ import type { GovernedUnderstanding } from '../bi/index';
 import { computeArcMoment } from './moment';
 import type {
   ArcFlags, ArcView, ArcTurn, ArcEmail, IEmailModelPort, ArcContainerItem, ArcSource,
+  ArcUnderstanding, CorrectionReflection, ICorrectionReflectionModel,
 } from './contracts';
 
 /** Narrow ports onto the existing engines — the arc REUSES them, it does not reimplement them. */
@@ -26,10 +27,12 @@ export interface ArcDeps {
   voiceBoundaries: (businessId: string) => Promise<string[]>;
   founderContext: (businessId: string) => Promise<string[]>;
   email: IEmailModelPort;
+  reflect: ICorrectionReflectionModel;
 }
 
 const clean = (xs?: (string | null | undefined)[]): string[] => (xs ?? []).map((x) => (x ?? '').trim()).filter(Boolean);
 const first = (...xs: (string | undefined)[]): string => { for (const x of xs) if (x?.trim()) return x.trim(); return ''; };
+const dedupe = (xs: string[]): string[] => { const seen = new Set<string>(); const out: string[] = []; for (const x of xs) { const v = (x ?? '').trim(); if (v && !seen.has(v)) { seen.add(v); out.push(v); } } return out; };
 
 export class ArcService {
   constructor(private readonly deps: ArcDeps) {}
@@ -104,14 +107,67 @@ export class ArcService {
     }
   }
 
-  private projectUnderstanding(u: GovernedUnderstanding | null, aha1: { finding: string }[]): ArcView['understanding'] {
+  /**
+   * DIAGNOSTIC projection, not a description. The engine already finds the raw material (contradictions,
+   * evidence-backed vs implied reads, unknowns); the old projection threw the contradictions away and showed
+   * flat summaries. This surfaces the strategist's actual reading: what stands out, what does NOT line up
+   * (tensions), what's confident-from-evidence vs inferred-from-pattern, and what the sources can't answer.
+   */
+  private projectUnderstanding(u: GovernedUnderstanding | null, aha1: { finding: string }[]): ArcUnderstanding {
+    const tensions = (u?.contradictions ?? [])
+      .map((c) => {
+        const tension = (c.tension ?? '').trim();
+        const a = (c.statementA ?? '').trim();
+        const b = (c.statementB ?? '').trim();
+        if (tension) return tension;
+        return a && b ? `${a} — yet ${b}` : '';
+      })
+      .filter(Boolean)
+      .slice(0, 4);
+
+    // Confident = anchored in the evidence: the grounded Aha findings + what the offer states explicitly +
+    // positioning the site actually backs up. Inferring = read from PATTERN (implied positioning, who the
+    // site *appears* aimed at) — honestly flagged as possibly wrong. Unanswered = what the sources can't tell.
+    const confident = dedupe([
+      ...aha1.map((a) => a.finding.trim()),
+      ...clean(u?.offer?.explicit),
+      ...clean(u?.positioning?.evidenceBacked),
+    ]).slice(0, 5);
+    const inferring = dedupe([
+      ...clean(u?.positioning?.implied),
+      ...clean(u?.audience?.appearsTargeted),
+    ]).slice(0, 4);
+    const unanswered = dedupe([...clean(u?.unknowns), ...clean(u?.offer?.unclear), ...clean(u?.audience?.unknown)]).slice(0, 5);
+
     return {
       does: first(u?.offer?.summary),
       serves: clean(u?.audience?.addressed).slice(0, 3).join(' · '),
       standsOut: first(u?.positioning?.summary, clean(u?.messaging?.recurringThemes).join(' · ')),
-      confident: aha1.map((a) => a.finding.trim()).filter(Boolean).slice(0, 3),
-      unsure: clean(u?.unknowns).slice(0, 3),
+      tensions,
+      confident,
+      inferring,
+      unanswered,
     };
+  }
+
+  /**
+   * Moment 3 — the strategist's SUBSTANTIVE reply to a founder correction, grounded in the correction + the
+   * current understanding: what BB understood (in the founder's terms), what it changes, what still holds, and
+   * an invitation to add more. Never throws (the model fails safe). The correction itself is already held as
+   * founder state by the route; this is the reflection the founder sees.
+   */
+  async reflectCorrection(businessId: string, businessName: string, language: string, correction: string): Promise<CorrectionReflection> {
+    const snap = await this.deps.understanding.latest(businessId);
+    const u = this.projectUnderstanding(snap?.understanding ?? null, (await this.deps.aha1.latest(businessId))?.findings ?? []);
+    return this.deps.reflect.reflect({
+      businessName,
+      language,
+      correction,
+      does: u.does,
+      standsOut: u.standsOut,
+      tensions: u.tensions,
+      confident: u.confident,
+    });
   }
 
   private projectContainer(u: GovernedUnderstanding | null): ArcContainerItem[] {

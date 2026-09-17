@@ -41,7 +41,14 @@ const PLAN: any = { planVersionId: 'p1', priorities: [
 function makeDeps(over: any = {}) {
   const emailCalls: any[] = [];
   const deps: any = {
-    understanding: { latest: async () => ({ understanding: { offer: { summary: 'Recovery-focused physiotherapy memberships' }, positioning: { summary: 'Recovery + performance', evidenceBacked: ['x'] }, audience: { addressed: ['post-op patients', 'active adults'] }, messaging: { recurringThemes: [] }, unknowns: ['whether corporate partnerships convert'] } }) },
+    understanding: { latest: async () => ({ understanding: {
+      offer: { summary: 'Recovery-focused physiotherapy memberships', explicit: ['physio memberships'], unclear: [] },
+      positioning: { summary: 'Recovery + performance', evidenceBacked: ['recovery-led copy throughout'], implied: ['performance-oriented for athletes'] },
+      audience: { addressed: ['post-op patients', 'active adults'], appearsTargeted: ['referring clinics'], unknown: [] },
+      messaging: { recurringThemes: [] },
+      contradictions: [{ statementA: 'the site gives six categories equal weight', statementB: 'but the kinetotherapy page is far more detailed', tension: 'kinetotherapy may be the real business — or the site is out of sync with the offer', sourceRefs: [] }],
+      unknowns: ['whether corporate partnerships convert'],
+    } }) },
     aha1: { latest: async () => ({ findings: [{ finding: 'Referrals already drive most new members.' }] }) },
     conversation: { status: async () => 'ready_for_aha2', turns: async () => [{ id: 't1', role: 'bb', content: 'What have you tried?' }] },
     mirror: { build: async () => ({ contrasts: [{ founderWords: 'You said recovery is the priority', against: 'Your site promotes six categories equally', tension: 'A priority your site does not reflect.' }] }) },
@@ -50,6 +57,7 @@ function makeDeps(over: any = {}) {
     voiceBoundaries: async () => ['warm, proof-led', 'a short call'],
     founderContext: async () => ['We have printed clinic brochures'],
     email: { draft: async (i: any) => { emailCalls.push(i); return { subject: `About ${i.businessName}`, body: `Advancing: ${i.todaysMove}` }; } },
+    reflect: { reflect: async (i: any) => ({ reflection: `Noted: ${i.correction}`, changes: 'that shifts what to lead with', holds: 'the referral direction still holds', ask: 'what else should I know?' }) },
     ...over,
   };
   return { deps, emailCalls };
@@ -67,14 +75,33 @@ describe('ArcService.view — each moment composes from the reused engines', () 
     expect(v.igConnected).toBe(true);
   });
 
-  it('understanding speaks what BB saw + confident (Aha1) + unsure (unknowns)', async () => {
+  it('understanding is DIAGNOSTIC: surfaces tensions + confident-from-evidence vs inferred + what sources can\'t answer', async () => {
     const { deps } = makeDeps({ conversation: { status: async () => null, turns: async () => [] } });
     const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true }), [], null);
     expect(v.moment).toBe('understanding');
     expect(v.understanding?.does).toMatch(/physiotherapy memberships/);
     expect(v.understanding?.serves).toMatch(/post-op patients/);
+    // The diagnostic core: the engine's contradiction is now SURFACED as a tension (it used to be discarded).
+    expect(v.understanding?.tensions).toContain('kinetotherapy may be the real business — or the site is out of sync with the offer');
+    // Confident = from evidence (Aha1 + explicit offer + evidence-backed positioning); inferring = from pattern.
     expect(v.understanding?.confident).toContain('Referrals already drive most new members.');
-    expect(v.understanding?.unsure).toContain('whether corporate partnerships convert');
+    expect(v.understanding?.confident).toContain('physio memberships');
+    expect(v.understanding?.inferring).toContain('performance-oriented for athletes');
+    expect(v.understanding?.inferring).toContain('referring clinics');
+    expect(v.understanding?.unanswered).toContain('whether corporate partnerships convert');
+  });
+
+  it('reflectCorrection replies substantively, grounded in the correction + current understanding', async () => {
+    const reflectCalls: any[] = [];
+    const { deps } = makeDeps({ reflect: { reflect: async (i: any) => { reflectCalls.push(i); return { reflection: `Noted: ${i.correction}`, changes: 'shifts what to lead with', holds: 'referrals hold', ask: 'what else?' }; } } });
+    const out = await new ArcService(deps).reflectCorrection('B', 'Body Move', 'en', 'Schroth Therapy matters more than the site suggests.');
+    expect(out.reflection).toContain('Schroth Therapy matters more');
+    expect(out.changes).toBeTruthy();
+    expect(out.holds).toBeTruthy();
+    expect(out.ask).toBeTruthy();
+    // grounded: the model received the correction AND the current understanding (tensions/confident).
+    expect(reflectCalls[0].correction).toMatch(/Schroth Therapy/);
+    expect(reflectCalls[0].tensions).toContain('kinetotherapy may be the real business — or the site is out of sync with the offer');
   });
 
   it('mirror shows the strongest contrast (both sides cited)', async () => {

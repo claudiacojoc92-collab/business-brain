@@ -120,7 +120,7 @@ import { AnthropicVoiceModel } from '@bb/infrastructure';
 import { AnthropicPlanModel } from '@bb/infrastructure';
 import { AnthropicImpactModel } from '@bb/infrastructure';
 import { AnthropicMirrorModel } from '@bb/infrastructure';
-import { AnthropicEmailModel } from '@bb/infrastructure';
+import { AnthropicEmailModel, AnthropicCorrectionReflectionModel } from '@bb/infrastructure';
 import { AnthropicCarouselModel } from '@bb/infrastructure';
 import { AnthropicObservationModel, AnthropicOpportunityModel } from '@bb/infrastructure';
 import { AnthropicVideoObservationModel, AnthropicReelOpportunityModel } from '@bb/infrastructure';
@@ -471,6 +471,7 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     voiceBoundaries: async (bid) => { const cur = await strategyService.getCurrent(bid); if (!cur) return []; const br = cur.record.bundle.branch; return [br.messagingDirection, br.ctaDirection].map((s) => (s ?? '').trim()).filter(Boolean); },
     founderContext: async (bid) => (await founderStateRepo.listActive(bid)).filter((s) => s.kind === 'resource' || s.kind === 'decision' || s.kind === 'preference').map((s) => s.statement.trim()).filter(Boolean),
     email: new AnthropicEmailModel(anthropicKey),
+    reflect: new AnthropicCorrectionReflectionModel(anthropicKey),
   });
 
   // ── Slice 6: carousel (CreateHandoff → governed asset-level copy → deterministic render → export) ──
