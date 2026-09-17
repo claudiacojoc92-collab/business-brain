@@ -75,6 +75,25 @@ describe('ArcSurface — one surface, nine moments', () => {
     expect(screen.getByPlaceholderText('arc.reading.ph')).toBeInTheDocument();
   });
 
+  it('Moment 2: the bridge input keeps focus across keystrokes — the SAME node persists (no remount) [regression]', async () => {
+    // Regression guard for the focus-loss bug: the input components must be hoisted OUT of ArcSurface, or each
+    // keystroke (setText → re-render) remounts the <textarea>, replacing the DOM node and dropping focus.
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'reading', turns: [] }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    const ta = await screen.findByPlaceholderText('arc.reading.ph') as HTMLTextAreaElement;
+    ta.focus();
+    expect(document.activeElement).toBe(ta);
+    fireEvent.change(ta, { target: { value: 'H' } });
+    expect(screen.getByPlaceholderText('arc.reading.ph')).toBe(ta);   // identical DOM node — not remounted
+    expect(document.activeElement).toBe(ta);                          // focus retained after the first keystroke
+    fireEvent.change(ta, { target: { value: 'He' } });
+    fireEvent.change(ta, { target: { value: 'Hel' } });
+    const still = screen.getByPlaceholderText('arc.reading.ph') as HTMLTextAreaElement;
+    expect(still).toBe(ta);                                            // still the same node after several keystrokes
+    expect(still.value).toBe('Hel');
+    expect(document.activeElement).toBe(ta);
+  });
+
   it('Moment 3: understanding speaks what BB saw, with confident + unsure — and NO strategy yet', async () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: { does: 'Physio memberships', serves: 'post-op patients', standsOut: 'recovery-led', confident: ['Referrals drive members'], unsure: ['corporate partnerships?'] } }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
@@ -117,6 +136,18 @@ describe('ArcSurface — one surface, nine moments', () => {
     expect(await screen.findByText('Build the clinic list')).toBeInTheDocument();
     expect(screen.getByText('Draft the clinic target list')).toBeInTheDocument();
     expect(screen.getByText('arc.week.draft →')).toBeInTheDocument();
+  });
+
+  it('Moment 8: the email body keeps focus across keystrokes (EmailMoment is module-level) [regression]', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'email', email: { subject: 'About Body Move', body: 'Hi there,' } }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    const body = await screen.findByDisplayValue('Hi there,') as HTMLTextAreaElement;
+    body.focus();
+    expect(document.activeElement).toBe(body);
+    fireEvent.change(body, { target: { value: 'Hi there, Ana' } });
+    const still = screen.getByDisplayValue('Hi there, Ana') as HTMLTextAreaElement;
+    expect(still).toBe(body);                       // same node — not remounted
+    expect(document.activeElement).toBe(body);      // focus retained
   });
 
   it('Moment 8: email is editable and exportable', async () => {

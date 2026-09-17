@@ -13,6 +13,29 @@ import {
 
 type T = (k: string, v?: Record<string, string>) => string;
 
+// These MUST live at module scope — never inside ArcSurface's body. A component defined inside another
+// component is recreated with a NEW identity on every render, so React unmounts + remounts it; a focused
+// <textarea>/<input> then loses focus after a single keystroke (setText → re-render → remount). Hoisting keeps
+// the DOM node stable across re-renders, so the founder can type continuously. State is passed in as props.
+function ArcMsg({ lines }: { lines: string[] }) {
+  return <div className="s0-strat-msg">{lines.filter(Boolean).map((l, i) => <p key={i} className="s0-strat-msg-line">{l}</p>)}</div>;
+}
+function ArcBullets({ k, items, t }: { k: string; items: string[]; t: T }) {
+  if (!items.length) return null;
+  return <div className="s0-arc-block"><div className="s0-arc-k">{t(k)}</div><ul className="s0-arc-list">{items.map((x, i) => <li key={i}>{x}</li>)}</ul></div>;
+}
+function ArcInput({ ph, onSend, cta, t, text, setText, busy, act }: {
+  ph: string; onSend: (m: string) => Promise<ArcView>; cta?: string; t: T;
+  text: string; setText: (s: string) => void; busy: boolean; act: (run: () => Promise<ArcView>) => Promise<void>;
+}) {
+  return (
+    <form className="s0-strat-input" onSubmit={(e) => { e.preventDefault(); if (text.trim()) void act(() => onSend(text.trim())); }}>
+      <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={ph} aria-label={ph} rows={2} disabled={busy} />
+      <button type="submit" className="s0-btn s0-btn-inline" disabled={busy || !text.trim()}>{cta ?? t('arc.send')}</button>
+    </form>
+  );
+}
+
 /**
  * DAY ONE — the arc, one surface. The strategist carries the founder through nine moments; the surface never
  * changes shape (context line · message · actions · input) — only the message does. No tabs, no panels, no
@@ -47,42 +70,26 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
     </div>
   );
 
-  function Msg({ lines }: { lines: string[] }) {
-    return <div className="s0-strat-msg">{lines.filter(Boolean).map((l, i) => <p key={i} className="s0-strat-msg-line">{l}</p>)}</div>;
-  }
-  function Bullets({ k, items }: { k: string; items: string[] }) {
-    if (!items.length) return null;
-    return <div className="s0-arc-block"><div className="s0-arc-k">{t(k)}</div><ul className="s0-arc-list">{items.map((x, i) => <li key={i}>{x}</li>)}</ul></div>;
-  }
-  function Input({ ph, onSend, cta }: { ph: string; onSend: (m: string) => Promise<ArcView>; cta?: string }) {
-    return (
-      <form className="s0-strat-input" onSubmit={(e) => { e.preventDefault(); if (text.trim()) void act(() => onSend(text.trim())); }}>
-        <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={ph} aria-label={ph} rows={2} disabled={busy} />
-        <button type="submit" className="s0-btn s0-btn-inline" disabled={busy || !text.trim()}>{cta ?? t('arc.send')}</button>
-      </form>
-    );
-  }
-
   function renderMoment() {
     switch (view!.moment) {
       case 'pour_in': return <PourIn businessId={businessId} view={view!} busy={busy} onReload={load} onDone={() => act(() => arcPourInDone(businessId))} t={t} />;
 
       case 'reading':
         return (<>
-          <Msg lines={[t('arc.reading')]} />
-          <Input ph={t('arc.reading.ph')} onSend={(m) => arcReading(businessId, m)} cta={t('arc.reading.cta')} />
+          <ArcMsg lines={[t('arc.reading')]} />
+          <ArcInput ph={t('arc.reading.ph')} onSend={(m) => arcReading(businessId, m)} cta={t('arc.reading.cta')} t={t} text={text} setText={setText} busy={busy} act={act} />
         </>);
 
       case 'understanding': {
         const u = view!.understanding!;
         return (<>
-          <Msg lines={[t('arc.understanding.title', { name: view!.businessName }), u.does, u.serves, u.standsOut]} />
-          <Bullets k="arc.understanding.confident" items={u.confident} />
-          <Bullets k="arc.understanding.unsure" items={u.unsure} />
+          <ArcMsg lines={[t('arc.understanding.title', { name: view!.businessName }), u.does, u.serves, u.standsOut]} />
+          <ArcBullets k="arc.understanding.confident" items={u.confident} t={t} />
+          <ArcBullets k="arc.understanding.unsure" items={u.unsure} t={t} />
           <div className="s0-strat-actions">
             <button type="button" className="s0-btn" disabled={busy} onClick={() => act(() => arcConfirmUnderstanding(businessId))}>{t('arc.understanding.confirm')} →</button>
           </div>
-          <Input ph={t('arc.understanding.ph')} onSend={(m) => arcConversation(businessId, m)} />
+          <ArcInput ph={t('arc.understanding.ph')} onSend={(m) => arcConversation(businessId, m)} t={t} text={text} setText={setText} busy={busy} act={act} />
         </>);
       }
 
@@ -90,31 +97,31 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
         const turns = view!.turns ?? [];
         const lastBb = [...turns].reverse().find((x) => x.role === 'bb');
         return (<>
-          {lastBb ? <Msg lines={[lastBb.content]} /> : <Msg lines={[t('arc.conversation.opener')]} />}
+          {lastBb ? <ArcMsg lines={[lastBb.content]} /> : <ArcMsg lines={[t('arc.conversation.opener')]} />}
           {turns.length > 1 ? (
             <details className="s0-arc-thread"><summary>{t('arc.conversation.history')}</summary>
               {turns.map((tn) => <p key={tn.id} className={tn.role === 'bb' ? 's0-turn-bb' : 's0-turn-founder'}>{tn.content}</p>)}
             </details>
           ) : null}
-          <Input ph={t('arc.conversation.ph')} onSend={(m) => arcConversation(businessId, m)} />
+          <ArcInput ph={t('arc.conversation.ph')} onSend={(m) => arcConversation(businessId, m)} t={t} text={text} setText={setText} busy={busy} act={act} />
         </>);
       }
 
       case 'mirror': {
         const m = view!.mirror;
         if (!m) return (<>
-          <Msg lines={[t('arc.mirror.none')]} />
+          <ArcMsg lines={[t('arc.mirror.none')]} />
           <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={() => act(() => arcMirrorSeen(businessId))}>{t('arc.continue')} →</button></div>
         </>);
         return (<>
-          <Msg lines={[t('arc.mirror.intro')]} />
+          <ArcMsg lines={[t('arc.mirror.intro')]} />
           <div className="s0-mirror-card">
             <p className="s0-mirror-said"><span className="s0-mirror-side-tag">{t('arc.mirror.yousaid')}</span> {m.founderWords}</p>
             <p className="s0-mirror-against"><span className="s0-mirror-side-tag">{t('arc.mirror.isaw')}</span> {m.against}</p>
             <p className="s0-mirror-tension">{m.tension}</p>
             <p className="s0-arc-q">{t('arc.mirror.which')}</p>
           </div>
-          <Input ph={t('arc.mirror.ph')} onSend={(ans) => arcMirrorSeen(businessId, ans)} cta={t('arc.send')} />
+          <ArcInput ph={t('arc.mirror.ph')} onSend={(ans) => arcMirrorSeen(businessId, ans)} cta={t('arc.send')} t={t} text={text} setText={setText} busy={busy} act={act} />
           <div className="s0-strat-actions"><button type="button" className="s0-linkbtn" disabled={busy} onClick={() => act(() => arcMirrorSeen(businessId))}>{t('arc.mirror.skip')}</button></div>
         </>);
       }
@@ -122,21 +129,21 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
       case 'strategy': {
         const s = view!.strategy!;
         return (<>
-          <Msg lines={[t('arc.strategy.intro'), t('arc.strategy.bet', { bet: s.bet, over: s.over }), s.horizon ? t('arc.strategy.horizon', { horizon: s.horizon }) : '']} />
-          <Bullets k="arc.strategy.reconsider" items={s.reconsider} />
+          <ArcMsg lines={[t('arc.strategy.intro'), t('arc.strategy.bet', { bet: s.bet, over: s.over }), s.horizon ? t('arc.strategy.horizon', { horizon: s.horizon }) : '']} />
+          <ArcBullets k="arc.strategy.reconsider" items={s.reconsider} t={t} />
           <div className="s0-strat-actions">
             <button type="button" className="s0-btn" disabled={busy || !s.adoptable || !s.proposalId} onClick={() => s.proposalId && act(() => arcAdoptStrategy(businessId, s.proposalId!))}>{t('arc.strategy.adopt')} →</button>
             <button type="button" className="s0-btn-ghost" disabled={busy} onClick={() => navigate(`/b/${businessId}/strategy`)}>{t('arc.showwhy')}</button>
           </div>
-          <Input ph={t('arc.strategy.ph')} onSend={(m) => arcChallengeStrategy(businessId, m)} cta={t('arc.strategy.challenge')} />
+          <ArcInput ph={t('arc.strategy.ph')} onSend={(m) => arcChallengeStrategy(businessId, m)} cta={t('arc.strategy.challenge')} t={t} text={text} setText={setText} busy={busy} act={act} />
         </>);
       }
 
       case 'week_day': {
         const w = view!.weekDay!;
         return (<>
-          <Msg lines={[t('arc.week.intro')]} />
-          <Bullets k="arc.week.week" items={w.week} />
+          <ArcMsg lines={[t('arc.week.intro')]} />
+          <ArcBullets k="arc.week.week" items={w.week} t={t} />
           {w.today ? <div className="s0-arc-block"><div className="s0-arc-k">{t('arc.week.today')}</div><p className="s0-strat-msg-line">{w.today}</p></div> : null}
           <div className="s0-strat-actions">
             <button type="button" className="s0-btn" disabled={busy} onClick={() => act(async () => { await arcAdoptWeekDay(businessId); await arcGenerateEmail(businessId); return getArc(businessId); })}>{t('arc.week.draft')} →</button>
