@@ -261,16 +261,27 @@ export async function readArcFlags(db: KyselyDB, businessId: string, accountId: 
 }
 
 /** The durable pour-in source list — every url the founder added, in order, deduped. */
-export async function readArcSources(db: KyselyDB, businessId: string, accountId: string): Promise<string[]> {
+export type ArcSourceType = 'website' | 'link' | 'pdf' | 'docx' | 'text' | 'instagram';
+export interface ArcSourceRow { readonly url: string; readonly type: ArcSourceType }
+
+const ARC_SOURCE_TYPES: ReadonlySet<string> = new Set(['website', 'link', 'pdf', 'docx', 'text', 'instagram']);
+
+/** The durable pour-in list: every source the founder has added, with its type (default 'website' for legacy rows). */
+export async function readArcSources(db: KyselyDB, businessId: string, accountId: string): Promise<ArcSourceRow[]> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const r: any = await sql`SELECT metadata, occurred_at FROM app.founder_event WHERE business_id=${businessId} AND account_id=${accountId} AND event_type='arc_source_added' ORDER BY occurred_at ASC LIMIT 50`.execute(db);
-    const urls: string[] = [];
+    const out: ArcSourceRow[] = [];
+    const seen = new Set<string>();
     for (const row of (r?.rows ?? [])) {
-      const u = row?.metadata && typeof row.metadata === 'object' ? String(row.metadata.url ?? '').trim() : '';
-      if (u && !urls.includes(u)) urls.push(u);
+      const meta = row?.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+      const u = String(meta.url ?? '').trim();
+      if (!u || seen.has(u)) continue;
+      seen.add(u);
+      const t = String(meta.type ?? '').trim();
+      out.push({ url: u, type: (ARC_SOURCE_TYPES.has(t) ? t : 'website') as ArcSourceType });
     }
-    return urls;
+    return out;
   } catch { return []; }
 }
 

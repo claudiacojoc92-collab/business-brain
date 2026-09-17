@@ -422,6 +422,10 @@
 .s0-pourin-source-status { color: var(--s0-ink-3); font-size: 12.5px; }
 .s0-pourin-added { color: var(--s0-clay); }
 .s0-pourin-source-err { color: var(--s0-danger); font-size: 12.5px; flex-basis: 100%; }
+.s0-pourin-source-type { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--s0-ink-3); border: 1px solid var(--s0-line-2); border-radius: 999px; padding: 1px 8px; }
+.s0-pourin-file { flex: 1; color: var(--s0-ink-2); font-family: var(--s0-sans); font-size: 14px; }
+.s0-pourin-file::file-selector-button { background: var(--s0-bg-3); color: var(--s0-ink); border: 1px solid var(--s0-line-2); border-radius: 8px; padding: 8px 12px; font-family: var(--s0-sans); font-size: 14px; cursor: pointer; margin-right: 10px; }
+.s0-pourin-adding-tag { align-self: center; color: var(--s0-clay); font-size: 13px; }
 .s0-pourin-done { align-self: flex-start; margin-top: 4px; background: none; border: none; color: var(--s0-ink-2); font-family: var(--s0-sans); font-size: 14px; cursor: pointer; padding: 4px 0; text-decoration: underline; text-underline-offset: 3px; }
 .s0-pourin-done:hover { color: var(--s0-ink); }
 .s0-pourin-words { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--s0-line); }

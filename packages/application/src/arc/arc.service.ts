@@ -3,7 +3,7 @@ import type { PlanVersion } from '../plan/index';
 import type { GovernedUnderstanding } from '../bi/index';
 import { computeArcMoment } from './moment';
 import type {
-  ArcFlags, ArcView, ArcTurn, ArcEmail, IEmailModelPort, ArcContainerItem,
+  ArcFlags, ArcView, ArcTurn, ArcEmail, IEmailModelPort, ArcContainerItem, ArcSource,
 } from './contracts';
 
 /** Narrow ports onto the existing engines — the arc REUSES them, it does not reimplement them. */
@@ -34,8 +34,8 @@ const first = (...xs: (string | undefined)[]): string => { for (const x of xs) i
 export class ArcService {
   constructor(private readonly deps: ArcDeps) {}
 
-  /** Compose the whole-arc view for the current moment — durable flags + sources + savedEmail from the route. */
-  async view(businessId: string, businessName: string, language: string, flags: ArcFlags, sources: string[], savedEmail: ArcEmail | null): Promise<ArcView> {
+  /** Compose the whole-arc view for the current moment — durable flags + typed sources + igConnected + savedEmail from the route. */
+  async view(businessId: string, businessName: string, language: string, flags: ArcFlags, sources: ArcSource[], savedEmail: ArcEmail | null, igConnected = false): Promise<ArcView> {
     const snap = await this.deps.understanding.latest(businessId);
     const status = await this.deps.conversation.status(businessId);
     const current = await this.deps.strategy.getCurrent(businessId);
@@ -54,7 +54,7 @@ export class ArcService {
 
     switch (moment) {
       case 'pour_in':
-        return { ...base, sources: sources.map((url) => ({ url })) };
+        return { ...base, sources, igConnected };
 
       case 'reading':
         return { ...base, turns: await this.deps.conversation.turns(businessId) };

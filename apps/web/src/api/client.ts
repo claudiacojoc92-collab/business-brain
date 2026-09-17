@@ -469,10 +469,14 @@ export function getHomeBriefing(businessId: string): Promise<HomeBriefing> {
 // ── Day One: the nine-moment arc ──
 export type ArcMoment = 'pour_in' | 'reading' | 'understanding' | 'conversation' | 'mirror' | 'strategy' | 'week_day' | 'email' | 'container' | 'done';
 export interface ArcTurn { id: string; role: 'founder' | 'bb'; content: string }
+export type ArcSourceType = 'website' | 'link' | 'pdf' | 'docx' | 'text' | 'instagram';
+/** The result of adding one pour-in source — light (no synthesis happens until "Done adding — start"). */
+export interface AddSourceResult { state: 'synced' | 'partial' | 'empty' | 'failed'; error?: string; needsAuth?: boolean; pagesRead?: number }
 export interface ArcView {
   moment: ArcMoment;
   businessName: string;
-  sources?: { url: string }[];
+  sources?: { url: string; type: ArcSourceType }[];
+  igConnected?: boolean;
   understanding?: { does: string; serves: string; standsOut: string; confident: string[]; unsure: string[] };
   turns?: ArcTurn[];
   mirror?: { founderWords: string; against: string; tension: string } | null;
@@ -485,7 +489,24 @@ const ARC = (b: string) => `v1/businesses/${encodeURIComponent(b)}/arc`;
 const arcPost = <T = ArcView>(b: string, path: string, body?: unknown): Promise<T> =>
   request<T>(`${ARC(b)}/${path}`, { method: 'POST', body: JSON.stringify(body ?? {}) });
 export const getArc = (b: string): Promise<ArcView> => request<ArcView>(ARC(b));
-export const arcAddSource = (b: string, url: string): Promise<LearnResult> => arcPost<LearnResult>(b, 'source', { url });
+// Pour-in sources — each ingests only; the bridge fires on arcPourInDone.
+export const arcAddSource = (b: string, url: string): Promise<AddSourceResult> => arcPost<AddSourceResult>(b, 'source', { url }); // website
+export const arcAddLink = (b: string, url: string): Promise<AddSourceResult> => arcPost<AddSourceResult>(b, 'source/link', { url });
+export const arcAddInstagram = (b: string): Promise<AddSourceResult> => arcPost<AddSourceResult>(b, 'source/instagram');
+export async function arcAddFile(b: string, file: File): Promise<AddSourceResult> {
+  const token = getToken();
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch(`${API_BASE}${ARC(b)}/source/file`, {
+    method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: fd,
+  });
+  if (!res.ok) {
+    let message = res.statusText;
+    try { const bd = await res.json(); message = bd?.error?.message ?? message; } catch { /* keep */ }
+    return { state: 'failed', error: message };
+  }
+  return res.json() as Promise<AddSourceResult>;
+}
 export const arcPourInDone = (b: string): Promise<ArcView> => arcPost(b, 'pour-in/done');
 export const arcReading = (b: string, message: string): Promise<ArcView> => arcPost(b, 'reading', { message });
 export const arcConversation = (b: string, message: string): Promise<ArcView> => arcPost(b, 'conversation', { message });

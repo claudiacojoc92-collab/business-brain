@@ -60,9 +60,11 @@ const flags = (o: Partial<ArcFlags>): ArcFlags => ({ ...OFF, ...o });
 describe('ArcService.view — each moment composes from the reused engines', () => {
   it('pour_in lists the durable sources', async () => {
     const { deps } = makeDeps();
-    const v = await new ArcService(deps).view('B', 'Body Move', 'en', OFF, ['www.bodymovestudio.ro', 'bodymovestudio.ro/kineto'], null);
+    const v = await new ArcService(deps).view('B', 'Body Move', 'en', OFF, [{ url: 'www.bodymovestudio.ro', type: 'website' }, { url: 'brochure.pdf', type: 'pdf' }], null, true);
     expect(v.moment).toBe('pour_in');
-    expect(v.sources?.map((s) => s.url)).toEqual(['www.bodymovestudio.ro', 'bodymovestudio.ro/kineto']);
+    expect(v.sources?.map((s) => s.url)).toEqual(['www.bodymovestudio.ro', 'brochure.pdf']);
+    expect(v.sources?.map((s) => s.type)).toEqual(['website', 'pdf']);
+    expect(v.igConnected).toBe(true);
   });
 
   it('understanding speaks what BB saw + confident (Aha1) + unsure (unknowns)', async () => {

@@ -30,6 +30,7 @@ import {
   type IBusinessWebsiteRepository,
   type DiscoveredProfile,
   type PageObservation,
+  type ObservationProvenance,
   type WebsiteIngestionResult,
   type LearnFromMaterialParams,
 } from './contracts';
@@ -194,6 +195,95 @@ export class LearnBusinessService {
     return { state: 'synced', pagesRead: observations.length, discovered: [], understandingId: persisted.understandingId, aha: persisted.aha };
   }
 
+  // ────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // DAY ONE — the multi-source POUR-IN. The founder pours many sources (website, PDF/brochure, pasted link,
+  // Instagram) in any order; each is ingested as business-bound, append-only evidence WITHOUT synthesizing.
+  // On "Done adding — start" the bridge fires ONCE (bridgePourIn) and synthesizes over the UNION of every
+  // source, so the strategist reads the COMPLETE business — never website-only, never last-source-only. This
+  // EXTENDS the engine (learn/learnFromMaterial are untouched and still used by the non-arc routes).
+  // ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  /** Pour-in: ingest a WEBSITE source (observed) and bind its pages to the business. NO synthesis (fires on Done). */
+  async ingestWebsiteForPourIn(p: { businessId: string; founderId: string; url: string }): Promise<{ state: WebsiteIngestionResult['state']; pagesRead: number; error?: string }> {
+    await this.deps.website.setWebsite(p.businessId, p.url, 'reading');
+    const ing = await this.deps.ingestion.ingest(p.founderId, p.url);
+    if (ing.state === 'failed') {
+      await this.deps.website.setIngestion(p.businessId, 'failed', false);
+      return { state: 'failed', pagesRead: 0, error: ing.error };
+    }
+    const host = hostOf(p.url);
+    const all = await this.deps.evidenceRepo.findObserved(p.founderId, 'website');
+    const forHost = all.filter((f) => (f.platform ?? '').replace(/^www\./, '') === host);
+    await this.deps.links.bind(p.businessId, forHost.map((f) => ({ fragmentId: f.id, source: 'website' })));
+    const pageObs = bridgeFragmentsToObservations(forHost, host);
+    const state = pageObs.length === 0 ? (ing.state === 'synced' ? 'empty' : ing.state) : ing.state;
+    await this.deps.website.setIngestion(p.businessId, state, true);
+    return { state, pagesRead: ing.pagesRead };
+  }
+
+  /**
+   * Pour-in: ingest a TEXT source as business-bound, append-only evidence fragments. NO synthesis. Provenance is
+   * honest per source: PDF/brochure and pasted-link = DECLARED (the founder handed it to BB); Instagram content
+   * BB read via the Graph API = OBSERVED (same lane as the website). Each item becomes one grounded observation.
+   */
+  async ingestTextForPourIn(p: {
+    businessId: string; founderId: string;
+    source: string; provenance: ObservationProvenance;
+    items: { ref: string; url: string; text: string; pageType: string }[];
+  }): Promise<{ stored: number }> {
+    const observed = p.provenance === 'observed';
+    const fragments = p.items
+      .filter((it) => it.text.trim().length > 0 && it.url.trim().length > 0)
+      .map((it) => makeFragment({
+        founderId: p.founderId,
+        source: p.source,
+        platform: observed ? p.source : null,
+        sourceUrl: it.url,
+        confidenceKind: observed ? 'observed' : 'declared',
+        visibility: observed ? 'public' : 'private',
+        occurredAt: null,
+        payload: { text: it.text.slice(0, 8000), kind: p.source, ref: it.ref, pageType: it.pageType },
+      }));
+    if (fragments.length === 0) return { stored: 0 };
+    await this.deps.evidenceRepo.appendMany(fragments);
+    await this.deps.links.bind(p.businessId, fragments.map((f) => ({ fragmentId: f.id, source: p.source })));
+    return { stored: fragments.length };
+  }
+
+  /**
+   * The pour-in BRIDGE — fires on "Done adding — start". Reads every source bound to the business, re-projects
+   * each into a grounded PageObservation (website pages = observed; declared/instagram from their fragments,
+   * provenance preserved), and runs the SAME synthesis + grounding + anti-transplant gate ONCE over the UNION →
+   * one understanding snapshot over the complete business. Empty (no usable text anywhere) → 'empty', no snapshot.
+   */
+  async bridgePourIn(p: { businessId: string; founderId: string; businessName: string; interfaceLanguage: string }): Promise<LearnBusinessResult> {
+    const boundIds = new Set(await this.deps.links.listFragmentIds(p.businessId));
+    const mine = (await this.deps.evidenceRepo.findByFounder(p.founderId)).filter((f) => boundIds.has(f.id));
+    const websiteObs = bridgeFragmentsToObservations(mine, ''); // observed website pages (all bound hosts)
+    const extra: PageObservation[] = [];
+    for (const f of mine) {
+      if (f.source === 'website') continue;
+      const payload = (f.payload ?? {}) as Record<string, unknown>;
+      if (payload['kind'] === 'block') continue;
+      const text = typeof payload['text'] === 'string' ? (payload['text'] as string) : '';
+      if (!text.trim()) continue;
+      extra.push({
+        ref: typeof payload['ref'] === 'string' && (payload['ref'] as string) ? (payload['ref'] as string) : (f.source === 'instagram' ? 'Instagram' : 'What you told me'),
+        url: f.sourceUrl ?? '',
+        pageType: typeof payload['pageType'] === 'string' ? (payload['pageType'] as string) : f.source,
+        title: null,
+        text,
+        lang: null,
+        provenance: f.confidenceKind === 'observed' ? 'observed' : 'declared',
+      });
+    }
+    const union = uniqueRefs(dedupeByUrl([...websiteObs, ...extra]));
+    if (union.length === 0) return { state: 'empty', pagesRead: 0, discovered: [], aha: { status: 'insufficient', findings: [] } };
+    const profileVersion = union.some((o) => o.provenance === 'declared') ? SUPPLIED_UNDERSTANDING_PROFILE_VERSION : UNDERSTANDING_PROFILE_VERSION;
+    const persisted = await this.synthesizeAndPersist(p.businessId, p.businessName, union, p.interfaceLanguage, profileVersion);
+    return { state: 'synced', pagesRead: union.length, discovered: [], understandingId: persisted.understandingId, aha: persisted.aha };
+  }
+
   /**
    * Shared synthesis + persistence over NORMALIZED SOURCE OBSERVATIONS (observed and/or declared) — one path,
    * not "Website Brain + Paste Brain". Runs the propose-only model, the fail-closed structural gate, the
@@ -237,4 +327,29 @@ export class LearnBusinessService {
 
     return { understandingId: snap.id, aha: { status: ahaRec.status, findings: ahaRec.findings } };
   }
+}
+
+/** Dedupe observations by url (a re-added source is a no-op), keeping the first; urlless entries are all kept. */
+function dedupeByUrl(obs: PageObservation[]): PageObservation[] {
+  const seen = new Set<string>();
+  const out: PageObservation[] = [];
+  for (const o of obs) {
+    const u = (o.url ?? '').trim();
+    if (u) {
+      if (seen.has(u)) continue;
+      seen.add(u);
+    }
+    out.push(o);
+  }
+  return out;
+}
+
+/** Make refs unique across the whole union (grounding cites refs) — a duplicate ref gets a " (n)" suffix. */
+function uniqueRefs(obs: PageObservation[]): PageObservation[] {
+  const counts = new Map<string, number>();
+  return obs.map((o) => {
+    const n = (counts.get(o.ref) ?? 0) + 1;
+    counts.set(o.ref, n);
+    return n === 1 ? o : { ...o, ref: `${o.ref} (${n})` };
+  });
 }

@@ -37,7 +37,8 @@ export interface ArcState {
 }
 
 // ── per-moment payloads (only the current moment's field is populated) ──
-export interface ArcSource { readonly url: string }
+export type ArcSourceType = 'website' | 'link' | 'pdf' | 'docx' | 'text' | 'instagram';
+export interface ArcSource { readonly url: string; readonly type: ArcSourceType }
 export interface ArcUnderstanding { readonly does: string; readonly serves: string; readonly standsOut: string; readonly confident: string[]; readonly unsure: string[] }
 export interface ArcTurn { readonly id: string; readonly role: 'founder' | 'bb'; readonly content: string }
 export interface ArcMirror { readonly founderWords: string; readonly against: string; readonly tension: string }
@@ -50,7 +51,8 @@ export interface ArcContainer { readonly items: ArcContainerItem[] }
 export interface ArcView {
   readonly moment: ArcMoment;
   readonly businessName: string;
-  readonly sources?: ArcSource[];          // pour_in
+  readonly sources?: ArcSource[];          // pour_in — every functional source the founder has added (with type)
+  readonly igConnected?: boolean;          // pour_in — whether the founder's Instagram is connected (drives the affordance)
   readonly understanding?: ArcUnderstanding; // understanding / (container derives from same engine)
   readonly turns?: ArcTurn[];              // reading / conversation
   readonly mirror?: ArcMirror | null;      // mirror

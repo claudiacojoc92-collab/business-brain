@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import {
-  getArc, arcAddSource, arcPourInDone, arcReading, arcConversation, arcConfirmUnderstanding,
+  getArc, arcAddSource, arcAddLink, arcAddInstagram, arcAddFile, getInstagramConnectUrl,
+  arcPourInDone, arcReading, arcConversation, arcConfirmUnderstanding,
   arcMirrorSeen, arcAdoptStrategy, arcChallengeStrategy, arcAdoptWeekDay, arcGenerateEmail,
   arcSaveEmail, arcExportEmail, arcContainerSeen, type ArcView,
 } from '../api/client';
@@ -151,25 +152,69 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
   }
 }
 
-// ── Moment 1: the pour-in (durable sources come from the server view; adding reuses the learn engine) ──
+// ── Moment 1: the multi-source pour-in. Every connector shown is REAL and functional (website, paste-a-link,
+//    file upload, Instagram); nothing is a "coming soon" stub. Durable sources come from the server view. Adding
+//    only INGESTS — the strategist synthesizes over the union when the founder clicks "Done adding — start". ──
 function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: string; view: ArcView; busy: boolean; onReload: () => Promise<void>; onDone: () => void; t: T }) {
   const [url, setUrl] = useState('');
-  const [adding, setAdding] = useState(false);
+  const [link, setLink] = useState('');
+  const [adding, setAdding] = useState<null | 'website' | 'link' | 'file' | 'instagram'>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [soonKey, setSoonKey] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const sources = view.sources ?? [];
+  const igConnected = view.igConnected ?? false;
+  const disabled = adding !== null || busy;
 
-  async function add(e: React.FormEvent) {
+  const ok = (state: string) => state === 'synced' || state === 'partial';
+
+  async function addWebsite(e: React.FormEvent) {
     e.preventDefault();
-    const u = url.trim(); if (!u || adding) return;
-    setAdding(true); setErr(null);
+    const u = url.trim(); if (!u || disabled) return;
+    setAdding('website'); setErr(null);
     try {
       const res = await arcAddSource(businessId, u);
-      if (res.state === 'synced' || res.state === 'partial') { setUrl(''); await onReload(); }
-      else setErr(res.error?.trim() || t('home.empty.unreachable'));
-    } catch { setErr(t('home.empty.unreachable')); } finally { setAdding(false); }
+      if (ok(res.state)) { setUrl(''); await onReload(); } else setErr(res.error?.trim() || t('home.empty.unreachable'));
+    } catch { setErr(t('home.empty.unreachable')); } finally { setAdding(null); }
   }
-  const next = [{ key: 'home.empty.ig' }, { key: 'home.empty.google' }, { key: 'home.empty.doc', hint: 'home.empty.doc.hint' }, { key: 'home.empty.link' }];
+
+  async function addLink(e: React.FormEvent) {
+    e.preventDefault();
+    const u = link.trim(); if (!u || disabled) return;
+    setAdding('link'); setErr(null);
+    try {
+      const res = await arcAddLink(businessId, u);
+      if (ok(res.state)) { setLink(''); await onReload(); } else setErr(res.error?.trim() || t('home.empty.unreachable'));
+    } catch { setErr(t('home.empty.unreachable')); } finally { setAdding(null); }
+  }
+
+  async function addFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file || disabled) return;
+    setAdding('file'); setErr(null);
+    try {
+      const res = await arcAddFile(businessId, file);
+      if (ok(res.state)) await onReload(); else setErr(res.error?.trim() || t('home.empty.filefail'));
+    } catch { setErr(t('home.empty.filefail')); } finally { setAdding(null); if (fileRef.current) fileRef.current.value = ''; }
+  }
+
+  async function addInstagram() {
+    if (disabled) return;
+    setAdding('instagram'); setErr(null);
+    try {
+      const res = await arcAddInstagram(businessId);
+      if (ok(res.state)) await onReload();
+      else setErr(res.error?.trim() || t('home.empty.igfail'));
+    } catch { setErr(t('home.empty.igfail')); } finally { setAdding(null); }
+  }
+
+  async function connectInstagram() {
+    if (disabled) return;
+    setErr(null);
+    try {
+      const res = await getInstagramConnectUrl();
+      if (res.authUrl) window.location.href = res.authUrl;
+      else setErr(res.error?.trim() || t('home.empty.igfail'));
+    } catch { setErr(t('home.empty.igfail')); }
+  }
 
   return (
     <>
@@ -178,31 +223,58 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
         <p className="s0-strat-msg-line s0-strat-msg-sub">{t('home.empty.sub')}</p>
       </div>
       <div className="s0-pourin">
-        <form className="s0-pourin-web" onSubmit={add}>
+        {/* WEBSITE */}
+        <form className="s0-pourin-web" onSubmit={addWebsite}>
           <label className="s0-pourin-web-k">{t('home.empty.website')}</label>
           <div className="s0-pourin-web-row">
             <input className="s0-pourin-web-input" type="text" inputMode="url" value={url} placeholder={t('home.empty.website.ph')} onChange={(e) => setUrl(e.target.value)} aria-label={t('home.empty.website')} />
-            <button type="submit" className="s0-btn s0-btn-inline" disabled={adding || !url.trim()}>{adding ? t('home.empty.adding') : t('home.empty.website.add')}</button>
+            <button type="submit" className="s0-btn s0-btn-inline" disabled={disabled || !url.trim()}>{adding === 'website' ? t('home.empty.adding') : t('home.empty.website.add')}</button>
           </div>
-          {err ? <div className="s0-error" role="alert">{err}</div> : null}
-          {sources.length > 0 ? (
-            <ul className="s0-pourin-sources">
-              {sources.map((s, i) => <li key={i} className="s0-pourin-source s0-pourin-source-done"><span className="s0-pourin-source-url">{s.url}</span><span className="s0-pourin-source-status s0-pourin-added">{t('home.empty.added')}</span></li>)}
-            </ul>
-          ) : null}
         </form>
-        <ul className="s0-pourin-list">
-          {next.map((c) => (
-            <li key={c.key}>
-              <button type="button" className="s0-pourin-item" onClick={() => setSoonKey(c.key)}>
-                <span className="s0-pourin-item-label">{t(c.key)}{c.hint ? <span className="s0-pourin-item-hint"> · {t(c.hint)}</span> : null}</span>
-                <span className="s0-pourin-soon">{t('home.empty.soon')}</span>
-              </button>
-              {soonKey === c.key ? <p className="s0-pourin-wiring">{t('home.empty.wiring')}</p> : null}
-            </li>
-          ))}
-        </ul>
-        {sources.length > 0 ? <button type="button" className="s0-pourin-done" disabled={busy} onClick={onDone}>{t('home.empty.done')}</button> : null}
+
+        {/* PASTE A LINK — the universal catch-all (a competitor page, a testimonial, any page) */}
+        <form className="s0-pourin-web" onSubmit={addLink}>
+          <label className="s0-pourin-web-k">{t('home.empty.link')} <span className="s0-pourin-item-hint">· {t('home.empty.link.hint')}</span></label>
+          <div className="s0-pourin-web-row">
+            <input className="s0-pourin-web-input" type="text" inputMode="url" value={link} placeholder={t('home.empty.link.ph')} onChange={(e) => setLink(e.target.value)} aria-label={t('home.empty.link')} />
+            <button type="submit" className="s0-btn s0-btn-inline" disabled={disabled || !link.trim()}>{adding === 'link' ? t('home.empty.adding') : t('home.empty.website.add')}</button>
+          </div>
+        </form>
+
+        {/* UPLOAD A FILE — PDF / Word / text (offer, brochure, proposal, case study) */}
+        <div className="s0-pourin-web">
+          <label className="s0-pourin-web-k" htmlFor="s0-pourin-file">{t('home.empty.upload')} <span className="s0-pourin-item-hint">· {t('home.empty.upload.hint')}</span></label>
+          <div className="s0-pourin-web-row">
+            <input id="s0-pourin-file" ref={fileRef} className="s0-pourin-file" type="file" accept=".pdf,.docx,.doc,.txt,.md" onChange={addFile} disabled={disabled} aria-label={t('home.empty.upload')} />
+            {adding === 'file' ? <span className="s0-pourin-adding-tag">{t('home.empty.adding')}</span> : null}
+          </div>
+        </div>
+
+        {/* INSTAGRAM — connect (OAuth) then read the account's profile + captions */}
+        <div className="s0-pourin-web">
+          <label className="s0-pourin-web-k">{t('home.empty.ig')}{igConnected ? <span className="s0-pourin-item-hint"> · {t('home.empty.ig.connected')}</span> : null}</label>
+          <div className="s0-pourin-web-row">
+            {igConnected
+              ? <button type="button" className="s0-btn s0-btn-inline" disabled={disabled} onClick={addInstagram}>{adding === 'instagram' ? t('home.empty.adding') : t('home.empty.ig.add')}</button>
+              : <button type="button" className="s0-btn-ghost" disabled={disabled} onClick={connectInstagram}>{t('home.empty.ig.connect')}</button>}
+          </div>
+        </div>
+
+        {err ? <div className="s0-error" role="alert">{err}</div> : null}
+
+        {sources.length > 0 ? (
+          <ul className="s0-pourin-sources">
+            {sources.map((s, i) => (
+              <li key={i} className="s0-pourin-source s0-pourin-source-done">
+                <span className="s0-pourin-source-type">{t(`home.empty.type.${s.type}`)}</span>
+                <span className="s0-pourin-source-url">{s.url}</span>
+                <span className="s0-pourin-source-status s0-pourin-added">{t('home.empty.added')}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        {sources.length > 0 ? <button type="button" className="s0-pourin-done" disabled={disabled} onClick={onDone}>{t('home.empty.done')}</button> : null}
       </div>
     </>
   );

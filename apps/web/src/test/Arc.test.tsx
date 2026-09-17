@@ -10,7 +10,8 @@ vi.mock('react-router-dom', async (orig) => {
   return { ...actual, useNavigate: () => vi.fn() };
 });
 vi.mock('../api/client', () => ({
-  getArc: vi.fn(), arcAddSource: vi.fn(), arcPourInDone: vi.fn(), arcReading: vi.fn(), arcConversation: vi.fn(),
+  getArc: vi.fn(), arcAddSource: vi.fn(), arcAddLink: vi.fn(), arcAddInstagram: vi.fn(), arcAddFile: vi.fn(),
+  getInstagramConnectUrl: vi.fn(), arcPourInDone: vi.fn(), arcReading: vi.fn(), arcConversation: vi.fn(),
   arcConfirmUnderstanding: vi.fn(), arcMirrorSeen: vi.fn(), arcAdoptStrategy: vi.fn(), arcChallengeStrategy: vi.fn(),
   arcAdoptWeekDay: vi.fn(), arcGenerateEmail: vi.fn(), arcSaveEmail: vi.fn(), arcExportEmail: vi.fn(), arcContainerSeen: vi.fn(),
 }));
@@ -25,27 +26,40 @@ beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
 
 describe('ArcSurface — one surface, nine moments', () => {
-  it('Moment 1: pour-in lists persisted sources (survives refresh) + connectors + Done; no tabs', async () => {
-    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [{ url: 'www.bodymovestudio.ro' }] }));
+  it('Moment 1: pour-in lists persisted typed sources (survives refresh) + Done; no tabs', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [{ url: 'www.bodymovestudio.ro', type: 'website' }, { url: 'brochure.pdf', type: 'pdf' }] }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
     expect(await screen.findByText('www.bodymovestudio.ro')).toBeInTheDocument();  // durable source shown
-    expect(screen.getByText('home.empty.added')).toBeInTheDocument();
-    expect(screen.getByText('home.empty.website')).toBeInTheDocument();
-    expect(screen.getByText('home.empty.done')).toBeInTheDocument();               // Done adding present (a source is in)
+    expect(screen.getByText('brochure.pdf')).toBeInTheDocument();
+    expect(screen.getByText('home.empty.type.website')).toBeInTheDocument();       // typed tag
+    expect(screen.getByText('home.empty.type.pdf')).toBeInTheDocument();
+    expect(screen.getAllByText('home.empty.added')).toHaveLength(2);
+    expect(screen.getByText('home.empty.done')).toBeInTheDocument();               // Done adding present (sources are in)
     noTabs();
   });
 
-  it('Moment 1: the wiring note is HIDDEN by default and appears only under the tapped NEXT connector (regression)', async () => {
-    // Regression guard: the "I'm wiring this one up" note must never render by default — only when a
-    // specific NEXT connector is tapped, and only under that one. This has regressed twice on live.
-    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [] }));
+  it('Moment 1: every connector is a REAL affordance — no NEXT pills, no "coming soon" stubs (regression)', async () => {
+    // Regression guard against the amputated pour-in: website, paste-a-link, file upload, and Instagram are all
+    // functional; there is NO "Next" pill and NO "wiring up" note; unbuilt connectors (Google) are not shown.
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [], igConnected: false }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
-    const igButton = await screen.findByText('home.empty.ig');           // the first NEXT connector (Instagram)
-    expect(screen.queryByText('home.empty.wiring')).toBeNull();          // hidden by default — nothing tapped yet
-    fireEvent.click(igButton);
-    expect(screen.getAllByText('home.empty.wiring')).toHaveLength(1);    // appears exactly once, under the tapped connector
-    fireEvent.click(screen.getByText('home.empty.google'));              // tap a different connector
-    expect(screen.getAllByText('home.empty.wiring')).toHaveLength(1);    // still exactly one (moves, never duplicates/persists everywhere)
+    expect(await screen.findByText('home.empty.website')).toBeInTheDocument();
+    expect(screen.getByText('home.empty.link')).toBeInTheDocument();
+    expect(screen.getByText('home.empty.upload')).toBeInTheDocument();
+    expect(screen.getByText('home.empty.ig.connect')).toBeInTheDocument();          // not connected → connect affordance
+    expect(screen.queryByText('home.empty.soon')).toBeNull();                       // no "Next" pill anywhere
+    expect(screen.queryByText('home.empty.wiring')).toBeNull();                     // no "coming soon" note
+    expect(screen.queryByText('home.empty.google')).toBeNull();                     // unbuilt connector is hidden, not stubbed
+  });
+
+  it('Moment 1: once Instagram is connected, the founder can read it in (Add my Instagram)', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [], igConnected: true }));
+    vi.mocked(api.arcAddInstagram).mockResolvedValue({ state: 'synced' });
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    const add = await screen.findByText('home.empty.ig.add');
+    expect(screen.queryByText('home.empty.ig.connect')).toBeNull();
+    fireEvent.click(add);
+    await waitFor(() => expect(api.arcAddInstagram).toHaveBeenCalledWith('b1'));
   });
 
   it('Moment 2: reading asks for a few words', async () => {
