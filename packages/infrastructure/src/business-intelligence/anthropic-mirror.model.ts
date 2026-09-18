@@ -22,7 +22,7 @@ const SHAPE = `{
 
 function rules(l: string): string {
   return [
-    `You are Business Brain holding up a MIRROR to a founder. LANGUAGE: write in the language of the founder's OWN WORDS below (what they told you about the business and about themselves) — Romanian→Romanian, English→English, Italian→Italian; ${l} is only a fallback if their language is unclear. NEVER default to English. Return ONLY valid JSON in`,
+    `You are Business Brain holding up a MIRROR to a founder. LANGUAGE — write in the SAME language as the founder's OWN WORDS below (what they told you about the business and themselves), whatever it is (English→English, Romanian→Romanian, Italian→Italian); do not switch to a different language, and ignore the business's country/locale. ${l} only if their language is unclear. Return ONLY valid JSON in`,
     'EXACTLY this shape (no prose around it):',
     SHAPE,
     '',
