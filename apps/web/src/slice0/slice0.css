@@ -245,6 +245,19 @@
 .s0-arc-question-tag { font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--s0-clay); }
 .s0-arc-question-text { margin: 0; color: var(--s0-ink); font-size: 16.5px; font-weight: 500; line-height: 1.45; }
 
+/* The Moment 4 conversation THREAD — a visible, growing sequence (no hidden-history toggle). Founder turns are
+   labelled "You" and set apart (inset, own ground); strategist turns read as plain messages; the current
+   question renders as the ArcQuestion card at the end. */
+.s0-cthread { display: flex; flex-direction: column; gap: 14px; margin: 4px 0 6px; }
+.s0-cturn { display: flex; flex-direction: column; gap: 3px; }
+.s0-cturn-who { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--s0-ink-3); }
+.s0-cturn-text { margin: 0; font-size: 15px; line-height: 1.5; white-space: pre-wrap; }
+.s0-cturn-bb .s0-cturn-text { color: var(--s0-ink); }
+/* the founder's turn — visually distinct: inset card on its own ground, clay label */
+.s0-cturn-you { align-self: stretch; background: var(--s0-bg-3); border: 1px solid var(--s0-line); border-left: 2px solid var(--s0-clay); border-radius: 10px; padding: 10px 13px; }
+.s0-cturn-you .s0-cturn-who { color: var(--s0-clay); }
+.s0-cturn-you .s0-cturn-text { color: var(--s0-ink-2); }
+
 .s0-stack > * + * { margin-top: 12px; }
 
 /* ── business list ────────────────────────────────────────────────────────── */

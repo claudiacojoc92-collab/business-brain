@@ -50,6 +50,34 @@ function ArcQuestion({ text, t }: { text: string; t: T }) {
   );
 }
 
+// THE conversation thread — the exchange rendered as a VISIBLE, growing sequence (not one current message with
+// the history hidden behind a toggle). Every turn shows top-to-bottom: the founder's turns labelled "You" and
+// visually distinct, the strategist's as plain "Business Brain" messages, and the CURRENT question (the last
+// bb turn) as the prominent ArcQuestion at the end. Auto-scrolls to the newest exchange; the older ones stay
+// above (scroll up = read the thread). The input sits below this. Rendering only — the engine is untouched.
+type ThreadTurn = { id: string; role: 'founder' | 'bb'; content: string };
+function ArcThread({ turns, t }: { turns: ThreadTurn[]; t: T }) {
+  const endRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { endRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'end' }); }, [turns.length]);
+  let lastBb = -1;
+  for (let i = turns.length - 1; i >= 0; i -= 1) { if (turns[i]?.role === 'bb') { lastBb = i; break; } }
+  return (
+    <div className="s0-cthread">
+      {turns.map((tn, i) => (
+        tn.role === 'bb' && i === lastBb
+          ? <ArcQuestion key={tn.id} text={tn.content} t={t} />
+          : (
+            <div key={tn.id} className={tn.role === 'founder' ? 's0-cturn s0-cturn-you' : 's0-cturn s0-cturn-bb'}>
+              <div className="s0-cturn-who">{tn.role === 'founder' ? t('arc.thread.you') : t('arc.thread.bb')}</div>
+              <p className="s0-cturn-text">{tn.content}</p>
+            </div>
+          )
+      ))}
+      <div ref={endRef} aria-hidden="true" />
+    </div>
+  );
+}
+
 /**
  * DAY ONE — the arc, one surface. The strategist carries the founder through nine moments; the surface never
  * changes shape (context line · message · actions · input) — only the message does. No tabs, no panels, no
@@ -140,15 +168,9 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
 
       case 'conversation': {
         const turns = view!.turns ?? [];
-        const lastBb = [...turns].reverse().find((x) => x.role === 'bb');
+        // The whole conversation is the surface — a visible thread that grows, not a single message + a toggle.
         return (<>
-          {/* the strategist's current question — rendered by the shared, unmissable ArcQuestion */}
-          <ArcQuestion text={lastBb ? lastBb.content : t('arc.conversation.opener')} t={t} />
-          {turns.length > 1 ? (
-            <details className="s0-arc-thread"><summary>{t('arc.conversation.history')}</summary>
-              {turns.map((tn) => <p key={tn.id} className={tn.role === 'bb' ? 's0-turn-bb' : 's0-turn-founder'}>{tn.content}</p>)}
-            </details>
-          ) : null}
+          {turns.length ? <ArcThread turns={turns} t={t} /> : <ArcQuestion text={t('arc.conversation.opener')} t={t} />}
           <ArcInput ph={t('arc.conversation.ph')} onSend={(m) => arcConversation(businessId, m)} t={t} text={text} setText={setText} busy={busy} act={act} />
         </>);
       }

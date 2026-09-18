@@ -170,14 +170,23 @@ describe('ArcSurface — one surface, nine moments', () => {
     expect(screen.getByText('arc.question.label')).toBeInTheDocument();
   });
 
-  it('Moment 4: conversation shows BB\'s question + input — still no strategy', async () => {
-    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'conversation', turns: [{ id: 't1', role: 'bb', content: 'What have you tried and stopped?' }] }));
+  it('Moment 4: the conversation renders as a VISIBLE THREAD (all turns, no toggle); current question is the ArcQuestion', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'conversation', turns: [
+      { id: 't1', role: 'bb', content: 'What have you tried and stopped?' },
+      { id: 't2', role: 'founder', content: 'We ran Instagram ads for a month.' },
+      { id: 't3', role: 'bb', content: 'What made you stop the ads?' },
+    ] }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
-    // the BB question renders via the shared, unmissable ArcQuestion (labelled, its own card)
-    const q = await screen.findByText('What have you tried and stopped?');
-    expect(q.closest('.s0-arc-question')).toBeTruthy();
+    // every exchange is visible top-to-bottom — earlier turns are NOT hidden behind a toggle
+    expect(await screen.findByText('What have you tried and stopped?')).toBeInTheDocument(); // earlier bb turn, visible
+    expect(screen.getByText('We ran Instagram ads for a month.')).toBeInTheDocument();       // founder turn, visible
+    expect(screen.getAllByText('arc.thread.you').length).toBeGreaterThan(0);                 // founder turn labelled "You"
+    expect(screen.queryByText('arc.conversation.history')).toBeNull();                       // NO "earlier in our conversation" toggle
+    // the CURRENT (last) question is the prominent ArcQuestion; an EARLIER bb turn is a plain message
+    expect(screen.getByText('What made you stop the ads?').closest('.s0-arc-question')).toBeTruthy();
+    expect(screen.getByText('What have you tried and stopped?').closest('.s0-arc-question')).toBeNull();
     expect(screen.getByText('arc.question.label')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('arc.conversation.ph')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('arc.conversation.ph')).toBeInTheDocument();          // input stays at the bottom
     expect(screen.queryByText('arc.strategy.adopt →')).toBeNull();
   });
 
