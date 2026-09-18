@@ -49,7 +49,7 @@ function systemPrompt(lang: string): string {
     'You will receive labelled blocks. Cite evidence ONLY by the exact `ref` labels given.',
     'Never cite a ref that was not provided.',
     '',
-    `Write all founder-facing prose (summaries, findings, implications) in ${langName}. Keep the`,
+    `LANGUAGE: detect the language of the SOURCE material below (the website text and any founder-supplied blocks) and write ALL founder-facing prose (summaries, findings, implications) in THAT language — Romanian site→Romanian, Italian→Italian, English→English. Fall back to ${langName} only if the source language is genuinely unclear; NEVER default to English. Keep the`,
     'business name and product/brand terms in their original language.',
     '',
     'Return ONLY valid JSON (no markdown, no commentary) with EXACTLY this shape:',

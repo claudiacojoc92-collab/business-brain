@@ -11,7 +11,7 @@ const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Itali
 
 function rules(l: string): string {
   return [
-    `You are Business Brain drafting one real email for a founder to send, in ${l}. Return ONLY valid JSON:`,
+    `You are Business Brain drafting one real email for a founder to send. LANGUAGE: write the email in the language the founder uses in the FOUNDER CONTEXT / business inputs below; use ${l} only if that is unclear. NEVER default to English unless the founder's own language is English. Return ONLY valid JSON:`,
     '{ "subject": "a short, specific subject line", "body": "the full email, ready to send" }',
     '',
     '- Ground it in the STRATEGY BET and TODAY\'S MOVE below — this email is the first concrete step of that move.',
