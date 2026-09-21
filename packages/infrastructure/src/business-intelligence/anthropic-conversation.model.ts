@@ -79,7 +79,7 @@ function systemPrompt(lang: string): string {
     'would break the JSON. Use EXACTLY this shape:',
     '{',
     '  "interpretation": "opener → \'\'; question phase → ONE sentence that ADDS a noticing (never a bare paraphrase); by the 3rd–4th answer → your full SYNTHESIS then DIAGNOSIS in your own voice; when the founder ASKS/CHALLENGES the current context → your direct spoken answer. NEVER a description of their question or your process",',
-    '  "nextQuestion": "question phase → the next decision-changing question; diagnosis phase → the verification (\'Have I got that right — what am I missing?\'); null when ready",',
+    '  "nextQuestion": "question phase → the next decision-changing question; diagnosis phase → the verification (\'Have I got that right — what am I missing?\'); null when ready. MUST be in the EXACT SAME language as interpretation and the founder\'s last message — if the founder wrote English, this question is in English, NEVER Romanian",',
     '  "readyForAha2": false,',
     '  "declarations": [{"kind": "goal|horizon|constraint|preference|decision|intention|challenge_permission|resource", "statement": "the founder-owned fact in their words", "scope": "optional"}],',
     '  "businessCorrections": ["a fact the founder says is no longer true about the business"],',
@@ -148,6 +148,7 @@ export class AnthropicConversationModel implements IConversationModelPort {
     const resp: any = await client.messages.create({
       model: this.modelId,
       max_tokens: 5000, // headroom for the synthesis+diagnosis interpretation + the state JSON (avoids truncation->no-JSON)
+      temperature: 0, // deterministic — stops the reply from code-switching (e.g. the verification question) into the Romanian context
       system: systemPrompt(input.interfaceLanguage),
       messages: [{ role: 'user', content: user }],
     });
