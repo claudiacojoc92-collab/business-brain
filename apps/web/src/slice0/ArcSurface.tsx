@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
+import { translate, isLocale, type Locale } from '../i18n/messages';
 import { parseOpenerTurn, type ArcOpener } from './parse-briefing';
 import {
   getArc, arcAddSource, arcAddLink, arcAddFile,
@@ -107,7 +108,7 @@ function ArcOpenerView({ opener, t, asQuestion }: { opener: ArcOpener; t: T; asQ
  * server-derived (durable), so refresh/reopen lands exactly where the founder left off.
  */
 export function ArcSurface({ businessId, onDone }: { businessId: string; onDone: () => void }) {
-  const { t, locale } = useLocale() as { t: T; locale: string };
+  const { locale } = useLocale() as { t: T; locale: string };
   const navigate = useNavigate();
   const [view, setView] = useState<ArcView | null>(null);
   const [busy, setBusy] = useState(false);
@@ -115,6 +116,12 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
   const [err, setErr] = useState<string | null>(null);
   const [ack, setAck] = useState<string | null>(null);
   const started = useRef(false);
+
+  // Arc CHROME (labels, buttons, the question tag, provenance, error copy) follows the CONTENT language — the
+  // language BB read the business in — so it never mismatches the content. `t` here resolves keys in that
+  // language (falls back to the UI locale before any understanding exists). Date formatting stays on the UI locale.
+  const contentLocale: Locale = view && isLocale(view.contentLanguage) ? (view.contentLanguage as Locale) : (isLocale(locale) ? locale : 'en');
+  const t: T = useCallback((key: string, vars?: Record<string, string>) => translate(contentLocale, key, vars), [contentLocale]);
 
   const apply = useCallback((v: ArcView) => { if (v.moment === 'done') onDone(); else setView(v); }, [onDone]);
   const load = useCallback(async () => { apply(await getArc(businessId)); }, [businessId, apply]);
@@ -131,7 +138,7 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
       const v = await run();
       // A same-moment send gets a light "noted" — UNLESS it carried a substantive reply (a Moment 3 correction
       // reflection), which is the acknowledgment and renders in the moment itself.
-      if (v.moment !== 'done' && v.moment === prevMoment && !v.correctionReflection && !v.error) setAck(t('arc.noted'));
+      if (v.moment !== 'done' && v.moment === prevMoment && !v.correctionReflection && !v.error && !v.strategyChange) setAck(t('arc.noted'));
       apply(v);
       setText('');
     } catch {
@@ -234,6 +241,8 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
       case 'strategy': {
         const s = view!.strategy!;
         return (<>
+          {/* after a challenge: the bet was regenerated — say so, then show the updated bet below */}
+          {view!.strategyChange ? <div className="s0-arc-ack" role="status">{t('arc.strategy.changed', { because: view!.strategyChange.because })}</div> : null}
           <ArcMsg lines={[t('arc.strategy.intro'), t('arc.strategy.bet', { bet: s.bet, over: s.over }), s.horizon ? t('arc.strategy.horizon', { horizon: s.horizon }) : '']} />
           <ArcBullets k="arc.strategy.tradeoffs" items={s.tradeOffs} t={t} />
           <ArcBullets k="arc.strategy.notnow" items={s.notNow} t={t} />

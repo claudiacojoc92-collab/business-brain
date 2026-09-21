@@ -476,6 +476,8 @@ export interface ArcView {
   moment: ArcMoment;
   businessName: string;
   error?: { kind: 'generation' | 'pourin_empty' | 'pourin_failed' } | null; // per-moment failure — never the whole surface
+  contentLanguage?: string | null; // the source/founder language — arc chrome localizes to this
+  strategyChange?: { because: string } | null; // Moment 6 — transient "the bet changed because…" note
   sources?: { url: string; type: ArcSourceType; detail?: string }[];
   igConnected?: boolean;
   understanding?: { does: string; serves: string; standsOut: string; tensions: string[]; confident: string[]; inferring: string[]; unanswered: string[] };

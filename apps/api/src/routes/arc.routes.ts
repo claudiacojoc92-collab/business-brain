@@ -234,14 +234,12 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
   flagRoute('email/export', 'arc_email_exported');          // Moment 8 → 9
   flagRoute('container/seen', 'arc_container_seen');        // Moment 9 → done
 
-  // ── Moment 2: the few words while BB reads (reuses the conversation engine) ──
+  // ── Moment 2: a few words while BB reads. This is a RAPPORT gesture — it does NOT run the conversation engine
+  //    and does NOT count toward the Moment-4 answer budget (the real conversation begins fresh at Moment 4, and
+  //    its opener is generated lazily there). Previously it seeded the conversation session, which offset the
+  //    Moment-4 pacing and pre-created a session; now it only advances the phase. ──
   server.post('/v1/businesses/:id/arc/reading', async (request: FastifyRequest, reply: FastifyReply) => {
     const { founderId, business, language } = await requireBusiness(request);
-    const message = ((request.body as { message?: string })?.message ?? '').trim();
-    if (message) {
-      await deps.conversationService.startOrResume(business.id, founderId, business.name, language);
-      await deps.conversationService.submitResponse(business.id, founderId, business.name, message, language);
-    }
     mark(founderId, business.id, 'arc_reading_done');
     await reply.status(200).send(await viewFor(business.id, business.name, language, founderId));
   });
@@ -281,8 +279,11 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
     const { founderId, business, language } = await requireBusiness(request);
     const statement = ((request.body as { statement?: string })?.statement ?? '').trim();
     if (!statement) throw new ValidationError('STATEMENT_REQUIRED', 'A statement is required.');
+    // recordFounderInput holds the challenge as a constraint and REGENERATES the proposal, so the bet the founder
+    // sees next already reflects it. Surface a transient "the bet changed because you said X" note on this response.
     await deps.strategyService.recordFounderInput(business.id, founderId, business.name, 'constraint', statement, language);
-    await reply.status(200).send(await viewFor(business.id, business.name, language, founderId));
+    const view = await viewFor(business.id, business.name, language, founderId);
+    await reply.status(200).send({ ...view, strategyChange: { because: statement } });
   });
 
   // ── Moment 7: adopt the week/day plan (reuses the plan engine) ──

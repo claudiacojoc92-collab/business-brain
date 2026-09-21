@@ -96,6 +96,11 @@ export interface ArcView {
   readonly moment: ArcMoment;
   readonly businessName: string;
   readonly error?: { readonly kind: ArcErrorKind } | null; // per-moment failure — never fails the whole surface
+  // The language BB read the business in (the source/founder language). During the arc the UI localizes its
+  // CHROME (section labels, buttons, question tag, provenance) to THIS, so chrome never mismatches the content.
+  readonly contentLanguage?: string | null;
+  // Moment 6 — a transient one-line "the bet changed because you said X" note shown right after a challenge.
+  readonly strategyChange?: { readonly because: string } | null;
   readonly sources?: ArcSource[];          // pour_in — every functional source the founder has added (with type)
   readonly igConnected?: boolean;          // pour_in — whether the founder's Instagram is connected (drives the affordance)
   readonly understanding?: ArcUnderstanding; // understanding / (container derives from same engine)

@@ -5,6 +5,12 @@ import type { ArcView } from '../api/client';
 // Day One — the arc surface: each moment's message renders; one surface, no tabs/panels; the pour-in
 // persists (sources come from the server view = survive refresh); no strategy appears before Moments 3 & 4.
 vi.mock('../i18n/LocaleContext', () => ({ useLocale: () => ({ t: (k: string, v?: Record<string, string>) => (v ? `${k}:${Object.values(v).join(',')}` : k), locale: 'en' }) }));
+// The arc localizes chrome to the CONTENT language via translate(); here we keep it identity (assert keys),
+// isLocale stays real. Content-language behavior is covered separately in ArcChromeLanguage.test.tsx.
+vi.mock('../i18n/messages', async (orig) => {
+  const actual = await (orig() as Promise<Record<string, unknown>>);
+  return { ...actual, translate: (_loc: string, k: string, val?: Record<string, string>) => (val ? `${k}:${Object.values(val).join(',')}` : k) };
+});
 vi.mock('react-router-dom', async (orig) => {
   const actual = await (orig() as Promise<Record<string, unknown>>);
   return { ...actual, useNavigate: () => vi.fn() };

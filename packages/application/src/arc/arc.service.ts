@@ -9,7 +9,7 @@ import type {
 
 /** Narrow ports onto the existing engines — the arc REUSES them, it does not reimplement them. */
 export interface ArcDeps {
-  understanding: { latest(businessId: string): Promise<{ understanding: GovernedUnderstanding } | null> };
+  understanding: { latest(businessId: string): Promise<{ understanding: GovernedUnderstanding; sourceLanguage?: string | null } | null> };
   aha1: { latest(businessId: string): Promise<{ findings: { finding: string }[] } | null> };
   conversation: {
     status(businessId: string): Promise<'active' | 'paused' | 'ready_for_aha2' | null>;
@@ -52,7 +52,10 @@ export class ArcService {
       planActive: Boolean(active),
     });
 
-    const base: ArcView = { moment, businessName };
+    // The content language = the language BB read the business in (falls back to the request language before any
+    // understanding exists). The UI localizes its chrome to this so labels never mismatch the content.
+    const contentLanguage = (snap?.sourceLanguage ?? '').trim() || language;
+    const base: ArcView = { moment, businessName, contentLanguage };
     const u = snap?.understanding ?? null;
 
     switch (moment) {
