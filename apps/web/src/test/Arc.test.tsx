@@ -190,6 +190,26 @@ describe('ArcSurface — one surface, nine moments', () => {
     expect(screen.queryByText('arc.strategy.adopt →')).toBeNull();
   });
 
+  it('Moment 4 opener renders as a scannable BRIEFING (labelled sections + bullets), invitation alone in the clay card', async () => {
+    const opener = [
+      'Before we talk, here is what I already know about Body Move. From your medical brochure: purely clinical — written for orthopedists — no fitness framing. From your website: two locations; Schroth is the priciest service. What I am not sure about: is Schroth the core line, or an experiment?',
+      'What is missing? What did I get wrong?',
+    ].join('\n\n');
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'conversation', turns: [{ id: 't1', role: 'bb', content: opener }] }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    // source-labelled sections appear as small-caps labels with bullets
+    expect(await screen.findByText(/From your medical brochure/i)).toBeInTheDocument();
+    expect(screen.getByText(/From your website/i)).toBeInTheDocument();
+    expect(screen.getByText(/What I am not sure about/i)).toBeInTheDocument();
+    // at least one bullet from the medical brochure section
+    expect(screen.getByText(/purely clinical/i).tagName).toBe('LI');
+    // ONLY the invitation is in the clay question card — not the recap
+    const qCard = screen.getByText('What is missing? What did I get wrong?').closest('.s0-arc-question');
+    expect(qCard).toBeTruthy();
+    expect(screen.getByText(/purely clinical/i).closest('.s0-arc-question')).toBeNull(); // recap NOT in the card
+    expect(screen.getByText('arc.question.label')).toBeInTheDocument();
+  });
+
   it('Moment 4 with no turns shows a quiet THINKING state, never the old generic placeholder question', async () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'conversation', turns: [] }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);

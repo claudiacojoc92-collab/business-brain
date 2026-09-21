@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
+import { parseBriefing } from './parse-briefing';
 import {
   getArc, arcAddSource, arcAddLink, arcAddFile,
   arcPourInDone, arcReading, arcConversation, arcConfirmUnderstanding, arcCorrectUnderstanding,
@@ -74,6 +75,40 @@ function ArcThread({ turns, t }: { turns: ThreadTurn[]; t: T }) {
           )
       ))}
       <div ref={endRef} aria-hidden="true" />
+    </div>
+  );
+}
+
+// ── The grounded BRIEFING (the Moment 4 opener) rendered as a SCANNABLE structure, not a wall of text. ──
+// The model output must NOT change (same content, same words), so this is purely presentational: parseBriefing
+// (pure, in ./parse-briefing) turns the one-paragraph recap into a lead line, source-labelled sections with
+// bullets, a "what I'm not sure about" section, and the closing invitation — rendered here with the SAME visual
+// language as Moment 3 (s0-arc-block / s0-arc-k label / s0-arc-list bullets). If the expected "Label: …"
+// structure isn't present it falls back to short lines (never one blob). The invitation is the ONLY thing in the
+// clay question card.
+function ArcSection({ label, points }: { label: string; points: string[] }) {
+  if (!points.length) return null;
+  return <div className="s0-arc-block"><div className="s0-arc-k">{label}</div><ul className="s0-arc-list">{points.map((p, i) => <li key={i}>{p}</li>)}</ul></div>;
+}
+
+// Render a grounded briefing. `asOpener` = this is the current ask (no founder reply yet), so the invitation is
+// the prominent clay question card; once the conversation has moved on, the invitation is just a trailing line.
+function ArcBriefing({ content, t, asOpener }: { content: string; t: T; asOpener: boolean }) {
+  const b = parseBriefing(content);
+  if (b.sections.length === 0 && !b.notSure) {
+    // Fallback — no recognizable sections. Still never a single blob: break into short lines, invitation apart.
+    const lines = (b.lead || content).split(/(?<=\.)\s+/).map((s) => s.trim()).filter(Boolean);
+    return (<>
+      <ArcMsg lines={lines} />
+      {b.invitation ? (asOpener ? <ArcQuestion text={b.invitation} t={t} /> : <ArcMsg lines={[b.invitation]} />) : null}
+    </>);
+  }
+  return (
+    <div className="s0-arc-briefing">
+      {b.lead ? <ArcMsg lines={[b.lead]} /> : null}
+      {b.sections.map((s, i) => <ArcSection key={i} label={s.label} points={s.points} />)}
+      {b.notSure ? <ArcSection label={b.notSure.label} points={b.notSure.points} /> : null}
+      {b.invitation ? (asOpener ? <ArcQuestion text={b.invitation} t={t} /> : <ArcMsg lines={[b.invitation]} />) : null}
     </div>
   );
 }
@@ -174,8 +209,17 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
         if (turns.length === 0) {
           return <div className="s0-arc-thinking" role="status" aria-live="polite">{t('arc.conversation.preparing')}</div>;
         }
-        // The whole conversation is the surface — a visible thread that grows, not a single message + a toggle.
-        return (<>
+        // The opener is the grounded RECAP — rendered as a scannable structure (lead + source-labelled bulleted
+        // sections + "not sure" + the invitation in the clay card), never a blob. Only the first turn, and only
+        // when it actually parses into a briefing (a plain question turn is NOT a briefing); the rest of the
+        // exchange grows below as the normal thread (its last question is the clay card).
+        const [first, ...rest] = turns;
+        const firstIsBriefing = !!first && first.role === 'bb' && ((): boolean => { const b = parseBriefing(first.content); return b.sections.length > 0 || !!b.notSure; })();
+        return firstIsBriefing ? (<>
+          <ArcBriefing content={first.content} t={t} asOpener={rest.length === 0} />
+          {rest.length ? <ArcThread turns={rest} t={t} /> : null}
+          <ArcInput ph={t('arc.conversation.ph')} onSend={(m) => arcConversation(businessId, m)} t={t} text={text} setText={setText} busy={busy} act={act} />
+        </>) : (<>
           <ArcThread turns={turns} t={t} />
           <ArcInput ph={t('arc.conversation.ph')} onSend={(m) => arcConversation(businessId, m)} t={t} text={text} setText={setText} busy={busy} act={act} />
         </>);
