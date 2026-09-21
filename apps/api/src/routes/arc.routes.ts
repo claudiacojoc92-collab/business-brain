@@ -40,7 +40,18 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
       readArcCorrectionReflection(deps.db, businessId, founderId),
       ig ? ig.status(founderId).catch(() => 'disconnected' as const) : Promise.resolve('disconnected' as const),
     ]);
-    const view = await deps.arcService.view(businessId, businessName, language, flags, sources, email, igState === 'connected');
+    let view = await deps.arcService.view(businessId, businessName, language, flags, sources, email, igState === 'connected');
+
+    // Moment 4 opener is generated LAZILY on view: the recap opener ("here's what I already know about your
+    // business…") is produced by startOrResume, which otherwise only runs on a POST — so entering the conversation
+    // with no session (e.g. after a scoped reset, or before the founder has typed) would show nothing. Generate it
+    // here so the founder lands on the model recap, not a placeholder. Idempotent: startOrResume no-ops when a
+    // session already exists, so this only fires when there are genuinely no turns yet.
+    if (view.moment === 'conversation' && (view.turns?.length ?? 0) === 0) {
+      await deps.conversationService.startOrResume(businessId, founderId, businessName, language);
+      view = await deps.arcService.view(businessId, businessName, language, flags, sources, email, igState === 'connected');
+    }
+
     // The Moment 3 reply is durable: if the founder has corrected, re-attach the persisted reflection so a
     // refresh re-shows the reflection + its question (they clear only when the founder confirms → the moment advances).
     return view.moment === 'understanding' && reflection ? { ...view, correctionReflection: reflection } : view;

@@ -190,6 +190,17 @@ describe('ArcSurface — one surface, nine moments', () => {
     expect(screen.queryByText('arc.strategy.adopt →')).toBeNull();
   });
 
+  it('Moment 4 with no turns shows a quiet THINKING state, never the old generic placeholder question', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'conversation', turns: [] }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    // the model recap is generated server-side; until it arrives we show a quiet thinking line…
+    expect(await screen.findByText('arc.conversation.preparing')).toBeInTheDocument();
+    // …never the removed static placeholder, and no input to answer a question that isn't there yet
+    expect(screen.queryByText('arc.conversation.opener')).toBeNull();
+    expect(screen.queryByText('Tell me where the business is today.')).toBeNull();
+    expect(screen.queryByPlaceholderText('arc.conversation.ph')).toBeNull();
+  });
+
   it('Moment 5: mirror shows the contrast (both sides cited) + the question', async () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'mirror', mirror: { founderWords: 'recovery is the priority', against: 'six categories equally', tension: 'a priority your site doesn’t reflect' } }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);

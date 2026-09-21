@@ -230,6 +230,17 @@
   gap: 8px;
 }
 .s0-arc-ack::before { content: "✓"; font-weight: 700; }
+/* Moment 4 — quiet "thinking" state shown only while the model recap opener is being generated (never a
+   generic placeholder question). Muted + gently pulsing so it reads as BB working, not as content. */
+.s0-arc-thinking {
+  margin-top: 6px;
+  color: var(--s0-ink-3);
+  font-size: 14.5px;
+  font-style: italic;
+  animation: s0-arc-thinking-pulse 1.6s ease-in-out infinite;
+}
+@keyframes s0-arc-thinking-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .s0-arc-thinking { animation: none; opacity: 0.7; } }
 /* Moment 3 — the substantive reply to a founder correction. Neutral card (so the clay QUESTION below stands
    out): the reflection is the prominent lead; "what changes"/"what holds" are labelled and muted below it. */
 .s0-arc-reflection { margin-top: 14px; padding: 15px 17px; border: 1px solid var(--s0-line-2); border-radius: 12px; background: var(--s0-bg-2); display: flex; flex-direction: column; gap: 12px; }

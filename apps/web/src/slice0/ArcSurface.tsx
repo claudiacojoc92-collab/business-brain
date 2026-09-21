@@ -168,9 +168,15 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
 
       case 'conversation': {
         const turns = view!.turns ?? [];
+        // The opener is the model-generated RECAP, created server-side on view (lazy startOrResume) and returned
+        // as the first turn — never a static placeholder. If it isn't here yet (a brief transient), show a quiet
+        // thinking state, not a generic question, until the real recap arrives.
+        if (turns.length === 0) {
+          return <div className="s0-arc-thinking" role="status" aria-live="polite">{t('arc.conversation.preparing')}</div>;
+        }
         // The whole conversation is the surface — a visible thread that grows, not a single message + a toggle.
         return (<>
-          {turns.length ? <ArcThread turns={turns} t={t} /> : <ArcQuestion text={t('arc.conversation.opener')} t={t} />}
+          <ArcThread turns={turns} t={t} />
           <ArcInput ph={t('arc.conversation.ph')} onSend={(m) => arcConversation(businessId, m)} t={t} text={text} setText={setText} busy={busy} act={act} />
         </>);
       }
