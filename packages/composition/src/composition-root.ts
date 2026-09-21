@@ -92,6 +92,7 @@ import {
   FounderAccountService,
   LearnBusinessService,
   ConversationService,
+  BoundSourceReader,
   BusinessCorrectionService,
   Aha2Service,
   StrategyService,
@@ -323,6 +324,9 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     model: new AnthropicConversationModel(anthropicKey),
     understanding: understandingRepo,
     aha1: ahaRepo,
+    // Lets the conversation READ the sources the founder poured in (website/brochure/link/IG) — same projection
+    // as the pour-in bridge — so the strategist never asks about what a source already answers.
+    sources: new BoundSourceReader(new PgBusinessEvidenceLinkRepository(db), new PgEvidenceRepository(db)),
   });
   // M2 — Business corrections reuse the same founder_state the conversation already reads (no new store).
   const businessCorrectionService = new BusinessCorrectionService({ state: founderStateRepo });

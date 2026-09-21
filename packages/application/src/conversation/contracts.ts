@@ -84,11 +84,32 @@ export interface ConversationStepOutput {
   readonly newNeeds: { key: string; whatMissing: string; whyMatters: string }[];
 }
 
+/**
+ * A source the founder already poured in (a website page, an uploaded brochure/PDF, a pasted link, Instagram),
+ * projected for the conversation model to READ. This is the actual source TEXT — not the governed understanding
+ * digest — so the strategist never asks about something a source already answers. Provenance stays honest:
+ * `observed` = BB read it (website / Instagram); `declared` = the founder handed it to BB (PDF / paste).
+ */
+export interface SourceExcerpt {
+  readonly ref: string;
+  readonly provenance: 'observed' | 'declared';
+  readonly pageType: string;
+  readonly text: string;
+}
+
+/** Read the sources the founder poured in for a business, so the conversation can reference what it has read. */
+export interface IBusinessSourceReader {
+  listForBusiness(businessId: string, founderId: string): Promise<SourceExcerpt[]>;
+}
+
 export interface ConversationStepInput {
   readonly businessName: string;
   readonly interfaceLanguage: string;
   readonly understandingSummary: string;
   readonly aha1: { finding: string }[];
+  // The actual source material the founder poured in (website/brochure/link/Instagram), windowed to a bounded
+  // budget. The strategist has ALREADY READ these — it must never ask about anything they already answer.
+  readonly sources: SourceExcerpt[];
   readonly openNeeds: { key: string; whatMissing: string; whyMatters: string }[];
   readonly knownState: { kind: string; statement: string }[];
   readonly transcript: { role: 'founder' | 'bb'; content: string }[];

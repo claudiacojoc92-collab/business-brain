@@ -20,3 +20,4 @@ export {
   type FounderModelProjection,
 } from './conversation.service';
 export { Aha2Service, type Aha2Deps, type Aha2Event } from './aha2.service';
+export { BoundSourceReader } from './bound-source-reader';

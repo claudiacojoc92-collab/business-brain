@@ -6,6 +6,8 @@ import type {
   IFounderStateRepository,
   IFounderObservationRepository,
   IConversationModelPort,
+  IBusinessSourceReader,
+  SourceExcerpt,
   ConversationSession,
   ConversationTurn,
   FounderStateItem,
@@ -13,16 +15,28 @@ import type {
   FounderStateKind,
 } from './contracts';
 
-/** Compact, founder-language-neutral summary of governed understanding for the conversation model. */
+/**
+ * Faithful digest of the governed understanding for the conversation model. It carries not just the flat
+ * summaries but the SPECIFICS the strategist must not re-ask: the explicit offer items, what positioning is
+ * evidence-backed vs. merely implied, who the site addresses vs. appears to target, the recurring messaging
+ * themes, the conversion paths, the tensions, and the open unknowns. (The raw source TEXT is passed separately,
+ * via SourceExcerpt[], so the model can also quote what it actually read.)
+ */
 export function summarizeUnderstanding(u: GovernedUnderstanding | null): string {
   if (!u) return '';
   const parts: string[] = [];
+  const join = (xs?: string[]): string => (xs ?? []).filter(Boolean).join('; ');
   if (u.offer?.summary) parts.push(`Offer: ${u.offer.summary}`);
+  if (u.offer?.explicit?.length) parts.push(`Offer — explicitly stated: ${join(u.offer.explicit)}`);
   if (u.positioning?.summary) parts.push(`Positioning: ${u.positioning.summary}`);
-  if (u.audience?.addressed?.length) parts.push(`Audience addressed: ${u.audience.addressed.join('; ')}`);
-  if (u.acquisition?.visiblePaths?.length) parts.push(`Visible conversion paths: ${u.acquisition.visiblePaths.join('; ')}`);
-  if (u.contradictions?.length) parts.push(`Tensions: ${u.contradictions.map((c) => c.tension).join('; ')}`);
-  if (u.unknowns?.length) parts.push(`Unknowns: ${u.unknowns.join('; ')}`);
+  if (u.positioning?.evidenceBacked?.length) parts.push(`Positioning — evidence-backed: ${join(u.positioning.evidenceBacked)}`);
+  if (u.positioning?.implied?.length) parts.push(`Positioning — only implied (not yet confirmed): ${join(u.positioning.implied)}`);
+  if (u.audience?.addressed?.length) parts.push(`Audience addressed: ${join(u.audience.addressed)}`);
+  if (u.audience?.appearsTargeted?.length) parts.push(`Audience appears targeted: ${join(u.audience.appearsTargeted)}`);
+  if (u.messaging?.recurringThemes?.length) parts.push(`Recurring messaging themes: ${join(u.messaging.recurringThemes)}`);
+  if (u.acquisition?.visiblePaths?.length) parts.push(`Visible conversion paths: ${join(u.acquisition.visiblePaths)}`);
+  if (u.contradictions?.length) parts.push(`Tensions: ${u.contradictions.map((c) => c.tension).filter(Boolean).join('; ')}`);
+  if (u.unknowns?.length) parts.push(`Open unknowns: ${join(u.unknowns)}`);
   return parts.join('\n');
 }
 
@@ -103,6 +117,8 @@ export interface ConversationDeps {
   model: IConversationModelPort;
   understanding: IUnderstandingSnapshotRepository;
   aha1: IAhaRepository;
+  // Reads the sources the founder poured in so the strategist references what it has ALREADY read (never re-asks).
+  sources: IBusinessSourceReader;
 }
 
 export class ConversationService {
@@ -114,7 +130,7 @@ export class ConversationService {
       session = await this.deps.conversations.create({ id: generateId(), businessId, founderId, conversationLanguage: language });
       await this.deps.needs.seed(session.id, businessId, CORE_NEEDS);
       // Generate the opener from Aha 1 (no founder message yet).
-      const out = await this.deps.model.step(await this.buildStepInput(businessId, businessName, language, session.id, null));
+      const out = await this.deps.model.step(await this.buildStepInput(businessId, founderId, businessName, language, session.id, null));
       const opener = out.nextQuestion ?? out.interpretation;
       if (opener) {
         await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: opener, language, infoNeedKey: null });
@@ -139,7 +155,7 @@ export class ConversationService {
     const open = await this.deps.needs.listOpen(session.id);
     if (open.length > 0) {
       await this.deps.conversations.setStatus(session.id, 'active', null); // reopen the interview
-      const out = await this.deps.model.step(await this.buildStepInput(businessId, businessName, language, session.id, null));
+      const out = await this.deps.model.step(await this.buildStepInput(businessId, founderId, businessName, language, session.id, null));
       const opener = out.nextQuestion ?? out.interpretation;
       if (opener) await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: opener, language, infoNeedKey: null });
     }
@@ -157,7 +173,7 @@ export class ConversationService {
       id: generateId(), sessionId: session.id, businessId, role: 'founder', content: message, language, infoNeedKey: null,
     });
 
-    const out = await this.deps.model.step(await this.buildStepInput(businessId, businessName, language, session.id, message, currentContext));
+    const out = await this.deps.model.step(await this.buildStepInput(businessId, founderId, businessName, language, session.id, message, currentContext));
 
     // Route founder response to the correct state type (owned vs correction vs observed). A turn that answers
     // ONLY founder-self needs is self-narrative: its declarations are tagged scope='founder_self' (Lane 3 of the
@@ -248,17 +264,26 @@ export class ConversationService {
     };
   }
 
-  private async buildStepInput(businessId: string, businessName: string, language: string, sessionId: string, latest: string | null, currentContext?: string | null) {
+  private async buildStepInput(businessId: string, founderId: string, businessName: string, language: string, sessionId: string, latest: string | null, currentContext?: string | null) {
     const snap = await this.deps.understanding.latest(businessId);
     const aha = await this.deps.aha1.latest(businessId);
     const openNeeds = await this.deps.needs.listOpen(sessionId);
     const knownState = (await this.deps.state.listActive(businessId)).map((s) => ({ kind: s.kind, statement: s.statement }));
     const turns = await this.deps.conversations.listTurns(sessionId);
+    // The actual source material the founder poured in — the strategist has already READ it, so it must never
+    // re-ask what a source answers. Fail-open: if sources can't be read the conversation still runs on the digest.
+    let sources: SourceExcerpt[] = [];
+    try {
+      sources = await this.deps.sources.listForBusiness(businessId, founderId);
+    } catch {
+      sources = [];
+    }
     return {
       businessName,
       interfaceLanguage: language,
       understandingSummary: summarizeUnderstanding(snap?.understanding ?? null),
       aha1: (aha?.findings ?? []).map((f) => ({ finding: f.finding })),
+      sources,
       openNeeds: openNeeds.map((n) => ({ key: n.key, whatMissing: n.whatMissing, whyMatters: n.whyMatters })),
       knownState,
       transcript: windowTranscript(turns),

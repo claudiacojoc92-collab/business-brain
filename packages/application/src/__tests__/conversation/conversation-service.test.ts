@@ -7,13 +7,14 @@ const EMPTY_STEP: ConversationStepOutput = {
   declarations: [], businessCorrections: [], observationCandidates: [], answeredNeedKeys: [], newNeeds: [],
 };
 
-function makeDeps(step: Partial<ConversationStepOutput>) {
+function makeDeps(step: Partial<ConversationStepOutput>, sourceList: any[] = []) {
   const sessions: any[] = [];
   const turns: any[] = [];
   const needs: any[] = [];
   const stateAppends: any[] = [];
   const observeCalls: { behavior: string; turnId: string }[] = [];
   const stepInputs: any[] = [];
+  const sourceReads: { businessId: string; founderId: string }[] = [];
   let statusSet: string | null = null;
 
   const deps: ConversationDeps = {
@@ -44,8 +45,9 @@ function makeDeps(step: Partial<ConversationStepOutput>) {
     model: { step: async (input: any) => { stepInputs.push(input); return ({ ...EMPTY_STEP, ...step }); } },
     understanding: { save: async () => { throw new Error('n/a'); }, latest: async () => null },
     aha1: { save: async () => { throw new Error('n/a'); }, latest: async () => null },
+    sources: { listForBusiness: async (businessId: string, founderId: string) => { sourceReads.push({ businessId, founderId }); return sourceList.slice(); } },
   };
-  return { deps, sessions, turns, needs, stateAppends, observeCalls, stepInputs, getStatus: () => statusSet };
+  return { deps, sessions, turns, needs, stateAppends, observeCalls, stepInputs, sourceReads, getStatus: () => statusSet };
 }
 
 const P = { businessId: 'B', founderId: 'F', businessName: 'Acme', language: 'en' };
@@ -60,6 +62,27 @@ describe('ConversationService', () => {
     expect(m.stepInputs.at(-1).founderAnswerCount).toBe(1);
     await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'I want to grow the scoliosis side.', P.language);
     expect(m.stepInputs.at(-1).founderAnswerCount).toBe(2);
+  });
+
+  it('feeds the sources the founder poured in into the model step (the strategist reads what it was given, keyed by business+founder)', async () => {
+    const brochure = { ref: 'Medical brochure', provenance: 'declared', pageType: 'pdf', text: 'Schroth method for scoliosis. Purely clinical recovery programme — no group-fitness framing.' };
+    const m = makeDeps({}, [brochure]);
+    const svc = new ConversationService(m.deps);
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language); // opener
+    // the reader was consulted with this business + founder…
+    expect(m.sourceReads.at(-1)).toEqual({ businessId: P.businessId, founderId: P.founderId });
+    // …and the actual source text reached the model prompt input (not just the governed digest).
+    expect(m.stepInputs.at(-1).sources).toEqual([brochure]);
+    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'yes', P.language);
+    expect(m.stepInputs.at(-1).sources[0].text).toContain('no group-fitness framing');
+  });
+
+  it('does not break if sources cannot be read (fails open to the digest)', async () => {
+    const m = makeDeps({});
+    (m.deps as any).sources = { listForBusiness: async () => { throw new Error('db down'); } };
+    const view = await new ConversationService(m.deps).startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    expect(view.session).toBeTruthy();
+    expect(m.stepInputs.at(-1).sources).toEqual([]);
   });
 
   it('startOrResume creates a session, seeds core needs, and appends a BB opener', async () => {
