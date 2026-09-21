@@ -263,6 +263,7 @@ export class ConversationService {
       knownState,
       transcript: windowTranscript(turns),
       latestFounderMessage: latest,
+      founderAnswerCount: turns.filter((t) => t.role === 'founder').length, // true count from ALL turns (paces the short arc)
       currentContext: currentContext ?? null,
     };
   }

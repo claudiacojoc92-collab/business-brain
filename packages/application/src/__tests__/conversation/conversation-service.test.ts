@@ -13,6 +13,7 @@ function makeDeps(step: Partial<ConversationStepOutput>) {
   const needs: any[] = [];
   const stateAppends: any[] = [];
   const observeCalls: { behavior: string; turnId: string }[] = [];
+  const stepInputs: any[] = [];
   let statusSet: string | null = null;
 
   const deps: ConversationDeps = {
@@ -40,16 +41,27 @@ function makeDeps(step: Partial<ConversationStepOutput>) {
       observe: async (_bid, behavior, turnId) => { observeCalls.push({ behavior, turnId }); return { id: 'o', behavior, status: 'candidate', turnRefs: [turnId] }; },
       setStatus: async () => null,
     },
-    model: { step: async () => ({ ...EMPTY_STEP, ...step }) },
+    model: { step: async (input: any) => { stepInputs.push(input); return ({ ...EMPTY_STEP, ...step }); } },
     understanding: { save: async () => { throw new Error('n/a'); }, latest: async () => null },
     aha1: { save: async () => { throw new Error('n/a'); }, latest: async () => null },
   };
-  return { deps, sessions, turns, needs, stateAppends, observeCalls, getStatus: () => statusSet };
+  return { deps, sessions, turns, needs, stateAppends, observeCalls, stepInputs, getStatus: () => statusSet };
 }
 
 const P = { businessId: 'B', founderId: 'F', businessName: 'Acme', language: 'en' };
 
 describe('ConversationService', () => {
+  it('paces the SHORT arc: founderAnswerCount passed to the model reflects answers given (0 at opener, then +1 each)', async () => {
+    const m = makeDeps({});
+    const svc = new ConversationService(m.deps);
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language); // opener
+    expect(m.stepInputs.at(-1).founderAnswerCount).toBe(0);
+    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'Most clients come from doctor referrals.', P.language);
+    expect(m.stepInputs.at(-1).founderAnswerCount).toBe(1);
+    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'I want to grow the scoliosis side.', P.language);
+    expect(m.stepInputs.at(-1).founderAnswerCount).toBe(2);
+  });
+
   it('startOrResume creates a session, seeds core needs, and appends a BB opener', async () => {
     const m = makeDeps({});
     const view = await new ConversationService(m.deps).startOrResume(P.businessId, P.founderId, P.businessName, P.language);
