@@ -131,7 +131,10 @@ export class ConversationService {
       await this.deps.needs.seed(session.id, businessId, CORE_NEEDS);
       // Generate the opener from Aha 1 (no founder message yet).
       const out = await this.deps.model.step(await this.buildStepInput(businessId, founderId, businessName, language, session.id, null));
-      const opener = out.nextQuestion ?? out.interpretation;
+      // The opener is a grounded RECAP (interpretation: what BB already read from the sources) + the INVITATION
+      // to correct/extend (nextQuestion). Keep BOTH — storing only the question would drop the recap that proves
+      // BB read the business. Falls back to whichever is present.
+      const opener = [out.interpretation, out.nextQuestion].filter((s) => s && s.trim()).join('\n\n') || out.nextQuestion || out.interpretation;
       if (opener) {
         await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: opener, language, infoNeedKey: null });
       }
@@ -156,7 +159,7 @@ export class ConversationService {
     if (open.length > 0) {
       await this.deps.conversations.setStatus(session.id, 'active', null); // reopen the interview
       const out = await this.deps.model.step(await this.buildStepInput(businessId, founderId, businessName, language, session.id, null));
-      const opener = out.nextQuestion ?? out.interpretation;
+      const opener = [out.interpretation, out.nextQuestion].filter((s) => s && s.trim()).join('\n\n') || out.nextQuestion || out.interpretation;
       if (opener) await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: opener, language, infoNeedKey: null });
     }
     const fresh = (await this.deps.conversations.getByBusiness(businessId)) ?? session;

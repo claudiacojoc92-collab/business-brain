@@ -77,6 +77,17 @@ describe('ConversationService', () => {
     expect(m.stepInputs.at(-1).sources[0].text).toContain('no group-fitness framing');
   });
 
+  it('opener stores BOTH the grounded recap (interpretation) and the invitation (nextQuestion), recap first', async () => {
+    const recap = 'Before we talk, here is what I already know about Body Move. From your medical brochure: purely clinical, no fitness framing. What I am not sure about: is Schroth a core line?';
+    const invitation = 'What is missing? What did I get wrong?';
+    const m = makeDeps({ interpretation: recap, nextQuestion: invitation });
+    const view = await new ConversationService(m.deps).startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    const opener = view.turns.find((t) => t.role === 'bb');
+    expect(opener?.content).toContain(recap);
+    expect(opener?.content).toContain(invitation);
+    expect(opener!.content.indexOf(recap)).toBeLessThan(opener!.content.indexOf(invitation)); // recap before the ask
+  });
+
   it('does not break if sources cannot be read (fails open to the digest)', async () => {
     const m = makeDeps({});
     (m.deps as any).sources = { listForBusiness: async () => { throw new Error('db down'); } };

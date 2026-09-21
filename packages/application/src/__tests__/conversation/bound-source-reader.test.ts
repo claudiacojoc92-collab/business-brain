@@ -48,6 +48,24 @@ describe('BoundSourceReader', () => {
     expect(out[0]!.text.length).toBeLessThanOrEqual(3500); // per-source cap
   });
 
+  it('filters sitemap/XML junk and puts founder-handed material BEFORE website pages (the real Body Move failure)', async () => {
+    const sitemap = frag({ id: 's', source: 'website', sourceUrl: 'https://x.ro/post-sitemap.xml', confidenceKind: 'observed', payload: { text: '<urlset>...', pageType: 'page', title: 'Post-sitemap.xml' } });
+    const home = frag({ id: 'h', source: 'website', sourceUrl: 'https://x.ro/', confidenceKind: 'observed', payload: { text: 'Homepage — two locations', pageType: 'home', title: 'Home' } });
+    const pdf = frag({ id: 'p', source: 'pdf', sourceUrl: 'founder://file/1', confidenceKind: 'declared', payload: { text: 'Medical brochure — purely clinical', ref: 'Medical brochure', pageType: 'pdf' } });
+    const out = await reader(['s', 'h', 'p'], [sitemap, home, pdf]).listForBusiness('B', 'F');
+    expect(out.some((s) => /sitemap/i.test(s.ref))).toBe(false); // sitemap dropped
+    expect(out[0]!.ref).toBe('Medical brochure'); // handed-over material first
+    expect(out.map((s) => s.ref)).toContain('Homepage'); // labelFor maps pageType 'home' → 'Homepage'
+  });
+
+  it('caps at 12 sources but keeps handed-over material even behind many website pages', async () => {
+    const many = Array.from({ length: 30 }, (_, i) => frag({ id: `w${i}`, source: 'website', sourceUrl: `https://x.ro/p${i}`, confidenceKind: 'observed', payload: { text: `page ${i}`, pageType: 'page', title: `P${i}` } }));
+    const pdf = frag({ id: 'p', source: 'pdf', sourceUrl: 'founder://file/1', confidenceKind: 'declared', payload: { text: 'brochure body', ref: 'Brochure', pageType: 'pdf' } });
+    const out = await reader([...many.map((m) => m.id), 'p'], [...many, pdf]).listForBusiness('B', 'F');
+    expect(out.length).toBe(12);
+    expect(out[0]!.ref).toBe('Brochure'); // survives the cap despite 30 website pages
+  });
+
   it('returns [] when nothing is bound', async () => {
     expect(await reader([], []).listForBusiness('B', 'F')).toEqual([]);
   });
