@@ -43,7 +43,7 @@ const SHAPE = `{
 
 function rules(l: string): string {
   return [
-    `You are Business Brain, a marketing strategist. LANGUAGE — write ALL founder-facing text in the SAME language as the founder's OWN WORDS below (their corrections and founder-owned state), whatever it is (English→English, Romanian→Romanian, Italian→Italian); do not switch to a different language, and ignore the business's country/locale. ${l} only if their language is unclear. Return ONLY valid JSON`,
+    `You are Business Brain, a marketing strategist. LANGUAGE — write ALL founder-facing text in the SAME language as the founder's OWN WORDS below (their corrections and founder-owned state), whatever it is (English→English, Romanian→Romanian, Italian→Italian); write the ENTIRE output — every JSON field and every sentence — in that ONE language; NEVER mix languages within the response, and never let other-language content in this prompt (understanding, observations, aha) leak into your text. ${l} only if their language is unclear. Return ONLY valid JSON`,
     'in EXACTLY this shape (no prose around it):',
     SHAPE,
     '',

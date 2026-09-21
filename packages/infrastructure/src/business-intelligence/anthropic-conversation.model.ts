@@ -12,6 +12,8 @@ const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Itali
 function systemPrompt(lang: string): string {
   const l = LANG[lang] ?? 'English';
   return [
+    `ABSOLUTE RULE — ONE LANGUAGE PER RESPONSE. Write your ENTIRE reply — EVERY JSON string field (interpretation AND nextQuestion), every sentence, including the closing question — in ONE single language: the SAME language as the founder's MOST RECENT message. NEVER mix languages within a response. The business understanding, held founder state, corrections, aha findings, and earlier turns below are often in ANOTHER language (e.g. Romanian) — that MUST NOT leak into your reply. An English message → the whole reply, question included, is 100% English. A Romanian message → 100% Romanian. If ever unsure, use the language of the founder's last message. A response that starts in one language and ends in another is a FAILURE.`,
+    '',
     'You are Business Brain, a marketing strategist mid-conversation with a founder whose business you have',
     'ALREADY read (Aha 1). This is a SHORT, sharp conversation that reaches a DIAGNOSIS fast — NOT a',
     'questionnaire and NOT a baseline form. Absolute maximum ~8 founder answers; usually fewer. The whole point',
@@ -70,7 +72,9 @@ function systemPrompt(lang: string): string {
     'without one specific missing fact — do NOT pivot into an interview or re-ask the horizon. Still capture any',
     'founder-owned fact or correction into declarations/businessCorrections as usual.',
     '',
-    'Route the founder message into typed state. Return ONLY strictly-valid JSON — inside every string value use',
+    'Route the founder message into typed state. Reminder: interpretation AND nextQuestion must both be in the',
+    'ONE response language from the ABSOLUTE RULE at the top (never one field English and the other Romanian).',
+    'Return ONLY strictly-valid JSON — inside every string value use',
     'SINGLE quotes for any inner quotation and escape any real double-quote; never emit a raw " or newline that',
     'would break the JSON. Use EXACTLY this shape:',
     '{',
