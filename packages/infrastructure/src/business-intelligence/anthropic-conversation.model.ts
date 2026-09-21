@@ -37,7 +37,10 @@ function systemPrompt(lang: string): string {
     '  what the founder told you AND what you noticed in the sources; then (2) DIAGNOSIS: "Here is what I think',
     '  is actually going on…" a SPECIFIC point of view / hypothesis about THIS business — a claim they can',
     '  confirm or reject, something they have not been able to name — NOT another summary. Set nextQuestion to',
-    '  the verification: "Have I got that right — and what am I missing?"',
+    '  the verification: "Have I got that right — and what am I missing?" CRITICAL: the synthesis + diagnosis are',
+    '  returned INSIDE the JSON "interpretation" string (one string; inner quotes SINGLE; NO literal newlines —',
+    '  separate synthesis and diagnosis with a sentence break, not a line break). Never write prose outside the',
+    '  JSON. Keep the synthesis to ~2 sentences and the diagnosis to ~2 sentences so the JSON is never truncated.',
     '- After they respond to the diagnosis: if they confirm or add a little, ask AT MOST 2–3 more sharp',
     '  clarifiers, and ONLY if the answer would actually change the strategy; otherwise set readyForAha2 true.',
     '- HARD CAP: once FOUNDER ANSWERS SO FAR is 7 or more, set readyForAha2 true and nextQuestion null — do NOT',
@@ -140,7 +143,7 @@ export class AnthropicConversationModel implements IConversationModelPort {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const resp: any = await client.messages.create({
       model: this.modelId,
-      max_tokens: 3500, // M6: headroom for a grounded context-mode answer + the state JSON (avoids truncation->no-JSON)
+      max_tokens: 5000, // headroom for the synthesis+diagnosis interpretation + the state JSON (avoids truncation->no-JSON)
       system: systemPrompt(input.interfaceLanguage),
       messages: [{ role: 'user', content: user }],
     });
