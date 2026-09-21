@@ -139,7 +139,9 @@ export class AnthropicUnderstandingModel implements IUnderstandingModelPort {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const resp: any = await client.messages.create({
       model: this.modelId,
-      max_tokens: 4096,
+      // Enough headroom for a full governed-understanding JSON over MANY sources (a founder can pour in a whole
+      // site + several brochures) — 4096 truncated it mid-array → malformed JSON.
+      max_tokens: 8192,
       temperature: 0, // deterministic → one language throughout, no mid-response drift
       system: systemPrompt(input.interfaceLanguage),
       messages: [{ role: 'user', content: user }],

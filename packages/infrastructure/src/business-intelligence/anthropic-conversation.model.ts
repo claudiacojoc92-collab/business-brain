@@ -92,6 +92,9 @@ function systemPrompt(lang: string): string {
     '',
     'Route the founder message into typed state. Reminder: interpretation AND nextQuestion must both be in the',
     'ONE response language from the ABSOLUTE RULE at the top (never one field English and the other Romanian).',
+    'OUTPUT FORMAT — CRITICAL: your ENTIRE response is a SINGLE JSON object and NOTHING else. No text before it,',
+    'no text after it, no ```json fences. Even the SYNTHESIS and DIAGNOSIS go INSIDE the "interpretation" string —',
+    'NEVER write them as prose before the JSON. The first character you output is "{".',
     'Return ONLY strictly-valid JSON — inside every string value use',
     'SINGLE quotes for any inner quotation and escape any real double-quote; never emit a raw " or newline that',
     'would break the JSON. Use EXACTLY this shape:',
@@ -123,9 +126,10 @@ function systemPrompt(lang: string): string {
     '  re-list every source. Keep it tight:',
     '    • opener.lead: 1–2 sentences — "I have read your sources — here is what stands out before we talk." (natural',
     '      in the source language; name the business).',
-    '    • opener.bullets: AT MOST 3, each ONE line, each a concrete observation grounded in the SOURCES, ideally',
-    '      each from a DIFFERENT source (e.g. one from a brochure, one from the site). Specific, never generic; no',
-    '      bullet longer than one line. Prefer the sharpest few — do not pad to 3.',
+    '    • opener.bullets: AT MOST 3, each a SHORT single line of ABOUT 12–18 WORDS (hard max ~120 characters) — a',
+    '      crisp observation, NOT a multi-clause sentence with dashes. Each grounded in the SOURCES, ideally each',
+    '      from a DIFFERENT source (one from a brochure, one from the site). Specific, never generic. Prefer the',
+    '      sharpest few — do not pad to 3, and do not cram two ideas into one bullet.',
     '    • opener.notSure: ONE line naming the single sharpest thing the sources cannot answer (or null).',
     '    • opener.invitation: the closing question — "What is missing? What did I get wrong?" (in the source language).',
     '  Every field in ONE language = the source language. If there are genuinely no sources, set opener to null and',
@@ -185,14 +189,23 @@ export class AnthropicConversationModel implements IConversationModelPort {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const resp: any = await client.messages.create({
       model: this.modelId,
-      max_tokens: 5000, // headroom for the synthesis+diagnosis interpretation + the state JSON (avoids truncation->no-JSON)
+      max_tokens: 6000, // headroom for the synthesis+diagnosis interpretation + the state JSON (avoids truncation->no-JSON)
       temperature: 0, // deterministic — stops the reply from code-switching (e.g. the verification question) into the Romanian context
       system: systemPrompt(input.interfaceLanguage),
       messages: [{ role: 'user', content: user }],
     });
     const block = Array.isArray(resp?.content) ? resp.content.find((c: { type?: string }) => c?.type === 'text') : null;
     const raw: string = (block as { text?: string } | null)?.text ?? '';
-    const p = extractJson(raw) as Partial<ConversationStepOutput>;
+    // The model normally returns pure JSON. If it ever narrates the synthesis/diagnosis as PROSE without a JSON
+    // object (no braces), salvage it: use the prose as the BB reply so the conversation continues, never a crash.
+    let p: Partial<ConversationStepOutput>;
+    try {
+      p = extractJson(raw) as Partial<ConversationStepOutput>;
+    } catch {
+      const prose = raw.trim();
+      if (!prose) throw new Error('CONVERSATION_MALFORMED: empty');
+      p = { interpretation: prose.slice(0, 1800), nextQuestion: null, readyForAha2: false, declarations: [], businessCorrections: [], observationCandidates: [], answeredNeedKeys: [], newNeeds: [] };
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rawOpener = (p as any).opener;
     const opener = rawOpener && typeof rawOpener === 'object'
