@@ -83,6 +83,13 @@ export class ArcService {
             bet: first(core.coreBet.priority, core.goal),
             over: first(core.coreBet.deprioritized, (core.tradeOffs?.[0]?.over ?? '')),
             horizon: core.horizon,
+            // The real trade-offs and the deliberate "not now" — surfaced INLINE (was hidden behind "Show why").
+            tradeOffs: (core.tradeOffs ?? [])
+              .map((t) => { const c = (t.choosing ?? '').trim(); const o = (t.over ?? '').trim(); const w = (t.why ?? '').trim(); return c && o ? `${c} ↔ ${o}${w ? ` · ${w}` : ''}` : ''; })
+              .filter(Boolean).slice(0, 3),
+            notNow: (core.notNow ?? [])
+              .map((n) => { const i = (n.item ?? '').trim(); const r = (n.reason ?? '').trim(); return i ? `${i}${r ? ` · ${r}` : ''}` : ''; })
+              .filter(Boolean).slice(0, 3),
             reconsider: (core.reconsiderTriggers ?? []).map((r) => r.condition).filter(Boolean).slice(0, 3),
             proposalId: rec.status === 'proposal' ? rec.id : null,
             adoptable: rec.status === 'proposal',

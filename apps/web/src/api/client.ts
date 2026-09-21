@@ -481,7 +481,7 @@ export interface ArcView {
   correctionReflection?: { reflection: string; changes: string; holds: string; ask: string };
   turns?: ArcTurn[];
   mirror?: { founderWords: string; against: string; tension: string } | null;
-  strategy?: { bet: string; over: string; horizon: string; reconsider: string[]; proposalId: string | null; adoptable: boolean };
+  strategy?: { bet: string; over: string; horizon: string; tradeOffs: string[]; notNow: string[]; reconsider: string[]; proposalId: string | null; adoptable: boolean };
   weekDay?: { week: string[]; today: string | null; canCreate: boolean };
   email?: { subject: string; body: string } | null;
   container?: { items: { label: string; statement: string; provenance: 'observed' | 'declared' | 'inferred' | 'unknown' }[] };

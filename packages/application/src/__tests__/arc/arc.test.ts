@@ -30,7 +30,9 @@ describe('computeArcMoment — the linear, no-skip state machine (survives refre
 const STRAT: any = { id: 'v1', status: 'proposal', bundle: { core: {
   goal: 'Grow memberships', horizon: '6 months',
   coreBet: { priority: 'The referral channel', deprioritized: 'a general studio campaign' },
-  audiencePrimaryForGoal: 'clinics and therapists', tradeOffs: [], notNow: [],
+  audiencePrimaryForGoal: 'clinics and therapists',
+  tradeOffs: [{ choosing: 'referrals', over: 'a paid campaign', why: 'trust converts here' }],
+  notNow: [{ item: 'paid social', reason: 'no proof yet' }],
   reconsiderTriggers: [{ condition: 'if fewer than 2 of 8–10 clinic conversations show interest' }],
 }, branch: { messagingDirection: 'warm, proof-led', ctaDirection: 'a short call' } } };
 const PLAN: any = { planVersionId: 'p1', priorities: [
@@ -120,6 +122,8 @@ describe('ArcService.view — each moment composes from the reused engines', () 
     expect(v.strategy?.bet).toBe('The referral channel');
     expect(v.strategy?.over).toBe('a general studio campaign');
     expect(v.strategy?.reconsider[0]).toMatch(/fewer than 2/);
+    expect(v.strategy?.tradeOffs[0]).toMatch(/referrals ↔ a paid campaign/); // trade-offs surfaced inline
+    expect(v.strategy?.notNow[0]).toMatch(/paid social/);                      // not-now surfaced inline
     expect(v.strategy?.adoptable).toBe(true);
     expect(v.strategy?.proposalId).toBe('v1');
   });

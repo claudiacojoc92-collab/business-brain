@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
-import { parseBriefing } from './parse-briefing';
+import { parseOpenerTurn, type ArcOpener } from './parse-briefing';
 import {
   getArc, arcAddSource, arcAddLink, arcAddFile,
   arcPourInDone, arcReading, arcConversation, arcConfirmUnderstanding, arcCorrectUnderstanding,
@@ -64,51 +64,38 @@ function ArcThread({ turns, t }: { turns: ThreadTurn[]; t: T }) {
   for (let i = turns.length - 1; i >= 0; i -= 1) { if (turns[i]?.role === 'bb') { lastBb = i; break; } }
   return (
     <div className="s0-cthread">
-      {turns.map((tn, i) => (
-        tn.role === 'bb' && i === lastBb
+      {turns.map((tn, i) => {
+        // The opener turn is STRUCTURED (a short pointer) — render it as such, never as a prose blob. Its
+        // invitation is the clay question card only when it is the current (last) turn; once the conversation has
+        // grown it's a plain trailing line.
+        const opener = tn.role === 'bb' ? parseOpenerTurn(tn.content) : null;
+        if (opener) return <ArcOpenerView key={tn.id} opener={opener} t={t} asQuestion={i === lastBb} />;
+        return tn.role === 'bb' && i === lastBb
           ? <ArcQuestion key={tn.id} text={tn.content} t={t} />
           : (
             <div key={tn.id} className={tn.role === 'founder' ? 's0-cturn s0-cturn-you' : 's0-cturn s0-cturn-bb'}>
               <div className="s0-cturn-who">{tn.role === 'founder' ? t('arc.thread.you') : t('arc.thread.bb')}</div>
               <p className="s0-cturn-text">{tn.content}</p>
             </div>
-          )
-      ))}
+          );
+      })}
       <div ref={endRef} aria-hidden="true" />
     </div>
   );
 }
 
-// ── The grounded BRIEFING (the Moment 4 opener) rendered as a SCANNABLE structure, not a wall of text. ──
-// The model output must NOT change (same content, same words), so this is purely presentational: parseBriefing
-// (pure, in ./parse-briefing) turns the one-paragraph recap into a lead line, source-labelled sections with
-// bullets, a "what I'm not sure about" section, and the closing invitation — rendered here with the SAME visual
-// language as Moment 3 (s0-arc-block / s0-arc-k label / s0-arc-list bullets). If the expected "Label: …"
-// structure isn't present it falls back to short lines (never one blob). The invitation is the ONLY thing in the
-// clay question card.
-function ArcSection({ label, points }: { label: string; points: string[] }) {
-  if (!points.length) return null;
-  return <div className="s0-arc-block"><div className="s0-arc-k">{label}</div><ul className="s0-arc-list">{points.map((p, i) => <li key={i}>{p}</li>)}</ul></div>;
-}
-
-// Render a grounded briefing. `asOpener` = this is the current ask (no founder reply yet), so the invitation is
-// the prominent clay question card; once the conversation has moved on, the invitation is just a trailing line.
-function ArcBriefing({ content, t, asOpener }: { content: string; t: T; asOpener: boolean }) {
-  const b = parseBriefing(content);
-  if (b.sections.length === 0 && !b.notSure) {
-    // Fallback — no recognizable sections. Still never a single blob: break into short lines, invitation apart.
-    const lines = (b.lead || content).split(/(?<=\.)\s+/).map((s) => s.trim()).filter(Boolean);
-    return (<>
-      <ArcMsg lines={lines} />
-      {b.invitation ? (asOpener ? <ArcQuestion text={b.invitation} t={t} /> : <ArcMsg lines={[b.invitation]} />) : null}
-    </>);
-  }
+// The Moment 4 opener — a SHORT structured pointer (lead + ≤3 one-line grounded bullets + one "not sure" line +
+// the invitation). Differentiated from Moment 3 (the full diagnosis): this does NOT re-list every source. Only
+// the invitation sits in the clay question card, and only when it's the current question.
+function ArcOpenerView({ opener, t, asQuestion }: { opener: ArcOpener; t: T; asQuestion: boolean }) {
   return (
     <div className="s0-arc-briefing">
-      {b.lead ? <ArcMsg lines={[b.lead]} /> : null}
-      {b.sections.map((s, i) => <ArcSection key={i} label={s.label} points={s.points} />)}
-      {b.notSure ? <ArcSection label={b.notSure.label} points={b.notSure.points} /> : null}
-      {b.invitation ? (asOpener ? <ArcQuestion text={b.invitation} t={t} /> : <ArcMsg lines={[b.invitation]} />) : null}
+      <div className="s0-strat-msg"><p className="s0-strat-msg-line">{opener.lead}</p></div>
+      {opener.bullets.length ? <ul className="s0-arc-list">{opener.bullets.map((b, i) => <li key={i}>{b}</li>)}</ul> : null}
+      {opener.notSure ? <p className="s0-arc-notsure">{opener.notSure}</p> : null}
+      {asQuestion
+        ? <ArcQuestion text={opener.invitation} t={t} />
+        : <div className="s0-strat-msg"><p className="s0-strat-msg-line">{opener.invitation}</p></div>}
     </div>
   );
 }
@@ -209,17 +196,9 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
         if (turns.length === 0) {
           return <div className="s0-arc-thinking" role="status" aria-live="polite">{t('arc.conversation.preparing')}</div>;
         }
-        // The opener is the grounded RECAP — rendered as a scannable structure (lead + source-labelled bulleted
-        // sections + "not sure" + the invitation in the clay card), never a blob. Only the first turn, and only
-        // when it actually parses into a briefing (a plain question turn is NOT a briefing); the rest of the
-        // exchange grows below as the normal thread (its last question is the clay card).
-        const [first, ...rest] = turns;
-        const firstIsBriefing = !!first && first.role === 'bb' && ((): boolean => { const b = parseBriefing(first.content); return b.sections.length > 0 || !!b.notSure; })();
-        return firstIsBriefing ? (<>
-          <ArcBriefing content={first.content} t={t} asOpener={rest.length === 0} />
-          {rest.length ? <ArcThread turns={rest} t={t} /> : null}
-          <ArcInput ph={t('arc.conversation.ph')} onSend={(m) => arcConversation(businessId, m)} t={t} text={text} setText={setText} busy={busy} act={act} />
-        </>) : (<>
+        // The whole exchange is a visible thread. The opener turn renders as a short structured pointer (handled
+        // inside ArcThread via parseOpenerTurn); the current question is the clay card. No prose parsing.
+        return (<>
           <ArcThread turns={turns} t={t} />
           <ArcInput ph={t('arc.conversation.ph')} onSend={(m) => arcConversation(businessId, m)} t={t} text={text} setText={setText} busy={busy} act={act} />
         </>);
@@ -248,6 +227,8 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
         const s = view!.strategy!;
         return (<>
           <ArcMsg lines={[t('arc.strategy.intro'), t('arc.strategy.bet', { bet: s.bet, over: s.over }), s.horizon ? t('arc.strategy.horizon', { horizon: s.horizon }) : '']} />
+          <ArcBullets k="arc.strategy.tradeoffs" items={s.tradeOffs} t={t} />
+          <ArcBullets k="arc.strategy.notnow" items={s.notNow} t={t} />
           <ArcBullets k="arc.strategy.reconsider" items={s.reconsider} t={t} />
           <div className="s0-strat-actions">
             <button type="button" className="s0-btn" disabled={busy || !s.adoptable || !s.proposalId} onClick={() => s.proposalId && act(() => arcAdoptStrategy(businessId, s.proposalId!))}>{t('arc.strategy.adopt')} →</button>

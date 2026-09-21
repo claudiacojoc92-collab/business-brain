@@ -73,6 +73,19 @@ export interface ObservationCandidate {
   readonly behavior: string;
 }
 
+/**
+ * The Moment 4 OPENER as STRUCTURED data (not prose) — a SHORT pointer, differentiated from the Moment 3
+ * diagnosis: "I've read your sources, here's what stands out, let's talk." The model emits it directly (no UI
+ * regex parsing of prose); the UI renders lead + ≤3 one-line source-grounded bullets + one "not sure" line +
+ * the invitation (the only thing in the clay question card). Every field is in the founder's/source language.
+ */
+export interface ConversationOpener {
+  readonly lead: string;        // 1–2 sentences: "I've read your sources — here's what stands out before we talk."
+  readonly bullets: string[];   // ≤3 one-line grounded observations, each ideally from a different source
+  readonly notSure: string | null; // ONE line: the sharpest thing the sources can't answer
+  readonly invitation: string;  // the closing question ("What's missing? What did I get wrong?")
+}
+
 export interface ConversationStepOutput {
   readonly interpretation: string; // brief BB reflection of what the answer changed ('' on opener)
   readonly nextQuestion: string | null; // next pivotal question; null when nothing pivotal remains
@@ -82,6 +95,7 @@ export interface ConversationStepOutput {
   readonly observationCandidates: ObservationCandidate[];
   readonly answeredNeedKeys: string[];
   readonly newNeeds: { key: string; whatMissing: string; whyMatters: string }[];
+  readonly opener?: ConversationOpener | null; // populated ONLY on the opener step (no founder message yet)
 }
 
 /**

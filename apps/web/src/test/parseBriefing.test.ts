@@ -1,45 +1,43 @@
 import { describe, it, expect } from 'vitest';
-import { parseBriefing } from '../slice0/parse-briefing';
+import { parseOpenerTurn } from '../slice0/parse-briefing';
 
-// The real Body Move opener (model output, unchanged): one recap paragraph + the invitation as its own paragraph.
-const REAL = [
-  'Înainte să vorbim, iată ce știu deja despre Body Move Studio. Din pliantul terapeutic pe care l-ai încărcat: aveți deja o broșură clinică completă adresată medicilor — ortopedie, neurologie, reumatologie — cu un flux clar de colaborare în șase pași și cinci specialiști nominalizați. Din pliantul corporate: există un al doilea canal de outreach — companii — cu servicii precum Pilates, Aerial Yoga, Functional Training. De pe site: Decebal este singura locație cu kinetoterapie, iar Schroth are cel mai mare preț per ședință (220 lei/ședință). Ce nu îmi este clar din surse: Decebal funcționează la ~70% capacitate; reprezentantul există dar nu a început.',
-  'Ce lipsește? Ce am înțeles greșit?',
-].join('\n\n');
+// The opener is now a STRUCTURED JSON turn (no prose regex). parseOpenerTurn detects it and returns its fields;
+// a normal prose turn returns null.
+const openerTurn = JSON.stringify({
+  __arcOpener: {
+    lead: 'Am citit sursele tale — iată ce iese în evidență înainte să vorbim.',
+    bullets: ['Broșura medicală: pur clinică, pentru medici', 'Site: Decebal e singura locație cu kinetoterapie', 'Broșura corporate: un canal B2B separat'],
+    notSure: 'Nu îmi este clar ce blochează primul pas spre cabinete.',
+    invitation: 'Ce lipsește? Ce am înțeles greșit?',
+  },
+});
 
-describe('parseBriefing — the opener becomes a scannable structure (no model change)', () => {
-  it('splits into a lead, source-labelled sections with bullets, a not-sure section, and the invitation', () => {
-    const b = parseBriefing(REAL);
-    expect(b.lead).toMatch(/^Înainte să vorbim/);
-    expect(b.lead).not.toMatch(/pliantul terapeutic/); // the lead does not swallow the sections
-    // three source sections, each labelled and bulleted
-    const labels = b.sections.map((s) => s.label);
-    expect(labels.some((l) => /pliantul terapeutic/i.test(l))).toBe(true);
-    expect(labels.some((l) => /pliantul corporate/i.test(l))).toBe(true);
-    expect(labels.some((l) => /de pe site/i.test(l))).toBe(true);
-    for (const s of b.sections) expect(s.points.length).toBeGreaterThan(0);
-    // the therapeutic section's em-dash sub-points became separate bullets
-    const therap = b.sections.find((s) => /terapeutic/i.test(s.label))!;
-    expect(therap.points.length).toBeGreaterThanOrEqual(2);
-    // "what I'm not sure about" is its own section, not a source section
-    expect(b.notSure).not.toBeNull();
-    expect(b.notSure!.label).toMatch(/nu îmi este clar/i);
-    expect(b.notSure!.points.length).toBeGreaterThan(0);
-    // the invitation is captured separately (goes in the clay card, not the recap)
-    expect(b.invitation).toBe('Ce lipsește? Ce am înțeles greșit?');
+describe('parseOpenerTurn — structured opener detection (no prose parsing)', () => {
+  it('parses a structured opener turn into its fields', () => {
+    const o = parseOpenerTurn(openerTurn);
+    expect(o).not.toBeNull();
+    expect(o!.lead).toMatch(/Am citit sursele/);
+    expect(o!.bullets).toHaveLength(3);
+    expect(o!.notSure).toMatch(/blochează primul pas/);
+    expect(o!.invitation).toBe('Ce lipsește? Ce am înțeles greșit?');
   });
 
-  it('falls back cleanly when there are no "Label:" sections (no blob, invitation still separated)', () => {
-    const b = parseBriefing('This is a plain paragraph with no sections at all. It just runs on. What did I get wrong?');
-    expect(b.sections).toHaveLength(0);
-    expect(b.notSure).toBeNull();
-    expect(b.invitation).toBe('What did I get wrong?');
-    expect(b.lead).toMatch(/plain paragraph/);
+  it('caps bullets at 3 and drops empties', () => {
+    const t = JSON.stringify({ __arcOpener: { lead: 'x', bullets: ['a', '', 'b', 'c', 'd'], notSure: null, invitation: 'q?' } });
+    expect(parseOpenerTurn(t)!.bullets).toEqual(['a', 'b', 'c']);
   });
 
-  it('handles an opener with no invitation (nothing forced into a question)', () => {
-    const b = parseBriefing('From your site: two locations and six services.');
-    expect(b.invitation).toBeNull();
-    expect(b.sections[0]?.label).toMatch(/from your site/i);
+  it('returns null for a plain prose turn', () => {
+    expect(parseOpenerTurn('What made you stop the ads?')).toBeNull();
+    expect(parseOpenerTurn('Din pliantul terapeutic: aveți o echipă.')).toBeNull();
+  });
+
+  it('returns null when lead or invitation is missing (falls back to prose handling)', () => {
+    expect(parseOpenerTurn(JSON.stringify({ __arcOpener: { lead: '', bullets: [], notSure: null, invitation: 'q?' } }))).toBeNull();
+    expect(parseOpenerTurn(JSON.stringify({ __arcOpener: { lead: 'x', bullets: [], notSure: null, invitation: '' } }))).toBeNull();
+  });
+
+  it('returns null for malformed JSON', () => {
+    expect(parseOpenerTurn('{ not json')).toBeNull();
   });
 });

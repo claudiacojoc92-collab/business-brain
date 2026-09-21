@@ -77,7 +77,16 @@ describe('ConversationService', () => {
     expect(m.stepInputs.at(-1).sources[0].text).toContain('no group-fitness framing');
   });
 
-  it('opener stores BOTH the grounded recap (interpretation) and the invitation (nextQuestion), recap first', async () => {
+  it('opener: when the model returns a STRUCTURED opener, it is stored as a JSON turn (no prose blob)', async () => {
+    const opener = { lead: 'I have read your sources — here is what stands out.', bullets: ['Medical brochure: purely clinical', 'Site: two locations'], notSure: 'What blocks the first step?', invitation: 'What is missing?' };
+    const m = makeDeps({ opener });
+    await new ConversationService(m.deps).startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    const bb = m.turns.find((t: any) => t.role === 'bb');
+    const parsed = JSON.parse(bb.content);
+    expect(parsed.__arcOpener).toEqual(opener);
+  });
+
+  it('opener (fallback, no structured opener) stores recap + invitation, recap first', async () => {
     const recap = 'Before we talk, here is what I already know about Body Move. From your medical brochure: purely clinical, no fitness framing. What I am not sure about: is Schroth a core line?';
     const invitation = 'What is missing? What did I get wrong?';
     const m = makeDeps({ interpretation: recap, nextQuestion: invitation });

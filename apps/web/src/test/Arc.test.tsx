@@ -190,23 +190,22 @@ describe('ArcSurface — one surface, nine moments', () => {
     expect(screen.queryByText('arc.strategy.adopt →')).toBeNull();
   });
 
-  it('Moment 4 opener renders as a scannable BRIEFING (labelled sections + bullets), invitation alone in the clay card', async () => {
-    const opener = [
-      'Before we talk, here is what I already know about Body Move. From your medical brochure: purely clinical — written for orthopedists — no fitness framing. From your website: two locations; Schroth is the priciest service. What I am not sure about: is Schroth the core line, or an experiment?',
-      'What is missing? What did I get wrong?',
-    ].join('\n\n');
+  it('Moment 4 opener renders as a SHORT structured pointer (lead + ≤3 bullets + not-sure), invitation alone in the clay card', async () => {
+    const opener = JSON.stringify({ __arcOpener: {
+      lead: "I've read your sources — here's what stands out before we talk.",
+      bullets: ['Medical brochure: purely clinical, for orthopedists', 'Website: two locations, Schroth is the priciest', 'Corporate brochure: a separate B2B channel'],
+      notSure: "I'm not sure what blocks the first step to clinics.",
+      invitation: 'What is missing? What did I get wrong?',
+    } });
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'conversation', turns: [{ id: 't1', role: 'bb', content: opener }] }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
-    // source-labelled sections appear as small-caps labels with bullets
-    expect(await screen.findByText(/From your medical brochure/i)).toBeInTheDocument();
-    expect(screen.getByText(/From your website/i)).toBeInTheDocument();
-    expect(screen.getByText(/What I am not sure about/i)).toBeInTheDocument();
-    // at least one bullet from the medical brochure section
-    expect(screen.getByText(/purely clinical/i).tagName).toBe('LI');
-    // ONLY the invitation is in the clay question card — not the recap
-    const qCard = screen.getByText('What is missing? What did I get wrong?').closest('.s0-arc-question');
-    expect(qCard).toBeTruthy();
-    expect(screen.getByText(/purely clinical/i).closest('.s0-arc-question')).toBeNull(); // recap NOT in the card
+    // lead + bullets render (each bullet an <li>), not a blob
+    expect(await screen.findByText(/here's what stands out/i)).toBeInTheDocument();
+    expect(screen.getByText(/Medical brochure: purely clinical/i).tagName).toBe('LI');
+    expect(screen.getByText(/I'm not sure what blocks/i)).toBeInTheDocument();
+    // ONLY the invitation is in the clay question card — not the lead or bullets
+    expect(screen.getByText('What is missing? What did I get wrong?').closest('.s0-arc-question')).toBeTruthy();
+    expect(screen.getByText(/Medical brochure: purely clinical/i).closest('.s0-arc-question')).toBeNull();
     expect(screen.getByText('arc.question.label')).toBeInTheDocument();
   });
 
@@ -233,7 +232,7 @@ describe('ArcSurface — one surface, nine moments', () => {
   });
 
   it('Moment 6: strategy shows the bet + reconsider; Adopt drives the engine', async () => {
-    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'strategy', strategy: { bet: 'referrals', over: 'a general campaign', horizon: '6 months', reconsider: ['if fewer than 2 of 8–10 show interest'], proposalId: 'ver1', adoptable: true } }));
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'strategy', strategy: { bet: 'referrals', over: 'a general campaign', horizon: '6 months', tradeOffs: ['referrals ↔ paid ads · trust converts here'], notNow: ['paid social · no proof yet'], reconsider: ['if fewer than 2 of 8–10 show interest'], proposalId: 'ver1', adoptable: true } }));
     vi.mocked(api.arcAdoptStrategy).mockResolvedValue(v({ moment: 'week_day', weekDay: { week: [], today: null, canCreate: false } }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
     expect(await screen.findByText('arc.strategy.bet:referrals,a general campaign')).toBeInTheDocument();

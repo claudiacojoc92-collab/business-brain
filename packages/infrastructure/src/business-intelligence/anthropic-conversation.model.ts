@@ -96,8 +96,9 @@ function systemPrompt(lang: string): string {
     'SINGLE quotes for any inner quotation and escape any real double-quote; never emit a raw " or newline that',
     'would break the JSON. Use EXACTLY this shape:',
     '{',
-    '  "interpretation": "OPENER (no founder message yet) → the grounded RECAP: \'Before we talk, here is what I already know about <business>.\' then 2–4 source-attributed specifics (\'From your site…\', \'From your medical brochure…\', \'From the link…\'), then \'What I am not sure about:\' + 1–3 real gaps; question phase → ONE sentence that ADDS a noticing (never a bare paraphrase); by the 3rd–4th answer → your full SYNTHESIS then DIAGNOSIS in your own voice; when the founder ASKS/CHALLENGES the current context → your direct spoken answer. NEVER a description of their question or your process",',
-    '  "nextQuestion": "OPENER → the invitation to correct/extend, e.g. \'What is missing? What did I get wrong?\' (never \'tell me more\' / \'where is the business today\'); question phase → the next decision-changing question; diagnosis phase → the verification (\'Have I got that right — what am I missing?\'); null when ready. MUST be in the EXACT SAME language as interpretation and the founder\'s last message — if the founder wrote English, this question is in English, NEVER Romanian",',
+    '  "interpretation": "OPENER (no founder message yet) → \'\' (leave EMPTY; put the opener in the \'opener\' object below); question phase → ONE sentence that ADDS a noticing (never a bare paraphrase); by the 3rd–4th answer → your full SYNTHESIS then DIAGNOSIS in your own voice; when the founder ASKS/CHALLENGES the current context → your direct spoken answer. NEVER a description of their question or your process",',
+    '  "nextQuestion": "OPENER → null (the invitation goes in opener.invitation); question phase → the next decision-changing question; diagnosis phase → the verification (\'Have I got that right — what am I missing?\'); null when ready. MUST be in the EXACT SAME language as interpretation and the founder\'s last message — if the founder wrote English, this question is in English, NEVER Romanian",',
+    '  "opener": null,   // OPENER ONLY (no founder message yet): a SHORT structured pointer — see THE OPENER below. On every OTHER turn this is null.',
     '  "readyForAha2": false,',
     '  "declarations": [{"kind": "goal|horizon|constraint|preference|decision|intention|challenge_permission|resource", "statement": "the founder-owned fact in their words", "scope": "optional"}],',
     '  "businessCorrections": ["a fact the founder says is no longer true about the business"],',
@@ -105,6 +106,8 @@ function systemPrompt(lang: string): string {
     '  "answeredNeedKeys": ["keys from OPEN NEEDS this message answered"],',
     '  "newNeeds": [{"key": "snake_case", "whatMissing": "", "whyMatters": "what decision it changes"}]',
     '}',
+    'The "opener" object, when present, has EXACTLY this shape:',
+    '{ "lead": "1–2 sentences", "bullets": ["≤3 one-line observations"], "notSure": "one line or null", "invitation": "the closing question" }',
     '',
     'Rules:',
     '- declarations capture ONLY what the founder owns (wants/chose/constrains/their resources). A goal',
@@ -114,23 +117,19 @@ function systemPrompt(lang: string): string {
     '  never psychology (no fear/insecurity/motive/personality). Usually one answer is NOT a pattern.',
     '- READINESS follows THE ARC above: after the diagnosis + verification (and at most 2–3 clarifiers) set',
     '  readyForAha2 true; and ALWAYS set it true once FOUNDER ANSWERS SO FAR ≥ 7. Never drag the conversation out.',
-    '- THE OPENER (no founder message yet — the FIRST thing the founder sees) is NOT a cold question. The founder',
-    '  has ALREADY poured in their website, brochures/PDFs, links and maybe Instagram — PROVE you read them before',
-    '  asking anything. This is the same "here is what I already know, correct me" move as the understanding moment,',
-    '  applied to the conversation opener: the conversation is a CONTINUATION of what you read, never a cold start.',
-    '  Build the RECAP in the "interpretation" field (ONE JSON string; SINGLE inner quotes; NO literal newlines —',
-    '  separate the parts with sentence breaks), structured exactly like this:',
-    '    (1) Open with "Before we talk, here is what I already know about <business>." (natural in the opener language).',
-    '    (2) Then 2–4 CONCRETE, specific observations pulled from the SOURCES block — EACH attributing WHERE it came',
-    '        from ("From your site…", "From your medical brochure…", "From the link you shared…", "On Instagram…").',
-    '        Specific, never generic: NOT "a wellness studio" but "two locations, six services, and kinetotherapy has',
-    '        the most detailed pricing". Quote real specifics visible in the sources. If a brochure or a link is',
-    '        present, you MUST reference it specifically by what it says — do not lean only on the website.',
-    '    (3) Then "What I am not sure about:" and 1–3 REAL gaps or ambiguities the sources do NOT resolve (draw from',
-    '        the unknowns/tensions and what is genuinely missing) — real open questions, never rhetorical filler.',
-    '  Set "nextQuestion" to the INVITATION to correct and extend — "What is missing? What did I get wrong?" (in the',
-    '  opener language). The recap must DEMONSTRATE knowledge; the invitation must invite CORRECTION, not "tell me',
-    '  more". ONLY if there are genuinely no sources at all, fall back to ONE grounded question from Aha 1.',
+    '- THE OPENER (no founder message yet — the FIRST thing the founder sees): fill the "opener" OBJECT (leave',
+    '  interpretation "" and nextQuestion null). It is a SHORT POINTER, NOT a full recap — the founder already',
+    '  saw the detailed reading a moment ago (the understanding step). Do NOT repeat that diagnosis and do NOT',
+    '  re-list every source. Keep it tight:',
+    '    • opener.lead: 1–2 sentences — "I have read your sources — here is what stands out before we talk." (natural',
+    '      in the source language; name the business).',
+    '    • opener.bullets: AT MOST 3, each ONE line, each a concrete observation grounded in the SOURCES, ideally',
+    '      each from a DIFFERENT source (e.g. one from a brochure, one from the site). Specific, never generic; no',
+    '      bullet longer than one line. Prefer the sharpest few — do not pad to 3.',
+    '    • opener.notSure: ONE line naming the single sharpest thing the sources cannot answer (or null).',
+    '    • opener.invitation: the closing question — "What is missing? What did I get wrong?" (in the source language).',
+    '  Every field in ONE language = the source language. If there are genuinely no sources, set opener to null and',
+    '  instead ask ONE grounded question from Aha 1 in nextQuestion.',
   ].join('\n');
 }
 
@@ -194,6 +193,16 @@ export class AnthropicConversationModel implements IConversationModelPort {
     const block = Array.isArray(resp?.content) ? resp.content.find((c: { type?: string }) => c?.type === 'text') : null;
     const raw: string = (block as { text?: string } | null)?.text ?? '';
     const p = extractJson(raw) as Partial<ConversationStepOutput>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawOpener = (p as any).opener;
+    const opener = rawOpener && typeof rawOpener === 'object'
+      ? {
+          lead: String(rawOpener.lead ?? '').trim(),
+          bullets: (Array.isArray(rawOpener.bullets) ? rawOpener.bullets : []).map((b: unknown) => String(b ?? '').trim()).filter(Boolean).slice(0, 3),
+          notSure: rawOpener.notSure ? String(rawOpener.notSure).trim() : null,
+          invitation: String(rawOpener.invitation ?? '').trim(),
+        }
+      : null;
     return {
       interpretation: typeof p.interpretation === 'string' ? p.interpretation : '',
       nextQuestion: typeof p.nextQuestion === 'string' && p.nextQuestion.trim() ? p.nextQuestion : null,
@@ -203,6 +212,8 @@ export class AnthropicConversationModel implements IConversationModelPort {
       observationCandidates: Array.isArray(p.observationCandidates) ? p.observationCandidates : [],
       answeredNeedKeys: Array.isArray(p.answeredNeedKeys) ? p.answeredNeedKeys : [],
       newNeeds: Array.isArray(p.newNeeds) ? p.newNeeds : [],
+      // Only a well-formed opener with a lead + invitation counts (otherwise fall back to prose opener handling).
+      opener: opener && opener.lead && opener.invitation ? opener : null,
     };
   }
 }
