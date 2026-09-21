@@ -148,6 +148,28 @@ describe('ArcService.view — each moment composes from the reused engines', () 
     expect(v.error?.kind).toBe('generation');
   });
 
+  it('cross-session continuity: a returning founder resumes each late moment from PERSISTED state — no regeneration, no error', async () => {
+    let built = 0;
+    const saved = { founderWords: 'w', against: 'a', tension: 't' };
+    const { deps } = makeDeps({
+      mirror: { build: async () => { built += 1; return { contrasts: [] }; } },
+      strategy: { getCurrent: async () => ({ record: STRAT }), proposalOrGenerate: async () => STRAT },
+      plan: { getActive: async () => ({ plan: PLAN }), proposalOrGenerate: async () => PLAN },
+    });
+    const svc = new ArcService(deps);
+    // Mirror resumes from the persisted contrast — NOT rebuilt.
+    const mV = await svc.view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true, understandingConfirmed: true }), [], null, false, saved);
+    expect(mV.moment).toBe('mirror'); expect(mV.mirror).toEqual(saved); expect(mV.error).toBeUndefined(); expect(built).toBe(0);
+    // Email resumes from the persisted draft (strategyAdopted + planActive) — not re-drafted in the view.
+    const eV = await svc.view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true }), [], { subject: 'S', body: 'B' }, false, saved);
+    expect(eV.moment).toBe('email'); expect(eV.email).toEqual({ subject: 'S', body: 'B' });
+    // Container resumes read-only from the held understanding.
+    const cV = await svc.view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true, emailExported: true }), [], null, false, saved);
+    expect(cV.moment).toBe('container'); expect((cV.container?.items.length ?? 0)).toBeGreaterThan(0);
+    // Content language rides on every view for chrome localization.
+    expect(mV.contentLanguage).toBeTruthy();
+  });
+
   it('strategy is the bet + trade-off + reconsider, adoptable when a proposal exists', async () => {
     const { deps } = makeDeps();
     const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
