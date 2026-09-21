@@ -106,7 +106,7 @@ export class AnthropicStrategyModel implements IStrategyModelPort {
   private async call(system: string, user: string, maxTokens: number): Promise<unknown> {
     const client = createAnthropicClient(this.apiKey);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const resp: any = await client.messages.create({ model: this.modelId, max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] });
+    const resp: any = await client.messages.create({ model: this.modelId, max_tokens: maxTokens, temperature: 0, system, messages: [{ role: 'user', content: user }] }); // temp 0 → one language, no mid-response drift
     const block = Array.isArray(resp?.content) ? resp.content.find((c: { type?: string }) => c?.type === 'text') : null;
     return extractJson((block as { text?: string } | null)?.text ?? '');
   }

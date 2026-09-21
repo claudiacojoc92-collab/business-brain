@@ -140,6 +140,7 @@ export class AnthropicUnderstandingModel implements IUnderstandingModelPort {
     const resp: any = await client.messages.create({
       model: this.modelId,
       max_tokens: 4096,
+      temperature: 0, // deterministic → one language throughout, no mid-response drift
       system: systemPrompt(input.interfaceLanguage),
       messages: [{ role: 'user', content: user }],
     });

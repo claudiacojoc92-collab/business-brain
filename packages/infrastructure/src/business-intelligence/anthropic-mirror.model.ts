@@ -80,7 +80,7 @@ export class AnthropicMirrorModel implements IMirrorModelPort {
       const client = createAnthropicClient(this.apiKey);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const resp: any = await client.messages.create({
-        model: this.modelId, max_tokens: 1800,
+        model: this.modelId, max_tokens: 1800, temperature: 0, // deterministic → one language, no mid-response drift
         system: rules(LANG[input.interfaceLanguage] ?? 'English'),
         messages: [{ role: 'user', content: userBlock(input) }],
       });

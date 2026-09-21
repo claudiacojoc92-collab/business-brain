@@ -66,7 +66,7 @@ export class AnthropicCorrectionReflectionModel implements ICorrectionReflection
       const client = createAnthropicClient(this.apiKey);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const resp: any = await client.messages.create({
-        model: this.modelId, max_tokens: 700,
+        model: this.modelId, max_tokens: 700, temperature: 0, // deterministic → one language, no mid-response drift
         system: rules(LANG[input.language] ?? 'English'),
         messages: [{ role: 'user', content: userBlock(input) }],
       });
