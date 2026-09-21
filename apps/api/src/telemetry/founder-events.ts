@@ -50,6 +50,7 @@ export type FounderEventType =
   | 'arc_reading_done'       // Moment 2 → 3: the founder gave their few words while BB read
   | 'arc_understanding_confirmed' // Moment 3 → 4: the founder confirmed what BB understood
   | 'arc_correction_reflected' // Moment 3: the substantive reply to the LATEST correction (persisted so it survives refresh)
+  | 'arc_mirror_built'       // Moment 5: the mirror contrast (persisted so it's stable across refresh, no re-generation)
   | 'arc_mirror_seen'        // Moment 5 → 6: the founder answered the mirror
   | 'arc_email_saved'        // Moment 8: the current email draft (subject+body in metadata)
   | 'arc_email_exported'     // Moment 8 → 9: the founder exported the email
@@ -310,6 +311,28 @@ export async function readArcCorrectionReflection(db: KyselyDB, businessId: stri
     const reflection = String(meta.reflection ?? '').trim();
     if (!reflection) return null;
     return { reflection, changes: String(meta.changes ?? '').trim(), holds: String(meta.holds ?? '').trim(), ask: String(meta.ask ?? '').trim() };
+  } catch { return null; }
+}
+
+/** Persist the mirror contrast (Moment 5) so it is STABLE across refresh and never re-generated on every view. */
+export function recordArcMirror(db: KyselyDB, accountId: string, businessId: string, m: { founderWords: string; against: string; tension: string }): void {
+  recordFounderEvent(db, {
+    accountId, businessId, eventType: 'arc_mirror_built', surface: 'arc',
+    metadata: { founderWords: clip(m.founderWords), against: clip(m.against), tension: clip(m.tension) },
+  });
+}
+
+/** The most recent persisted mirror contrast (null if none built yet). */
+export async function readArcMirror(db: KyselyDB, businessId: string, accountId: string): Promise<{ founderWords: string; against: string; tension: string } | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r: any = await sql`SELECT metadata FROM app.founder_event WHERE business_id=${businessId} AND account_id=${accountId} AND event_type='arc_mirror_built' ORDER BY occurred_at DESC LIMIT 1`.execute(db);
+    const meta = r?.rows?.[0]?.metadata;
+    if (!meta || typeof meta !== 'object') return null;
+    const founderWords = String(meta.founderWords ?? '').trim();
+    const against = String(meta.against ?? '').trim();
+    const tension = String(meta.tension ?? '').trim();
+    return founderWords && against && tension ? { founderWords, against, tension } : null;
   } catch { return null; }
 }
 

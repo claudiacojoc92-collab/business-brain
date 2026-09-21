@@ -3,7 +3,7 @@ import multipart from '@fastify/multipart';
 import type { ServerDeps } from '../server';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
 import { fetchDocument, extractReadableText } from '@bb/infrastructure';
-import { recordFounderEvent, readArcFlags, readArcSources, readArcEmail, recordArcCorrectionReflection, readArcCorrectionReflection, type FounderEventType } from '../telemetry/founder-events';
+import { recordFounderEvent, readArcFlags, readArcSources, readArcEmail, recordArcCorrectionReflection, readArcCorrectionReflection, recordArcMirror, readArcMirror, type FounderEventType } from '../telemetry/founder-events';
 import { detectType, assertWithinBounds, MAX_BYTES } from '../connectors/upload/detect';
 import { extractPdf, extractDocx, extractText } from '../connectors/upload/extract';
 import { getInstagramConnector } from '../connectors/instagram/instagram-connector.instance';
@@ -33,23 +33,29 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
 
   async function viewFor(businessId: string, businessName: string, language: string, founderId: string) {
     const ig = getInstagramConnector();
-    const [flags, sources, email, reflection, igState] = await Promise.all([
+    const [flags, sources, email, reflection, savedMirror, igState] = await Promise.all([
       readArcFlags(deps.db, businessId, founderId),
       readArcSources(deps.db, businessId, founderId),
       readArcEmail(deps.db, businessId, founderId),
       readArcCorrectionReflection(deps.db, businessId, founderId),
+      readArcMirror(deps.db, businessId, founderId),
       ig ? ig.status(founderId).catch(() => 'disconnected' as const) : Promise.resolve('disconnected' as const),
     ]);
-    let view = await deps.arcService.view(businessId, businessName, language, flags, sources, email, igState === 'connected');
+    const connected = igState === 'connected';
+    let view = await deps.arcService.view(businessId, businessName, language, flags, sources, email, connected, savedMirror);
 
-    // Moment 4 opener is generated LAZILY on view: the recap opener ("here's what I already know about your
-    // business…") is produced by startOrResume, which otherwise only runs on a POST — so entering the conversation
-    // with no session (e.g. after a scoped reset, or before the founder has typed) would show nothing. Generate it
-    // here so the founder lands on the model recap, not a placeholder. Idempotent: startOrResume no-ops when a
-    // session already exists, so this only fires when there are genuinely no turns yet.
+    // Persist a freshly-built mirror contrast so it is STABLE across refresh and not re-generated on every view.
+    if (view.moment === 'mirror' && !savedMirror && view.mirror) recordArcMirror(deps.db, founderId, businessId, view.mirror);
+
+    // Moment 4 opener is generated LAZILY on view (startOrResume runs otherwise only on a POST). WRAPPED so a model
+    // failure here is a PER-MOMENT error (the founder retries the conversation), never a whole-arc surface failure.
     if (view.moment === 'conversation' && (view.turns?.length ?? 0) === 0) {
-      await deps.conversationService.startOrResume(businessId, founderId, businessName, language);
-      view = await deps.arcService.view(businessId, businessName, language, flags, sources, email, igState === 'connected');
+      try {
+        await deps.conversationService.startOrResume(businessId, founderId, businessName, language);
+        view = await deps.arcService.view(businessId, businessName, language, flags, sources, email, connected, savedMirror);
+      } catch {
+        view = { ...view, error: { kind: 'generation' } };
+      }
     }
 
     // The Moment 3 reply is durable: if the founder has corrected, re-attach the persisted reflection so a
@@ -188,7 +194,22 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
   // the union of every poured-in source, THEN the durable phase flag advances the arc.
   server.post('/v1/businesses/:id/arc/pour-in/done', async (request: FastifyRequest, reply: FastifyReply) => {
     const { founderId, business, language } = await requireBusiness(request);
-    await deps.learnBusinessService.bridgePourIn({ businessId: business.id, founderId, businessName: business.name, interfaceLanguage: language });
+    // The bridge can THROW (synthesis malformed / model error) or return EMPTY (no readable text anywhere). In
+    // BOTH cases the arc must NOT advance into a hollow understanding — stay at pour-in and tell the founder to
+    // fix/retry their sources. The flag is marked ONLY on a real snapshot.
+    let result;
+    try {
+      result = await deps.learnBusinessService.bridgePourIn({ businessId: business.id, founderId, businessName: business.name, interfaceLanguage: language });
+    } catch {
+      const view = await viewFor(business.id, business.name, language, founderId); // still pour_in (flag unmarked)
+      await reply.status(200).send({ ...view, error: { kind: 'pourin_failed' } });
+      return;
+    }
+    if (result.state === 'empty' || !result.understandingId) {
+      const view = await viewFor(business.id, business.name, language, founderId);
+      await reply.status(200).send({ ...view, error: { kind: 'pourin_empty' } });
+      return;
+    }
     mark(founderId, business.id, 'arc_pour_in_done');
     await reply.status(200).send(await viewFor(business.id, business.name, language, founderId));
   });

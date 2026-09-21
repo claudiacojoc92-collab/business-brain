@@ -84,9 +84,18 @@ export interface ArcEmail { readonly subject: string; readonly body: string }
 export interface ArcContainerItem { readonly label: string; readonly statement: string; readonly provenance: 'observed' | 'declared' | 'inferred' | 'unknown' }
 export interface ArcContainer { readonly items: ArcContainerItem[] }
 
+/**
+ * A per-moment error that must NOT fail the whole arc surface. `generation` = a model call for this moment
+ * failed (mirror/strategy/plan/opener) — the UI shows a retry for THIS moment only. `pourin_empty`/`pourin_failed`
+ * = the pour-in bridge produced nothing / threw — the founder stays on pour-in and fixes their sources. The UI
+ * localizes the message by kind (content language), so no English leaks in.
+ */
+export type ArcErrorKind = 'generation' | 'pourin_empty' | 'pourin_failed';
+
 export interface ArcView {
   readonly moment: ArcMoment;
   readonly businessName: string;
+  readonly error?: { readonly kind: ArcErrorKind } | null; // per-moment failure — never fails the whole surface
   readonly sources?: ArcSource[];          // pour_in — every functional source the founder has added (with type)
   readonly igConnected?: boolean;          // pour_in — whether the founder's Instagram is connected (drives the affordance)
   readonly understanding?: ArcUnderstanding; // understanding / (container derives from same engine)

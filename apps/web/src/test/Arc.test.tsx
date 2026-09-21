@@ -209,6 +209,22 @@ describe('ArcSurface — one surface, nine moments', () => {
     expect(screen.getByText('arc.question.label')).toBeInTheDocument();
   });
 
+  it('a per-moment GENERATION failure shows an error + retry, never a blank/broken surface', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'strategy', error: { kind: 'generation' } }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    expect(await screen.findByText('arc.error.generation')).toBeInTheDocument();
+    expect(screen.getByText('arc.error.retry →')).toBeInTheDocument();
+    // it did NOT try to render the (absent) strategy body
+    expect(screen.queryByText('arc.strategy.adopt →')).toBeNull();
+  });
+
+  it('a pour-in EMPTY error keeps the pour-in card usable and shows the specific message', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [{ url: 'x.ro', type: 'website' }], error: { kind: 'pourin_empty' } }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    expect(await screen.findByText('arc.error.pourinEmpty')).toBeInTheDocument();
+    expect(screen.getByText('home.empty.website')).toBeInTheDocument(); // the pour-in affordances are still there
+  });
+
   it('Moment 4 with no turns shows a quiet THINKING state, never the old generic placeholder question', async () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'conversation', turns: [] }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);

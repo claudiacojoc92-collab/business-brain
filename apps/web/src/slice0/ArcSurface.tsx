@@ -131,7 +131,7 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
       const v = await run();
       // A same-moment send gets a light "noted" — UNLESS it carried a substantive reply (a Moment 3 correction
       // reflection), which is the acknowledgment and renders in the moment itself.
-      if (v.moment !== 'done' && v.moment === prevMoment && !v.correctionReflection) setAck(t('arc.noted'));
+      if (v.moment !== 'done' && v.moment === prevMoment && !v.correctionReflection && !v.error) setAck(t('arc.noted'));
       apply(v);
       setText('');
     } catch {
@@ -154,6 +154,14 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
   );
 
   function renderMoment() {
+    // A model generation for THIS moment failed (mirror / strategy / plan / opener). Show a per-moment error with
+    // a retry — never a whole-arc failure. (pour-in errors are handled inside the PourIn card, so it stays usable.)
+    if (view!.error?.kind === 'generation') {
+      return (<>
+        <ArcMsg lines={[t('arc.error.generation')]} />
+        <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={() => void load()}>{t('arc.error.retry')} →</button></div>
+      </>);
+    }
     switch (view!.moment) {
       case 'pour_in': return <PourIn businessId={businessId} view={view!} busy={busy} onReload={load} onDone={() => act(() => arcPourInDone(businessId))} t={t} />;
 
@@ -245,7 +253,13 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
           <ArcBullets k="arc.week.week" items={w.week} t={t} />
           {w.today ? <div className="s0-arc-block"><div className="s0-arc-k">{t('arc.week.today')}</div><p className="s0-strat-msg-line">{w.today}</p></div> : null}
           <div className="s0-strat-actions">
-            <button type="button" className="s0-btn" disabled={busy} onClick={() => act(async () => { await arcAdoptWeekDay(businessId); await arcGenerateEmail(businessId); return getArc(businessId); })}>{t('arc.week.draft')} →</button>
+            <button type="button" className="s0-btn" disabled={busy} onClick={() => act(async () => {
+              // Only draft the email AFTER the plan is confirmed accepted (moment advanced to 'email'); otherwise the
+              // email would be generated but never shown (the moment would stay 'week_day').
+              const after = await arcAdoptWeekDay(businessId);
+              if (after.moment === 'email') await arcGenerateEmail(businessId);
+              return getArc(businessId);
+            })}>{t('arc.week.draft')} →</button>
             <button type="button" className="s0-btn-ghost" disabled={busy} onClick={() => act(() => arcAdoptWeekDay(businessId))}>{t('arc.week.writefirst')}</button>
           </div>
         </>);
@@ -375,6 +389,9 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
         {/* Instagram is intentionally NOT rendered here — hidden until after MVP validation (see note at top). */}
 
         {err ? <div className="s0-error" role="alert">{err}</div> : null}
+        {/* "Done" produced no readable understanding / threw — the arc stays here so the founder fixes their sources. */}
+        {view.error?.kind === 'pourin_empty' ? <div className="s0-error" role="alert">{t('arc.error.pourinEmpty')}</div> : null}
+        {view.error?.kind === 'pourin_failed' ? <div className="s0-error" role="alert">{t('arc.error.pourinFailed')}</div> : null}
 
         {sources.length > 0 ? <button type="button" className="s0-pourin-done" disabled={disabled} onClick={onDone}>{t('home.empty.done')}</button> : null}
       </div>

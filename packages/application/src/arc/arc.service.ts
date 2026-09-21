@@ -3,7 +3,7 @@ import type { PlanVersion } from '../plan/index';
 import type { GovernedUnderstanding } from '../bi/index';
 import { computeArcMoment } from './moment';
 import type {
-  ArcFlags, ArcView, ArcTurn, ArcEmail, IEmailModelPort, ArcContainerItem, ArcSource,
+  ArcFlags, ArcView, ArcTurn, ArcEmail, ArcMirror, IEmailModelPort, ArcContainerItem, ArcSource,
   ArcUnderstanding, CorrectionReflection, ICorrectionReflectionModel,
 } from './contracts';
 
@@ -38,7 +38,7 @@ export class ArcService {
   constructor(private readonly deps: ArcDeps) {}
 
   /** Compose the whole-arc view for the current moment — durable flags + typed sources + igConnected + savedEmail from the route. */
-  async view(businessId: string, businessName: string, language: string, flags: ArcFlags, sources: ArcSource[], savedEmail: ArcEmail | null, igConnected = false): Promise<ArcView> {
+  async view(businessId: string, businessName: string, language: string, flags: ArcFlags, sources: ArcSource[], savedEmail: ArcEmail | null, igConnected = false, savedMirror: ArcMirror | null = null): Promise<ArcView> {
     const snap = await this.deps.understanding.latest(businessId);
     const status = await this.deps.conversation.status(businessId);
     const current = await this.deps.strategy.getCurrent(businessId);
@@ -69,13 +69,22 @@ export class ArcService {
         return { ...base, turns: await this.deps.conversation.turns(businessId) };
 
       case 'mirror': {
-        const m = await this.deps.mirror.build(businessId, businessName, language);
-        const c = m.contrasts[0] ?? null;
-        return { ...base, mirror: c ? { founderWords: c.founderWords, against: c.against, tension: c.tension } : null };
+        // Prefer the persisted contrast (stable across refresh, no re-generation); build only when none is held.
+        // Wrapped so a model failure is a PER-MOMENT error, never a whole-arc failure.
+        if (savedMirror) return { ...base, mirror: savedMirror };
+        try {
+          const m = await this.deps.mirror.build(businessId, businessName, language);
+          const c = m.contrasts[0] ?? null;
+          return { ...base, mirror: c ? { founderWords: c.founderWords, against: c.against, tension: c.tension } : null };
+        } catch {
+          return { ...base, error: { kind: 'generation' } };
+        }
       }
 
       case 'strategy': {
-        const rec = await this.deps.strategy.proposalOrGenerate(businessId, businessName, language);
+        let rec;
+        try { rec = await this.deps.strategy.proposalOrGenerate(businessId, businessName, language); }
+        catch { return { ...base, error: { kind: 'generation' } }; } // per-moment, never fail the whole surface
         const core = rec.bundle.core;
         return {
           ...base,
@@ -98,8 +107,13 @@ export class ArcService {
       }
 
       case 'week_day': {
-        const plan = await this.deps.plan.proposalOrGenerate(businessId);
-        const priorities = (plan?.priorities ?? []).slice().sort((a, b) => a.order - b.order);
+        let plan;
+        try { plan = await this.deps.plan.proposalOrGenerate(businessId); }
+        catch { return { ...base, error: { kind: 'generation' } }; }
+        // A strategy is adopted by the time we reach week_day, so a plan should exist. If none came back, treat it
+        // as a soft generation failure (retryable) rather than showing an empty, actionless week.
+        if (!plan) return { ...base, error: { kind: 'generation' } };
+        const priorities = (plan.priorities ?? []).slice().sort((a, b) => a.order - b.order);
         const week = priorities.map((p) => p.title.trim()).filter(Boolean).slice(0, 5);
         const firstAction = priorities.flatMap((p) => p.actions)[0] ?? null;
         return { ...base, weekDay: { week, today: firstAction?.what?.trim() ?? null, canCreate: Boolean(firstAction?.leadsToCreate) } };

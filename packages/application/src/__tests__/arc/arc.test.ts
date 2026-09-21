@@ -115,6 +115,39 @@ describe('ArcService.view — each moment composes from the reused engines', () 
     expect(v.mirror?.tension).toBeTruthy();
   });
 
+  it('mirror: a PERSISTED contrast is used verbatim, without re-building (stable across refresh)', async () => {
+    let built = 0;
+    const { deps } = makeDeps({ mirror: { build: async () => { built += 1; return { contrasts: [] }; } } });
+    const saved = { founderWords: 'held words', against: 'held against', tension: 'held tension' };
+    const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true, understandingConfirmed: true }), [], null, false, saved);
+    expect(v.moment).toBe('mirror');
+    expect(v.mirror).toEqual(saved);
+    expect(built).toBe(0); // no re-generation when a contrast is already held
+  });
+
+  it('per-moment failure isolation: a strategy generation THROW → error:generation, not a whole-arc failure', async () => {
+    const { deps } = makeDeps({ strategy: { getCurrent: async () => null, proposalOrGenerate: async () => { throw new Error('gate failed'); } } });
+    const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
+    expect(v.moment).toBe('strategy');
+    expect(v.error?.kind).toBe('generation');
+    expect(v.strategy).toBeUndefined();
+  });
+
+  it('per-moment failure isolation: a mirror build THROW → error:generation', async () => {
+    const { deps } = makeDeps({ mirror: { build: async () => { throw new Error('model down'); } } });
+    const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true, understandingConfirmed: true }), [], null);
+    expect(v.moment).toBe('mirror');
+    expect(v.error?.kind).toBe('generation');
+  });
+
+  it('week_day: a null plan → error:generation, never an empty actionless week', async () => {
+    // strategyAdopted (getCurrent non-null) + planActive false drives the moment to week_day; the plan then fails.
+    const drive = makeDeps({ strategy: { getCurrent: async () => ({ record: STRAT }), proposalOrGenerate: async () => STRAT }, plan: { getActive: async () => null, proposalOrGenerate: async () => null } });
+    const v = await new ArcService(drive.deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
+    expect(v.moment).toBe('week_day');
+    expect(v.error?.kind).toBe('generation');
+  });
+
   it('strategy is the bet + trade-off + reconsider, adoptable when a proposal exists', async () => {
     const { deps } = makeDeps();
     const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
