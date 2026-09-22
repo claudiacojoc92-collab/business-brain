@@ -135,6 +135,14 @@ describe('ArcSurface — one surface, eight moments', () => {
     expect(screen.getByText('Referrals drive members')).toBeInTheDocument();        // confident (from evidence)
     expect(screen.getByText('Aimed at athletes, not just patients')).toBeInTheDocument(); // inferring (from pattern)
     expect(screen.getByText('What do customers actually value most?')).toBeInTheDocument(); // unanswered
+    // premium design: a hero headline card + one card per lane, each with its intentional variant
+    expect(document.querySelector('.s0-u-hero .s0-u-hero-title')).toBeTruthy();
+    expect(screen.getByText('arc.understanding.eyebrow')).toBeInTheDocument();
+    expect(screen.getByText('arc.understanding.standsout').closest('.s0-u-card--primary')).toBeTruthy();
+    expect(screen.getByText('arc.understanding.tensions').closest('.s0-u-card--primary')).toBeTruthy();
+    expect(screen.getByText('arc.understanding.confident').closest('.s0-u-card--evidence')).toBeTruthy();
+    expect(screen.getByText('arc.understanding.inferring').closest('.s0-u-card--inference')).toBeTruthy();
+    expect(screen.getByText('arc.understanding.unanswered').closest('.s0-u-card--question')).toBeTruthy();
     expect(screen.getByText('arc.understanding.confirm →')).toBeInTheDocument();
     expect(screen.queryByText('arc.strategy.adopt →')).toBeNull();                 // no strategy before Moment 3/4
   });

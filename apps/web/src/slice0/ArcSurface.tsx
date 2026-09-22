@@ -26,6 +26,22 @@ function ArcBullets({ k, items, t }: { k: string; items: string[]; t: T }) {
   if (!items.length) return null;
   return <div className="s0-arc-block"><div className="s0-arc-k">{t(k)}</div><ul className="s0-arc-list">{items.map((x, i) => <li key={i}>{x}</li>)}</ul></div>;
 }
+// A premium diagnosis CARD for the understanding moment — its own surface, a clay-accented label, and roomy
+// bullets. `kind` gives each card a distinct, intentional treatment: primary (the diagnosis core, clay bar),
+// evidence (warm/confident tint), inference (muted, hollow markers — "I could be wrong"), question (a dashed,
+// clay-tinted invitation — "your turn"). Renders nothing when the section is empty. Design-only.
+function UCard({ label, kind, paragraph, bullets }: { label: string; kind: 'primary' | 'evidence' | 'inference' | 'question'; paragraph?: string; bullets?: string[] }) {
+  const items = (bullets ?? []).map((b) => (b ?? '').trim()).filter(Boolean);
+  const lead = (paragraph ?? '').trim();
+  if (!lead && items.length === 0) return null;
+  return (
+    <div className={`s0-u-card s0-u-card--${kind}`}>
+      <div className="s0-u-card-label">{label}</div>
+      {lead ? <p className="s0-u-card-lead">{lead}</p> : null}
+      {items.length ? <ul className="s0-u-list">{items.map((x, i) => <li key={i}>{x}</li>)}</ul> : null}
+    </div>
+  );
+}
 function ArcInput({ ph, onSend, cta, t, text, setText, busy, act, workingKey }: {
   ph: string; onSend: (m: string) => Promise<ArcView>; cta?: string; t: T;
   text: string; setText: (s: string) => void; busy: boolean; act: (run: () => Promise<ArcView>, workingKey?: string) => Promise<void>; workingKey?: string;
@@ -194,13 +210,21 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
       case 'understanding': {
         const u = view!.understanding!;
         const cr = view!.correctionReflection;
+        const ctx = [u.does, u.serves].filter(Boolean).join(' · ');
         return (<>
-          <ArcMsg lines={[t('arc.understanding.title', { name: view!.businessName }), [u.does, u.serves].filter(Boolean).join(' · ')]} />
-          {u.standsOut ? <div className="s0-arc-block"><div className="s0-arc-k">{t('arc.understanding.standsout')}</div><p className="s0-strat-msg-line">{u.standsOut}</p></div> : null}
-          <ArcBullets k="arc.understanding.tensions" items={u.tensions} t={t} />
-          <ArcBullets k="arc.understanding.confident" items={u.confident} t={t} />
-          <ArcBullets k="arc.understanding.inferring" items={u.inferring} t={t} />
-          <ArcBullets k="arc.understanding.unanswered" items={u.unanswered} t={t} />
+          {/* Premium diagnostic reading: a hero headline card + one card per diagnostic lane (design-only). */}
+          <div className="s0-u">
+            <div className="s0-u-hero">
+              <div className="s0-u-hero-eyebrow">{t('arc.understanding.eyebrow')}</div>
+              <p className="s0-u-hero-title">{t('arc.understanding.title', { name: view!.businessName })}</p>
+              {ctx ? <p className="s0-u-hero-sub">{ctx}</p> : null}
+            </div>
+            <UCard label={t('arc.understanding.standsout')} kind="primary" paragraph={u.standsOut} />
+            <UCard label={t('arc.understanding.tensions')} kind="primary" bullets={u.tensions} />
+            <UCard label={t('arc.understanding.confident')} kind="evidence" bullets={u.confident} />
+            <UCard label={t('arc.understanding.inferring')} kind="inference" bullets={u.inferring} />
+            <UCard label={t('arc.understanding.unanswered')} kind="question" bullets={u.unanswered} />
+          </div>
           {cr ? (<>
             <div className="s0-arc-reflection" role="status">
               <p className="s0-arc-reflection-lead">{cr.reflection}</p>

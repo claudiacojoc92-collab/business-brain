@@ -490,6 +490,51 @@
 .s0-pourin-added-body { min-width: 0; }
 .s0-pourin-added-url { color: var(--s0-ink); font-size: 14.5px; font-weight: 550; overflow-wrap: anywhere; }
 .s0-pourin-added-detail { color: var(--s0-ink-2); font-size: 12.5px; margin-top: 2px; }
+/* ── Moment "understanding" — the diagnostic reading as a premium set of cards (design-only) ─────────────── */
+.s0-u { display: flex; flex-direction: column; gap: 14px; margin-bottom: 4px; }
+
+/* HERO — the headline of what BB understood: elevated, clay-tinted, a clay left bar, generous type. */
+.s0-u-hero {
+  position: relative; overflow: hidden;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--s0-clay) 11%, var(--s0-bg-2)), var(--s0-bg-2) 72%);
+  border: 1px solid color-mix(in srgb, var(--s0-clay) 26%, var(--s0-line));
+  border-radius: 18px; padding: 24px 26px 24px 28px;
+}
+.s0-u-hero::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--s0-clay); }
+.s0-u-hero-eyebrow { font-size: 11.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--s0-clay); font-weight: 700; margin-bottom: 10px; }
+.s0-u-hero-title { margin: 0; font-size: 21px; line-height: 1.4; font-weight: 500; color: var(--s0-ink); text-wrap: balance; }
+.s0-u-hero-sub { margin: 12px 0 0; font-size: 15px; line-height: 1.55; color: var(--s0-ink-2); }
+
+/* CARD — each diagnostic lane on its own surface, clay-accented label, roomy bullets. */
+.s0-u-card { position: relative; background: var(--s0-bg-2); border: 1px solid var(--s0-line); border-radius: 14px; padding: 18px 20px; }
+.s0-u-card-label { display: flex; align-items: center; gap: 9px; font-size: 12.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--s0-clay); font-weight: 650; margin-bottom: 13px; line-height: 1.3; }
+.s0-u-card-label::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--s0-clay); flex: none; }
+.s0-u-card-lead { margin: 0; font-size: 16.5px; line-height: 1.55; color: var(--s0-ink); max-width: 62ch; }
+.s0-u-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 11px; }
+.s0-u-list li { position: relative; padding-left: 18px; font-size: 16px; line-height: 1.6; color: var(--s0-ink); max-width: 62ch; }
+.s0-u-list li::before { content: ''; position: absolute; left: 3px; top: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--s0-clay); }
+
+/* variants — intentional, subtle tints per card type */
+.s0-u-card--primary { border-left: 3px solid var(--s0-clay); }
+.s0-u-card--evidence { background: color-mix(in srgb, var(--s0-clay) 5%, var(--s0-bg-2)); }
+.s0-u-card--inference .s0-u-card-label { color: var(--s0-ink-3); }
+.s0-u-card--inference .s0-u-card-label::before { background: transparent; border: 1.5px solid var(--s0-ink-3); }
+.s0-u-card--inference .s0-u-list li { color: var(--s0-ink-2); }
+.s0-u-card--inference .s0-u-list li::before { background: transparent; border: 1.5px solid var(--s0-ink-3); top: 9px; }
+.s0-u-card--question { background: color-mix(in srgb, var(--s0-clay) 8%, var(--s0-bg-2)); border: 1px dashed color-mix(in srgb, var(--s0-clay) 42%, var(--s0-line-2)); }
+.s0-u-card--question .s0-u-list li { color: var(--s0-ink-2); font-style: italic; }
+
+/* micro-motion: a gentle staggered rise as the diagnosis appears */
+@keyframes s0-u-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.s0-u > * { animation: s0-u-in .45s cubic-bezier(.4, 0, .2, 1) both; }
+.s0-u > *:nth-child(1) { animation-delay: 0s; }
+.s0-u > *:nth-child(2) { animation-delay: .06s; }
+.s0-u > *:nth-child(3) { animation-delay: .12s; }
+.s0-u > *:nth-child(4) { animation-delay: .18s; }
+.s0-u > *:nth-child(5) { animation-delay: .24s; }
+.s0-u > *:nth-child(6) { animation-delay: .30s; }
+@media (prefers-reduced-motion: reduce) { .s0-u > * { animation: none; } }
+
 /* The pour-in's closing decision — the moment that triggers the whole arc. A separate, prominent block (32px
    above so it reads as its own decision, not part of the source list): a centered count line + a full-width
    solid-clay CTA with white text. This is the visual focal point of the pour-in bottom. */
