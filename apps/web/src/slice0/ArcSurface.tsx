@@ -30,13 +30,16 @@ function ArcBullets({ k, items, t }: { k: string; items: string[]; t: T }) {
 // bullets. `kind` gives each card a distinct, intentional treatment: primary (the diagnosis core, clay bar),
 // evidence (warm/confident tint), inference (muted, hollow markers — "I could be wrong"), question (a dashed,
 // clay-tinted invitation — "your turn"). Renders nothing when the section is empty. Design-only.
+// One small, meaningful glyph per lane: ◆ the core reading, ✓ what the sources back, ~ what BB infers (unsure),
+// → the open question for the founder. aria-hidden — the label carries the meaning for assistive tech.
+const U_ICON: Record<string, string> = { primary: '◆', evidence: '✓', inference: '~', question: '→' };
 function UCard({ label, kind, paragraph, bullets }: { label: string; kind: 'primary' | 'evidence' | 'inference' | 'question'; paragraph?: string; bullets?: string[] }) {
   const items = (bullets ?? []).map((b) => (b ?? '').trim()).filter(Boolean);
   const lead = (paragraph ?? '').trim();
   if (!lead && items.length === 0) return null;
   return (
     <div className={`s0-u-card s0-u-card--${kind}`}>
-      <div className="s0-u-card-label">{label}</div>
+      <div className="s0-u-card-label"><span className="s0-u-ic" aria-hidden="true">{U_ICON[kind]}</span>{label}</div>
       {lead ? <p className="s0-u-card-lead">{lead}</p> : null}
       {items.length ? <ul className="s0-u-list">{items.map((x, i) => <li key={i}>{x}</li>)}</ul> : null}
     </div>
