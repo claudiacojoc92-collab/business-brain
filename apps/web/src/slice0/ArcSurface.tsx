@@ -26,12 +26,12 @@ function ArcBullets({ k, items, t }: { k: string; items: string[]; t: T }) {
   if (!items.length) return null;
   return <div className="s0-arc-block"><div className="s0-arc-k">{t(k)}</div><ul className="s0-arc-list">{items.map((x, i) => <li key={i}>{x}</li>)}</ul></div>;
 }
-function ArcInput({ ph, onSend, cta, t, text, setText, busy, act }: {
+function ArcInput({ ph, onSend, cta, t, text, setText, busy, act, workingKey }: {
   ph: string; onSend: (m: string) => Promise<ArcView>; cta?: string; t: T;
-  text: string; setText: (s: string) => void; busy: boolean; act: (run: () => Promise<ArcView>) => Promise<void>;
+  text: string; setText: (s: string) => void; busy: boolean; act: (run: () => Promise<ArcView>, workingKey?: string) => Promise<void>; workingKey?: string;
 }) {
   return (
-    <form className="s0-strat-input" onSubmit={(e) => { e.preventDefault(); if (text.trim()) void act(() => onSend(text.trim())); }}>
+    <form className="s0-strat-input" onSubmit={(e) => { e.preventDefault(); if (text.trim()) void act(() => onSend(text.trim()), workingKey); }}>
       <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={ph} aria-label={ph} rows={2} disabled={busy} />
       <button type="submit" className="s0-btn s0-btn-inline" disabled={busy || !text.trim()}>{cta ?? t('arc.send')}</button>
     </form>
@@ -85,6 +85,20 @@ function ArcThread({ turns, t }: { turns: ThreadTurn[]; t: T }) {
   );
 }
 
+// "BB is working" — an animated, alive progress state shown while a model runs (so the founder never sees a
+// frozen screen). Escalates to a "still working…" line after ~12s so a long generation (strategy/plan) still
+// reads as progress, not a hang. Message is content-language (via t).
+function ArcWorking({ t, messageKey }: { t: T; messageKey: string }) {
+  const [longWait, setLongWait] = useState(false);
+  useEffect(() => { const id = setTimeout(() => setLongWait(true), 12000); return () => clearTimeout(id); }, []);
+  return (
+    <div className="s0-arc-working" role="status" aria-live="polite">
+      <span className="s0-arc-working-dots" aria-hidden="true"><i /><i /><i /></span>
+      <span className="s0-arc-working-text">{longWait ? t('arc.working.still') : t(messageKey)}</span>
+    </div>
+  );
+}
+
 // The Moment 4 opener — a SHORT structured pointer (lead + ≤3 one-line grounded bullets + one "not sure" line +
 // the invitation). Differentiated from Moment 3 (the full diagnosis): this does NOT re-list every source. Only
 // the invitation sits in the clay question card, and only when it's the current question.
@@ -115,6 +129,7 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
   const [text, setText] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [ack, setAck] = useState<string | null>(null);
+  const [work, setWork] = useState<string | null>(null); // the "BB is working…" message key while a model runs
   const started = useRef(false);
 
   // Arc CHROME (labels, buttons, the question tag, provenance, error copy) follows the CONTENT language — the
@@ -131,8 +146,8 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
   // on error, surface a message and KEEP the founder's text; on success, clear the text and — when the moment
   // does not advance (a correction at Moment 3, a challenge at Moment 6) — acknowledge that BB received it, so
   // the founder always sees a response instead of "nothing happened".
-  async function act(run: () => Promise<ArcView>) {
-    setBusy(true); setErr(null); setAck(null);
+  async function act(run: () => Promise<ArcView>, workingKey = 'arc.working') {
+    setBusy(true); setErr(null); setAck(null); setWork(workingKey);
     const prevMoment = view?.moment;
     try {
       const v = await run();
@@ -144,17 +159,21 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
     } catch {
       setErr(t('arc.senderror'));
     } finally {
-      setBusy(false);
+      setBusy(false); setWork(null);
     }
   }
 
-  if (!view) return <div className="s0-loading">{t('common.loading')}</div>;
+  // Initial load: a model may be generating this moment (understanding/mirror/strategy/plan run inside the GET),
+  // so show an animated "working" state that escalates after a few seconds — never a bare, frozen-looking spinner.
+  if (!view) return <div className="s0-strat"><ArcWorking t={t} messageKey="arc.working" /></div>;
   const weekday = new Date().toLocaleDateString(locale, { weekday: 'long' });
 
   return (
     <div className="s0-strat">
       <div className="s0-strat-ctx">{view.businessName} · {weekday}</div>
       {renderMoment()}
+      {/* While a model runs (a transition BB is thinking through), show progress — escalates to "still working…". */}
+      {work ? <ArcWorking t={t} messageKey={work} /> : null}
       {ack ? <div className="s0-arc-ack" role="status">{ack}</div> : null}
       {err ? <div className="s0-error" role="alert">{err}</div> : null}
     </div>
@@ -170,7 +189,7 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
       </>);
     }
     switch (view!.moment) {
-      case 'pour_in': return <PourIn businessId={businessId} view={view!} busy={busy} onReload={load} onDone={() => act(() => arcPourInDone(businessId))} t={t} />;
+      case 'pour_in': return <PourIn businessId={businessId} view={view!} busy={busy} onReload={load} onDone={() => act(() => arcPourInDone(businessId), 'arc.working.reading')} t={t} />;
 
       case 'reading':
         return (<>
@@ -197,7 +216,7 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
             {cr.ask ? <ArcQuestion text={cr.ask} t={t} /> : null}
           </>) : null}
           <div className="s0-strat-actions">
-            <button type="button" className="s0-btn" disabled={busy} onClick={() => act(() => arcConfirmUnderstanding(businessId))}>{t('arc.understanding.confirm')} →</button>
+            <button type="button" className="s0-btn" disabled={busy} onClick={() => act(() => arcConfirmUnderstanding(businessId), 'arc.working.mirror')}>{t('arc.understanding.confirm')} →</button>
           </div>
           <ArcInput ph={t('arc.understanding.ph')} onSend={(m) => arcCorrectUnderstanding(businessId, m)} t={t} text={text} setText={setText} busy={busy} act={act} />
         </>);
@@ -215,7 +234,7 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
         // inside ArcThread via parseOpenerTurn); the current question is the clay card. No prose parsing.
         return (<>
           <ArcThread turns={turns} t={t} />
-          <ArcInput ph={t('arc.conversation.ph')} onSend={(m) => arcConversation(businessId, m)} t={t} text={text} setText={setText} busy={busy} act={act} />
+          <ArcInput ph={t('arc.conversation.ph')} onSend={(m) => arcConversation(businessId, m)} t={t} text={text} setText={setText} busy={busy} act={act} workingKey="arc.working.thinking" />
         </>);
       }
 
@@ -223,7 +242,7 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
         const m = view!.mirror;
         if (!m) return (<>
           <ArcMsg lines={[t('arc.mirror.none')]} />
-          <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={() => act(() => arcMirrorSeen(businessId))}>{t('arc.continue')} →</button></div>
+          <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={() => act(() => arcMirrorSeen(businessId), 'arc.working.strategy')}>{t('arc.continue')} →</button></div>
         </>);
         return (<>
           <ArcMsg lines={[t('arc.mirror.intro')]} />
@@ -233,8 +252,8 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
             <p className="s0-mirror-tension">{m.tension}</p>
           </div>
           <ArcQuestion text={t('arc.mirror.which')} t={t} />
-          <ArcInput ph={t('arc.mirror.ph')} onSend={(ans) => arcMirrorSeen(businessId, ans)} cta={t('arc.send')} t={t} text={text} setText={setText} busy={busy} act={act} />
-          <div className="s0-strat-actions"><button type="button" className="s0-linkbtn" disabled={busy} onClick={() => act(() => arcMirrorSeen(businessId))}>{t('arc.mirror.skip')}</button></div>
+          <ArcInput ph={t('arc.mirror.ph')} onSend={(ans) => arcMirrorSeen(businessId, ans)} cta={t('arc.send')} t={t} text={text} setText={setText} busy={busy} act={act} workingKey="arc.working.strategy" />
+          <div className="s0-strat-actions"><button type="button" className="s0-linkbtn" disabled={busy} onClick={() => act(() => arcMirrorSeen(businessId), 'arc.working.strategy')}>{t('arc.mirror.skip')}</button></div>
         </>);
       }
 
@@ -248,7 +267,7 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
           <ArcBullets k="arc.strategy.notnow" items={s.notNow} t={t} />
           <ArcBullets k="arc.strategy.reconsider" items={s.reconsider} t={t} />
           <div className="s0-strat-actions">
-            <button type="button" className="s0-btn" disabled={busy || !s.adoptable || !s.proposalId} onClick={() => s.proposalId && act(() => arcAdoptStrategy(businessId, s.proposalId!))}>{t('arc.strategy.adopt')} →</button>
+            <button type="button" className="s0-btn" disabled={busy || !s.adoptable || !s.proposalId} onClick={() => s.proposalId && act(() => arcAdoptStrategy(businessId, s.proposalId!), 'arc.working.plan')}>{t('arc.strategy.adopt')} →</button>
             <button type="button" className="s0-btn-ghost" disabled={busy} onClick={() => navigate(`/b/${businessId}/strategy`)}>{t('arc.showwhy')}</button>
           </div>
           <ArcInput ph={t('arc.strategy.ph')} onSend={(m) => arcChallengeStrategy(businessId, m)} cta={t('arc.strategy.challenge')} t={t} text={text} setText={setText} busy={busy} act={act} />

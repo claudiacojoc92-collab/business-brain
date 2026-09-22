@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor, within, act } from '@testing-library/react';
 import type { ArcView } from '../api/client';
 
 // Day One — the arc surface: each moment's message renders; one surface, no tabs/panels; the pour-in
@@ -245,6 +245,34 @@ describe('ArcSurface — one surface, nine moments', () => {
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
     expect(await screen.findByText('arc.error.pourinEmpty')).toBeInTheDocument();
     expect(screen.getByText('home.empty.website')).toBeInTheDocument(); // the pour-in affordances are still there
+  });
+
+  it('initial load shows an animated WORKING state (progress, not a frozen spinner)', async () => {
+    vi.mocked(api.getArc).mockReturnValue(new Promise(() => {}) as Promise<ArcView>); // never resolves → stays loading
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    expect(await screen.findByText('arc.working')).toBeInTheDocument();
+    expect(document.querySelector('.s0-arc-working-dots')).toBeTruthy(); // animated dots
+  });
+
+  it('a transition shows a MOMENT-AWARE working state while the model runs', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [{ url: 'x.ro', type: 'website' }] }));
+    let resolveDone: (v: ArcView) => void = () => {};
+    vi.mocked(api.arcPourInDone).mockReturnValue(new Promise<ArcView>((r) => { resolveDone = r; }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    fireEvent.click(await screen.findByText('home.empty.done'));
+    // while the pour-in→understanding generation runs, the founder sees a reading-progress state, not a freeze
+    expect(await screen.findByText('arc.working.reading')).toBeInTheDocument();
+    await act(async () => { resolveDone(v({ moment: 'reading' })); }); // flush the completion inside act
+  });
+
+  it('the working state escalates to "still working…" after ~12s', async () => {
+    vi.useFakeTimers();
+    vi.mocked(api.getArc).mockReturnValue(new Promise(() => {}) as Promise<ArcView>);
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    expect(screen.getByText('arc.working')).toBeInTheDocument();
+    act(() => { vi.advanceTimersByTime(12000); });
+    expect(screen.getByText('arc.working.still')).toBeInTheDocument();
+    vi.useRealTimers();
   });
 
   it('Moment 4 with no turns shows a quiet THINKING state, never the old generic placeholder question', async () => {
