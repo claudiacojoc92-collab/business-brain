@@ -32,18 +32,18 @@ describe('arc chrome follows the CONTENT language, not the UI locale', () => {
   it('renders Romanian chrome for a Romanian business even when the UI locale is English', async () => {
     vi.mocked(api.getArc).mockResolvedValue(strat);
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
-    // the strategy hero uses the RO eyebrow "Pariul", not the EN "The bet"
-    expect(await screen.findByText(/Pariul/)).toBeInTheDocument();
-    expect(screen.queryByText(/The bet/)).toBeNull();
-    // the bet itself renders as the hero title
+    // the strategy hero uses the RO eyebrow, not the EN one
+    expect(await screen.findByText(/Iată ce cred că ar trebui să faci/)).toBeInTheDocument();
+    expect(screen.queryByText(/what I think you should do/i)).toBeNull();
+    // the recommendation itself renders as the hero title
     expect(screen.getByText(/canalul de recomandări/)).toBeInTheDocument();
-    // the adopt button is Romanian
-    expect(screen.getByText(/Adoptă/i)).toBeInTheDocument();
+    // the accept action is Romanian
+    expect(screen.getByText(/Da, îmi place/i)).toBeInTheDocument();
   });
 
   it('falls back to the UI locale (en) when there is no content language yet', async () => {
     vi.mocked(api.getArc).mockResolvedValue({ ...strat, contentLanguage: null });
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
-    expect(await screen.findByText(/The bet/)).toBeInTheDocument();
+    expect(await screen.findByText(/what I think you should do/i)).toBeInTheDocument();
   });
 });

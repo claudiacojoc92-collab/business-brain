@@ -86,16 +86,24 @@ export class ArcService {
         try { rec = await this.deps.strategy.proposalOrGenerate(businessId, businessName, language); }
         catch { return { ...base, error: { kind: 'generation' } }; } // per-moment, never fail the whole surface
         const core = rec.bundle.core;
+        // A strategy that failed to generate/validate is persisted as an EMPTY bundle with status 'insufficient';
+        // rendering it produced a hollow card (a title with no content). Treat it as a retryable generation
+        // failure instead of showing an empty strategy.
+        if (rec.status === 'insufficient' || !core.coreBet.priority.trim()) return { ...base, error: { kind: 'generation' } };
+        // "Why this, and not something else" — the explicit trade-offs read as tight "X over Y, because Z" bullets;
+        // fall back to the core reasoning only if there are none, so the card is never empty and never a wall of text.
+        let why = dedupe((core.tradeOffs ?? [])
+          .map((t) => { const c = (t.choosing ?? '').trim(); const o = (t.over ?? '').trim(); const w = (t.why ?? '').trim(); return c && o ? `${c} ↔ ${o}${w ? ` · ${w}` : ''}` : ''; }))
+          .filter(Boolean).slice(0, 3);
+        if (why.length === 0 && core.coreBet.whyOverAlternative.trim()) why = [core.coreBet.whyOverAlternative.trim()];
         return {
           ...base,
           strategy: {
             bet: first(core.coreBet.priority, core.goal),
             over: first(core.coreBet.deprioritized, (core.tradeOffs?.[0]?.over ?? '')),
             horizon: core.horizon,
-            // The real trade-offs and the deliberate "not now" — surfaced INLINE (was hidden behind "Show why").
-            tradeOffs: (core.tradeOffs ?? [])
-              .map((t) => { const c = (t.choosing ?? '').trim(); const o = (t.over ?? '').trim(); const w = (t.why ?? '').trim(); return c && o ? `${c} ↔ ${o}${w ? ` · ${w}` : ''}` : ''; })
-              .filter(Boolean).slice(0, 3),
+            // "Why this, not something else" (was "the trade-offs"), surfaced INLINE.
+            tradeOffs: why,
             notNow: (core.notNow ?? [])
               .map((n) => { const i = (n.item ?? '').trim(); const r = (n.reason ?? '').trim(); return i ? `${i}${r ? ` · ${r}` : ''}` : ''; })
               .filter(Boolean).slice(0, 3),

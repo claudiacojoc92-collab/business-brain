@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import { translate, isLocale, type Locale } from '../i18n/messages';
 import { parseOpenerTurn, type ArcOpener } from './parse-briefing';
@@ -143,7 +142,6 @@ function ArcOpenerView({ opener, t, asQuestion }: { opener: ArcOpener; t: T; asQ
  */
 export function ArcSurface({ businessId, onDone }: { businessId: string; onDone: () => void }) {
   const { locale } = useLocale() as { t: T; locale: string };
-  const navigate = useNavigate();
   const [view, setView] = useState<ArcView | null>(null);
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState('');
@@ -155,6 +153,7 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
   const [history, setHistory] = useState<ArcView[]>([]);
   const [viewIdx, setViewIdx] = useState<number | null>(null);
   const [histOpen, setHistOpen] = useState(false);
+  const [discuss, setDiscuss] = useState(false); // strategy: the "let's talk about it" box, revealed on demand
   const started = useRef(false);
 
   // Arc CHROME (labels, buttons, the question tag, provenance, error copy) follows the CONTENT language — the
@@ -168,6 +167,7 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
   const apply = useCallback((v: ArcView) => {
     if (v.moment === 'done') { onDone(); return; }
     setView(v);
+    if (v.moment !== 'strategy') setDiscuss(false); // collapse the strategy discussion box once we move on
     const TRACK = new Set(['understanding', 'conversation', 'mirror', 'strategy', 'week_day', 'email', 'container']);
     if (TRACK.has(v.moment)) {
       setHistory((h) => {
@@ -345,9 +345,10 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
           {!ro ? (<>
             <div className="s0-strat-actions">
               <button type="button" className="s0-btn" disabled={busy || !s.adoptable || !s.proposalId} onClick={() => s.proposalId && act(() => arcAdoptStrategy(businessId, s.proposalId!), 'arc.working.plan')}>{t('arc.strategy.adopt')} →</button>
-              <button type="button" className="s0-btn-ghost" disabled={busy} onClick={() => navigate(`/b/${businessId}/strategy`)}>{t('arc.showwhy')}</button>
+              <button type="button" className="s0-btn-ghost" disabled={busy} onClick={() => setDiscuss(true)}>{t('arc.strategy.discuss')}</button>
+              <button type="button" className="s0-btn-ghost" disabled={busy} onClick={() => setDiscuss(true)}>{t('arc.strategy.notconvinced')}</button>
             </div>
-            <ArcInput ph={t('arc.strategy.ph')} onSend={(msg) => arcChallengeStrategy(businessId, msg)} cta={t('arc.strategy.challenge')} t={t} text={text} setText={setText} busy={busy} act={act} />
+            {discuss ? <ArcInput ph={t('arc.strategy.ph')} onSend={(msg) => arcChallengeStrategy(businessId, msg)} cta={t('arc.send')} t={t} text={text} setText={setText} busy={busy} act={act} /> : null}
           </>) : null}
         </>);
       }
