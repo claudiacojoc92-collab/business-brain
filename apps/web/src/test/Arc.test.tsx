@@ -40,8 +40,24 @@ describe('ArcSurface — one surface, nine moments', () => {
     expect(screen.getByText('brochure.pdf')).toBeInTheDocument();
     expect(screen.getByText(/10 pages read/)).toBeInTheDocument();                 // confirmation detail, in-card
     expect(screen.getByText(/4 pages read/)).toBeInTheDocument();
-    expect(screen.getByText('home.empty.done')).toBeInTheDocument();               // Done adding present (sources are in)
+    // The closing CTA is now a prominent block: a count line + a full-width action button (not a tiny link).
+    expect(screen.getByText('home.empty.done')).toBeInTheDocument();
+    expect(screen.getByText('home.empty.ready.many:2')).toBeInTheDocument();        // "You've added 2 sources — …" (n interpolated)
+    expect(screen.getByText('home.empty.done').className).toContain('s0-pourin-done');
+    expect(screen.getByText('home.empty.done').closest('.s0-pourin-cta')).toBeTruthy();
     noTabs();
+  });
+
+  it('Moment 1 CTA: exactly ONE source shows the singular count line; zero sources shows no CTA', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [{ url: 'x.ro', type: 'website' }] }));
+    const { unmount } = render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    expect(await screen.findByText('home.empty.ready.one:1')).toBeInTheDocument();   // singular (n interpolated)
+    expect(screen.queryByText(/home\.empty\.ready\.many/)).toBeNull();
+    unmount();
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [] }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    await screen.findByText('home.empty.website');                                  // pour-in rendered…
+    expect(screen.queryByText('home.empty.done')).toBeNull();                        // …but no CTA with zero sources
   });
 
   it('Moment 1: exactly three real connectors — website, paste-a-link, upload; Instagram is HIDDEN; no NEXT/stubs', async () => {

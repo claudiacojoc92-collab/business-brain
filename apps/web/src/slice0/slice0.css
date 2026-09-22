@@ -482,8 +482,23 @@
 .s0-pourin-added-body { min-width: 0; }
 .s0-pourin-added-url { color: var(--s0-ink); font-size: 14.5px; font-weight: 550; overflow-wrap: anywhere; }
 .s0-pourin-added-detail { color: var(--s0-ink-2); font-size: 12.5px; margin-top: 2px; }
-.s0-pourin-done { align-self: flex-start; margin-top: 4px; background: none; border: none; color: var(--s0-ink-2); font-family: var(--s0-sans); font-size: 14px; cursor: pointer; padding: 4px 0; text-decoration: underline; text-underline-offset: 3px; }
-.s0-pourin-done:hover { color: var(--s0-ink); }
+/* The pour-in's closing decision — the moment that triggers the whole arc. A separate, prominent block (32px
+   above so it reads as its own decision, not part of the source list): a centered count line + a full-width
+   solid-clay CTA with white text. This is the visual focal point of the pour-in bottom. */
+.s0-pourin-cta { margin-top: 32px; display: flex; flex-direction: column; gap: 12px; }
+.s0-pourin-cta-line { margin: 0; text-align: center; color: var(--s0-ink-2); font-size: 15px; line-height: 1.45; }
+.s0-pourin-done {
+  width: 100%; box-sizing: border-box;
+  background: var(--s0-clay); color: #fff;
+  border: none; border-radius: 12px;
+  padding: 17px 24px;
+  font-family: var(--s0-sans); font-size: 17px; font-weight: 650; letter-spacing: .01em;
+  text-align: center; cursor: pointer;
+  transition: background .2s var(--s0-ease), transform .12s var(--s0-ease);
+}
+.s0-pourin-done:hover { background: var(--s0-clay-2); }
+.s0-pourin-done:active { transform: translateY(1px); }
+.s0-pourin-done:disabled { opacity: .5; cursor: default; }
 .s0-pourin-words { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--s0-line); }
 .s0-pourin-words .s0-linkbtn { font-size: 14px; color: var(--s0-ink-2); }
 .s0-pourin-words .s0-linkbtn:hover { color: var(--s0-ink); }

@@ -402,7 +402,13 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
         {view.error?.kind === 'pourin_empty' ? <div className="s0-error" role="alert">{t('arc.error.pourinEmpty')}</div> : null}
         {view.error?.kind === 'pourin_failed' ? <div className="s0-error" role="alert">{t('arc.error.pourinFailed')}</div> : null}
 
-        {sources.length > 0 ? <button type="button" className="s0-pourin-done" disabled={disabled} onClick={onDone}>{t('home.empty.done')}</button> : null}
+        {/* THE decision that triggers the whole arc — a prominent, unmissable CTA (not a "terms"-weight link). */}
+        {sources.length > 0 ? (
+          <div className="s0-pourin-cta">
+            <p className="s0-pourin-cta-line">{t(sources.length === 1 ? 'home.empty.ready.one' : 'home.empty.ready.many', { n: String(sources.length) })}</p>
+            <button type="button" className="s0-pourin-done" disabled={disabled} onClick={onDone}>{t('home.empty.done')}</button>
+          </div>
+        ) : null}
       </div>
     </>
   );
