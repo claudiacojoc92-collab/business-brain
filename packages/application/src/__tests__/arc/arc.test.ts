@@ -2,21 +2,20 @@
 import { describe, it, expect } from 'vitest';
 import { computeArcMoment, ArcService, type ArcFlags, type ArcState } from '../../arc/index';
 
-const OFF: ArcFlags = { pourInDone: false, readingDone: false, understandingConfirmed: false, mirrorSeen: false, emailExported: false, containerSeen: false };
+const OFF: ArcFlags = { pourInDone: false, understandingConfirmed: false, mirrorSeen: false, emailExported: false, containerSeen: false };
 
 describe('computeArcMoment — the linear, no-skip state machine (survives refresh: pure over durable state)', () => {
   it('walks 1→9→done as each durable gate is satisfied, never skipping', () => {
     const seq: { patch: Partial<ArcState>; expect: string }[] = [
       { patch: {}, expect: 'pour_in' },
-      { patch: { flags: { ...OFF, pourInDone: true } }, expect: 'reading' },
-      { patch: { flags: { ...OFF, pourInDone: true, readingDone: true } }, expect: 'understanding' },
-      { patch: { flags: { ...OFF, pourInDone: true, readingDone: true, understandingConfirmed: true } }, expect: 'conversation' },
-      { patch: { flags: { ...OFF, pourInDone: true, readingDone: true, understandingConfirmed: true }, conversationReady: true }, expect: 'mirror' },
-      { patch: { flags: { ...OFF, pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true }, conversationReady: true }, expect: 'strategy' },
-      { patch: { flags: { ...OFF, pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true }, conversationReady: true, strategyAdopted: true }, expect: 'week_day' },
-      { patch: { flags: { ...OFF, pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true }, conversationReady: true, strategyAdopted: true, planActive: true }, expect: 'email' },
-      { patch: { flags: { ...OFF, pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true, emailExported: true }, conversationReady: true, strategyAdopted: true, planActive: true }, expect: 'container' },
-      { patch: { flags: { ...OFF, pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true, emailExported: true, containerSeen: true }, conversationReady: true, strategyAdopted: true, planActive: true }, expect: 'done' },
+      { patch: { flags: { ...OFF, pourInDone: true } }, expect: 'understanding' },
+      { patch: { flags: { ...OFF, pourInDone: true, understandingConfirmed: true } }, expect: 'conversation' },
+      { patch: { flags: { ...OFF, pourInDone: true, understandingConfirmed: true }, conversationReady: true }, expect: 'mirror' },
+      { patch: { flags: { ...OFF, pourInDone: true, understandingConfirmed: true, mirrorSeen: true }, conversationReady: true }, expect: 'strategy' },
+      { patch: { flags: { ...OFF, pourInDone: true, understandingConfirmed: true, mirrorSeen: true }, conversationReady: true, strategyAdopted: true }, expect: 'week_day' },
+      { patch: { flags: { ...OFF, pourInDone: true, understandingConfirmed: true, mirrorSeen: true }, conversationReady: true, strategyAdopted: true, planActive: true }, expect: 'email' },
+      { patch: { flags: { ...OFF, pourInDone: true, understandingConfirmed: true, mirrorSeen: true, emailExported: true }, conversationReady: true, strategyAdopted: true, planActive: true }, expect: 'container' },
+      { patch: { flags: { ...OFF, pourInDone: true, understandingConfirmed: true, mirrorSeen: true, emailExported: true, containerSeen: true }, conversationReady: true, strategyAdopted: true, planActive: true }, expect: 'done' },
     ];
     const base: ArcState = { flags: OFF, understandingPresent: true, conversationReady: false, strategyAdopted: false, planActive: false };
     for (const step of seq) expect(computeArcMoment({ ...base, ...step.patch } as ArcState)).toBe(step.expect);
@@ -79,7 +78,7 @@ describe('ArcService.view — each moment composes from the reused engines', () 
 
   it('understanding is DIAGNOSTIC: surfaces tensions + confident-from-evidence vs inferred + what sources can\'t answer', async () => {
     const { deps } = makeDeps({ conversation: { status: async () => null, turns: async () => [] } });
-    const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true }), [], null);
+    const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true }), [], null);
     expect(v.moment).toBe('understanding');
     expect(v.understanding?.does).toMatch(/physiotherapy memberships/);
     expect(v.understanding?.serves).toMatch(/post-op patients/);
@@ -108,7 +107,7 @@ describe('ArcService.view — each moment composes from the reused engines', () 
 
   it('mirror shows the strongest contrast (both sides cited)', async () => {
     const { deps } = makeDeps();
-    const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true, understandingConfirmed: true }), [], null);
+    const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, understandingConfirmed: true }), [], null);
     expect(v.moment).toBe('mirror');
     expect(v.mirror?.founderWords).toMatch(/recovery is the priority/);
     expect(v.mirror?.against).toMatch(/six categories/);
@@ -119,7 +118,7 @@ describe('ArcService.view — each moment composes from the reused engines', () 
     let built = 0;
     const { deps } = makeDeps({ mirror: { build: async () => { built += 1; return { contrasts: [] }; } } });
     const saved = { founderWords: 'held words', against: 'held against', tension: 'held tension' };
-    const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true, understandingConfirmed: true }), [], null, false, saved);
+    const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, understandingConfirmed: true }), [], null, false, saved);
     expect(v.moment).toBe('mirror');
     expect(v.mirror).toEqual(saved);
     expect(built).toBe(0); // no re-generation when a contrast is already held
@@ -127,7 +126,7 @@ describe('ArcService.view — each moment composes from the reused engines', () 
 
   it('per-moment failure isolation: a strategy generation THROW → error:generation, not a whole-arc failure', async () => {
     const { deps } = makeDeps({ strategy: { getCurrent: async () => null, proposalOrGenerate: async () => { throw new Error('gate failed'); } } });
-    const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
+    const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
     expect(v.moment).toBe('strategy');
     expect(v.error?.kind).toBe('generation');
     expect(v.strategy).toBeUndefined();
@@ -135,7 +134,7 @@ describe('ArcService.view — each moment composes from the reused engines', () 
 
   it('per-moment failure isolation: a mirror build THROW → error:generation', async () => {
     const { deps } = makeDeps({ mirror: { build: async () => { throw new Error('model down'); } } });
-    const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true, understandingConfirmed: true }), [], null);
+    const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, understandingConfirmed: true }), [], null);
     expect(v.moment).toBe('mirror');
     expect(v.error?.kind).toBe('generation');
   });
@@ -143,7 +142,7 @@ describe('ArcService.view — each moment composes from the reused engines', () 
   it('week_day: a null plan → error:generation, never an empty actionless week', async () => {
     // strategyAdopted (getCurrent non-null) + planActive false drives the moment to week_day; the plan then fails.
     const drive = makeDeps({ strategy: { getCurrent: async () => ({ record: STRAT }), proposalOrGenerate: async () => STRAT }, plan: { getActive: async () => null, proposalOrGenerate: async () => null } });
-    const v = await new ArcService(drive.deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
+    const v = await new ArcService(drive.deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
     expect(v.moment).toBe('week_day');
     expect(v.error?.kind).toBe('generation');
   });
@@ -158,13 +157,13 @@ describe('ArcService.view — each moment composes from the reused engines', () 
     });
     const svc = new ArcService(deps);
     // Mirror resumes from the persisted contrast — NOT rebuilt.
-    const mV = await svc.view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true, understandingConfirmed: true }), [], null, false, saved);
+    const mV = await svc.view('B', 'Body Move', 'en', flags({ pourInDone: true, understandingConfirmed: true }), [], null, false, saved);
     expect(mV.moment).toBe('mirror'); expect(mV.mirror).toEqual(saved); expect(mV.error).toBeUndefined(); expect(built).toBe(0);
     // Email resumes from the persisted draft (strategyAdopted + planActive) — not re-drafted in the view.
-    const eV = await svc.view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true }), [], { subject: 'S', body: 'B' }, false, saved);
+    const eV = await svc.view('B', 'Body Move', 'en', flags({ pourInDone: true, understandingConfirmed: true, mirrorSeen: true }), [], { subject: 'S', body: 'B' }, false, saved);
     expect(eV.moment).toBe('email'); expect(eV.email).toEqual({ subject: 'S', body: 'B' });
     // Container resumes read-only from the held understanding.
-    const cV = await svc.view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true, emailExported: true }), [], null, false, saved);
+    const cV = await svc.view('B', 'Body Move', 'en', flags({ pourInDone: true, understandingConfirmed: true, mirrorSeen: true, emailExported: true }), [], null, false, saved);
     expect(cV.moment).toBe('container'); expect((cV.container?.items.length ?? 0)).toBeGreaterThan(0);
     // Content language rides on every view for chrome localization.
     expect(mV.contentLanguage).toBeTruthy();
@@ -172,7 +171,7 @@ describe('ArcService.view — each moment composes from the reused engines', () 
 
   it('strategy is the bet + trade-off + reconsider, adoptable when a proposal exists', async () => {
     const { deps } = makeDeps();
-    const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
+    const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
     expect(v.moment).toBe('strategy');
     expect(v.strategy?.bet).toBe('The referral channel');
     expect(v.strategy?.over).toBe('a general studio campaign');
@@ -185,7 +184,7 @@ describe('ArcService.view — each moment composes from the reused engines', () 
 
   it('week_day names the week (priorities) + today (first action)', async () => {
     const { deps } = makeDeps({ strategy: { getCurrent: async () => ({ record: STRAT }), proposalOrGenerate: async () => STRAT } });
-    const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
+    const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
     expect(v.moment).toBe('week_day');
     expect(v.weekDay?.week).toEqual(['Build the clinic list', 'First outreach']);
     expect(v.weekDay?.today).toBe('Draft the clinic target list');
@@ -194,10 +193,10 @@ describe('ArcService.view — each moment composes from the reused engines', () 
   it('email returns the saved draft; container projects the read-only items with provenance', async () => {
     const { deps } = makeDeps({ strategy: { getCurrent: async () => ({ record: STRAT }), proposalOrGenerate: async () => STRAT }, plan: { getActive: async () => ({ plan: PLAN }), proposalOrGenerate: async () => PLAN } });
     const svc = new ArcService(deps);
-    const emailView = await svc.view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true }), [], { subject: 'S', body: 'B' });
+    const emailView = await svc.view('B', 'Body Move', 'en', flags({ pourInDone: true, understandingConfirmed: true, mirrorSeen: true }), [], { subject: 'S', body: 'B' });
     expect(emailView.moment).toBe('email');
     expect(emailView.email).toEqual({ subject: 'S', body: 'B' });
-    const containerView = await svc.view('B', 'Body Move', 'en', flags({ pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true, emailExported: true }), [], null);
+    const containerView = await svc.view('B', 'Body Move', 'en', flags({ pourInDone: true, understandingConfirmed: true, mirrorSeen: true, emailExported: true }), [], null);
     expect(containerView.moment).toBe('container');
     expect(containerView.container?.items.some((i) => i.provenance === 'observed')).toBe(true);
     expect(containerView.container?.items.some((i) => i.provenance === 'unknown')).toBe(true);

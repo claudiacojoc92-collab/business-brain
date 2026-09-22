@@ -1,4 +1,4 @@
-// PHASE 3 — automated END-TO-END arc test. Drives all nine moments through the REAL composition + REAL models
+// PHASE 3 — automated END-TO-END arc test. Drives all arc moments (8 after removing the reading step) through the REAL composition + REAL models
 // against a local test Postgres, seeded with REAL Body Move source content (website pages + both brochures + a
 // link, captured from prod). Verifies at each moment: structure, one-language, source grounding, and hierarchy
 // (bullets ≤3, no monster paragraphs). Prints a PASS/FAIL report per moment and exits non-zero on any failure.
@@ -57,7 +57,7 @@ async function seedSources() {
   return { webCount: web.length, brochureCount: brochures.length };
 }
 
-const flags = (o) => ({ pourInDone: false, readingDone: false, understandingConfirmed: false, mirrorSeen: false, emailExported: false, containerSeen: false, ...o });
+const flags = (o) => ({ pourInDone: false, understandingConfirmed: false, mirrorSeen: false, emailExported: false, containerSeen: false, ...o });
 
 async function run() {
   // founder + business
@@ -72,10 +72,10 @@ async function run() {
 
   // ── Moment 2: reading bridge fires → one understanding snapshot ──
   const bridge = await root.learnBusinessService.bridgePourIn({ businessId: BID, founderId: FID, businessName: biz.name, interfaceLanguage: LANG });
-  check('M2 reading/bridge', 'bridge produced an understanding snapshot', bridge.state === 'synced' && !!bridge.understandingId, `state=${bridge.state}`);
+  check('M2 bridge/loading (no reading input)', 'bridge produced an understanding snapshot', bridge.state === 'synced' && !!bridge.understandingId, `state=${bridge.state}`);
 
   // ── Moment 3: understanding — diagnostic, grounded, one language ──
-  const uView = await root.arcService.view(BID, biz.name, LANG, flags({ pourInDone: true, readingDone: true }), [], null);
+  const uView = await root.arcService.view(BID, biz.name, LANG, flags({ pourInDone: true }), [], null);
   check('M3 understanding', 'moment is understanding', uView.moment === 'understanding');
   const u = uView.understanding || {};
   const uAll = [u.does, u.serves, u.standsOut, ...(u.tensions || []), ...(u.confident || []), ...(u.inferring || []), ...(u.unanswered || [])].filter(Boolean).join(' ');
@@ -87,7 +87,7 @@ async function run() {
   // ── Moment 4: conversation — opener structured; synthesis+diagnosis by answer 3–4; one language ──
   await root.conversationService.startOrResume(BID, FID, biz.name, LANG); // generates the opener turn
   // Moment 4 requires understanding CONFIRMED (else the moment is still 'understanding' and carries no turns).
-  const CONV_FLAGS = flags({ pourInDone: true, readingDone: true, understandingConfirmed: true });
+  const CONV_FLAGS = flags({ pourInDone: true, understandingConfirmed: true });
   const turnsOf = async () => (await root.arcService.view(BID, biz.name, LANG, CONV_FLAGS, [], null)).turns || [];
   let turns = await turnsOf();
   const openerRaw = turns[0]?.content || '';
@@ -131,7 +131,7 @@ async function run() {
   check('M4 conversation', 'conversation reaches ready_for_aha2 within the budget', !!ready, `ready=${ready}`);
 
   // mark understanding confirmed for the rest of the walk
-  const F_AFTER_CONV = flags({ pourInDone: true, readingDone: true, understandingConfirmed: true });
+  const F_AFTER_CONV = flags({ pourInDone: true, understandingConfirmed: true });
 
   // ── Moment 5: mirror — a specific contrast (both sides) ──
   const mView = await root.arcService.view(BID, biz.name, LANG, F_AFTER_CONV, [], null);
@@ -143,7 +143,7 @@ async function run() {
   }
 
   // ── Moment 6: strategy — bet + trade-offs + not-now + reconsider ──
-  const sView = await root.arcService.view(BID, biz.name, LANG, flags({ pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
+  const sView = await root.arcService.view(BID, biz.name, LANG, flags({ pourInDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
   check('M6 strategy', 'moment is strategy, no generation error', sView.moment === 'strategy' && !sView.error, `moment=${sView.moment} err=${sView.error?.kind}`);
   const s = sView.strategy;
   if (s) {
@@ -154,7 +154,7 @@ async function run() {
   }
 
   // ── Moment 7: week + day — a real plan ──
-  const wView = await root.arcService.view(BID, biz.name, LANG, flags({ pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
+  const wView = await root.arcService.view(BID, biz.name, LANG, flags({ pourInDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
   check('M7 week+day', 'moment is week_day with a real plan (week + today), no error', wView.moment === 'week_day' && !wView.error && (wView.weekDay?.week?.length || 0) > 0, `moment=${wView.moment} week=${wView.weekDay?.week?.length} today=${!!wView.weekDay?.today}`);
   if (wView.weekDay) check('M7 week+day', 'plan is one language (Romanian)', oneLanguageRomanian([...(wView.weekDay.week||[]), wView.weekDay.today].filter(Boolean).join(' ')), (wView.weekDay.week||[]).join(' ').slice(0, 120));
   // accept the plan
@@ -167,7 +167,7 @@ async function run() {
   check('M8 email', 'email is one language (Romanian)', oneLanguageRomanian(`${email.subject} ${email.body}`), `${email.subject} ${email.body}`.slice(0, 120));
 
   // ── Moment 9: container — read-only projection renders ──
-  const cView = await root.arcService.view(BID, biz.name, LANG, flags({ pourInDone: true, readingDone: true, understandingConfirmed: true, mirrorSeen: true, emailExported: true }), [], null);
+  const cView = await root.arcService.view(BID, biz.name, LANG, flags({ pourInDone: true, understandingConfirmed: true, mirrorSeen: true, emailExported: true }), [], null);
   const cReached = cView.moment === 'container' || cView.moment === 'done';
   check('M9 container', 'moment is container with items', cReached && (cView.container?.items?.length || 0) > 0, `moment=${cView.moment} items=${cView.container?.items?.length}`);
 

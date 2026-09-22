@@ -47,7 +47,6 @@ export type FounderEventType =
   // Day One arc — durable phase markers (no new table; the arc's moment is derived from these + engine state).
   | 'arc_source_added'       // Moment 1: a source the founder added (url in metadata) — the durable pour-in list
   | 'arc_pour_in_done'       // Moment 1 → 2: the founder clicked "Done adding — start"
-  | 'arc_reading_done'       // Moment 2 → 3: the founder gave their few words while BB read
   | 'arc_understanding_confirmed' // Moment 3 → 4: the founder confirmed what BB understood
   | 'arc_correction_reflected' // Moment 3: the substantive reply to the LATEST correction (persisted so it survives refresh)
   | 'arc_mirror_built'       // Moment 5: the mirror contrast (persisted so it's stable across refresh, no re-generation)
@@ -235,7 +234,6 @@ export async function readReturnSummary(db: KyselyDB, businessId: string, accoun
 
 export interface ArcFlags {
   readonly pourInDone: boolean;
-  readonly readingDone: boolean;
   readonly understandingConfirmed: boolean;
   readonly mirrorSeen: boolean;
   readonly emailExported: boolean;
@@ -252,15 +250,14 @@ const has = async (db: KyselyDB, businessId: string, accountId: string, type: st
 
 /** Read the arc's durable phase markers for this founder+business. Missing table / error → all false. */
 export async function readArcFlags(db: KyselyDB, businessId: string, accountId: string): Promise<ArcFlags> {
-  const [pourInDone, readingDone, understandingConfirmed, mirrorSeen, emailExported, containerSeen] = await Promise.all([
+  const [pourInDone, understandingConfirmed, mirrorSeen, emailExported, containerSeen] = await Promise.all([
     has(db, businessId, accountId, 'arc_pour_in_done'),
-    has(db, businessId, accountId, 'arc_reading_done'),
     has(db, businessId, accountId, 'arc_understanding_confirmed'),
     has(db, businessId, accountId, 'arc_mirror_seen'),
     has(db, businessId, accountId, 'arc_email_exported'),
     has(db, businessId, accountId, 'arc_container_seen'),
   ]);
-  return { pourInDone, readingDone, understandingConfirmed, mirrorSeen, emailExported, containerSeen };
+  return { pourInDone, understandingConfirmed, mirrorSeen, emailExported, containerSeen };
 }
 
 /** The durable pour-in source list — every url the founder added, in order, deduped. */

@@ -5,7 +5,7 @@ import { translate, isLocale, type Locale } from '../i18n/messages';
 import { parseOpenerTurn, type ArcOpener } from './parse-briefing';
 import {
   getArc, arcAddSource, arcAddLink, arcAddFile,
-  arcPourInDone, arcReading, arcConversation, arcConfirmUnderstanding, arcCorrectUnderstanding,
+  arcPourInDone, arcConversation, arcConfirmUnderstanding, arcCorrectUnderstanding,
   arcMirrorSeen, arcAdoptStrategy, arcChallengeStrategy, arcAdoptWeekDay, arcGenerateEmail,
   arcSaveEmail, arcExportEmail, arcContainerSeen, type ArcView,
 } from '../api/client';
@@ -190,12 +190,6 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
     }
     switch (view!.moment) {
       case 'pour_in': return <PourIn businessId={businessId} view={view!} busy={busy} onReload={load} onDone={() => act(() => arcPourInDone(businessId), 'arc.working.reading')} t={t} />;
-
-      case 'reading':
-        return (<>
-          <ArcMsg lines={[t('arc.reading')]} />
-          <ArcInput ph={t('arc.reading.ph')} onSend={(m) => arcReading(businessId, m)} cta={t('arc.reading.cta')} t={t} text={text} setText={setText} busy={busy} act={act} />
-        </>);
 
       case 'understanding': {
         const u = view!.understanding!;

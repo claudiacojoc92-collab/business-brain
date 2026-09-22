@@ -62,9 +62,6 @@ export class ArcService {
       case 'pour_in':
         return { ...base, sources, igConnected };
 
-      case 'reading':
-        return { ...base, turns: await this.deps.conversation.turns(businessId) };
-
       case 'understanding':
         return { ...base, understanding: this.projectUnderstanding(u, (await this.deps.aha1.latest(businessId))?.findings ?? []) };
 

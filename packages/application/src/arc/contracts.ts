@@ -7,20 +7,19 @@
  */
 
 export type ArcMoment =
-  | 'pour_in'        // 1 — add sources; persists until "Done adding — start"
-  | 'reading'        // 2 — "I'm reading… tell me a few words"
-  | 'understanding'  // 3 — "here's what I see"; confirm/correct
-  | 'conversation'   // 4 — the adaptive onboarding conversation (+ founder-self lanes)
-  | 'mirror'         // 5 — one contrast held in tension
-  | 'strategy'       // 6 — the bet + reconsider; adopt/challenge
-  | 'week_day'       // 7 — this week's moves + today's one move
-  | 'email'          // 8 — the first work item (a real email)
-  | 'container'      // 9 — offer the read-only "what I know" view
+  | 'pour_in'        // 1 — add sources; persists until "Done adding — start" (then a progress state while BB reads)
+  | 'understanding'  // 2 — "here's what I see"; confirm/correct (the FIRST thing shown after pour-in — no "describe
+                     //      your business" step: the bridge synthesizes during a loading state, not a founder input)
+  | 'conversation'   // 3 — the adaptive onboarding conversation (+ founder-self lanes), after understanding is confirmed
+  | 'mirror'         // 4 — one contrast held in tension
+  | 'strategy'       // 5 — the bet + reconsider; adopt/challenge
+  | 'week_day'       // 6 — this week's moves + today's one move
+  | 'email'          // 7 — the first work item (a real email)
+  | 'container'      // 8 — offer the read-only "what I know" view
   | 'done';          // arc complete → the normal home briefing takes over
 
 export interface ArcFlags {
   readonly pourInDone: boolean;
-  readonly readingDone: boolean;
   readonly understandingConfirmed: boolean;
   readonly mirrorSeen: boolean;
   readonly emailExported: boolean;

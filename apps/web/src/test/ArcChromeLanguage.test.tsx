@@ -12,7 +12,7 @@ vi.mock('react-router-dom', async (orig) => {
 });
 vi.mock('../api/client', () => ({
   getArc: vi.fn(), arcAddSource: vi.fn(), arcAddLink: vi.fn(), arcAddInstagram: vi.fn(), arcAddFile: vi.fn(),
-  getInstagramConnectUrl: vi.fn(), arcPourInDone: vi.fn(), arcReading: vi.fn(), arcConversation: vi.fn(),
+  getInstagramConnectUrl: vi.fn(), arcPourInDone: vi.fn(), arcConversation: vi.fn(),
   arcConfirmUnderstanding: vi.fn(), arcCorrectUnderstanding: vi.fn(), arcMirrorSeen: vi.fn(), arcAdoptStrategy: vi.fn(), arcChallengeStrategy: vi.fn(),
   arcAdoptWeekDay: vi.fn(), arcGenerateEmail: vi.fn(), arcSaveEmail: vi.fn(), arcExportEmail: vi.fn(), arcContainerSeen: vi.fn(),
 }));

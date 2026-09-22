@@ -17,7 +17,7 @@ vi.mock('react-router-dom', async (orig) => {
 });
 vi.mock('../api/client', () => ({
   getArc: vi.fn(), arcAddSource: vi.fn(), arcAddLink: vi.fn(), arcAddInstagram: vi.fn(), arcAddFile: vi.fn(),
-  getInstagramConnectUrl: vi.fn(), arcPourInDone: vi.fn(), arcReading: vi.fn(), arcConversation: vi.fn(),
+  getInstagramConnectUrl: vi.fn(), arcPourInDone: vi.fn(), arcConversation: vi.fn(),
   arcConfirmUnderstanding: vi.fn(), arcCorrectUnderstanding: vi.fn(), arcMirrorSeen: vi.fn(), arcAdoptStrategy: vi.fn(), arcChallengeStrategy: vi.fn(),
   arcAdoptWeekDay: vi.fn(), arcGenerateEmail: vi.fn(), arcSaveEmail: vi.fn(), arcExportEmail: vi.fn(), arcContainerSeen: vi.fn(),
 }));
@@ -31,7 +31,7 @@ const noTabs = () => { expect(document.querySelector('.s0-nav')).toBeNull(); exp
 beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
 
-describe('ArcSurface — one surface, nine moments', () => {
+describe('ArcSurface — one surface, eight moments', () => {
   it('Moment 1: each added source shows prominently IN its connector card (url + confirmation), survives refresh; Done; no tabs', async () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [{ url: 'www.bodymovestudio.ro', type: 'website', detail: '10 pages read' }, { url: 'brochure.pdf', type: 'pdf', detail: '4 pages read' }] }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
@@ -90,28 +90,33 @@ describe('ArcSurface — one surface, nine moments', () => {
     expect(api.arcAddFile).toHaveBeenCalledWith('b1', f2);
   });
 
-  it('Moment 2: reading asks for a few words', async () => {
-    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'reading', turns: [] }));
+  it('after pour-in there is NO "describe your business" step — the arc goes straight to understanding', async () => {
+    // The reading moment is removed: the flow is pour-in → (loading) → understanding, never a founder-input step
+    // that asks them to describe the business before BB shows what it read.
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: { does: 'X', serves: 'Y', standsOut: '', tensions: [], confident: [], inferring: [], unanswered: [] } }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
-    expect(await screen.findByText('arc.reading')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('arc.reading.ph')).toBeInTheDocument();
+    expect(await screen.findByText(/arc\.understanding\.title/)).toBeInTheDocument();
+    // no reading prompt anywhere
+    expect(screen.queryByText('arc.reading')).toBeNull();
+    expect(screen.queryByPlaceholderText('arc.reading.ph')).toBeNull();
   });
 
-  it('Moment 2: the bridge input keeps focus across keystrokes — the SAME node persists (no remount) [regression]', async () => {
+  it('an input keeps focus across keystrokes — the SAME node persists (no remount) [regression]', async () => {
     // Regression guard for the focus-loss bug: the input components must be hoisted OUT of ArcSurface, or each
-    // keystroke (setText → re-render) remounts the <textarea>, replacing the DOM node and dropping focus.
-    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'reading', turns: [] }));
+    // keystroke (setText → re-render) remounts the <textarea>, dropping focus. Exercised on the understanding
+    // correction input (the reading input it used to guard is gone).
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: { does: 'X', serves: 'Y', standsOut: '', tensions: [], confident: [], inferring: [], unanswered: [] } }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
-    const ta = await screen.findByPlaceholderText('arc.reading.ph') as HTMLTextAreaElement;
+    const ta = await screen.findByPlaceholderText('arc.understanding.ph') as HTMLTextAreaElement;
     ta.focus();
     expect(document.activeElement).toBe(ta);
     fireEvent.change(ta, { target: { value: 'H' } });
-    expect(screen.getByPlaceholderText('arc.reading.ph')).toBe(ta);   // identical DOM node — not remounted
-    expect(document.activeElement).toBe(ta);                          // focus retained after the first keystroke
+    expect(screen.getByPlaceholderText('arc.understanding.ph')).toBe(ta); // identical DOM node — not remounted
+    expect(document.activeElement).toBe(ta);
     fireEvent.change(ta, { target: { value: 'He' } });
     fireEvent.change(ta, { target: { value: 'Hel' } });
-    const still = screen.getByPlaceholderText('arc.reading.ph') as HTMLTextAreaElement;
-    expect(still).toBe(ta);                                            // still the same node after several keystrokes
+    const still = screen.getByPlaceholderText('arc.understanding.ph') as HTMLTextAreaElement;
+    expect(still).toBe(ta);
     expect(still.value).toBe('Hel');
     expect(document.activeElement).toBe(ta);
   });
@@ -262,7 +267,7 @@ describe('ArcSurface — one surface, nine moments', () => {
     fireEvent.click(await screen.findByText('home.empty.done'));
     // while the pour-in→understanding generation runs, the founder sees a reading-progress state, not a freeze
     expect(await screen.findByText('arc.working.reading')).toBeInTheDocument();
-    await act(async () => { resolveDone(v({ moment: 'reading' })); }); // flush the completion inside act
+    await act(async () => { resolveDone(v({ moment: 'understanding', understanding: { does: 'X', serves: 'Y', standsOut: '', tensions: [], confident: [], inferring: [], unanswered: [] } })); }); // flush the completion inside act
   });
 
   it('the working state escalates to "still working…" after ~12s', async () => {

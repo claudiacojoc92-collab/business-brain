@@ -467,7 +467,7 @@ export function getHomeBriefing(businessId: string): Promise<HomeBriefing> {
 }
 
 // ── Day One: the nine-moment arc ──
-export type ArcMoment = 'pour_in' | 'reading' | 'understanding' | 'conversation' | 'mirror' | 'strategy' | 'week_day' | 'email' | 'container' | 'done';
+export type ArcMoment = 'pour_in' | 'understanding' | 'conversation' | 'mirror' | 'strategy' | 'week_day' | 'email' | 'container' | 'done';
 export interface ArcTurn { id: string; role: 'founder' | 'bb'; content: string }
 export type ArcSourceType = 'website' | 'link' | 'pdf' | 'docx' | 'text' | 'instagram';
 /** The result of adding one pour-in source — light (no synthesis happens until "Done adding — start"). */
@@ -512,7 +512,6 @@ export async function arcAddFile(b: string, file: File): Promise<AddSourceResult
   return res.json() as Promise<AddSourceResult>;
 }
 export const arcPourInDone = (b: string): Promise<ArcView> => arcPost(b, 'pour-in/done');
-export const arcReading = (b: string, message: string): Promise<ArcView> => arcPost(b, 'reading', { message });
 export const arcConversation = (b: string, message: string): Promise<ArcView> => arcPost(b, 'conversation', { message });
 export const arcConfirmUnderstanding = (b: string): Promise<ArcView> => arcPost(b, 'understanding/confirm');
 export const arcCorrectUnderstanding = (b: string, message: string): Promise<ArcView> => arcPost(b, 'understanding/correct', { message }); // Moment 3 correction — held, deterministic, no model step

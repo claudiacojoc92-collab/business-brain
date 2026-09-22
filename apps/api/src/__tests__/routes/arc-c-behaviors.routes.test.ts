@@ -28,18 +28,7 @@ function buildServer(moment: string, extra: any = {}) {
   return { server, startOrResume, submitResponse, recordFounderInput };
 }
 
-describe('Category C — Moment 2 reading decoupled from the conversation engine', () => {
-  it('POST /arc/reading advances the phase WITHOUT running startOrResume/submitResponse', async () => {
-    const { server, startOrResume, submitResponse } = buildServer('understanding');
-    const res = await server.inject({ method: 'POST', url: '/v1/businesses/b1/arc/reading', payload: { message: 'a few words about us' } });
-    expect(res.statusCode).toBe(200);
-    expect(startOrResume).not.toHaveBeenCalled();  // does not seed the conversation
-    expect(submitResponse).not.toHaveBeenCalled(); // does not count toward the answer budget
-    await server.close();
-  });
-});
-
-describe('Category C — Moment 6 challenge regenerates + surfaces "changed because"', () => {
+describe('Moment 5 challenge regenerates + surfaces "changed because"', () => {
   it('POST /arc/strategy/challenge records the constraint and returns a strategyChange note', async () => {
     const { server, recordFounderInput } = buildServer('strategy');
     const res = await server.inject({ method: 'POST', url: '/v1/businesses/b1/arc/strategy/challenge', payload: { statement: 'we will not do paid ads' } });

@@ -234,17 +234,10 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
   flagRoute('email/export', 'arc_email_exported');          // Moment 8 → 9
   flagRoute('container/seen', 'arc_container_seen');        // Moment 9 → done
 
-  // ── Moment 2: a few words while BB reads. This is a RAPPORT gesture — it does NOT run the conversation engine
-  //    and does NOT count toward the Moment-4 answer budget (the real conversation begins fresh at Moment 4, and
-  //    its opener is generated lazily there). Previously it seeded the conversation session, which offset the
-  //    Moment-4 pacing and pre-created a session; now it only advances the phase. ──
-  server.post('/v1/businesses/:id/arc/reading', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { founderId, business, language } = await requireBusiness(request);
-    mark(founderId, business.id, 'arc_reading_done');
-    await reply.status(200).send(await viewFor(business.id, business.name, language, founderId));
-  });
+  // (No "reading" route: after pour-in/done the bridge synthesizes during a UI progress state and the arc lands
+  //  straight on 'understanding' — the founder is never asked to describe the business before BB shows what it read.)
 
-  // ── Moment 4: the conversation (reuses the conversation engine; advances to mirror when ready) ──
+  // ── Moment 3: the conversation (reuses the conversation engine; advances to mirror when ready) ──
   server.post('/v1/businesses/:id/arc/conversation', async (request: FastifyRequest, reply: FastifyReply) => {
     const { founderId, business, language } = await requireBusiness(request);
     const message = ((request.body as { message?: string })?.message ?? '').trim();
