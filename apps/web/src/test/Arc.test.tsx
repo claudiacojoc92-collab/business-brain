@@ -314,7 +314,8 @@ describe('ArcSurface — one surface, eight moments', () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'strategy', strategy: { bet: 'referrals', over: 'a general campaign', horizon: '6 months', tradeOffs: ['referrals ↔ paid ads · trust converts here'], notNow: ['paid social · no proof yet'], reconsider: ['if fewer than 2 of 8–10 show interest'], proposalId: 'ver1', adoptable: true } }));
     vi.mocked(api.arcAdoptStrategy).mockResolvedValue(v({ moment: 'week_day', weekDay: { week: [], today: null, canCreate: false } }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
-    expect(await screen.findByText('arc.strategy.bet:referrals,a general campaign')).toBeInTheDocument();
+    expect(await screen.findByText('arc.strategy.eyebrow')).toBeInTheDocument();
+    expect(screen.getByText('referrals')).toBeInTheDocument();
     expect(screen.getByText('if fewer than 2 of 8–10 show interest')).toBeInTheDocument();
     fireEvent.click(screen.getByText('arc.strategy.adopt →'));
     await waitFor(() => expect(api.arcAdoptStrategy).toHaveBeenCalledWith('b1', 'ver1'));

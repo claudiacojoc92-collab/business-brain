@@ -22,10 +22,6 @@ type T = (k: string, v?: Record<string, string>) => string;
 function ArcMsg({ lines }: { lines: string[] }) {
   return <div className="s0-strat-msg">{lines.filter(Boolean).map((l, i) => <p key={i} className="s0-strat-msg-line">{l}</p>)}</div>;
 }
-function ArcBullets({ k, items, t }: { k: string; items: string[]; t: T }) {
-  if (!items.length) return null;
-  return <div className="s0-arc-block"><div className="s0-arc-k">{t(k)}</div><ul className="s0-arc-list">{items.map((x, i) => <li key={i}>{x}</li>)}</ul></div>;
-}
 // A premium diagnosis CARD for the understanding moment — its own surface, a clay-accented label, and roomy
 // bullets. `kind` gives each card a distinct, intentional treatment: primary (the diagnosis core, clay bar),
 // evidence (warm/confident tint), inference (muted, hollow markers — "I could be wrong"), question (a dashed,
@@ -123,13 +119,16 @@ function ArcWorking({ t, messageKey }: { t: T; messageKey: string }) {
 // the invitation sits in the clay question card, and only when it's the current question.
 function ArcOpenerView({ opener, t, asQuestion }: { opener: ArcOpener; t: T; asQuestion: boolean }) {
   return (
-    <div className="s0-arc-briefing">
-      <div className="s0-strat-msg"><p className="s0-strat-msg-line">{opener.lead}</p></div>
-      {opener.bullets.length ? <ul className="s0-arc-list">{opener.bullets.map((b, i) => <li key={i}>{b}</li>)}</ul> : null}
-      {opener.notSure ? <p className="s0-arc-notsure">{opener.notSure}</p> : null}
+    <div className="s0-u">
+      <div className="s0-u-hero">
+        <div className="s0-u-hero-eyebrow">{t('arc.opener.eyebrow')}</div>
+        <p className="s0-u-hero-title">{opener.lead}</p>
+      </div>
+      {opener.bullets.length ? <UCard label={t('arc.opener.stands')} kind="primary" bullets={opener.bullets} /> : null}
+      {opener.notSure ? <UCard label={t('arc.opener.notsure')} kind="inference" bullets={[opener.notSure]} /> : null}
       {asQuestion
         ? <ArcQuestion text={opener.invitation} t={t} />
-        : <div className="s0-strat-msg"><p className="s0-strat-msg-line">{opener.invitation}</p></div>}
+        : <div className="s0-u-card"><p className="s0-u-card-lead">{opener.invitation}</p></div>}
     </div>
   );
 }
@@ -149,6 +148,11 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
   const [err, setErr] = useState<string | null>(null);
   const [ack, setAck] = useState<string | null>(null);
   const [work, setWork] = useState<string | null>(null); // the "BB is working…" message key while a model runs
+  // Back / History: the moments the founder has passed through (understanding onward), so they can re-read a
+  // previous moment READ-ONLY without undoing progress. viewIdx null = viewing the live (current) moment.
+  const [history, setHistory] = useState<ArcView[]>([]);
+  const [viewIdx, setViewIdx] = useState<number | null>(null);
+  const [histOpen, setHistOpen] = useState(false);
   const started = useRef(false);
 
   // Arc CHROME (labels, buttons, the question tag, provenance, error copy) follows the CONTENT language — the
@@ -157,7 +161,22 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
   const contentLocale: Locale = view && isLocale(view.contentLanguage) ? (view.contentLanguage as Locale) : (isLocale(locale) ? locale : 'en');
   const t: T = useCallback((key: string, vars?: Record<string, string>) => translate(contentLocale, key, vars), [contentLocale]);
 
-  const apply = useCallback((v: ArcView) => { if (v.moment === 'done') onDone(); else setView(v); }, [onDone]);
+  // Track the arc-content moments (understanding onward) in history so the founder can go back read-only. pour_in
+  // and reading-style transients are not tracked (nothing to re-read there). Same moment = refresh in place.
+  const apply = useCallback((v: ArcView) => {
+    if (v.moment === 'done') { onDone(); return; }
+    setView(v);
+    const TRACK = new Set(['understanding', 'conversation', 'mirror', 'strategy', 'week_day', 'email', 'container']);
+    if (TRACK.has(v.moment)) {
+      setHistory((h) => {
+        const last = h[h.length - 1];
+        if (!last) return [v];
+        if (last.moment === v.moment) return [...h.slice(0, -1), v];
+        return [...h, v];
+      });
+    }
+    setViewIdx(null); // snap to the live moment
+  }, [onDone]);
   const load = useCallback(async () => { apply(await getArc(businessId)); }, [businessId, apply]);
   useEffect(() => { if (started.current) return; started.current = true; void load(); }, [load]);
 
@@ -187,39 +206,69 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
   if (!view) return <div className="s0-strat"><ArcWorking t={t} messageKey="arc.working" /></div>;
   const weekday = new Date().toLocaleDateString(locale, { weekday: 'long' });
 
+  // Which view is on screen: the live one, or a past moment being re-read (read-only). Back/History never
+  // touch progress — they only change what is DISPLAYED.
+  const liveIdx = Math.max(0, history.length - 1);
+  const shownIdx = viewIdx ?? liveIdx;
+  const shown = history[shownIdx] ?? view;
+  const readOnly = viewIdx !== null && shownIdx < liveIdx;
+  const goBack = () => setViewIdx(Math.max(0, shownIdx - 1));
+  const goCurrent = () => setViewIdx(null);
+  const selectHist = (i: number) => { setViewIdx(i >= liveIdx ? null : i); setHistOpen(false); };
+
   return (
     <div className="s0-strat">
-      <div className="s0-strat-ctx">{view.businessName} · {weekday}</div>
-      {renderMoment()}
-      {/* While a model runs (a transition BB is thinking through), show progress — escalates to "still working…". */}
-      {work ? <ArcWorking t={t} messageKey={work} /> : null}
-      {ack ? <div className="s0-arc-ack" role="status">{ack}</div> : null}
-      {err ? <div className="s0-error" role="alert">{err}</div> : null}
+      <div className="s0-topline">
+        <div className="s0-strat-ctx">{shown.businessName} · {weekday}</div>
+        {history.length > 1 ? (
+          <div className="s0-topnav">
+            {shownIdx > 0 ? <button type="button" className="s0-navbtn" onClick={goBack}>← {t('arc.back')}</button> : null}
+            <button type="button" className="s0-navbtn" onClick={() => setHistOpen((o) => !o)} aria-expanded={histOpen}>{t('arc.history')}</button>
+          </div>
+        ) : null}
+      </div>
+      {histOpen ? (
+        <ul className="s0-histlist" role="list">
+          {history.map((h, i) => (
+            <li key={i}><button type="button" className={`s0-histitem${i === shownIdx ? ' is-current' : ''}`} onClick={() => selectHist(i)}>{t(`arc.moment.${h.moment}`)}</button></li>
+          ))}
+        </ul>
+      ) : null}
+      {readOnly ? (
+        <div className="s0-readonly-bar" role="status">
+          <span>{t('arc.readonly')}</span>
+          <button type="button" className="s0-navbtn" onClick={goCurrent}>{t('arc.tocurrent')} →</button>
+        </div>
+      ) : null}
+      {renderMoment(shown, readOnly)}
+      {/* live-only feedback: progress, ack, errors don't apply while re-reading a past moment */}
+      {!readOnly && work ? <ArcWorking t={t} messageKey={work} /> : null}
+      {!readOnly && ack ? <div className="s0-arc-ack" role="status">{ack}</div> : null}
+      {!readOnly && err ? <div className="s0-error" role="alert">{err}</div> : null}
     </div>
   );
 
-  function renderMoment() {
-    // A model generation for THIS moment failed (mirror / strategy / plan / opener). Show a per-moment error with
-    // a retry — never a whole-arc failure. (pour-in errors are handled inside the PourIn card, so it stays usable.)
-    if (view!.error?.kind === 'generation') {
+  // Render a moment's view. `ro` (read-only) = the founder is re-reading a past moment: show the content exactly
+  // as it was, but hide the interactive controls (buttons/inputs) so going back never advances anything.
+  function renderMoment(m: ArcView, ro: boolean) {
+    if (m.error?.kind === 'generation') {
       return (<>
         <ArcMsg lines={[t('arc.error.generation')]} />
-        <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={() => void load()}>{t('arc.error.retry')} →</button></div>
+        {!ro ? <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={() => void load()}>{t('arc.error.retry')} →</button></div> : null}
       </>);
     }
-    switch (view!.moment) {
-      case 'pour_in': return <PourIn businessId={businessId} view={view!} busy={busy} onReload={load} onDone={() => act(() => arcPourInDone(businessId), 'arc.working.reading')} t={t} />;
+    switch (m.moment) {
+      case 'pour_in': return <PourIn businessId={businessId} view={m} busy={busy} onReload={load} onDone={() => act(() => arcPourInDone(businessId), 'arc.working.reading')} t={t} />;
 
       case 'understanding': {
-        const u = view!.understanding!;
-        const cr = view!.correctionReflection;
+        const u = m.understanding!;
+        const cr = m.correctionReflection;
         const ctx = [u.does, u.serves].filter(Boolean).join(' · ');
         return (<>
-          {/* Premium diagnostic reading: a hero headline card + one card per diagnostic lane (design-only). */}
           <div className="s0-u">
             <div className="s0-u-hero">
               <div className="s0-u-hero-eyebrow">{t('arc.understanding.eyebrow')}</div>
-              <p className="s0-u-hero-title">{t('arc.understanding.title', { name: view!.businessName })}</p>
+              <p className="s0-u-hero-title">{t('arc.understanding.title', { name: m.businessName })}</p>
               {ctx ? <p className="s0-u-hero-sub">{ctx}</p> : null}
             </div>
             <UCard label={t('arc.understanding.standsout')} kind="primary" paragraph={u.standsOut} />
@@ -236,88 +285,96 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
             </div>
             {cr.ask ? <ArcQuestion text={cr.ask} t={t} /> : null}
           </>) : null}
-          <div className="s0-strat-actions">
-            <button type="button" className="s0-btn" disabled={busy} onClick={() => act(() => arcConfirmUnderstanding(businessId), 'arc.working.mirror')}>{t('arc.understanding.confirm')} →</button>
-          </div>
-          <ArcInput ph={t('arc.understanding.ph')} onSend={(m) => arcCorrectUnderstanding(businessId, m)} t={t} text={text} setText={setText} busy={busy} act={act} />
+          {!ro ? (<>
+            <div className="s0-strat-actions">
+              <button type="button" className="s0-btn" disabled={busy} onClick={() => act(() => arcConfirmUnderstanding(businessId), 'arc.working.mirror')}>{t('arc.understanding.confirm')} →</button>
+            </div>
+            <ArcInput ph={t('arc.understanding.ph')} onSend={(msg) => arcCorrectUnderstanding(businessId, msg)} t={t} text={text} setText={setText} busy={busy} act={act} />
+          </>) : null}
         </>);
       }
 
       case 'conversation': {
-        const turns = view!.turns ?? [];
-        // The opener is the model-generated RECAP, created server-side on view (lazy startOrResume) and returned
-        // as the first turn — never a static placeholder. If it isn't here yet (a brief transient), show a quiet
-        // thinking state, not a generic question, until the real recap arrives.
+        const turns = m.turns ?? [];
         if (turns.length === 0) {
           return <div className="s0-arc-thinking" role="status" aria-live="polite">{t('arc.conversation.preparing')}</div>;
         }
-        // The whole exchange is a visible thread. The opener turn renders as a short structured pointer (handled
-        // inside ArcThread via parseOpenerTurn); the current question is the clay card. No prose parsing.
         return (<>
           <ArcThread turns={turns} t={t} />
-          <ArcInput ph={t('arc.conversation.ph')} onSend={(m) => arcConversation(businessId, m)} t={t} text={text} setText={setText} busy={busy} act={act} workingKey="arc.working.thinking" />
+          {!ro ? <ArcInput ph={t('arc.conversation.ph')} onSend={(msg) => arcConversation(businessId, msg)} t={t} text={text} setText={setText} busy={busy} act={act} workingKey="arc.working.thinking" /> : null}
         </>);
       }
 
       case 'mirror': {
-        const m = view!.mirror;
-        if (!m) return (<>
-          <ArcMsg lines={[t('arc.mirror.none')]} />
-          <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={() => act(() => arcMirrorSeen(businessId), 'arc.working.strategy')}>{t('arc.continue')} →</button></div>
+        const mm = m.mirror;
+        if (!mm) return (<>
+          <div className="s0-u"><div className="s0-u-hero"><div className="s0-u-hero-eyebrow">{t('arc.mirror.eyebrow')}</div><p className="s0-u-hero-title">{t('arc.mirror.none')}</p></div></div>
+          {!ro ? <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={() => act(() => arcMirrorSeen(businessId), 'arc.working.strategy')}>{t('arc.continue')} →</button></div> : null}
         </>);
         return (<>
-          <ArcMsg lines={[t('arc.mirror.intro')]} />
-          <div className="s0-mirror-card">
-            <p className="s0-mirror-said"><span className="s0-mirror-side-tag">{t('arc.mirror.yousaid')}</span> {m.founderWords}</p>
-            <p className="s0-mirror-against"><span className="s0-mirror-side-tag">{t('arc.mirror.isaw')}</span> {m.against}</p>
-            <p className="s0-mirror-tension">{m.tension}</p>
+          <div className="s0-u">
+            <div className="s0-u-hero"><div className="s0-u-hero-eyebrow">{t('arc.mirror.eyebrow')}</div><p className="s0-u-hero-title">{t('arc.mirror.intro')}</p></div>
+            <div className="s0-u-card s0-u-card--primary"><div className="s0-u-card-label"><span className="s0-u-ic" aria-hidden="true">“</span>{t('arc.mirror.yousaid')}</div><p className="s0-u-card-lead">{mm.founderWords}</p></div>
+            <div className="s0-u-card s0-u-card--evidence"><div className="s0-u-card-label"><span className="s0-u-ic" aria-hidden="true">✓</span>{t('arc.mirror.isaw')}</div><p className="s0-u-card-lead">{mm.against}</p></div>
+            <div className="s0-u-card s0-u-card--inference"><div className="s0-u-card-label"><span className="s0-u-ic" aria-hidden="true">~</span>{t('arc.mirror.tension')}</div><p className="s0-u-card-lead">{mm.tension}</p></div>
+            {!ro ? <ArcQuestion text={t('arc.mirror.which')} t={t} /> : null}
           </div>
-          <ArcQuestion text={t('arc.mirror.which')} t={t} />
-          <ArcInput ph={t('arc.mirror.ph')} onSend={(ans) => arcMirrorSeen(businessId, ans)} cta={t('arc.send')} t={t} text={text} setText={setText} busy={busy} act={act} workingKey="arc.working.strategy" />
-          <div className="s0-strat-actions"><button type="button" className="s0-linkbtn" disabled={busy} onClick={() => act(() => arcMirrorSeen(businessId), 'arc.working.strategy')}>{t('arc.mirror.skip')}</button></div>
+          {!ro ? (<>
+            <ArcInput ph={t('arc.mirror.ph')} onSend={(ans) => arcMirrorSeen(businessId, ans)} cta={t('arc.send')} t={t} text={text} setText={setText} busy={busy} act={act} workingKey="arc.working.strategy" />
+            <div className="s0-strat-actions"><button type="button" className="s0-linkbtn" disabled={busy} onClick={() => act(() => arcMirrorSeen(businessId), 'arc.working.strategy')}>{t('arc.mirror.skip')}</button></div>
+          </>) : null}
         </>);
       }
 
       case 'strategy': {
-        const s = view!.strategy!;
+        const s = m.strategy!;
         return (<>
-          {/* after a challenge: the bet was regenerated — say so, then show the updated bet below */}
-          {view!.strategyChange ? <div className="s0-arc-ack" role="status">{t('arc.strategy.changed', { because: view!.strategyChange.because })}</div> : null}
-          <ArcMsg lines={[t('arc.strategy.intro'), t('arc.strategy.bet', { bet: s.bet, over: s.over }), s.horizon ? t('arc.strategy.horizon', { horizon: s.horizon }) : '']} />
-          <ArcBullets k="arc.strategy.tradeoffs" items={s.tradeOffs} t={t} />
-          <ArcBullets k="arc.strategy.notnow" items={s.notNow} t={t} />
-          <ArcBullets k="arc.strategy.reconsider" items={s.reconsider} t={t} />
-          <div className="s0-strat-actions">
-            <button type="button" className="s0-btn" disabled={busy || !s.adoptable || !s.proposalId} onClick={() => s.proposalId && act(() => arcAdoptStrategy(businessId, s.proposalId!), 'arc.working.plan')}>{t('arc.strategy.adopt')} →</button>
-            <button type="button" className="s0-btn-ghost" disabled={busy} onClick={() => navigate(`/b/${businessId}/strategy`)}>{t('arc.showwhy')}</button>
+          {!ro && m.strategyChange ? <div className="s0-arc-ack" role="status">{t('arc.strategy.changed', { because: m.strategyChange.because })}</div> : null}
+          <div className="s0-u">
+            <div className="s0-u-hero">
+              <div className="s0-u-hero-eyebrow">{t('arc.strategy.eyebrow')}</div>
+              <p className="s0-u-hero-title">{s.bet}</p>
+              {s.over || s.horizon ? <p className="s0-u-hero-sub">{[s.over ? t('arc.strategy.over', { over: s.over }) : '', s.horizon ? t('arc.strategy.horizon', { horizon: s.horizon }) : ''].filter(Boolean).join(' · ')}</p> : null}
+            </div>
+            <UCard label={t('arc.strategy.tradeoffs')} kind="primary" bullets={s.tradeOffs} />
+            <UCard label={t('arc.strategy.notnow')} kind="inference" bullets={s.notNow} />
+            <UCard label={t('arc.strategy.reconsider')} kind="evidence" bullets={s.reconsider} />
           </div>
-          <ArcInput ph={t('arc.strategy.ph')} onSend={(m) => arcChallengeStrategy(businessId, m)} cta={t('arc.strategy.challenge')} t={t} text={text} setText={setText} busy={busy} act={act} />
+          {!ro ? (<>
+            <div className="s0-strat-actions">
+              <button type="button" className="s0-btn" disabled={busy || !s.adoptable || !s.proposalId} onClick={() => s.proposalId && act(() => arcAdoptStrategy(businessId, s.proposalId!), 'arc.working.plan')}>{t('arc.strategy.adopt')} →</button>
+              <button type="button" className="s0-btn-ghost" disabled={busy} onClick={() => navigate(`/b/${businessId}/strategy`)}>{t('arc.showwhy')}</button>
+            </div>
+            <ArcInput ph={t('arc.strategy.ph')} onSend={(msg) => arcChallengeStrategy(businessId, msg)} cta={t('arc.strategy.challenge')} t={t} text={text} setText={setText} busy={busy} act={act} />
+          </>) : null}
         </>);
       }
 
       case 'week_day': {
-        const w = view!.weekDay!;
+        const w = m.weekDay!;
         return (<>
-          <ArcMsg lines={[t('arc.week.intro')]} />
-          <ArcBullets k="arc.week.week" items={w.week} t={t} />
-          {w.today ? <div className="s0-arc-block"><div className="s0-arc-k">{t('arc.week.today')}</div><p className="s0-strat-msg-line">{w.today}</p></div> : null}
-          <div className="s0-strat-actions">
-            <button type="button" className="s0-btn" disabled={busy} onClick={() => act(async () => {
-              // Only draft the email AFTER the plan is confirmed accepted (moment advanced to 'email'); otherwise the
-              // email would be generated but never shown (the moment would stay 'week_day').
-              const after = await arcAdoptWeekDay(businessId);
-              if (after.moment === 'email') await arcGenerateEmail(businessId);
-              return getArc(businessId);
-            })}>{t('arc.week.draft')} →</button>
-            <button type="button" className="s0-btn-ghost" disabled={busy} onClick={() => act(() => arcAdoptWeekDay(businessId))}>{t('arc.week.writefirst')}</button>
+          <div className="s0-u">
+            <div className="s0-u-hero"><div className="s0-u-hero-eyebrow">{t('arc.week.eyebrow')}</div><p className="s0-u-hero-title">{t('arc.week.intro')}</p></div>
+            <UCard label={t('arc.week.week')} kind="primary" bullets={w.week} />
+            {w.today ? <UCard label={t('arc.week.today')} kind="evidence" paragraph={w.today} /> : null}
           </div>
+          {!ro ? (
+            <div className="s0-strat-actions">
+              <button type="button" className="s0-btn" disabled={busy} onClick={() => act(async () => {
+                const after = await arcAdoptWeekDay(businessId);
+                if (after.moment === 'email') await arcGenerateEmail(businessId);
+                return getArc(businessId);
+              }, 'arc.working.email')}>{t('arc.week.draft')} →</button>
+              <button type="button" className="s0-btn-ghost" disabled={busy} onClick={() => act(() => arcAdoptWeekDay(businessId))}>{t('arc.week.writefirst')}</button>
+            </div>
+          ) : null}
         </>);
       }
 
-      case 'email': return <EmailMoment businessId={businessId} view={view!} busy={busy} onAct={act} t={t} />;
+      case 'email': return <EmailMoment businessId={businessId} view={m} busy={busy} readOnly={ro} onAct={act} t={t} />;
 
       case 'container':
-        return <ContainerMoment businessId={businessId} view={view!} busy={busy} onSeen={() => act(() => arcContainerSeen(businessId))} t={t} />;
+        return <ContainerMoment businessId={businessId} view={m} busy={busy} readOnly={ro} onSeen={() => act(() => arcContainerSeen(businessId))} t={t} />;
 
       default: return null;
     }
@@ -454,8 +511,8 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
   );
 }
 
-// ── Moment 8: the email — editable, exportable (copy), regenerate ──
-function EmailMoment({ businessId, view, busy, onAct, t }: { businessId: string; view: ArcView; busy: boolean; onAct: (run: () => Promise<ArcView>) => Promise<void>; t: T }) {
+// ── Moment 8 (email) — the first work item, in the shared card language: a hero + an editable email card. ──
+function EmailMoment({ businessId, view, busy, readOnly, onAct, t }: { businessId: string; view: ArcView; busy: boolean; readOnly?: boolean; onAct: (run: () => Promise<ArcView>) => Promise<void>; t: T }) {
   const [subject, setSubject] = useState(view.email?.subject ?? '');
   const [body, setBody] = useState(view.email?.body ?? '');
   const [copied, setCopied] = useState(false);
@@ -469,27 +526,34 @@ function EmailMoment({ businessId, view, busy, onAct, t }: { businessId: string;
 
   return (
     <>
-      <div className="s0-strat-msg"><p className="s0-strat-msg-line">{t('arc.email.intro')}</p></div>
-      <div className="s0-arc-email">
-        <input className="s0-arc-email-subject" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder={t('arc.email.subject')} aria-label={t('arc.email.subject')} />
-        <textarea className="s0-arc-email-body" value={body} onChange={(e) => setBody(e.target.value)} rows={10} aria-label={t('arc.email.body')} />
+      <div className="s0-u">
+        <div className="s0-u-hero"><div className="s0-u-hero-eyebrow">{t('arc.email.eyebrow')}</div><p className="s0-u-hero-title">{t('arc.email.intro')}</p></div>
+        <div className="s0-u-card s0-u-card--primary">
+          <div className="s0-u-card-label"><span className="s0-u-ic" aria-hidden="true">✉</span>{t('arc.email.card')}</div>
+          <div className="s0-arc-email">
+            <input className="s0-arc-email-subject" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder={t('arc.email.subject')} aria-label={t('arc.email.subject')} readOnly={readOnly} />
+            <textarea className="s0-arc-email-body" value={body} onChange={(e) => setBody(e.target.value)} rows={10} aria-label={t('arc.email.body')} readOnly={readOnly} />
+          </div>
+        </div>
       </div>
       {copied ? <p className="s0-arc-copied">{t('arc.email.copied')}</p> : null}
-      <div className="s0-strat-actions">
-        <button type="button" className="s0-btn" disabled={busy || !subject.trim() || !body.trim()} onClick={exportEmail}>{t('arc.email.export')} →</button>
-        <button type="button" className="s0-btn-ghost" disabled={busy} onClick={() => onAct(async () => { const r = await arcGenerateEmail(businessId); setSubject(r.email.subject); setBody(r.email.body); return getArc(businessId); })}>{t('arc.email.revise')}</button>
-      </div>
+      {!readOnly ? (
+        <div className="s0-strat-actions">
+          <button type="button" className="s0-btn" disabled={busy || !subject.trim() || !body.trim()} onClick={exportEmail}>{t('arc.email.export')} →</button>
+          <button type="button" className="s0-btn-ghost" disabled={busy} onClick={() => onAct(async () => { const r = await arcGenerateEmail(businessId); setSubject(r.email.subject); setBody(r.email.body); return getArc(businessId); })}>{t('arc.email.revise')}</button>
+        </div>
+      ) : null}
     </>
   );
 }
 
-// ── Moment 9: the container offer + read-only view ──
-function ContainerMoment({ view, busy, onSeen, t }: { businessId: string; view: ArcView; busy: boolean; onSeen: () => void; t: T }) {
+// ── Moment 9 (container) — the read-only "what I know" view, in the shared card language. ──
+function ContainerMoment({ view, busy, readOnly, onSeen, t }: { businessId: string; view: ArcView; busy: boolean; readOnly?: boolean; onSeen: () => void; t: T }) {
   const [open, setOpen] = useState(false);
   const items = view.container?.items ?? [];
-  if (!open) {
+  if (!open && !readOnly) {
     return (<>
-      <div className="s0-strat-msg"><p className="s0-strat-msg-line">{t('arc.container.offer')}</p></div>
+      <div className="s0-u"><div className="s0-u-hero"><div className="s0-u-hero-eyebrow">{t('arc.container.eyebrow')}</div><p className="s0-u-hero-title">{t('arc.container.offer')}</p></div></div>
       <div className="s0-strat-actions">
         <button type="button" className="s0-btn" disabled={busy} onClick={() => setOpen(true)}>{t('arc.container.show')} →</button>
         <button type="button" className="s0-btn-ghost" disabled={busy} onClick={onSeen}>{t('arc.container.notnow')}</button>
@@ -497,12 +561,16 @@ function ContainerMoment({ view, busy, onSeen, t }: { businessId: string; view: 
     </>);
   }
   return (<>
-    <div className="s0-strat-msg"><p className="s0-strat-msg-line">{t('arc.container.title', { name: view.businessName })}</p></div>
-    <ul className="s0-arc-container">
-      {items.map((it, i) => (
-        <li key={i}><span className="s0-arc-container-label">{it.label}</span><span className="s0-arc-container-stmt">{it.statement}</span><span className={`s0-arc-prov s0-arc-prov-${it.provenance}`}>{t(`arc.prov.${it.provenance}`)}</span></li>
-      ))}
-    </ul>
-    <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={onSeen}>{t('arc.container.done')} →</button></div>
+    <div className="s0-u">
+      <div className="s0-u-hero"><div className="s0-u-hero-eyebrow">{t('arc.container.eyebrow')}</div><p className="s0-u-hero-title">{t('arc.container.title', { name: view.businessName })}</p></div>
+      <div className="s0-u-card">
+        <ul className="s0-arc-container">
+          {items.map((it, i) => (
+            <li key={i}><span className="s0-arc-container-label">{it.label}</span><span className="s0-arc-container-stmt">{it.statement}</span><span className={`s0-arc-prov s0-arc-prov-${it.provenance}`}>{t(`arc.prov.${it.provenance}`)}</span></li>
+          ))}
+        </ul>
+      </div>
+    </div>
+    {!readOnly ? <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={onSeen}>{t('arc.container.done')} →</button></div> : null}
   </>);
 }
