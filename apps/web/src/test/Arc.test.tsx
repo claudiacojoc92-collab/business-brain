@@ -238,8 +238,10 @@ describe('ArcSurface — one surface, eight moments', () => {
     expect(await screen.findByText(/here's what stands out/i)).toBeInTheDocument();
     expect(screen.getByText(/Medical brochure: purely clinical/i).tagName).toBe('LI');
     expect(screen.getByText(/I'm not sure what blocks/i)).toBeInTheDocument();
-    // ONLY the invitation is in the clay question card — not the lead or bullets
-    expect(screen.getByText('What is missing? What did I get wrong?').closest('.s0-arc-question')).toBeTruthy();
+    // The closing question is the FIXED strategist sign-off (i18n key), alone in the clay card — NOT the model's
+    // per-run invitation text, so the "what did I get wrong?" framing can never leak back in.
+    expect(screen.getByText('arc.opener.invitation').closest('.s0-arc-question')).toBeTruthy();
+    expect(screen.queryByText('What is missing? What did I get wrong?')).toBeNull();
     expect(screen.getByText(/Medical brochure: purely clinical/i).closest('.s0-arc-question')).toBeNull();
     expect(screen.getByText('arc.question.label')).toBeInTheDocument();
   });

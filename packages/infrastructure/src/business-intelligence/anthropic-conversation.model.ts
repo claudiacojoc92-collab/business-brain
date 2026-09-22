@@ -137,7 +137,11 @@ function systemPrompt(lang: string): string {
     '      sources but SPEAK ABOUT THE BUSINESS; every bullet must answer "so what does this mean for the business?".',
     '    • opener.notSure: ONE line — the sharpest BUSINESS question the sources cannot answer (or null), never a',
     '      technical gap.',
-    '    • opener.invitation: the closing question — "What is missing? What did I get wrong?" (in the source language).',
+    '    • opener.invitation: the closing question — SHORT (≤10 words), in a confident STRATEGIST voice, e.g. "This is',
+    '      what I see. What should I know?". NEVER imply YOU got something wrong or ask the founder to "correct" you',
+    '      ("what did I get wrong?", "what is missing from my reading?"), and do NOT explain why they have context —',
+    '      they know. You are an expert stating what you see and asking for input, not a tool asking to be fixed.',
+    '      (in the source language).',
     '  Every field in ONE language = the source language. If there are genuinely no sources, set opener to null and',
     '  instead ask ONE grounded question from Aha 1 in nextQuestion.',
   ].join('\n');

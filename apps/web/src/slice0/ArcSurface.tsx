@@ -126,9 +126,11 @@ function ArcOpenerView({ opener, t, asQuestion }: { opener: ArcOpener; t: T; asQ
       </div>
       {opener.bullets.length ? <UCard label={t('arc.opener.stands')} kind="primary" bullets={opener.bullets} /> : null}
       {opener.notSure ? <UCard label={t('arc.opener.notsure')} kind="inference" bullets={[opener.notSure]} /> : null}
+      {/* The closing question is a FIXED strategist sign-off (not the model's per-run text): "here's what I see,
+          you have context the sources can't" — never "what did I get wrong?". Framing must never regress. */}
       {asQuestion
-        ? <ArcQuestion text={opener.invitation} t={t} />
-        : <div className="s0-u-card"><p className="s0-u-card-lead">{opener.invitation}</p></div>}
+        ? <ArcQuestion text={t('arc.opener.invitation')} t={t} />
+        : <div className="s0-u-card"><p className="s0-u-card-lead">{t('arc.opener.invitation')}</p></div>}
     </div>
   );
 }
