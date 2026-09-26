@@ -41,3 +41,7 @@ Thumbs.db
 
 # Redis local dump artifact
 dump.rdb
+
+# PII / local-only (added for safety)
+database/seeds/*prod*.sql
+docker-compose.override.yml
