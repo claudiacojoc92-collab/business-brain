@@ -71,6 +71,7 @@ export {
 export { PgVoiceRepository } from './database/repositories/pg-voice.repository';
 export { PgPlanRepository } from './database/repositories/pg-plan.repository';
 export { PgCarouselRepository } from './database/repositories/pg-carousel.repository';
+export { PgProofRepository } from './database/repositories/pg-proof.repository';
 export { PgPhotoLedRepository } from './database/repositories/pg-photoled.repository';
 export { ResvgCarouselRenderer } from './render/resvg-carousel.renderer';
 export { FsBlobStore } from './storage/fs-blob-store';
@@ -195,6 +196,7 @@ export { AnthropicStrategyModel } from './business-intelligence/anthropic-strate
 export { AnthropicVoiceModel } from './business-intelligence/anthropic-voice.model';
 export { AnthropicPlanModel, PLAN_SYSTEM } from './business-intelligence/anthropic-plan.model';
 export { AnthropicCarouselModel } from './business-intelligence/anthropic-carousel.model';
+export { AnthropicProofModel } from './business-intelligence/anthropic-proof.model';
 export { AnthropicObservationModel, AnthropicOpportunityModel } from './business-intelligence/anthropic-photoled.model';
 export { AnthropicVideoObservationModel, AnthropicReelOpportunityModel } from './business-intelligence/anthropic-reel.model';
 export { AnthropicConceptPlanModel } from './business-intelligence/anthropic-shoot.model';

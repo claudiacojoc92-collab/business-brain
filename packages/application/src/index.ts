@@ -52,6 +52,7 @@ export * from './business-understanding/index';
 
 // Slice 2 — "BB understood me": founder conversation + founder model + Aha 2
 export * from './conversation/index';
+export * from './proof/index';
 
 // Slice 3 — "BB gave me a real strategy": Strategy Candidate → Proposal → Current
 export * from './strategy/index';

@@ -57,6 +57,18 @@ export class PgEvidenceRepository implements IEvidenceRepository {
     return rows.map((r) => this.toDomain(r));
   }
 
+  async findByIds(ids: string[], tx?: unknown): Promise<EvidenceFragment[]> {
+    if (!ids.length) return [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = (tx ?? this.db) as any;
+    const rows = (await db
+      .selectFrom('evidence.fragments')
+      .selectAll()
+      .where('id', 'in', ids)
+      .execute()) as unknown[];
+    return rows.map((r) => this.toDomain(r));
+  }
+
   async findObserved(founderId: string, source?: string, tx?: unknown): Promise<EvidenceFragment[]> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = (tx ?? this.db) as any;
