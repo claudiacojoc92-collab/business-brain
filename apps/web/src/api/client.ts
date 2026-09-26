@@ -647,9 +647,10 @@ export function createFromConcept(businessId: string, input: { objective: string
 // ── Slice 6: carousel asset creation (image carousel 1080×1350) ──
 export interface CarouselSlideView { slideId: string; order: number; role: string; imageUrl: string | null; canRevise: boolean; headline: string; body: string; cta: string }
 export type CarouselView =
-  | { state: 'ready'; assetId: string; versionId: string; versionNumber: number; direction: string; ready: boolean; slides: CarouselSlideView[]; exportUrl: string | null }
+  | { state: 'ready'; assetId: string; versionId: string; versionNumber: number; direction: string; ready: boolean; slides: CarouselSlideView[]; exportUrl: string | null; angleNote?: string }
   | { state: 'unavailable_format'; requested: string }
   | { state: 'no_strategy' } | { state: 'insufficient' } | { state: 'not_different' }
+  | { state: 'needs_evidence'; requests: { claim: string; ask: string }[] }
   | { state: 'revision_rejected'; reasons: string[] };
 const CR = (b: string) => `v1/businesses/${encodeURIComponent(b)}/carousel`;
 export function generateCarousel(businessId: string, createHandoffId: string): Promise<CarouselView> {

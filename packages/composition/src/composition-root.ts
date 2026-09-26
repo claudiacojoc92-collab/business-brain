@@ -15,6 +15,8 @@ import {
   PgFounderAccountRepository,
   PgEvidenceRepository,
   PgBusinessEvidenceLinkRepository,
+  PgProofRepository,
+  AnthropicProofModel,
   PgDiscoveredProfileRepository,
   PgUnderstandingSnapshotRepository,
   PgAhaRepository,
@@ -93,6 +95,7 @@ import {
   LearnBusinessService,
   ConversationService,
   BoundSourceReader,
+  ProofExtractionService,
   BusinessCorrectionService,
   Aha2Service,
   StrategyService,
@@ -480,6 +483,17 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
 
   // ── Slice 6: carousel (CreateHandoff → governed asset-level copy → deterministic render → export) ──
   const carouselRepo = new PgCarouselRepository(db);
+  // Part 1 — proof extraction: documented proof on ingested sources → licensable proofFacts (durable provenance
+  // in V080). Feeds the authority set; the claim gate is unchanged. Cached by bound-source fingerprint.
+  const proofExtractionService = new ProofExtractionService({
+    links: new PgBusinessEvidenceLinkRepository(db),
+    evidence: new PgEvidenceRepository(db),
+    model: new AnthropicProofModel(anthropicKey),
+    repo: new PgProofRepository(db),
+    modelId: process.env['LLM_STRONG_MODEL'] ?? undefined,
+    // eslint-disable-next-line no-console
+    log: (e) => console.error('[proof]', JSON.stringify(e)),
+  });
   // Carousel governance context — reused by both the carousel service (claim authority) and the Slice-6.1
   // photo-led recommender (strategy conditioning). Photos NEVER add to this; claim authority stays here.
   const carouselContext = async (bid: string) => {
@@ -487,7 +501,22 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
       if (!cur) return null;
       const c = cur.record.bundle.core; const br = cur.record.bundle.branch;
       const active = await founderStateRepo.listActive(bid);
-      const proofFacts = active.filter((s) => s.kind === 'resource').map((s) => s.statement.trim()).filter(Boolean);
+      const founderProofFacts = active.filter((s) => s.kind === 'resource').map((s) => s.statement.trim()).filter(Boolean);
+      // Part 1: documented proof extracted from the ingested sources (attributed testimonials, credentials, awards,
+      // checkable facts, named case studies, externally-sourced figures), each wrapped as reported speech and
+      // carrying durable provenance in V080. Self-published performance figures are excluded (unsourced_claim).
+      let extractedProofFacts: string[] = [];
+      let extractedProofKinds: string[] = [];
+      try {
+        const nameRow = await (db as unknown as { selectFrom: (t: string) => { select: (c: string) => { where: (a: string, o: string, v: string) => { executeTakeFirst: () => Promise<{ name?: string } | undefined> } } } })
+          .selectFrom('workspace.businesses').select('name').where('id', '=', bid).executeTakeFirst();
+        const extracted = await proofExtractionService.facts(bid, nameRow?.name ?? '');
+        extractedProofFacts = extracted.map((f) => f.licensedText);
+        extractedProofKinds = extracted.map((f) => f.kind);
+      } catch { /* proof extraction is additive; never block carousel context on it */ }
+      const proofFacts = [...founderProofFacts, ...extractedProofFacts];
+      // Decision 2: claim-KIND per proofFact (aligned by index) so the angle gate classifies claim types precisely.
+      const proofKinds = [...founderProofFacts.map(() => 'founder_stated'), ...extractedProofKinds];
       const founderProps = active.filter((s) => s.kind !== 'business_correction' && s.kind !== 'resource').map((s) => s.statement.trim()).filter(Boolean);
       // M5.5 — active founder business CORRECTIONS are founder-authoritative world FACTS (e.g. "we offer one
       // fixed-price starter audit"). They must be licensable so the carousel can state them, exactly as M3.5
@@ -507,7 +536,7 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
       return {
         strategyVersionId: cur.record.id, language: 'en', goal: c.goal, coreBet: c.coreBet.priority,
         audience: c.audiencePrimaryForGoal, ctaDirection: br.ctaDirection,
-        licensedPropositions, proofFacts, ownedStances: founderProps, sourceRefs: mediaPool,
+        licensedPropositions, proofFacts, proofKinds, ownedStances: founderProps, sourceRefs: mediaPool,
         brand, voiceLines, speakingRole: 'the founder',
       };
   };

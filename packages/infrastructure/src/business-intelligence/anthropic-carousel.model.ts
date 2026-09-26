@@ -169,9 +169,16 @@ const CLOSURE_SYSTEM = [
 ].join('\n');
 
 function conceptUser(brief: CarouselBrief, snap: AssetAuthorizationSnapshot): string {
+  // OPTION C: once the angle has been adapted (adaptedFrom set), the copy model must serve the CHOSEN angle
+  // (communicationJob), NOT the intended bet — showing the bet/goal here is exactly what made the model invent
+  // referral/outcome claims the material cannot license. Suppress them for the copy prompt; the persisted brief
+  // still carries strategicBetTrace/founderGoalTrace/strategyVersionId (traceability unchanged).
+  const reangled = Boolean(brief.adaptedFrom);
   return [
     `COMMUNICATION JOB: ${brief.communicationJob}`,
-    `STRATEGY BET: ${brief.strategicBetTrace}`, `FOUNDER GOAL: ${brief.founderGoalTrace}`,
+    ...(reangled
+      ? ['(Write ONLY to the communication job above, from the authorized facts. Do NOT tell a different strategic story or add results/outcomes/social-proof the authorized material does not contain.)']
+      : [`STRATEGY BET: ${brief.strategicBetTrace}`, `FOUNDER GOAL: ${brief.founderGoalTrace}`]),
     `AUDIENCE / USE CONTEXT: ${brief.audienceUseContext}`, `CTA DIRECTION: ${brief.ctaDirection}`,
     '', 'AUTHORIZED PROPOSITIONS:', ...(snap.licensedPropositions.length ? snap.licensedPropositions.map((p) => `- [${p.ref}] ${p.text}`) : ['- (none)']),
     '', 'DOCUMENTED PROOF FACTS (cite faithfully, never as a forward promise):', ...(snap.proofFacts.length ? snap.proofFacts.map((p) => `- ${p}`) : ['- (none)']),
@@ -226,6 +233,12 @@ export class AnthropicCarouselModel implements ICarouselModelPort {
       '', 'CONCEPT (write to this exact ordered structure):', concept.slideOutline.map((r, i) => `s${i + 1}: ${r}`).join(' → '),
       '', 'VOICE (rhythm/register to match — not a claim source):', ...(voiceLines.length ? voiceLines.map((l) => `- ${l}`) : ['- (neutral, plain, concrete)']),
       `LANGUAGE: ${brief.language}`,
+      ...(input.copyBudget ? ['', 'LENGTH BUDGET (hard character limits per block — these are TARGETS to write WITHIN, not quotas to fill; shorter is better, and copy over a limit will not fit the slide):',
+        `- headline: ≤ ${input.copyBudget.headline} characters (a hero/opening headline: ≤ ${input.copyBudget.headlineHero})`,
+        `- body: ≤ ${input.copyBudget.body} characters`,
+        `- cta: ≤ ${input.copyBudget.cta} characters`,
+        'Do NOT add a kicker/eyebrow label — this layout has no room for one; use headline + body only.',
+        'Count characters. If a true, authorized line does not fit, cut words, not meaning — never pad to reach a limit.'] : []),
       ...(input.repairReasons?.length ? ['', 'SURGICAL REPAIR. The previous draft added UNLICENSED meaning (listed below). Return the COMPLETE corrected',
         'carousel, changing ONLY what is required. For each flagged line: DELETE the offending clause and either',
         'replace it with the VERBATIM-EQUIVALENT of one AUTHORIZED PROPOSITION above (keep its exact scope and',

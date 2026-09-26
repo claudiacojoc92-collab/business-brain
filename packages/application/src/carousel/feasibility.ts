@@ -7,6 +7,123 @@
  */
 import type { AssetAuthorizationSnapshot, MeaningUnit, MeaningUnitType, FeasibilityResult, SlideRole, BeatBinding, ConceptFamily, Concept } from './contracts';
 
+// ── Decision 2 — CLAIM-TYPE angle feasibility (move the check upstream of generation). A concept's angle is
+//    writable only if the authority set can LICENSE the claim TYPES its angle requires. The previous gate
+//    conflated everything into a 'proof' lane, so descriptive proofFacts (addresses, credentials) made an
+//    outcome angle look supported and the model then invented outcome claims. This classifies precisely.
+export type CarouselClaimType = 'outcome' | 'capability' | 'credential' | 'descriptive' | 'social_proof' | 'stance';
+
+/** The claim type a documented-proof KIND licenses (kinds come from Part-1 extraction, carried on the snapshot). */
+export function claimTypeForProofKind(kind: string, text = ''): CarouselClaimType {
+  switch (kind) {
+    case 'testimonial': return 'social_proof';
+    case 'external_sourced_figure': return /\b(star|rating|review)/i.test(text) ? 'social_proof' : 'outcome';
+    case 'credential': case 'award': return 'credential';
+    case 'location': case 'tenure': case 'team_size': case 'service_count': return 'descriptive';
+    case 'founder_stated': return 'descriptive'; // a bare founder statement is not documented outcome proof
+    // Unknown/absent kind: a proofFact with no descriptive tag is the historical documented-result ("proof" lane) → outcome.
+    default: return 'outcome';
+  }
+}
+
+/** Claim types the authority set can actually license (precise; proofKinds aligns with snapshot.proofFacts). */
+export function licensableClaimTypes(snap: AssetAuthorizationSnapshot): Set<CarouselClaimType> {
+  const out = new Set<CarouselClaimType>();
+  const kinds = snap.proofKinds ?? [];
+  snap.proofFacts.forEach((t, i) => out.add(claimTypeForProofKind(kinds[i] ?? '', t)));
+  for (const p of snap.licensedPropositions) {
+    if (p.source === 'business_evidence') out.add('descriptive');
+    else if (p.source === 'behavior_result') out.add('outcome');
+    else if (p.source === 'founder_owned') out.add('stance');
+  }
+  if (snap.ownedStances.length) out.add('stance');
+  return out;
+}
+
+/** The claim type(s) an angle (concept family) needs at least ONE of, to be writable without inventing. */
+function requiredAnyOf(fam: ConceptFamily): CarouselClaimType[] {
+  switch (fam) {
+    case 'proof_breakdown': case 'before_after': return ['outcome'];
+    case 'proof_statement': return ['outcome', 'social_proof'];
+    case 'myth_correction': return ['capability', 'descriptive', 'stance'];
+    case 'checklist': return ['descriptive', 'capability'];
+    case 'problem_reframe': return ['descriptive', 'stance'];
+    case 'founder_insight': return ['stance', 'descriptive'];
+    case 'offer_explainer': return ['descriptive', 'capability'];
+    default: return ['descriptive', 'capability', 'stance'];
+  }
+}
+/** Fallback families, most-preferred first, when the intended angle isn't licensable. */
+const REANGLE_ORDER: ConceptFamily[] = ['offer_explainer', 'founder_insight', 'problem_reframe', 'checklist', 'proof_statement'];
+
+const CLAIM_PLAIN: Record<CarouselClaimType, string> = {
+  outcome: 'results or outcomes', social_proof: 'reviews or testimonials', credential: 'credentials',
+  capability: 'what you can do', descriptive: 'your services and details', stance: 'your own point of view',
+};
+
+export type AngleDecision = 'writable' | 'reangled' | 'needs_evidence';
+export interface EvidenceRequest { readonly claim: CarouselClaimType; readonly ask: string }
+export interface AngleAssessment {
+  readonly decision: AngleDecision;
+  readonly intendedFamily: ConceptFamily;
+  readonly intendedTypes: CarouselClaimType[];
+  readonly licensable: CarouselClaimType[];
+  readonly chosenFamily: ConceptFamily | null;
+  readonly founderNote: string | null;   // plain-language, FOUNDER-facing, shown in the UI on a re-angle
+  readonly strategyBetSupported: boolean; // false ⇒ the strategy's persuasive story (outcome/social-proof) isn't licensable, so the copy brief must drop the bet even if the chosen family is descriptively writable
+  readonly requests: EvidenceRequest[];   // populated only when decision === 'needs_evidence'
+}
+
+/** One-line, one-fact-answerable evidence asks for the intended types the authority lacks (≤2). */
+function evidenceRequestsFor(types: CarouselClaimType[]): EvidenceRequest[] {
+  const ask: Record<CarouselClaimType, string> = {
+    outcome: 'One concrete result you can point to — a number, or one client and what changed.',
+    social_proof: 'One review or testimonial you can share, with who said it.',
+    credential: 'One credential, licence or certification your team holds.',
+    capability: 'One specific thing you do that others in your field do not.',
+    descriptive: 'One concrete detail about your services or who they are for.',
+    stance: 'One thing you believe about this work that guides how you do it.',
+  };
+  return types.slice(0, 2).map((t) => ({ claim: t, ask: ask[t] }));
+}
+
+/**
+ * Decide, BEFORE generation, whether the intended concept angle is writable from the authority set; if not,
+ * pick the smallest licensable angle (and produce a founder-facing note), or — if nothing substantive is
+ * licensable — return needs_evidence with ≤2 one-line asks. Never let a structurally-unwritable angle draft.
+ */
+export function assessAngle(concept: Concept, snap: AssetAuthorizationSnapshot): AngleAssessment {
+  const licensable = licensableClaimTypes(snap);
+  const intendedTypes = requiredAnyOf(concept.internalFamily);
+  const intendedOk = intendedTypes.some((t) => licensable.has(t));
+  // The strategy's PERSUASIVE story (an outcome/referral/results bet) needs outcome or social-proof to be told.
+  // When neither is licensable, the copy brief must drop the bet even if the model's chosen family is descriptively
+  // writable — otherwise the model keeps inventing results/referral claims to satisfy the bet it was shown.
+  const strategyBetSupported = licensable.has('outcome') || licensable.has('social_proof');
+  const descriptivePlain = () => {
+    const have = [...licensable].filter((t) => t !== 'outcome' && t !== 'social_proof');
+    return [...new Set(have.map((t) => CLAIM_PLAIN[t]))].join(' and ') || 'what your sources actually show';
+  };
+  const base = { intendedFamily: concept.internalFamily, intendedTypes, licensable: [...licensable], strategyBetSupported };
+
+  if (intendedOk) {
+    // Family is writable; but if the strategy's persuasive types aren't licensable, still tell the founder why the
+    // copy stays descriptive (and the service will drop the bet from the copy brief).
+    const founderNote = strategyBetSupported ? null
+      : `I built this around ${descriptivePlain()} because there's no results or reviews I can point to in your sources yet.`;
+    return { ...base, decision: 'writable', chosenFamily: concept.internalFamily, founderNote, requests: [] };
+  }
+
+  const chosen = REANGLE_ORDER.find((f) => requiredAnyOf(f).some((t) => licensable.has(t)));
+  if (chosen) {
+    const missing = intendedTypes.filter((t) => !licensable.has(t));
+    const missPlain = [...new Set(missing.map((t) => CLAIM_PLAIN[t]))].join(' or ');
+    const founderNote = `I built this around ${descriptivePlain()} because there's no ${missPlain} in what I can see about your business yet.`;
+    return { ...base, decision: 'reangled', chosenFamily: chosen, founderNote, requests: evidenceRequestsFor(intendedTypes) /* kept for logging; not surfaced on a re-angle */ };
+  }
+  return { ...base, decision: 'needs_evidence', chosenFamily: null, founderNote: null, requests: evidenceRequestsFor(intendedTypes) };
+}
+
 /** Derive the authorized meaning units from the immutable snapshot (strategy decisions excluded). */
 export function meaningUnits(snap: AssetAuthorizationSnapshot): MeaningUnit[] {
   const out: MeaningUnit[] = [];

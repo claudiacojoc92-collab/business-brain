@@ -8,6 +8,7 @@ export * from './placement';
 export * from './brand-resolve';
 export * from './closure';
 export * from './compose';
+export * from './copy-budget';
 export * from './visual-system';
 export * from './composition';
 export { CarouselService, type CarouselDeps, type CarouselJudgePort, type GenerateResult } from './carousel.service';

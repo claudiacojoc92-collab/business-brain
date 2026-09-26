@@ -159,10 +159,19 @@ export function CarouselPage() {
           </>
         )}
 
+        {view?.state === 'needs_evidence' && (
+          <>
+            <h1 className="s0-h1">{t('carousel.needsEvidence.title')}</h1>
+            <p className="s0-lede">{t('carousel.needsEvidence.body')}</p>
+            <ul className="s0-strat-list">{view.requests.map((r, i) => <li key={i}>{r.ask}</li>)}</ul>
+          </>
+        )}
+
         {view?.state === 'ready' && (
           <>
             <h1 className="s0-h1">{t('carousel.ready.title')}</h1>
             <p className="s0-lede">{t('carousel.ready.sub', { n: String(view.slides.length) })}</p>
+            {view.angleNote && <div className="s0-plan-stale" role="note">{view.angleNote}</div>}
             {rejected && <div className="s0-plan-stale"><strong>{t('carousel.rejected.title')}</strong><ul className="s0-strat-list">{rejected.map((r, i) => <li key={i}>{r}</li>)}</ul></div>}
             {notice && <div className="s0-plan-stale">{notice}</div>}
 

@@ -146,6 +146,7 @@ export interface AssetAuthorizationSnapshot {
   readonly audienceUseContext: string;
   readonly licensedPropositions: CarouselProposition[];
   readonly proofFacts: string[];            // documented, licensed proof (e.g. a case-study result)
+  readonly proofKinds?: string[];           // Decision 2: claim-KIND per proofFact (aligned by index) for claim-type feasibility
   readonly ctaFunction: string;
   readonly ownedStances: string[];          // founder/brand owned stances
   readonly sourceRefs: CarouselSourceRef[];
@@ -288,7 +289,7 @@ export interface CarouselSafetyTraceCore {
   readonly fullAssetFindings: { clause: string; proposition: string }[];
 }
 export type CarouselSafetyDisposition = 'persisted' | 'repaired_persisted' | 'fail_closed';
-export type GenerationMode = 'normal' | 'constrained_fallback';
+export type GenerationMode = 'normal' | 'constrained_fallback' | 'deterministic_strip';
 /** The persisted, immutable per-attempt safety trace. version_id is null when the attempt failed closed. */
 export interface CarouselSafetyTrace extends CarouselSafetyTraceCore {
   readonly traceId: string;
@@ -319,6 +320,17 @@ export interface CarouselModelInput {
   readonly concept: Concept;
   readonly repairReasons?: string[];
   readonly priorDraft?: CarouselCopyDraft;
+  readonly copyBudget?: CopyBudget;         // per-role DESIGN character budgets (targets to write within; shorter is better)
+}
+
+/** Per-role DESIGN character budgets, derived from the canvas geometry + type scale (see copy-budget.ts). Targets
+ * that render at/near the intended type size, NOT the fit ceiling at the 28px floor. */
+export interface CopyBudget {
+  readonly kicker: number;
+  readonly headline: number;
+  readonly headlineHero: number;   // hero/display headline (emphasis slides)
+  readonly body: number;
+  readonly cta: number;
 }
 export interface AntiTemplateVerdict { readonly generic: boolean; readonly reason: string }
 export interface ClosureVerdict { readonly closed: boolean; readonly reason: string }
@@ -436,6 +448,7 @@ export interface CarouselContextView {
   readonly ctaDirection: string;
   readonly licensedPropositions: CarouselProposition[];
   readonly proofFacts: string[];
+  readonly proofKinds?: string[];          // Decision 2: claim-KIND per proofFact (aligned by index)
   readonly ownedStances?: string[];        // founder/brand owned stances the copy may express
   readonly sourceRefs: CarouselSourceRef[];
   readonly brand: BrandContext;

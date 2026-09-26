@@ -546,3 +546,73 @@ describe('Slice 6 — targeted constrained repair (one bounded, block-scoped fix
     expect(repo.versions).toHaveLength(0);
   });
 });
+
+// ── Stage 2 (B retain best + A deterministic strip + D cap=2): when both capped drafts fail closed, the retained
+//    best is stripped of exactly the blocked clause IN CODE (no model), re-gated, and persisted — or fails honestly.
+describe('Slice 6 — Stage 2 deterministic strip (code-only clause deletion on the retained best)', () => {
+  // A body with ONE licensed sentence + ONE unlicensed guarantee sentence. Normal drafting can't fix it (the fake
+  // ignores repair signals), so both capped attempts fail closed. NO realizeConstrained is configured, so the ONLY
+  // way an asset can exist is the deterministic strip removing the guarantee sentence and keeping the licensed one.
+  const MIXED_BODY = 'A SaaS client cut burn 30% after getting finance clarity through the diagnostic call. Every client triples their leads, guaranteed.';
+  const stripModel = (): ICarouselModelPort => fakeModel({
+    orderedSlideCopy: [
+      { slideKey: 's1', role: 'hook', headline: 'The SaaS founder who got finance clarity after raising' },
+      { slideKey: 's2', role: 'proof', headline: 'What the case study documents', body: MIXED_BODY },
+      { slideKey: 's3', role: 'cta', headline: 'Want the same clarity?' },
+    ],
+    propositionBindings: [{ blockRef: 's2:body', propositionRef: 'P1', sourceRefId: null, ctaFunction: null }],
+  });
+  const bodyOf = (v: any, role: string) => v.slides.find((s: any) => s.semanticRole === role)?.textBlocks.find((b: any) => b.role === 'body')?.text ?? '';
+
+  it('strips exactly the blocked guarantee sentence, keeps the licensed one, and persists via deterministic_strip (no model rewrite)', async () => {
+    const { service, repo } = svc(stripModel());
+    const res = await service.generate('B', 'ch1');
+    expect(res.status).toBe('created'); if (res.status !== 'created') return;
+    const t = repo.traces.at(-1);
+    expect(t?.generationMode).toBe('deterministic_strip');
+    expect(t?.disposition).toBe('repaired_persisted');
+    expect(t?.versionId).toBe(res.version.versionId);
+    // the licensed sentence survives; the guarantee sentence is gone; deck still holds ≥3 slides
+    const body = bodyOf(res.version, 'proof');
+    expect(body).toContain('cut burn 30%');
+    expect(body.toLowerCase()).not.toContain('guarantee');
+    expect(body.toLowerCase()).not.toContain('triple');
+    expect(res.version.slides.length).toBeGreaterThanOrEqual(3);
+    expect(res.render.gateReport.valid).toBe(true);
+  });
+
+  it('an unfilled placeholder (e.g. [Name]) never persists — it fails closed like any gate failure', async () => {
+    // The copy layer templated a description ("send a name, a number") into fill-in-the-blanks. A carousel that
+    // reaches a client with [Name] in it costs credibility; the deterministic placeholder gate blocks it on persist.
+    const model = fakeModel({
+      orderedSlideCopy: [
+        { slideKey: 's1', role: 'hook', headline: 'The SaaS founder who got finance clarity after raising' },
+        { slideKey: 's2', role: 'proof', headline: 'What the case study documents', body: 'A SaaS client cut burn 30% after getting finance clarity through the diagnostic call.' },
+        { slideKey: 's3', role: 'cta', headline: 'Ready?', body: 'Call or text [Name] directly at [Number] to book.' },
+      ],
+      propositionBindings: [{ blockRef: 's2:body', propositionRef: 'P1', sourceRefId: null, ctaFunction: null }],
+    });
+    const { service, repo } = svc(model);
+    const res = await service.generate('B', 'ch1');
+    expect(res.status).toBe('insufficient');
+    expect(repo.versions).toHaveLength(0);
+  });
+
+  it('when the only substantive block is entirely unlicensed, the strip cannot hold ≥3 slides and fails honestly', async () => {
+    // Every substantive block is a whole-clause guarantee → stripping empties the hook and proof slides → <3 slides.
+    // With no constrained fallback, the honest outcome is insufficient (no patched, half-empty asset is persisted).
+    const model = fakeModel({
+      orderedSlideCopy: [
+        { slideKey: 's1', role: 'hook', headline: 'We guarantee we will double your revenue' },
+        { slideKey: 's2', role: 'proof', headline: 'Proof', body: 'Every client triples their leads, guaranteed.' },
+        { slideKey: 's3', role: 'cta', headline: 'Want the same clarity?' },
+      ],
+      propositionBindings: [{ blockRef: 's2:body', propositionRef: 'P1', sourceRefId: null, ctaFunction: null }],
+    });
+    const { service, repo } = svc(model);
+    const res = await service.generate('B', 'ch1');
+    expect(res.status).toBe('insufficient');
+    expect(repo.versions).toHaveLength(0);
+    expect(repo.traces.at(-1)?.disposition).toBe('fail_closed');
+  });
+});

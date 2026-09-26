@@ -35,6 +35,7 @@ export type FounderEventType =
   | 'asset_exported'
   | 'strategy_to_asset_completed'
   | 'asset_generation_insufficient_material'
+  | 'asset_needs_evidence'
   | 'talk_opened'
   | 'talk_turn_submitted'
   | 'baseline_reopened'

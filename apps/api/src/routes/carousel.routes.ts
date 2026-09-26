@@ -54,8 +54,9 @@ export function registerCarouselRoutes(server: FastifyInstance, deps: ServerDeps
     if (res.status === 'unavailable_format') { await reply.status(200).send({ state: 'unavailable_format', requested: res.requested }); return; }
     if (res.status === 'no_strategy') { await reply.status(200).send({ state: 'no_strategy' }); return; }
     if (res.status === 'insufficient') { recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'asset_generation_insufficient_material', surface: 'create', metadata: {} }); await reply.status(200).send({ state: 'insufficient' }); return; }
-    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'asset_generated', surface: 'create', metadata: { adapted: Boolean(res.version.brief.adaptedFrom), slides: res.version.slides.length } });
-    await reply.status(200).send({ state: 'ready', ...projectAsset(business.id, res.version, res.render) });
+    if (res.status === 'needs_evidence') { recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'asset_needs_evidence', surface: 'create', metadata: { claims: res.requests.map((r) => r.claim) } }); await reply.status(200).send({ state: 'needs_evidence', requests: res.requests }); return; }
+    recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'asset_generated', surface: 'create', metadata: { adapted: Boolean(res.version.brief.adaptedFrom), slides: res.version.slides.length, reangled: Boolean(res.angleNote) } });
+    await reply.status(200).send({ state: 'ready', ...projectAsset(business.id, res.version, res.render), ...(res.angleNote ? { angleNote: res.angleNote } : {}) });
   });
 
   server.get('/v1/businesses/:id/carousel/:assetId', async (request: FastifyRequest, reply: FastifyReply) => {
