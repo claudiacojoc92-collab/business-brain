@@ -4,7 +4,7 @@ import { AppShell } from './AppShell';
 import { useTalk } from './TalkDrawer';
 import { ArcSurface } from './ArcSurface';
 import { useLocale } from '../i18n/LocaleContext';
-import { getArc, getHomeBriefing, type HomeBriefing, type HomeAction } from '../api/client';
+import { getArc, getHomeBriefing, ApiError, type HomeBriefing, type HomeAction } from '../api/client';
 
 /**
  * THE HOME SURFACE. While the Day One arc is in progress (Moments 1–9), the strategist carries the founder
@@ -32,8 +32,13 @@ export function HomePage(): React.ReactElement {
       if (arc.moment !== 'done') { setMode('arc'); return; }  // the arc owns the surface until it completes
       setBriefing(await getHomeBriefing(id));
       setMode('briefing');
-    } catch { setMode('fail'); }
-  }, [id]);
+    } catch (e) {
+      // FIX 4A — a deleted or inaccessible business (404/403) must never strand the founder on a dead retry.
+      // Recover to /home (the businesses list / create-first state) instead of showing a reload that can't succeed.
+      if (e instanceof ApiError && (e.status === 404 || e.status === 403)) { navigate('/home', { replace: true }); return; }
+      setMode('fail');
+    }
+  }, [id, navigate]);
   useEffect(() => { void load(); }, [load]);
 
   function submit(e: React.FormEvent) { e.preventDefault(); if (draft.trim()) openTalk(); }
@@ -68,6 +73,8 @@ export function HomePage(): React.ReactElement {
             <p className="s0-strat-msg-line">{t('home.fail')}</p>
             <div className="s0-strat-actions">
               <button type="button" className="s0-btn" onClick={() => id && navigate(0 as never)}>{t('common.retry')}</button>
+              {/* FIX 4C — every fail screen carries a way out, so a founder is never trapped on one URL. */}
+              <a href="/home" className="s0-btn-quiet">{t('home.tobusinesses')}</a>
             </div>
           </>
         ) : (

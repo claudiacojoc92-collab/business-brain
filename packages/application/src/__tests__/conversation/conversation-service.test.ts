@@ -21,7 +21,7 @@ function makeDeps(step: Partial<ConversationStepOutput>, sourceList: any[] = [])
     conversations: {
       getByBusiness: async (bid) => sessions.find((s) => s.businessId === bid) ?? null,
       create: async (i) => { const s = { id: i.id, businessId: i.businessId, conversationLanguage: i.conversationLanguage, status: 'active' as const, currentFocus: null }; sessions.push(s); return s; },
-      setStatus: async (_id, status) => { statusSet = status; const s = sessions[0]; if (s) s.status = status; },
+      setStatus: async (_id, status, currentFocus) => { statusSet = status; const s = sessions[0]; if (s) { s.status = status; s.currentFocus = currentFocus ?? null; } },
       setLanguage: async () => undefined,
       appendTurn: async (i) => { const t = { id: i.id, role: i.role, content: i.content, language: i.language, seq: turns.length + 1, createdAt: '1970' }; turns.push(t); return t; },
       listTurns: async () => turns.slice(),
@@ -199,8 +199,8 @@ describe('ConversationService', () => {
     expect(goal?.scope ?? null).toBeNull();
   });
 
-  it('marks ready_for_aha2 when the model signals readiness AND a goal is persisted', async () => {
-    const m = makeDeps({ readyForAha2: true, nextQuestion: null, declarations: [{ kind: 'goal', statement: 'Twenty members in three months' }] });
+  it('marks ready_for_aha2 when the model signals readiness AND a goal is persisted AND required core is covered', async () => {
+    const m = makeDeps({ readyForAha2: true, nextQuestion: null, declarations: [{ kind: 'goal', statement: 'Twenty members in three months' }], answeredNeedKeys: ['horizon', 'whats_working', 'acquisition_today'] });
     await new ConversationService(m.deps).startOrResume(P.businessId, P.founderId, P.businessName, P.language);
     await new ConversationService(m.deps).submitResponse(P.businessId, P.founderId, P.businessName, 'done', P.language);
     expect(m.getStatus()).toBe('ready_for_aha2');
@@ -211,6 +211,29 @@ describe('ConversationService', () => {
     await new ConversationService(m.deps).startOrResume(P.businessId, P.founderId, P.businessName, P.language);
     await new ConversationService(m.deps).submitResponse(P.businessId, P.founderId, P.businessName, 'done', P.language);
     expect(m.getStatus()).toBe('active'); // the gate holds — a goal-less conversation can never report ready
+  });
+
+  it('FIX 1: with required core covered but no goal, awaitingGoal fires (not requiring the self-needs closed), and confirming the goal advances', async () => {
+    // required core (horizon/whats_working/acquisition) covered, self_* needs still open, but no goal → reflect-back
+    const m = makeDeps({ readyForAha2: true, nextQuestion: null, answeredNeedKeys: ['horizon', 'whats_working', 'acquisition_today'] });
+    const svc = new ConversationService(m.deps);
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'done', P.language);
+    expect(m.getStatus()).toBe('active');                       // not advanced — no goal yet
+    expect(await svc.awaitingGoal(P.businessId)).toBe(true);    // reflect-back fires even with other needs still open
+    await svc.setGoal(P.businessId, P.founderId, 'Land 3 clinic partnerships this quarter, not direct clients', P.language);
+    expect(m.getStatus()).toBe('ready_for_aha2');               // confirming the goal releases the gate → advances
+    expect(await svc.awaitingGoal(P.businessId)).toBe(false);
+  });
+
+  it('FIX 2a: a reply never duplicates the question when the interpretation already ends with it', async () => {
+    const m = makeDeps({ interpretation: 'Here is what I heard. And what am I missing?', nextQuestion: 'And what am I missing?' });
+    const svc = new ConversationService(m.deps);
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'ok', P.language);
+    const bb = m.turns.filter((t: any) => t.role === 'bb').at(-1)!;
+    const occurrences = bb.content.split('And what am I missing?').length - 1;
+    expect(occurrences).toBe(1); // the question appears exactly once, not twice
   });
 
   it('pause sets status paused', async () => {

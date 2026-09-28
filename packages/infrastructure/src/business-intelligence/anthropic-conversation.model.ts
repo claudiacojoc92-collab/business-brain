@@ -114,7 +114,8 @@ function systemPrompt(lang: string): string {
     '  "businessCorrections": ["a fact the founder says is no longer true about the business"],',
     '  "observationCandidates": [{"behavior": "an OBSERVABLE decision/communication behavior, only if it recurs across turns"}],',
     '  "answeredNeedKeys": ["keys from OPEN NEEDS this message answered"],',
-    '  "newNeeds": [{"key": "snake_case", "whatMissing": "", "whyMatters": "what decision it changes"}]',
+    '  "newNeeds": [{"key": "snake_case", "whatMissing": "", "whyMatters": "what decision it changes"}],',
+    '  "nextNeedKey": "the OPEN NEEDS key your nextQuestion targets (from the list above, or a newNeeds key), or null when nextQuestion is null"',
     '}',
     'The "opener" object, when present, has EXACTLY this shape:',
     '{ "lead": "1–2 sentences", "bullets": ["≤3 one-line observations"], "notSure": "one line or null", "invitation": "the closing question" }',
@@ -187,6 +188,15 @@ export class AnthropicConversationModel implements IConversationModelPort {
       'OPEN NEEDS (ask only if pivotal):',
       ...input.openNeeds.map((n) => `- [${n.key}] ${n.whatMissing} — ${n.whyMatters}`),
       '',
+      ...((input.requiredCoreOpen && input.requiredCoreOpen.length)
+        ? ['REQUIRED CORE — do NOT set readyForAha2 true while ANY of these are uncovered. A strategy is not honest',
+           `without them. Keep going and cover them (naturally, from what the founder said): ${input.requiredCoreOpen.join(', ')}`, '']
+        : []),
+      ...(input.forcedNeedKey
+        ? [`DEPTH CHECK — you have gone deep on one thread. Your NEXT question MUST address the need "${input.forcedNeedKey}".`,
+           'First ACKNOWLEDGE in one clause what the last answer told you, THEN bridge to it — never a hard subject change,',
+           'e.g. "Got it — that tells me X. Before we go deeper there, one thing I still don\'t know: …". Set nextNeedKey to it.', '']
+        : []),
       'FOUNDER STATE ALREADY KNOWN (never re-ask):',
       ...input.knownState.map((s) => `- ${s.kind}: ${s.statement}`),
       '',
@@ -242,6 +252,8 @@ export class AnthropicConversationModel implements IConversationModelPort {
       observationCandidates: Array.isArray(p.observationCandidates) ? p.observationCandidates : [],
       answeredNeedKeys: Array.isArray(p.answeredNeedKeys) ? p.answeredNeedKeys : [],
       newNeeds: Array.isArray(p.newNeeds) ? p.newNeeds : [],
+      // FIX 3 — which need the question targets; default to the forced key when forcing so depth tracking is accurate.
+      nextNeedKey: typeof p.nextNeedKey === 'string' && p.nextNeedKey.trim() ? p.nextNeedKey.trim() : (input.forcedNeedKey ?? null),
       // Only a well-formed opener with a lead + invitation counts (otherwise fall back to prose opener handling).
       opener: opener && opener.lead && opener.invitation ? opener : null,
     };

@@ -83,7 +83,8 @@ describe('ArcService.view — each moment composes from the reused engines', () 
     expect(v.understanding?.does).toMatch(/physiotherapy memberships/);
     expect(v.understanding?.serves).toMatch(/post-op patients/);
     // The diagnostic core: the engine's contradiction is now SURFACED as a tension (it used to be discarded).
-    expect(v.understanding?.tensions).toContain('kinetotherapy may be the real business — or the site is out of sync with the offer');
+    // FIX 2c — tensions carry a grounding line (the concrete statement) so the referent resolves in the card.
+    expect(v.understanding?.tensions).toContainEqual({ tension: 'kinetotherapy may be the real business — or the site is out of sync with the offer', grounding: 'the site gives six categories equal weight' });
     // Confident = from evidence (Aha1 + explicit offer + evidence-backed positioning); inferring = from pattern.
     expect(v.understanding?.confident).toContain('Referrals already drive most new members.');
     expect(v.understanding?.confident).toContain('physio memberships');

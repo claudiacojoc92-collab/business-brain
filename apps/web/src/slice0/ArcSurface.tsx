@@ -6,7 +6,7 @@ import {
   getArc, arcAddSource, arcAddLink, arcAddFile,
   arcPourInDone, arcConversation, arcConfirmUnderstanding, arcCorrectUnderstanding,
   arcMirrorSeen, arcAdoptStrategy, arcChallengeStrategy, arcAdoptWeekDay, arcGenerateEmail,
-  arcSaveEmail, arcExportEmail, arcContainerSeen, arcConfirmGoal, type ArcView,
+  arcSaveEmail, arcExportEmail, arcContainerSeen, arcConfirmGoal, arcSkipQuestion, type ArcView,
 } from '../api/client';
 // NOTE: Instagram is intentionally HIDDEN from the pour-in until after MVP validation (founder decision).
 // The direct Instagram Login connector + the /arc/source/instagram route are left in place, unused, for when
@@ -49,6 +49,38 @@ function ArcInput({ ph, onSend, cta, t, text, setText, busy, act, workingKey }: 
       <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={ph} aria-label={ph} rows={2} disabled={busy} />
       <button type="submit" className="s0-btn s0-btn-inline" disabled={busy || !text.trim()}>{cta ?? t('arc.send')}</button>
     </form>
+  );
+}
+
+// FIX 2c — a tension card that shows each tension line + ONE muted grounding line, so the referent resolves in the
+// card (the field the tension names) without stacking three sentences.
+function TensionCard({ label, items }: { label: string; items: { tension: string; grounding: string }[] }) {
+  const rows = items.filter((x) => (x.tension ?? '').trim());
+  if (!rows.length) return null;
+  return (
+    <div className="s0-u-card s0-u-card--primary">
+      <div className="s0-u-card-label"><span className="s0-u-ic" aria-hidden="true">◆</span>{label}</div>
+      <ul className="s0-u-list">
+        {rows.map((x, i) => (
+          <li key={i}>{x.tension}{x.grounding ? <span className="s0-u-grounding">{x.grounding}</span> : null}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// FIX 3 — the quiet coverage "map": which core areas are mapped (●) and which are left (○). Not a progress bar —
+// it conveys the terrain so a multi-turn interview reads as covering ground, not drifting.
+function CoverageChips({ items, t }: { items: { key: string; covered: boolean }[]; t: T }) {
+  if (!items.length) return null;
+  return (
+    <div className="s0-coverage" role="status" aria-label={t('arc.coverage.aria')}>
+      {items.map((c) => (
+        <span key={c.key} className={`s0-chip${c.covered ? ' is-covered' : ''}`}>
+          <span className="s0-chip-dot" aria-hidden="true">{c.covered ? '●' : '○'}</span>{t(`arc.coverage.${c.key}`)}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -288,19 +320,19 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
     if (m.error?.kind === 'need_understanding') {
       return (<>
         <ArcMsg lines={[t('arc.error.needunderstanding')]} />
-        {!ro ? <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={() => void load()}>{t('arc.error.retry')} →</button></div> : null}
+        {!ro ? <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={() => void load()}>{t('arc.error.retry')} →</button><a href="/home" className="s0-btn-quiet">{t('home.tobusinesses')}</a></div> : null}
       </>);
     }
     if (m.error?.kind === 'strategy_insufficient') {
       return (<>
         <ArcMsg lines={[t('arc.error.strategyinsufficient'), ...(m.error.detail ? [m.error.detail] : [])]} />
-        {!ro ? <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={() => void load()}>{t('arc.error.retry')} →</button></div> : null}
+        {!ro ? <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={() => void load()}>{t('arc.error.retry')} →</button><a href="/home" className="s0-btn-quiet">{t('home.tobusinesses')}</a></div> : null}
       </>);
     }
     if (m.error?.kind === 'generation') {
       return (<>
         <ArcMsg lines={[t('arc.error.generation')]} />
-        {!ro ? <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={() => void load()}>{t('arc.error.retry')} →</button></div> : null}
+        {!ro ? <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={() => void load()}>{t('arc.error.retry')} →</button><a href="/home" className="s0-btn-quiet">{t('home.tobusinesses')}</a></div> : null}
       </>);
     }
     switch (m.moment) {
@@ -318,7 +350,7 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
               {ctx ? <p className="s0-u-hero-sub">{ctx}</p> : null}
             </div>
             <UCard label={t('arc.understanding.standsout')} kind="primary" paragraph={u.standsOut} />
-            <UCard label={t('arc.understanding.tensions')} kind="primary" bullets={u.tensions} />
+            <TensionCard label={t('arc.understanding.tensions')} items={u.tensions} />
             <UCard label={t('arc.understanding.confident')} kind="evidence" bullets={u.confident} />
             <UCard label={t('arc.understanding.inferring')} kind="inference" bullets={u.inferring} />
             <UCard label={t('arc.understanding.unanswered')} kind="question" bullets={u.unanswered} />
@@ -346,8 +378,12 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
           return <div className="s0-arc-thinking" role="status" aria-live="polite">{t('arc.conversation.preparing')}</div>;
         }
         return (<>
+          {m.coverage && m.coverage.length ? <CoverageChips items={m.coverage} t={t} /> : null}
           <ArcThread turns={turns} t={t} />
-          {!ro ? <ArcInput ph={t('arc.conversation.ph')} onSend={(msg) => arcConversation(businessId, msg)} t={t} text={text} setText={setText} busy={busy} act={act} workingKey="arc.working.thinking" /> : null}
+          {!ro ? (<>
+            <ArcInput ph={t('arc.conversation.ph')} onSend={(msg) => arcConversation(businessId, msg)} t={t} text={text} setText={setText} busy={busy} act={act} workingKey="arc.working.thinking" />
+            <div className="s0-strat-actions"><button type="button" className="s0-btn-quiet" disabled={busy} onClick={() => void act(() => arcSkipQuestion(businessId, t('arc.skip.msg')), 'arc.working.thinking')}>{t('arc.skip')}</button></div>
+          </>) : null}
         </>);
       }
 

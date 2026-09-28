@@ -482,9 +482,10 @@ export interface ArcView {
   strategyChange?: { because: string } | null; // Moment 6 — transient "the bet changed because…" note
   sources?: { url: string; type: ArcSourceType; detail?: string }[];
   igConnected?: boolean;
-  understanding?: { does: string; serves: string; standsOut: string; tensions: string[]; confident: string[]; inferring: string[]; unanswered: string[] };
+  understanding?: { does: string; serves: string; standsOut: string; tensions: { tension: string; grounding: string }[]; confident: string[]; inferring: string[]; unanswered: string[] };
   correctionReflection?: { reflection: string; changes: string; holds: string; ask: string };
   turns?: ArcTurn[];
+  coverage?: { key: string; covered: boolean }[]; // conversation — quiet progress map
   mirror?: { founderWords: string; against: string; tension: string } | null;
   strategy?: { bet: string; over: string; horizon: string; tradeOffs: string[]; notNow: string[]; reconsider: string[]; proposalId: string | null; adoptable: boolean };
   weekDay?: { week: string[]; today: string | null; canCreate: boolean };
@@ -515,6 +516,8 @@ export async function arcAddFile(b: string, file: File): Promise<AddSourceResult
 }
 export const arcPourInDone = (b: string): Promise<ArcView> => arcPost(b, 'pour-in/done');
 export const arcConversation = (b: string, message: string): Promise<ArcView> => arcPost(b, 'conversation', { message });
+// FIX 3 / Addition 1 — one-tap skip of the current question; `message` is the localized skip phrase for the transcript.
+export const arcSkipQuestion = (b: string, message: string): Promise<ArcView> => arcPost(b, 'conversation', { message, skip: true });
 export const arcConfirmUnderstanding = (b: string): Promise<ArcView> => arcPost(b, 'understanding/confirm');
 export const arcCorrectUnderstanding = (b: string, message: string): Promise<ArcView> => arcPost(b, 'understanding/correct', { message }); // Moment 3 correction — held, deterministic, no model step
 export const arcMirrorSeen = (b: string, answer?: string): Promise<ArcView> => arcPost(b, 'mirror/seen', { answer: answer ?? '' });

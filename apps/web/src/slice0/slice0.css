@@ -467,6 +467,13 @@
 .s0-btn-quiet:hover:not(:disabled) { color: var(--s0-ink); }
 .s0-btn-quiet:disabled { opacity: .5; cursor: default; }
 
+/* ── FIX 3 — conversation coverage map (quiet chips, not a progress bar) + FIX 2c tension grounding line ── */
+.s0-coverage { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.s0-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--s0-ink-2); border: 1px solid var(--s0-line-2); border-radius: 999px; padding: 4px 12px; transition: color .18s ease, border-color .18s ease; }
+.s0-chip.is-covered { color: var(--s0-ink); border-color: var(--s0-clay); }
+.s0-chip-dot { color: var(--s0-clay); font-size: 9px; line-height: 1; }
+.s0-u-grounding { display: block; margin-top: 4px; color: var(--s0-ink-2); font-size: 14px; line-height: 1.4; }
+
 /* ── Surface Correction — the pour-in (empty state): connectors first, website primary ── */
 .s0-pourin { display: flex; flex-direction: column; gap: 14px; margin-top: 4px; }
 .s0-pourin-web { display: flex; flex-direction: column; gap: 8px; padding: 16px; border: 1px solid var(--s0-line-2); border-left: 2px solid var(--s0-clay); border-radius: 12px; background: var(--s0-bg-2); }

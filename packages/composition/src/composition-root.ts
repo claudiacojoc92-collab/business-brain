@@ -330,6 +330,8 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     // Lets the conversation READ the sources the founder poured in (website/brochure/link/IG) — same projection
     // as the pour-in bridge — so the strategist never asks about what a source already answers.
     sources: new BoundSourceReader(new PgBusinessEvidenceLinkRepository(db), new PgEvidenceRepository(db)),
+    // eslint-disable-next-line no-console
+    log: (e) => console.error('[conversation]', JSON.stringify(e)),
   });
   // M2 — Business corrections reuse the same founder_state the conversation already reads (no new store).
   const businessCorrectionService = new BusinessCorrectionService({ state: founderStateRepo });
@@ -468,6 +470,7 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
       hasGoal: (bid) => conversationService.hasGoal(bid),
       goalCandidate: (bid) => conversationService.goalCandidate(bid),
       awaitingGoal: (bid) => conversationService.awaitingGoal(bid),
+      coverage: (bid) => conversationService.coverage(bid),
     },
     mirror: { build: (bid, name, lang) => mirrorService.build(bid, name, lang) },
     strategy: {

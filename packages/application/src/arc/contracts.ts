@@ -49,7 +49,8 @@ export interface ArcUnderstanding {
   readonly does: string;
   readonly serves: string;
   readonly standsOut: string;
-  readonly tensions: string[];
+  // FIX 2c — each tension carries ONE grounding line so its referent resolves in the card (never three sentences).
+  readonly tensions: { readonly tension: string; readonly grounding: string }[];
   readonly confident: string[];
   readonly inferring: string[];
   readonly unanswered: string[];
@@ -120,6 +121,7 @@ export interface ArcView {
   readonly igConnected?: boolean;          // pour_in — whether the founder's Instagram is connected (drives the affordance)
   readonly understanding?: ArcUnderstanding; // understanding / (container derives from same engine)
   readonly turns?: ArcTurn[];              // reading / conversation
+  readonly coverage?: { readonly key: string; readonly covered: boolean }[]; // conversation — the quiet progress map
   readonly mirror?: ArcMirror | null;      // mirror
   readonly strategy?: ArcStrategy;         // strategy
   readonly weekDay?: ArcWeekDay;           // week_day

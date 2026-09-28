@@ -18,6 +18,7 @@ export interface ArcDeps {
     hasGoal(businessId: string): Promise<boolean>;
     goalCandidate(businessId: string): Promise<GoalCandidate | null>;
     awaitingGoal(businessId: string): Promise<boolean>;
+    coverage(businessId: string): Promise<{ key: string; covered: boolean }[]>;
   };
   mirror: { build(businessId: string, businessName: string, language: string): Promise<{ contrasts: { founderWords: string; against: string; tension: string }[] }> };
   strategy: {
@@ -78,7 +79,7 @@ export class ArcService {
         // persisted (the classifier mis-filed it, or none was stated), don't loop the question — reflect the
         // strongest goal-shaped statement back for confirmation, right here.
         if (await this.deps.conversation.awaitingGoal(businessId)) return this.needGoalView(base, businessId);
-        return { ...base, turns: await this.deps.conversation.turns(businessId) };
+        return { ...base, turns: await this.deps.conversation.turns(businessId), coverage: await this.deps.conversation.coverage(businessId) };
 
       case 'mirror': {
         // Prefer the persisted contrast (stable across refresh, no re-generation); build only when none is held.
@@ -179,15 +180,21 @@ export class ArcService {
   }
 
   private projectUnderstanding(u: GovernedUnderstanding | null, aha1: { finding: string }[]): ArcUnderstanding {
+    // FIX 2c — a tension line + ONE grounding line (never three). The model writes tensions with definite referents
+    // ("the unfilled field") assuming both statements are visible; the card only showed the tension, so the referent
+    // dangled. Carry the MORE CONCRETE statement (a quote/number names the referent), drop the softer half.
+    const concreteScore = (s: string): number => (/[„“"'”]/.test(s) ? 2 : 0) + (/\d/.test(s) ? 1 : 0);
+    const grounded = (a: string, b: string): string => (!b ? a : !a ? b : concreteScore(b) > concreteScore(a) ? b : a);
     const tensions = (u?.contradictions ?? [])
       .map((c) => {
         const tension = (c.tension ?? '').trim();
         const a = (c.statementA ?? '').trim();
         const b = (c.statementB ?? '').trim();
-        if (tension) return tension;
-        return a && b ? `${a} — yet ${b}` : '';
+        if (!tension && !a && !b) return null;
+        if (!tension) return { tension: a && b ? `${a} — yet ${b}` : a || b, grounding: '' };
+        return { tension, grounding: grounded(a, b) };
       })
-      .filter(Boolean)
+      .filter((x): x is { tension: string; grounding: string } => Boolean(x))
       .slice(0, 4);
 
     // Confident = anchored in the evidence: the grounded Aha findings + what the offer states explicitly +
@@ -230,7 +237,7 @@ export class ArcService {
       correction,
       does: u.does,
       standsOut: u.standsOut,
-      tensions: u.tensions,
+      tensions: u.tensions.map((x) => x.tension), // the reflection model takes the tension lines only
       confident: u.confident,
     });
   }

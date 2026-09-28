@@ -25,7 +25,7 @@ import { selectGoalCandidate, type GoalCandidate } from './goal-candidate';
 export const ARC_OPENER_MARKER = '__arcOpener';
 function openerTurnContent(out: ConversationStepOutput): string {
   if (out.opener) return JSON.stringify({ [ARC_OPENER_MARKER]: out.opener });
-  return [out.interpretation, out.nextQuestion].filter((s) => s && s.trim()).join('\n\n') || out.nextQuestion || out.interpretation || '';
+  return joinReply(out.interpretation, out.nextQuestion) || (out.nextQuestion ?? '') || (out.interpretation ?? '');
 }
 
 /**
@@ -103,6 +103,17 @@ const CORE_NEEDS = [
   ...FOUNDER_SELF_NEEDS,
 ];
 
+// FIX 3 — the needs a strategy cannot be honest without. `goal` = where they want to go; `horizon` = by when;
+// `whats_working` + `acquisition_today` = where they actually are (what pays the bills, how leads arrive). The
+// interview may not end until all four are covered (answered or declined). current_marketing/capacity stay optional.
+const REQUIRED_CORE = ['goal', 'horizon', 'whats_working', 'acquisition_today'] as const;
+// Which required-core needs the depth cap may FORCE. `goal` is excluded — a mis-answered goal loops the classifier,
+// so goal is handled by the reflect-back (FIX 1), never by forcing a goal question mid-thread.
+const FORCEABLE_CORE = ['horizon', 'whats_working', 'acquisition_today'] as const;
+const DEPTH_CAP = 3; // after 3 consecutive questions off the required-core, the next must pivot to an uncovered core.
+// Founder-facing coverage chips (order = the map the founder sees). Labels are localized in the web layer.
+export const CONVERSATION_COVERAGE_KEYS = ['goal', 'horizon', 'whats_working', 'acquisition_today'] as const;
+
 export interface FounderModelProjection {
   goal: FounderStateItem | null;
   horizon: FounderStateItem | null;
@@ -132,6 +143,23 @@ export interface ConversationDeps {
   aha1: IAhaRepository;
   // Reads the sources the founder poured in so the strategist references what it has ALREADY read (never re-asks).
   sources: IBusinessSourceReader;
+  /** Structured telemetry (mirrors carousel/arc). Absent ⇒ silent (tests). Logs the needs state, what each step
+   * answered/added, and why readiness did or did not fire — the conversation had no server-side trace before. */
+  log?: (e: { type: string; detail?: string }) => void;
+}
+
+// FIX 1 — the reflect-back must fire whenever the model wants to advance but no goal is persisted (NOT only when
+// every other need is closed). We mark that state on the session's currentFocus (migration-free, self-correcting:
+// the next real question overwrites it, confirming the goal clears it). Never rendered — internal signal only.
+const AWAITING_GOAL_FOCUS = '\u0000awaiting_goal';
+
+// FIX 2a — join an interpretation with its follow-up question WITHOUT duplicating: if the model already ended the
+// interpretation with the question, don't append it again.
+function joinReply(interpretation?: string | null, nextQuestion?: string | null): string {
+  const interp = (interpretation ?? '').trim();
+  const nq = (nextQuestion ?? '').trim();
+  if (!nq || (interp && interp.includes(nq))) return interp;
+  return [interp, nq].filter(Boolean).join('\n\n');
 }
 
 export class ConversationService {
@@ -219,29 +247,53 @@ export class ConversationService {
       if (out.newNeeds.length) await this.deps.needs.seed(session.id, businessId, out.newNeeds);
     }
 
-    // In answer mode the BB reply is the grounded answer ALONE — the next discovery question is dropped, and any
-    // genuinely-needed clarification is already carried inside the answer itself (the model states what it needs).
-    const bbContent = answerMode
-      ? (out.interpretation ?? '').trim()
-      : [out.interpretation, out.nextQuestion].filter((s) => s && s.trim()).join('\n\n');
-    if (bbContent) {
-      await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: bbContent, language, infoNeedKey: null });
+    if (answerMode) {
+      // a contextual answer is the grounded answer ALONE — no discovery question, no state-machine advance.
+      const bbContent = (out.interpretation ?? '').trim();
+      if (bbContent) await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: bbContent, language, infoNeedKey: null });
+      const turns = await this.deps.conversations.listTurns(session.id);
+      const updated = await this.deps.conversations.getByBusiness(businessId);
+      return { session: updated ?? session, turns, readyForAha2: session.status === 'ready_for_aha2' };
     }
 
-    let ready: boolean;
-    if (answerMode) {
-      // a contextual answer never advances the discovery state machine (status/focus stay as they are)
-      ready = session.status === 'ready_for_aha2';
-    } else {
-      const openNeeds = await this.deps.needs.listOpen(session.id);
-      // Gate close: the conversation may only report READY once a founder goal is actually PERSISTED (kind='goal').
-      // The model's say-so / all-needs-closed is necessary but not sufficient — that is how businesses left the
-      // conversation goal-less and only discovered it later as an opaque strategy failure. When otherwise-ready
-      // without a goal, the arc surfaces the reflect-back (awaitingGoal) rather than looping the goal question.
-      const hasGoal = (await this.deps.state.listActive(businessId)).some((s) => s.kind === 'goal');
-      ready = (out.readyForAha2 || openNeeds.length === 0) && hasGoal;
-      await this.deps.conversations.setStatus(session.id, ready ? 'ready_for_aha2' : 'active', out.nextQuestion ?? null);
+    // FIX 3 — coverage gate. A strategy is only honest once the required-core is covered: goal (a persisted goal
+    // row), horizon, whats_working, acquisition_today. `coveredCore` = the forceable three are no longer open.
+    const openNeeds = await this.deps.needs.listOpen(session.id);
+    const openKeys = new Set(openNeeds.map((n) => n.key));
+    const hasGoal = (await this.deps.state.listActive(businessId)).some((s) => s.kind === 'goal');
+    const coveredCore = FORCEABLE_CORE.every((k) => !openKeys.has(k));
+
+    // Backstop: the model tried to end (or ran dry) while a forceable core need is still open. Re-step ONCE with that
+    // need forced, so it asks a real, conversational question (acknowledge + bridge) instead of stranding. The first
+    // step already recorded answers/declarations; this re-step is used only for the question.
+    let finalOut = out;
+    if ((out.readyForAha2 || openNeeds.length === 0) && !coveredCore) {
+      const forced = FORCEABLE_CORE.find((k) => openKeys.has(k)) ?? null;
+      if (forced && out.nextNeedKey !== forced) {
+        const reInput = await this.buildStepInput(businessId, founderId, businessName, language, session.id, message, currentContext, forced);
+        finalOut = await this.deps.model.step(reInput);
+      }
     }
+
+    // FIX 2a — joinReply never duplicates the question when the interpretation already ends with it.
+    const bbContent = joinReply(finalOut.interpretation, finalOut.nextQuestion);
+    if (bbContent) {
+      await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: bbContent, language, infoNeedKey: finalOut.nextNeedKey ?? null });
+    }
+
+    const otherwiseReady = finalOut.readyForAha2 || openNeeds.length === 0;
+    // Ready ONLY when the model is done AND a goal is persisted AND the required core is covered.
+    const ready = otherwiseReady && hasGoal && coveredCore;
+    // FIX 1 — when core is covered and the model wants to advance but there is NO goal, mark AWAITING_GOAL so the arc
+    // shows the reflect-back immediately (never requiring every other need closed).
+    const focus = ready ? null : (otherwiseReady && coveredCore && !hasGoal ? AWAITING_GOAL_FOCUS : (finalOut.nextQuestion ?? null));
+    await this.deps.conversations.setStatus(session.id, ready ? 'ready_for_aha2' : 'active', focus);
+    this.deps.log?.({ type: 'conversation_step', detail: JSON.stringify({
+      businessId, answered: out.answeredNeedKeys, added: out.newNeeds.map((n) => n.key), openAfter: [...openKeys],
+      requiredCoreOpen: [...(!hasGoal ? ['goal'] : []), ...FORCEABLE_CORE.filter((k) => openKeys.has(k))],
+      forcedReStep: finalOut !== out, targetNeed: finalOut.nextNeedKey ?? null,
+      readyModel: Boolean(out.readyForAha2), hasGoal, coveredCore, ready, awaitingGoal: otherwiseReady && coveredCore && !hasGoal,
+    }) });
 
     const turns = await this.deps.conversations.listTurns(session.id);
     const updated = await this.deps.conversations.getByBusiness(businessId);
@@ -294,17 +346,14 @@ export class ConversationService {
     return selectGoalCandidate(await this.deps.state.listActive(businessId));
   }
 
-  /** Conversation-side gate signal: the founder engaged and every NON-goal need is closed, but no goal row exists —
-   * so the arc shows the reflect-back here instead of re-asking (and re-misclassifying) the goal. */
+  /** FIX 1 — Conversation-side gate signal: the model wanted to advance (marked AWAITING_GOAL) but no goal row
+   * exists. Fires exactly on "wants-to-advance AND no goal" — it no longer requires every other need to be closed,
+   * so a founder can never sit on a closed conversation with no strategy and no card. */
   async awaitingGoal(businessId: string): Promise<boolean> {
     const session = await this.deps.conversations.getByBusiness(businessId);
     if (!session) return false;
     if (await this.hasGoal(businessId)) return false;
-    const open = await this.deps.needs.listOpen(session.id);
-    const openNonGoal = open.filter((n) => n.key !== 'goal');
-    const turns = await this.deps.conversations.listTurns(session.id);
-    const answered = turns.filter((t) => t.role === 'founder').length;
-    return openNonGoal.length === 0 && answered >= 1;
+    return session.currentFocus === AWAITING_GOAL_FOCUS;
   }
 
   /** Write a founder-CONFIRMED goal DIRECTLY as kind='goal' — never through the turn classifier that mis-tagged it.
@@ -314,15 +363,19 @@ export class ConversationService {
     const item = await this.deps.state.append({ id: generateId(), businessId, founderId, kind: 'goal', statement: text, scope: null, language, sourceTurnId: null });
     const session = await this.deps.conversations.getByBusiness(businessId);
     if (session && session.status !== 'ready_for_aha2') {
+      // FIX 1 — advance when the interview was only waiting on the goal (AWAITING_GOAL marker set when the model
+      // wanted to advance) OR when every non-goal need is already closed. Either way the goal was the last blocker.
       const open = await this.deps.needs.listOpen(session.id);
-      if (open.filter((n) => n.key !== 'goal').length === 0) {
-        await this.deps.conversations.setStatus(session.id, 'ready_for_aha2', session.currentFocus ?? null);
+      const onlyGoalLeft = open.filter((n) => n.key !== 'goal').length === 0;
+      if (session.currentFocus === AWAITING_GOAL_FOCUS || onlyGoalLeft) {
+        await this.deps.conversations.setStatus(session.id, 'ready_for_aha2', null);
+        this.deps.log?.({ type: 'conversation_goal_confirmed', detail: JSON.stringify({ businessId, advanced: true }) });
       }
     }
     return item;
   }
 
-  private async buildStepInput(businessId: string, founderId: string, businessName: string, language: string, sessionId: string, latest: string | null, currentContext?: string | null) {
+  private async buildStepInput(businessId: string, founderId: string, businessName: string, language: string, sessionId: string, latest: string | null, currentContext?: string | null, forcedOverride?: string | null) {
     const snap = await this.deps.understanding.latest(businessId);
     const aha = await this.deps.aha1.latest(businessId);
     const openNeeds = await this.deps.needs.listOpen(sessionId);
@@ -336,6 +389,20 @@ export class ConversationService {
     } catch {
       sources = [];
     }
+    // FIX 3 — coverage hints for the model. requiredCoreOpen: the required-core needs still uncovered (goal is
+    // "open" whenever no goal ROW exists, independent of the need's answered flag, because the classifier can mark
+    // the goal need answered without persisting a goal). forcedNeedKey: set when the depth cap fired.
+    const hasGoal = knownState.some((s) => s.kind === 'goal');
+    const openKeys = new Set(openNeeds.map((n) => n.key));
+    const requiredCoreOpen = [...(!hasGoal ? ['goal'] : []), ...FORCEABLE_CORE.filter((k) => openKeys.has(k))];
+    const bb = turns.filter((t) => t.role === 'bb');
+    let sideDepth = 0;
+    for (let i = bb.length - 1; i >= 0; i--) {
+      const k = bb[i]!.infoNeedKey ?? null;
+      if (k && (REQUIRED_CORE as readonly string[]).includes(k)) break; // a core question resets the thread depth
+      sideDepth += 1;
+    }
+    const forcedNeedKey = forcedOverride ?? (sideDepth >= DEPTH_CAP ? (FORCEABLE_CORE.find((k) => openKeys.has(k)) ?? null) : null);
     return {
       businessName,
       interfaceLanguage: language,
@@ -347,7 +414,31 @@ export class ConversationService {
       transcript: windowTranscript(turns),
       latestFounderMessage: latest,
       founderAnswerCount: turns.filter((t) => t.role === 'founder').length, // true count from ALL turns (paces the short arc)
+      requiredCoreOpen,
+      forcedNeedKey,
       currentContext: currentContext ?? null,
     };
+  }
+
+  /** FIX 3 / Addition 1 — DECLINE the current question in one tap: mark the need the last question targeted as
+   * covered (declined) so the depth cap never re-forces it and the founder is never walled in. */
+  async declineCurrentNeed(businessId: string): Promise<void> {
+    const session = await this.deps.conversations.getByBusiness(businessId);
+    if (!session) return;
+    const turns = await this.deps.conversations.listTurns(session.id);
+    const key = [...turns].reverse().find((t) => t.role === 'bb')?.infoNeedKey ?? null;
+    if (key) {
+      await this.deps.needs.markAnswered(session.id, [key]);
+      this.deps.log?.({ type: 'conversation_need_declined', detail: JSON.stringify({ businessId, key }) });
+    }
+  }
+
+  /** Founder-facing coverage: the required-core areas + whether each is covered (goal = a goal row exists; others =
+   * the need is no longer open, i.e. answered or declined). Drives the quiet progress chips in the conversation. */
+  async coverage(businessId: string): Promise<{ key: string; covered: boolean }[]> {
+    const session = await this.deps.conversations.getByBusiness(businessId);
+    const open = session ? new Set((await this.deps.needs.listOpen(session.id)).map((n) => n.key)) : new Set<string>();
+    const hasGoal = await this.hasGoal(businessId);
+    return CONVERSATION_COVERAGE_KEYS.map((key) => ({ key, covered: key === 'goal' ? hasGoal : !open.has(key) }));
   }
 }

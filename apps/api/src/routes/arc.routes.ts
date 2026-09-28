@@ -240,10 +240,17 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
   // ── Moment 3: the conversation (reuses the conversation engine; advances to mirror when ready) ──
   server.post('/v1/businesses/:id/arc/conversation', async (request: FastifyRequest, reply: FastifyReply) => {
     const { founderId, business, language } = await requireBusiness(request);
-    const message = ((request.body as { message?: string })?.message ?? '').trim();
-    if (!message) throw new ValidationError('MESSAGE_REQUIRED', 'A message is required.');
+    const body = (request.body ?? {}) as { message?: string; skip?: boolean };
+    const message = (body.message ?? '').trim();
+    if (!body.skip && !message) throw new ValidationError('MESSAGE_REQUIRED', 'A message is required.');
     await deps.conversationService.startOrResume(business.id, founderId, business.name, language);
-    await deps.conversationService.submitResponse(business.id, founderId, business.name, message, language);
+    // FIX 3 / Addition 1 — one-tap skip: decline the current question's need FIRST (deterministic, so the depth cap
+    // never re-forces it), then let the interview move on. The founder's (localized) message carries the skip.
+    if (body.skip) {
+      await deps.conversationService.declineCurrentNeed(business.id);
+      mark(founderId, business.id, 'talk_turn_submitted', { skip: true });
+    }
+    await deps.conversationService.submitResponse(business.id, founderId, business.name, message || '(skip)', language);
     await reply.status(200).send(await viewFor(business.id, business.name, language, founderId));
   });
 

@@ -28,6 +28,7 @@ export interface ConversationTurn {
   readonly language: string;
   readonly seq: number;
   readonly createdAt: string;
+  readonly infoNeedKey?: string | null; // FIX 3 — which need a bb question targeted (for per-thread depth tracking)
 }
 
 export interface ConversationSession {
@@ -96,6 +97,9 @@ export interface ConversationStepOutput {
   readonly answeredNeedKeys: string[];
   readonly newNeeds: { key: string; whatMissing: string; whyMatters: string }[];
   readonly opener?: ConversationOpener | null; // populated ONLY on the opener step (no founder message yet)
+  // FIX 3 — which OPEN need the nextQuestion targets. Recorded on the bb turn (conversation_turns.info_need_key)
+  // so the service can track per-thread depth and drive the coverage chips. null when nothing pivotal remains.
+  readonly nextNeedKey?: string | null;
 }
 
 /**
@@ -132,6 +136,12 @@ export interface ConversationStepInput {
   // questions → synthesis + diagnosis → verify → ready by ~8. Counted from ALL turns (not the windowed
   // transcript), so it stays accurate in a long session. 0 at the opener.
   readonly founderAnswerCount: number;
+  // FIX 3 — coverage control. `requiredCoreOpen` = the required-core needs still uncovered (priority-ordered); the
+  // model must NOT declare readyForAha2 while any remain. `forcedNeedKey` = when the depth cap fired (too many
+  // consecutive questions on one thread), the ONE need the next question must address — the model acknowledges the
+  // last answer, then pivots to it (never a hard subject change).
+  readonly requiredCoreOpen?: string[];
+  readonly forcedNeedKey?: string | null;
   // M6: a compact, high-signal snapshot of the surface the founder is looking at right now (strategy bet,
   // today's move, the asset/job in Create). Lets the interviewer ground "what do you mean by this?" without
   // the founder restating the page. Optional — absent for the pure discovery flow. NOT a strategy engine.

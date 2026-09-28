@@ -51,6 +51,12 @@ describe('BusinessService', () => {
     expect(await repo.hasMembership(b.id, 'f1')).toBe(true);
   });
 
+  it('FIX 2b: title-cases a lowercase word on create, preserving acronyms/mixed case', async () => {
+    expect((await svc.createBusiness({ founderId: 'f1', name: 'Body move Studio' })).name).toBe('Body Move Studio');
+    expect((await svc.createBusiness({ founderId: 'f1', name: 'body move studio' })).name).toBe('Body Move Studio');
+    expect((await svc.createBusiness({ founderId: 'f1', name: 'B2B Growth iPhone' })).name).toBe('B2B Growth iPhone'); // acronym + mixed case untouched
+  });
+
   it('rejects empty/whitespace business names', async () => {
     await expect(svc.createBusiness({ founderId: 'f1', name: '   ' })).rejects.toBeInstanceOf(ValidationError);
     await expect(svc.createBusiness({ founderId: 'f1', name: '' })).rejects.toBeInstanceOf(ValidationError);

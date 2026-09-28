@@ -49,12 +49,12 @@ export class PgConversationRepository implements IConversationRepository {
     const r = await (this.db as any).insertInto('workspace.conversation_turns')
       .values({ id: input.id, session_id: input.sessionId, business_id: input.businessId, seq, role: input.role, content: input.content, language: input.language, info_need_key: input.infoNeedKey })
       .returningAll().executeTakeFirstOrThrow();
-    return { id: r.id, role: r.role, content: r.content, language: r.language, seq: r.seq, createdAt: iso(r.created_at) };
+    return { id: r.id, role: r.role, content: r.content, language: r.language, seq: r.seq, createdAt: iso(r.created_at), infoNeedKey: r.info_need_key ?? null };
   }
 
   async listTurns(sessionId: string): Promise<ConversationTurn[]> {
     const rows = await (this.db as any).selectFrom('workspace.conversation_turns').selectAll().where('session_id', '=', sessionId).orderBy('seq', 'asc').execute();
-    return rows.map((r: any) => ({ id: r.id, role: r.role, content: r.content, language: r.language, seq: r.seq, createdAt: iso(r.created_at) }));
+    return rows.map((r: any) => ({ id: r.id, role: r.role, content: r.content, language: r.language, seq: r.seq, createdAt: iso(r.created_at), infoNeedKey: r.info_need_key ?? null }));
   }
 }
 

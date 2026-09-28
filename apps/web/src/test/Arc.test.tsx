@@ -124,14 +124,16 @@ describe('ArcSurface — one surface, eight moments', () => {
   it('Moment 3: understanding is DIAGNOSTIC — tensions, confident vs inferring, unanswered; NO strategy yet', async () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: {
       does: 'Physio memberships', serves: 'post-op patients', standsOut: 'recovery-led',
-      tensions: ['Six categories shown equally, but kinetotherapy is far more detailed'],
+      tensions: [{ tension: 'The unfilled field contradicts the expertise message', grounding: 'The site shows "Years of experience: 0+"' }],
       confident: ['Referrals drive members'], inferring: ['Aimed at athletes, not just patients'],
       unanswered: ['What do customers actually value most?'],
     } }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
     expect(await screen.findByText(/Physio memberships/)).toBeInTheDocument();
     expect(screen.getByText('arc.understanding.tensions')).toBeInTheDocument();     // the diagnostic section is present
-    expect(screen.getByText('Six categories shown equally, but kinetotherapy is far more detailed')).toBeInTheDocument();
+    expect(screen.getByText('The unfilled field contradicts the expertise message')).toBeInTheDocument();
+    // FIX 2c — the grounding line resolves the referent (names the field) in the same card
+    expect(screen.getByText('The site shows "Years of experience: 0+"')).toBeInTheDocument();
     expect(screen.getByText('Referrals drive members')).toBeInTheDocument();        // confident (from evidence)
     expect(screen.getByText('Aimed at athletes, not just patients')).toBeInTheDocument(); // inferring (from pattern)
     expect(screen.getByText('What do customers actually value most?')).toBeInTheDocument(); // unanswered
