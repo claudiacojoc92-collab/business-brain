@@ -326,6 +326,17 @@ describe('ArcSurface — one surface, eight moments', () => {
     await waitFor(() => expect(api.arcAdoptStrategy).toHaveBeenCalledWith('b1', 'ver1'));
   });
 
+  it('Moment 6: ONE discuss button (reject collapsed away); clicking it reveals the challenge box', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'strategy', strategy: { bet: 'referrals', over: 'x', horizon: '6m', tradeOffs: ['a'], notNow: ['b'], reconsider: ['c'], proposalId: 'ver1', adoptable: true } }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    await screen.findByText('arc.strategy.eyebrow');
+    expect(screen.getByText('arc.strategy.discuss')).toBeInTheDocument();
+    expect(screen.queryByText('arc.strategy.notconvinced')).toBeNull();     // the second button was collapsed away
+    expect(screen.queryByPlaceholderText('arc.strategy.ph')).toBeNull();
+    fireEvent.click(screen.getByText('arc.strategy.discuss'));
+    await waitFor(() => expect(screen.getByPlaceholderText('arc.strategy.ph')).toBeInTheDocument());
+  });
+
   it('Moment 7: week and day names the week + today', async () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'week_day', weekDay: { week: ['Build the clinic list', 'First outreach'], today: 'Draft the clinic target list', canCreate: false } }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);

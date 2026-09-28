@@ -40,13 +40,22 @@ function UCard({ label, kind, paragraph, bullets }: { label: string; kind: 'prim
     </div>
   );
 }
-function ArcInput({ ph, onSend, cta, t, text, setText, busy, act, workingKey }: {
+function ArcInput({ ph, onSend, cta, t, text, setText, busy, act, workingKey, autoFocus }: {
   ph: string; onSend: (m: string) => Promise<ArcView>; cta?: string; t: T;
   text: string; setText: (s: string) => void; busy: boolean; act: (run: () => Promise<ArcView>, workingKey?: string) => Promise<void>; workingKey?: string;
+  autoFocus?: boolean;
 }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  // When a box is REVEALED on demand (the strategy "let's talk" box), bring it into view and focus it — otherwise it
+  // renders below the buttons, can land below the fold, and reads as "the button did nothing".
+  useEffect(() => {
+    if (!autoFocus) return;
+    const el = ref.current;
+    if (el) { try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { /* jsdom / unsupported */ } el.focus(); }
+  }, [autoFocus]);
   return (
     <form className="s0-strat-input" onSubmit={(e) => { e.preventDefault(); if (text.trim()) void act(() => onSend(text.trim()), workingKey); }}>
-      <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={ph} aria-label={ph} rows={2} disabled={busy} />
+      <textarea ref={ref} value={text} onChange={(e) => setText(e.target.value)} placeholder={ph} aria-label={ph} rows={2} disabled={busy} />
       <button type="submit" className="s0-btn s0-btn-inline" disabled={busy || !text.trim()}>{cta ?? t('arc.send')}</button>
     </form>
   );
@@ -444,10 +453,13 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
           {!ro ? (<>
             <div className="s0-strat-actions">
               <button type="button" className="s0-btn" disabled={busy || !s.adoptable || !s.proposalId} onClick={() => s.proposalId && act(() => arcAdoptStrategy(businessId, s.proposalId!), 'arc.working.plan')}>{t('arc.strategy.adopt')} →</button>
+              {/* One button, not two: a labelled "reject" with no reasoning attached just regenerates the same way a
+                  challenge does (both hold the founder's text as a constraint + regenerate). The value is the text the
+                  founder writes, so we open one box. Excluding the rejected bet from regeneration is known debt —
+                  it earns building when a founder rejects the same bet twice in a row. */}
               <button type="button" className="s0-btn-ghost" disabled={busy} onClick={() => setDiscuss(true)}>{t('arc.strategy.discuss')}</button>
-              <button type="button" className="s0-btn-ghost" disabled={busy} onClick={() => setDiscuss(true)}>{t('arc.strategy.notconvinced')}</button>
             </div>
-            {discuss ? <ArcInput ph={t('arc.strategy.ph')} onSend={(msg) => arcChallengeStrategy(businessId, msg)} cta={t('arc.send')} t={t} text={text} setText={setText} busy={busy} act={act} /> : null}
+            {discuss ? <ArcInput ph={t('arc.strategy.ph')} onSend={(msg) => arcChallengeStrategy(businessId, msg)} cta={t('arc.send')} t={t} text={text} setText={setText} busy={busy} act={act} autoFocus /> : null}
           </>) : null}
         </>);
       }

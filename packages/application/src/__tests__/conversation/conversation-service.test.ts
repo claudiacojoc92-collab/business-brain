@@ -206,6 +206,24 @@ describe('ConversationService', () => {
     expect(m.getStatus()).toBe('ready_for_aha2');
   });
 
+  it('required core cut to TWO: ready with goal + horizon even while whats_working / acquisition_today stay OPEN', async () => {
+    // The model signals ready, a goal is persisted, horizon is answered — but the two now-OPTIONAL core needs are
+    // never answered. Readiness must fire anyway (they no longer gate), freeing the turn budget for the founder's thread.
+    const m = makeDeps({ readyForAha2: true, nextQuestion: null, declarations: [{ kind: 'goal', statement: 'Twenty members in three months' }], answeredNeedKeys: ['horizon'] });
+    await new ConversationService(m.deps).startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    await new ConversationService(m.deps).submitResponse(P.businessId, P.founderId, P.businessName, 'done', P.language);
+    expect(m.getStatus()).toBe('ready_for_aha2');
+    // and the optional needs really were still open (not silently answered)
+    expect(m.needs.filter((n) => (n.key === 'whats_working' || n.key === 'acquisition_today') && n.status === 'open')).toHaveLength(2);
+  });
+
+  it('required core cut to TWO: horizon still gates — ready is withheld while horizon is open', async () => {
+    const m = makeDeps({ readyForAha2: true, nextQuestion: null, declarations: [{ kind: 'goal', statement: 'Twenty members' }], answeredNeedKeys: [] }); // goal but no horizon
+    await new ConversationService(m.deps).startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    await new ConversationService(m.deps).submitResponse(P.businessId, P.founderId, P.businessName, 'done', P.language);
+    expect(m.getStatus()).toBe('active'); // horizon open → not ready
+  });
+
   it('does NOT report ready without a persisted goal, even when the model signals readiness (gate close)', async () => {
     const m = makeDeps({ readyForAha2: true, nextQuestion: null }); // model says ready, but no goal was captured
     await new ConversationService(m.deps).startOrResume(P.businessId, P.founderId, P.businessName, P.language);

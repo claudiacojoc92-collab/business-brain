@@ -104,14 +104,20 @@ const CORE_NEEDS = [
   ...FOUNDER_SELF_NEEDS,
 ];
 
-// FIX 3 — the needs a strategy cannot be honest without. `goal` = where they want to go; `horizon` = by when;
-// `whats_working` + `acquisition_today` = where they actually are (what pays the bills, how leads arrive). The
-// interview may not end until all four are covered (answered or declined). current_marketing/capacity stay optional.
-const REQUIRED_CORE = ['goal', 'horizon', 'whats_working', 'acquisition_today'] as const;
-// Which required-core needs the depth cap may FORCE. `goal` is excluded — a mis-answered goal loops the classifier,
-// so goal is handled by the reflect-back (FIX 1), never by forcing a goal question mid-thread.
-const FORCEABLE_CORE = ['horizon', 'whats_working', 'acquisition_today'] as const;
-const DEPTH_CAP = 3; // after 3 consecutive questions off the required-core, the next must pivot to an uncovered core.
+// The needs that GATE readiness — a strategy cannot be honest without them. Cut to TWO (was four): `goal` = where they
+// want to go, `horizon` = by when. Four required needs + three agenda items consumed ~7 of an ~8-turn budget on
+// business facts, starving the founder's own thread (founder_self 50%→9%, decisions 3→1, observations 1→0). The gate
+// is now `goal` (a persisted goal ROW, via hasGoal) + `horizon` (FORCEABLE_CORE below). `whats_working` +
+// `acquisition_today` are OPTIONAL: still seeded (see CORE_NEEDS), still asked if the model chooses and turns allow,
+// but they no longer gate readiness — the freed turns go back to the founder's thread.
+// Which gating need the depth cap / core backstop may FORCE. Just `horizon` — `goal` is excluded because a
+// mis-answered goal loops the classifier, so goal is handled by the reflect-back (FIX 1), never by forcing mid-thread.
+const FORCEABLE_CORE = ['horizon'] as const;
+const DEPTH_CAP = 3; // after 3 consecutive questions off ON_PLAN_KEYS, the next must pivot to an uncovered core.
+// ON-PLAN for the depth counter: a question on any of these (or a site_ agenda item) is "on-plan" and RESETS the
+// side-thread depth — only invented side-threads accumulate. This stays the FULL coverage set even though only
+// `goal`/`horizon` gate readiness, so cutting the required set never makes the depth cap fire sooner on the (still
+// legitimate) optional coverage needs. Same as the founder-facing coverage chips below.
 // Founder-facing coverage chips (order = the map the founder sees). Labels are localized in the web layer.
 export const CONVERSATION_COVERAGE_KEYS = ['goal', 'horizon', 'whats_working', 'acquisition_today'] as const;
 
@@ -424,8 +430,10 @@ export class ConversationService {
     let sideDepth = 0;
     for (let i = bb.length - 1; i >= 0; i--) {
       const k = bb[i]!.infoNeedKey ?? null;
-      // a core OR agenda (site_) question is ON-PLAN → resets thread depth; only invented side-threads accumulate.
-      if (k && ((REQUIRED_CORE as readonly string[]).includes(k) || k.startsWith('site_'))) break;
+      // a coverage-need OR agenda (site_) question is ON-PLAN → resets thread depth; only invented side-threads
+      // accumulate. Uses the FULL coverage set (not the gating subset), so asking an optional core need
+      // (whats_working/acquisition_today) never counts as a side-thread and the depth cap fires no sooner than before.
+      if (k && ((CONVERSATION_COVERAGE_KEYS as readonly string[]).includes(k) || k.startsWith('site_'))) break;
       sideDepth += 1;
     }
     // Continuity: force the opening questions onto the seeded agenda (site_ needs), in order, before anything else —

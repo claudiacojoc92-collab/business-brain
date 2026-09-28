@@ -71,6 +71,30 @@ describe('MirrorService — three lanes + grounded contrast', () => {
     expect(view.contrasts).toHaveLength(1);        // the one-sided one is guarded out
   });
 
+  it('DROPS a SAME-LANE contrast (business-vs-business) — the Bună Ziua/Decebal fabrication pattern', async () => {
+    const sameLaneBiz: MirrorMismatch = {
+      founderWords: 'You want to position Decebal on medical recovery',
+      founderLane: 'business',
+      against: 'You have no physiotherapist at Bună Ziua',
+      againstLane: 'business',                       // two business facts about different locations — not a real tension
+      tension: 'Which is the truth?',
+    };
+    const sameLaneSelf: MirrorMismatch = {
+      founderWords: 'You said you avoid selling', founderLane: 'self',
+      against: 'You said you dislike cold calls', againstLane: 'self', tension: 'invented',
+    };
+    const m = makeDeps([valid, sameLaneBiz, sameLaneSelf]);
+    const view = await new MirrorService(m.deps).build('B', 'Acme', 'en');
+    expect(view.contrasts).toHaveLength(1);          // only the cross-lane (business-vs-observed) survives
+    expect(view.contrasts[0]!.against).toMatch(/six service categories/);
+  });
+
+  it('KEEPS a legitimate business-vs-observed contrast (the mirror\'s core: told vs saw) — guard is not over-eager', async () => {
+    const m = makeDeps([valid]);                     // founderLane business, againstLane observed
+    const view = await new MirrorService(m.deps).build('B', 'Acme', 'en');
+    expect(view.contrasts).toHaveLength(1);
+  });
+
   it('does NOT fabricate: an empty model result yields no contrasts', async () => {
     const m = makeDeps([]);
     const view = await new MirrorService(m.deps).build('B', 'Acme', 'en');

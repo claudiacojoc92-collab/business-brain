@@ -99,7 +99,14 @@ export class MirrorService {
         heldStrategy,
       });
       contrasts = (out.mismatches ?? [])
+        // Structural completeness: both sides + a tension, founder side from a real lane.
         .filter((m) => m.founderWords?.trim() && m.against?.trim() && m.tension?.trim() && (m.founderLane === 'business' || m.founderLane === 'self'))
+        // Anti-fabrication: a mirror contrasts ACROSS lanes — the founder's words vs what BB observed, another lane,
+        // or the held strategy. A SAME-LANE contrast (business-vs-business, self-vs-self) is the fabrication pattern:
+        // the model reaches across two unrelated same-lane facts and invents a tension (e.g. "no physio at Bună Ziua"
+        // vs "specialise Decebal on medical" — two business facts about different locations that do not conflict).
+        // Reject those; every legitimate cross-lane tension (incl. told-vs-observed) survives.
+        .filter((m) => m.founderLane !== m.againstLane)
         .slice(0, MAX_CONTRASTS);
     }
 
