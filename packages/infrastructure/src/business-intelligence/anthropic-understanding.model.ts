@@ -132,6 +132,10 @@ function systemPrompt(lang: string): string {
     'The `tension` field is ONE sharp sentence in the shape: what does not line up (SPECIFIC) → what it implies for',
     'the founder. If you cannot name the specific services/pages/numbers, the tension is too general — sharpen it or',
     'drop it. NEVER a contradiction phrased in categories ("some services", "a channel", "content") — always the names.',
+    'PLAIN WORDS, not consultant-academic: name the real thing and use plain verbs — no stacked-noun abstraction',
+    '("mesaj diferențiat pe segmente distincte"), no filler ("activează", "servește brandul"). A tired founder should',
+    'understand the line instantly. (This is the READING step, so it stays observational — describe what the sources',
+    'show; do NOT switch into "you should" advice, that is the strategy\'s job.)',
   ].join('\n');
 }
 
