@@ -264,7 +264,7 @@
    alone with clear spacing, so the founder can never miss the invitation to continue. */
 .s0-arc-question { margin: 16px 0 6px; padding: 15px 17px; border: 1px solid var(--s0-clay); border-left: 3px solid var(--s0-clay); border-radius: 12px; background: color-mix(in srgb, var(--s0-clay) 10%, var(--s0-bg-2)); display: flex; flex-direction: column; gap: 7px; }
 .s0-arc-question-tag { font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--s0-clay); }
-.s0-arc-question-text { margin: 0; color: var(--s0-ink); font-size: 16.5px; font-weight: 500; line-height: 1.45; }
+.s0-arc-question-text { margin: 0; color: var(--s0-ink); font-size: 16.5px; font-weight: 500; line-height: 1.45; white-space: pre-wrap; }
 
 /* The Moment 4 conversation THREAD — a visible, growing sequence (no hidden-history toggle). Founder turns are
    labelled "You" and set apart (inset, own ground); strategist turns read as plain messages; the current

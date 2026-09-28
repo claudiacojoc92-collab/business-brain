@@ -233,7 +233,7 @@ describe('ArcSurface — one surface, eight moments', () => {
       lead: "I've read your sources — here's what stands out before we talk.",
       bullets: ['Medical brochure: purely clinical, for orthopedists', 'Website: two locations, Schroth is the priciest', 'Corporate brochure: a separate B2B channel'],
       notSure: "I'm not sure what blocks the first step to clinics.",
-      invitation: 'What is missing? What did I get wrong?',
+      invitation: 'Am citit sursele — ce lipsește din imagine?',
     } });
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'conversation', turns: [{ id: 't1', role: 'bb', content: opener }] }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
@@ -241,10 +241,8 @@ describe('ArcSurface — one surface, eight moments', () => {
     expect(await screen.findByText(/here's what stands out/i)).toBeInTheDocument();
     expect(screen.getByText(/Medical brochure: purely clinical/i).tagName).toBe('LI');
     expect(screen.getByText(/I'm not sure what blocks/i)).toBeInTheDocument();
-    // The closing question is the FIXED strategist sign-off (i18n key), alone in the clay card — NOT the model's
-    // per-run invitation text, so the "what did I get wrong?" framing can never leak back in.
-    expect(screen.getByText('arc.opener.invitation').closest('.s0-arc-question')).toBeTruthy();
-    expect(screen.queryByText('What is missing? What did I get wrong?')).toBeNull();
+    // The closing question is the model's CONTEXTUAL invitation (varies per run), alone in the clay card.
+    expect(screen.getByText('Am citit sursele — ce lipsește din imagine?').closest('.s0-arc-question')).toBeTruthy();
     expect(screen.getByText(/Medical brochure: purely clinical/i).closest('.s0-arc-question')).toBeNull();
     expect(screen.getByText('arc.question.label')).toBeInTheDocument();
   });

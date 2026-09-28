@@ -203,11 +203,12 @@ function ArcOpenerView({ opener, t, asQuestion }: { opener: ArcOpener; t: T; asQ
       </div>
       {opener.bullets.length ? <UCard label={t('arc.opener.stands')} kind="primary" bullets={opener.bullets} /> : null}
       {opener.notSure ? <UCard label={t('arc.opener.notsure')} kind="inference" bullets={[opener.notSure]} /> : null}
-      {/* The closing question is a FIXED strategist sign-off (not the model's per-run text): "here's what I see,
-          you have context the sources can't" — never "what did I get wrong?". Framing must never regress. */}
-      {asQuestion
-        ? <ArcQuestion text={t('arc.opener.invitation')} t={t} />
-        : <div className="s0-u-card"><p className="s0-u-card-lead">{t('arc.opener.invitation')}</p></div>}
+      {/* The closing question is the model's CONTEXTUAL invitation (varies per run, grounded in what stood out) —
+          falling back to the fixed strategist sign-off only if the model gave none. Never "what did I get wrong?". */}
+      {(() => { const q = (opener.invitation ?? '').trim() || t('arc.opener.invitation');
+        return asQuestion
+          ? <ArcQuestion text={q} t={t} />
+          : <div className="s0-u-card"><p className="s0-u-card-lead">{q}</p></div>; })()}
     </div>
   );
 }
