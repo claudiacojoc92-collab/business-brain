@@ -465,6 +465,9 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     conversation: {
       status: async (bid) => (await convRepo.getByBusiness(bid))?.status ?? null,
       turns: async (bid) => { const s = await convRepo.getByBusiness(bid); if (!s) return []; return (await convRepo.listTurns(s.id)).map((t) => ({ id: t.id, role: t.role, content: t.content })); },
+      hasGoal: (bid) => conversationService.hasGoal(bid),
+      goalCandidate: (bid) => conversationService.goalCandidate(bid),
+      awaitingGoal: (bid) => conversationService.awaitingGoal(bid),
     },
     mirror: { build: (bid, name, lang) => mirrorService.build(bid, name, lang) },
     strategy: {
@@ -479,6 +482,8 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     founderContext: async (bid) => (await founderStateRepo.listActive(bid)).filter((s) => s.kind === 'resource' || s.kind === 'decision' || s.kind === 'preference').map((s) => s.statement.trim()).filter(Boolean),
     email: new AnthropicEmailModel(anthropicKey),
     reflect: new AnthropicCorrectionReflectionModel(anthropicKey),
+    // eslint-disable-next-line no-console
+    log: (e) => console.error('[arc]', JSON.stringify(e)),
   });
 
   // ── Slice 6: carousel (CreateHandoff → governed asset-level copy → deterministic render → export) ──

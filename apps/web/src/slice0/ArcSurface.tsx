@@ -6,7 +6,7 @@ import {
   getArc, arcAddSource, arcAddLink, arcAddFile,
   arcPourInDone, arcConversation, arcConfirmUnderstanding, arcCorrectUnderstanding,
   arcMirrorSeen, arcAdoptStrategy, arcChallengeStrategy, arcAdoptWeekDay, arcGenerateEmail,
-  arcSaveEmail, arcExportEmail, arcContainerSeen, type ArcView,
+  arcSaveEmail, arcExportEmail, arcContainerSeen, arcConfirmGoal, type ArcView,
 } from '../api/client';
 // NOTE: Instagram is intentionally HIDDEN from the pour-in until after MVP validation (founder decision).
 // The direct Instagram Login connector + the /arc/source/instagram route are left in place, unused, for when
@@ -49,6 +49,33 @@ function ArcInput({ ph, onSend, cta, t, text, setText, busy, act, workingKey }: 
       <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={ph} aria-label={ph} rows={2} disabled={busy} />
       <button type="submit" className="s0-btn s0-btn-inline" disabled={busy || !text.trim()}>{cta ?? t('arc.send')}</button>
     </form>
+  );
+}
+
+// REFLECT-BACK goal confirmation. This is the best moment in the product, NOT a failure — the founder sees their
+// own words reflected back correctly. Deliberately NOT styled as an error (no warning colour, no icon, no apology).
+// The reflected statement renders VERBATIM in the language it was captured in (the founder's own words); the field
+// holds the FULL statement (incl. the "nu"/"not" trade-off half) and never truncates. Editing writes what the
+// founder leaves in the field. Hoisted to module scope so its text state survives re-renders (focus is kept).
+function GoalConfirm({ candidate, t, busy, onConfirm }: {
+  candidate: { stateId: string | null; statement: string } | null; t: T; busy: boolean;
+  onConfirm: (statement: string, fromStateId: string | null) => void;
+}) {
+  const cold = !candidate;
+  const [text, setText] = useState(candidate?.statement ?? '');
+  return (
+    <div className="s0-goal-confirm">
+      <ArcMsg lines={[t('arc.goal.heading')]} />
+      <p className="s0-strat-msg-line">{cold ? t('arc.goal.askcold') : t('arc.goal.reflect')}</p>
+      <textarea
+        className="s0-goal-field" value={text} onChange={(e) => setText(e.target.value)} rows={3} disabled={busy}
+        aria-label={t('arc.goal.fieldlabel')} placeholder={cold ? t('arc.goal.placeholder') : ''}
+      />
+      <div className="s0-strat-actions">
+        <button type="button" className="s0-btn" disabled={busy || !text.trim()} onClick={() => onConfirm(text.trim(), candidate?.stateId ?? null)}>{t('arc.goal.confirm')} →</button>
+        {!cold ? <button type="button" className="s0-btn-quiet" disabled={busy} onClick={() => setText('')}>{t('arc.goal.notit')}</button> : null}
+      </div>
+    </div>
   );
 }
 
@@ -253,6 +280,23 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
   // Render a moment's view. `ro` (read-only) = the founder is re-reading a past moment: show the content exactly
   // as it was, but hide the interactive controls (buttons/inputs) so going back never advances anything.
   function renderMoment(m: ArcView, ro: boolean) {
+    // need_goal is NOT an error — it's the reflect-back confirm step. Render it as its own (non-error) surface.
+    if (m.error?.kind === 'need_goal') {
+      if (ro) return <ArcMsg lines={[t('arc.goal.heading')]} />;
+      return <GoalConfirm candidate={m.error.goalCandidate ?? null} t={t} busy={busy} onConfirm={(s, id) => void act(() => arcConfirmGoal(businessId, s, id), 'arc.working')} />;
+    }
+    if (m.error?.kind === 'need_understanding') {
+      return (<>
+        <ArcMsg lines={[t('arc.error.needunderstanding')]} />
+        {!ro ? <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={() => void load()}>{t('arc.error.retry')} →</button></div> : null}
+      </>);
+    }
+    if (m.error?.kind === 'strategy_insufficient') {
+      return (<>
+        <ArcMsg lines={[t('arc.error.strategyinsufficient'), ...(m.error.detail ? [m.error.detail] : [])]} />
+        {!ro ? <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={() => void load()}>{t('arc.error.retry')} →</button></div> : null}
+      </>);
+    }
     if (m.error?.kind === 'generation') {
       return (<>
         <ArcMsg lines={[t('arc.error.generation')]} />

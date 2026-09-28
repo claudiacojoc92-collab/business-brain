@@ -199,11 +199,18 @@ describe('ConversationService', () => {
     expect(goal?.scope ?? null).toBeNull();
   });
 
-  it('marks ready_for_aha2 when the model signals readiness', async () => {
-    const m = makeDeps({ readyForAha2: true, nextQuestion: null });
+  it('marks ready_for_aha2 when the model signals readiness AND a goal is persisted', async () => {
+    const m = makeDeps({ readyForAha2: true, nextQuestion: null, declarations: [{ kind: 'goal', statement: 'Twenty members in three months' }] });
     await new ConversationService(m.deps).startOrResume(P.businessId, P.founderId, P.businessName, P.language);
     await new ConversationService(m.deps).submitResponse(P.businessId, P.founderId, P.businessName, 'done', P.language);
     expect(m.getStatus()).toBe('ready_for_aha2');
+  });
+
+  it('does NOT report ready without a persisted goal, even when the model signals readiness (gate close)', async () => {
+    const m = makeDeps({ readyForAha2: true, nextQuestion: null }); // model says ready, but no goal was captured
+    await new ConversationService(m.deps).startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    await new ConversationService(m.deps).submitResponse(P.businessId, P.founderId, P.businessName, 'done', P.language);
+    expect(m.getStatus()).toBe('active'); // the gate holds — a goal-less conversation can never report ready
   });
 
   it('pause sets status paused', async () => {

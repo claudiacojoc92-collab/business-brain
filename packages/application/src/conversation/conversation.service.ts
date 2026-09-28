@@ -15,6 +15,7 @@ import type {
   FounderObservation,
   FounderStateKind,
 } from './contracts';
+import { selectGoalCandidate, type GoalCandidate } from './goal-candidate';
 
 /**
  * The Moment 4 opener turn's stored content. When the model produced a STRUCTURED opener (the short pointer),
@@ -233,7 +234,12 @@ export class ConversationService {
       ready = session.status === 'ready_for_aha2';
     } else {
       const openNeeds = await this.deps.needs.listOpen(session.id);
-      ready = out.readyForAha2 || openNeeds.length === 0;
+      // Gate close: the conversation may only report READY once a founder goal is actually PERSISTED (kind='goal').
+      // The model's say-so / all-needs-closed is necessary but not sufficient — that is how businesses left the
+      // conversation goal-less and only discovered it later as an opaque strategy failure. When otherwise-ready
+      // without a goal, the arc surfaces the reflect-back (awaitingGoal) rather than looping the goal question.
+      const hasGoal = (await this.deps.state.listActive(businessId)).some((s) => s.kind === 'goal');
+      ready = (out.readyForAha2 || openNeeds.length === 0) && hasGoal;
       await this.deps.conversations.setStatus(session.id, ready ? 'ready_for_aha2' : 'active', out.nextQuestion ?? null);
     }
 
@@ -274,6 +280,46 @@ export class ConversationService {
       businessCorrections: pick('business_correction'),
       observations: obs,
     };
+  }
+
+  /** True when the founder has a PERSISTED goal (kind='goal'). The conversation-ready gate + the strategy moment
+   * both consult this: no goal ⇒ the reflect-back surface, never a silent advance or an opaque strategy failure. */
+  async hasGoal(businessId: string): Promise<boolean> {
+    return (await this.deps.state.listActive(businessId)).some((s) => s.kind === 'goal');
+  }
+
+  /** The strongest goal-shaped statement the founder already stated (mis-filed as decision/intention), VERBATIM,
+   * for reflect-back confirmation — or null to ask cold. Deterministic; never re-runs the turn classifier. */
+  async goalCandidate(businessId: string): Promise<GoalCandidate | null> {
+    return selectGoalCandidate(await this.deps.state.listActive(businessId));
+  }
+
+  /** Conversation-side gate signal: the founder engaged and every NON-goal need is closed, but no goal row exists —
+   * so the arc shows the reflect-back here instead of re-asking (and re-misclassifying) the goal. */
+  async awaitingGoal(businessId: string): Promise<boolean> {
+    const session = await this.deps.conversations.getByBusiness(businessId);
+    if (!session) return false;
+    if (await this.hasGoal(businessId)) return false;
+    const open = await this.deps.needs.listOpen(session.id);
+    const openNonGoal = open.filter((n) => n.key !== 'goal');
+    const turns = await this.deps.conversations.listTurns(session.id);
+    const answered = turns.filter((t) => t.role === 'founder').length;
+    return openNonGoal.length === 0 && answered >= 1;
+  }
+
+  /** Write a founder-CONFIRMED goal DIRECTLY as kind='goal' — never through the turn classifier that mis-tagged it.
+   * If the conversation was only waiting on the goal, release the ready gate so the arc advances. */
+  async setGoal(businessId: string, founderId: string, statement: string, language: string): Promise<FounderStateItem> {
+    const text = (statement ?? '').trim();
+    const item = await this.deps.state.append({ id: generateId(), businessId, founderId, kind: 'goal', statement: text, scope: null, language, sourceTurnId: null });
+    const session = await this.deps.conversations.getByBusiness(businessId);
+    if (session && session.status !== 'ready_for_aha2') {
+      const open = await this.deps.needs.listOpen(session.id);
+      if (open.filter((n) => n.key !== 'goal').length === 0) {
+        await this.deps.conversations.setStatus(session.id, 'ready_for_aha2', session.currentFocus ?? null);
+      }
+    }
+    return item;
   }
 
   private async buildStepInput(businessId: string, founderId: string, businessName: string, language: string, sessionId: string, latest: string | null, currentContext?: string | null) {

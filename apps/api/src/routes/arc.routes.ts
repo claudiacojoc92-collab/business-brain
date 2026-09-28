@@ -279,6 +279,20 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
     await reply.status(200).send({ ...view, strategyChange: { because: statement } });
   });
 
+  // ── Goal confirmation (reflect-back). The founder confirms (optionally edits) the goal we reflected from their
+  //    own words; it is written DIRECTLY as kind='goal' (never re-classified), then the arc re-derives — strategy
+  //    now has its goal and generates. Reachable from wherever need_goal appeared; no trip back through the gate.
+  server.post('/v1/businesses/:id/arc/goal', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { founderId, business, language } = await requireBusiness(request);
+    const body = (request.body ?? {}) as { statement?: string; fromStateId?: string };
+    const statement = (body.statement ?? '').trim();
+    const fromStateId = (body.fromStateId ?? '').trim() || null;
+    if (!statement) throw new ValidationError('GOAL_REQUIRED', 'A goal is required.');
+    await deps.conversationService.setGoal(business.id, founderId, statement, language);
+    mark(founderId, business.id, 'goal_confirmed', { fromCandidate: Boolean(fromStateId), edited: Boolean(fromStateId), length: statement.length });
+    await reply.status(200).send(await viewFor(business.id, business.name, language, founderId));
+  });
+
   // ── Moment 7: adopt the week/day plan (reuses the plan engine) ──
   server.post('/v1/businesses/:id/arc/week-day/adopt', async (request: FastifyRequest, reply: FastifyReply) => {
     const { founderId, business, language } = await requireBusiness(request);

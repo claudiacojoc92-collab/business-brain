@@ -39,6 +39,7 @@ export type FounderEventType =
   | 'talk_opened'
   | 'talk_turn_submitted'
   | 'baseline_reopened'
+  | 'goal_confirmed'         // founder confirmed a reflected-back (or cold-asked) goal → written directly as kind='goal'
   // Living State — impact evaluator + return loop.
   | 'impact_evaluated'       // a new reality was assessed against the held strategy (carries the verdict)
   | 'outcome_reported'       // a founder reported an outcome of their work

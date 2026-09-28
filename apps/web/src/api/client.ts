@@ -475,7 +475,9 @@ export interface AddSourceResult { state: 'synced' | 'partial' | 'empty' | 'fail
 export interface ArcView {
   moment: ArcMoment;
   businessName: string;
-  error?: { kind: 'generation' | 'pourin_empty' | 'pourin_failed' } | null; // per-moment failure — never the whole surface
+  // per-moment status — never the whole surface. `need_goal` is a positive confirm step (goalCandidate = the
+  // founder's own words to reflect back, verbatim, or null to ask cold); `detail` explains a strategy_insufficient.
+  error?: { kind: 'generation' | 'pourin_empty' | 'pourin_failed' | 'need_goal' | 'need_understanding' | 'strategy_insufficient'; goalCandidate?: { stateId: string | null; statement: string } | null; detail?: string | null } | null;
   contentLanguage?: string | null; // the source/founder language — arc chrome localizes to this
   strategyChange?: { because: string } | null; // Moment 6 — transient "the bet changed because…" note
   sources?: { url: string; type: ArcSourceType; detail?: string }[];
@@ -519,6 +521,9 @@ export const arcMirrorSeen = (b: string, answer?: string): Promise<ArcView> => a
 export const arcAdoptStrategy = (b: string, versionId: string): Promise<ArcView> => arcPost(b, 'strategy/adopt', { versionId });
 export const arcChallengeStrategy = (b: string, statement: string): Promise<ArcView> => arcPost(b, 'strategy/challenge', { statement });
 export const arcAdoptWeekDay = (b: string): Promise<ArcView> => arcPost(b, 'week-day/adopt');
+// Reflect-back goal confirmation — writes the (possibly edited) goal directly as kind='goal', then re-derives.
+export const arcConfirmGoal = (b: string, statement: string, fromStateId?: string | null): Promise<ArcView> =>
+  arcPost(b, 'goal', { statement, ...(fromStateId ? { fromStateId } : {}) });
 export const arcGenerateEmail = (b: string): Promise<{ email: { subject: string; body: string } }> => arcPost<{ email: { subject: string; body: string } }>(b, 'email/generate');
 export const arcSaveEmail = (b: string, subject: string, body: string): Promise<{ ok: boolean }> => arcPost<{ ok: boolean }>(b, 'email/save', { subject, body });
 export const arcExportEmail = (b: string): Promise<ArcView> => arcPost(b, 'email/export');

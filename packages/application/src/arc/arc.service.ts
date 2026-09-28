@@ -1,6 +1,7 @@
 import type { StrategyVersionRecord } from '../strategy/index';
 import type { PlanVersion } from '../plan/index';
 import type { GovernedUnderstanding } from '../bi/index';
+import type { GoalCandidate } from '../conversation/index';
 import { computeArcMoment } from './moment';
 import type {
   ArcFlags, ArcView, ArcTurn, ArcEmail, ArcMirror, IEmailModelPort, ArcContainerItem, ArcSource,
@@ -14,6 +15,9 @@ export interface ArcDeps {
   conversation: {
     status(businessId: string): Promise<'active' | 'paused' | 'ready_for_aha2' | null>;
     turns(businessId: string): Promise<ArcTurn[]>;
+    hasGoal(businessId: string): Promise<boolean>;
+    goalCandidate(businessId: string): Promise<GoalCandidate | null>;
+    awaitingGoal(businessId: string): Promise<boolean>;
   };
   mirror: { build(businessId: string, businessName: string, language: string): Promise<{ contrasts: { founderWords: string; against: string; tension: string }[] }> };
   strategy: {
@@ -28,8 +32,12 @@ export interface ArcDeps {
   founderContext: (businessId: string) => Promise<string[]>;
   email: IEmailModelPort;
   reflect: ICorrectionReflectionModel;
+  /** Structured arc telemetry (mirrors the carousel). Absent ⇒ silent (tests). Every per-moment failure and the
+   * reflect-back both log here, so a production arc failure is never invisible. */
+  log?: (e: { type: string; detail?: string }) => void;
 }
 
+const errText = (e: unknown): string => { const x = e as Error; return `${x?.message ?? String(e)}${x?.stack ? ' | ' + x.stack.split('\n').slice(1, 3).map((l) => l.trim()).join(' ') : ''}`.slice(0, 300); };
 const clean = (xs?: (string | null | undefined)[]): string[] => (xs ?? []).map((x) => (x ?? '').trim()).filter(Boolean);
 const first = (...xs: (string | undefined)[]): string => { for (const x of xs) if (x?.trim()) return x.trim(); return ''; };
 const dedupe = (xs: string[]): string[] => { const seen = new Set<string>(); const out: string[] = []; for (const x of xs) { const v = (x ?? '').trim(); if (v && !seen.has(v)) { seen.add(v); out.push(v); } } return out; };
@@ -66,6 +74,10 @@ export class ArcService {
         return { ...base, understanding: this.projectUnderstanding(u, (await this.deps.aha1.latest(businessId))?.findings ?? []) };
 
       case 'conversation':
+        // Gate close (Part 2): if the founder has engaged and every non-goal need is closed but no goal was
+        // persisted (the classifier mis-filed it, or none was stated), don't loop the question — reflect the
+        // strongest goal-shaped statement back for confirmation, right here.
+        if (await this.deps.conversation.awaitingGoal(businessId)) return this.needGoalView(base, businessId);
         return { ...base, turns: await this.deps.conversation.turns(businessId) };
 
       case 'mirror': {
@@ -76,7 +88,8 @@ export class ArcService {
           const m = await this.deps.mirror.build(businessId, businessName, language);
           const c = m.contrasts[0] ?? null;
           return { ...base, mirror: c ? { founderWords: c.founderWords, against: c.against, tension: c.tension } : null };
-        } catch {
+        } catch (e) {
+          this.deps.log?.({ type: 'arc_moment_threw', detail: JSON.stringify({ businessId, moment: 'mirror', err: errText(e) }) });
           return { ...base, error: { kind: 'generation' } };
         }
       }
@@ -84,12 +97,20 @@ export class ArcService {
       case 'strategy': {
         let rec;
         try { rec = await this.deps.strategy.proposalOrGenerate(businessId, businessName, language); }
-        catch { return { ...base, error: { kind: 'generation' } }; } // per-moment, never fail the whole surface
+        catch (e) {
+          this.deps.log?.({ type: 'arc_moment_threw', detail: JSON.stringify({ businessId, moment: 'strategy', err: errText(e) }) });
+          return { ...base, error: { kind: 'generation' } }; // a real throw is genuinely transient — retry is right
+        }
         const core = rec.bundle.core;
-        // A strategy that failed to generate/validate is persisted as an EMPTY bundle with status 'insufficient';
-        // rendering it produced a hollow card (a title with no content). Treat it as a retryable generation
-        // failure instead of showing an empty strategy.
-        if (rec.status === 'insufficient' || !core.coreBet.priority.trim()) return { ...base, error: { kind: 'generation' } };
+        if (rec.status === 'insufficient' || !core.coreBet.priority.trim()) {
+          // Distinguish the two deterministic causes so the founder gets a real path, not a dead-end retry:
+          //  • no persisted goal → REFLECT BACK the founder's own words (or ask cold) — the recoverable case.
+          //  • goal present but the bundle still could not form → strategy_insufficient, carrying the gate reason.
+          if (!(await this.deps.conversation.hasGoal(businessId))) return this.needGoalView(base, businessId);
+          const detail = (rec.gateResults ?? []).filter((g) => !g.pass).map((g) => g.detail).filter(Boolean)[0] ?? null;
+          this.deps.log?.({ type: 'arc_moment_error', detail: JSON.stringify({ businessId, moment: 'strategy', kind: 'strategy_insufficient', gate: detail }) });
+          return { ...base, error: { kind: 'strategy_insufficient', detail } };
+        }
         // "Why this, and not something else" — the explicit trade-offs read as tight "X over Y, because Z" bullets;
         // fall back to the core reasoning only if there are none, so the card is never empty and never a wall of text.
         let why = dedupe((core.tradeOffs ?? [])
@@ -117,10 +138,16 @@ export class ArcService {
       case 'week_day': {
         let plan;
         try { plan = await this.deps.plan.proposalOrGenerate(businessId); }
-        catch { return { ...base, error: { kind: 'generation' } }; }
+        catch (e) {
+          this.deps.log?.({ type: 'arc_moment_threw', detail: JSON.stringify({ businessId, moment: 'week_day', err: errText(e) }) });
+          return { ...base, error: { kind: 'generation' } };
+        }
         // A strategy is adopted by the time we reach week_day, so a plan should exist. If none came back, treat it
         // as a soft generation failure (retryable) rather than showing an empty, actionless week.
-        if (!plan) return { ...base, error: { kind: 'generation' } };
+        if (!plan) {
+          this.deps.log?.({ type: 'arc_moment_error', detail: JSON.stringify({ businessId, moment: 'week_day', kind: 'generation', reason: 'null_plan' }) });
+          return { ...base, error: { kind: 'generation' } };
+        }
         const priorities = (plan.priorities ?? []).slice().sort((a, b) => a.order - b.order);
         const week = priorities.map((p) => p.title.trim()).filter(Boolean).slice(0, 5);
         const firstAction = priorities.flatMap((p) => p.actions)[0] ?? null;
@@ -142,6 +169,15 @@ export class ArcService {
    * flat summaries. This surfaces the strategist's actual reading: what stands out, what does NOT line up
    * (tensions), what's confident-from-evidence vs inferred-from-pattern, and what the sources can't answer.
    */
+  /** The shared reflect-back surface (both call sites: the conversation gate and the strategy moment). Selects the
+   * strongest goal-shaped statement the founder already stated (verbatim) or null to ask cold, and logs whether a
+   * candidate was found and its score — so we can see how often founders arrive here and how often we can reflect. */
+  private async needGoalView(base: ArcView, businessId: string): Promise<ArcView> {
+    const cand = await this.deps.conversation.goalCandidate(businessId);
+    this.deps.log?.({ type: 'arc_reflect_back', detail: JSON.stringify({ businessId, candidate: Boolean(cand), score: cand?.score ?? 0, from: cand?.kind ?? null }) });
+    return { ...base, error: { kind: 'need_goal', goalCandidate: cand ? { stateId: cand.stateId, statement: cand.statement } : null } };
+  }
+
   private projectUnderstanding(u: GovernedUnderstanding | null, aha1: { finding: string }[]): ArcUnderstanding {
     const tensions = (u?.contradictions ?? [])
       .map((c) => {

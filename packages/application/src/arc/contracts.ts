@@ -89,12 +89,28 @@ export interface ArcContainer { readonly items: ArcContainerItem[] }
  * = the pour-in bridge produced nothing / threw — the founder stays on pour-in and fixes their sources. The UI
  * localizes the message by kind (content language), so no English leaks in.
  */
-export type ArcErrorKind = 'generation' | 'pourin_empty' | 'pourin_failed';
+export type ArcErrorKind =
+  | 'generation'          // a model call for this moment threw — genuinely transient; retry is the right action
+  | 'pourin_empty'        // the pour-in bridge produced nothing — founder fixes their sources
+  | 'pourin_failed'       // the pour-in bridge threw — founder fixes their sources
+  | 'need_goal'           // NOT a failure: strategy needs a founder goal that was never captured (or was mis-filed)
+  | 'need_understanding'  // no governed understanding yet — re-give the site or describe the business
+  | 'strategy_insufficient'; // understanding + goal present, but the strategy still could not be formed (detail says why)
+
+/** The founder's own words, reflected back for goal confirmation. `statement` is VERBATIM in the language it was
+ * captured in — never translated. `stateId` is the mis-filed founder_state row it came from (null when asking cold). */
+export interface ArcGoalCandidate {
+  readonly stateId: string | null;
+  readonly statement: string;
+}
 
 export interface ArcView {
   readonly moment: ArcMoment;
   readonly businessName: string;
-  readonly error?: { readonly kind: ArcErrorKind } | null; // per-moment failure — never fails the whole surface
+  // per-moment status — never fails the whole surface. `need_goal` is a POSITIVE step (confirm your goal), not an
+  // error; `goalCandidate` carries the founder's own words to reflect back (or null to ask cold); `detail` explains
+  // a strategy_insufficient. The UI localizes chrome by kind but renders `goalCandidate.statement` verbatim.
+  readonly error?: { readonly kind: ArcErrorKind; readonly goalCandidate?: ArcGoalCandidate | null; readonly detail?: string | null } | null;
   // The language BB read the business in (the source/founder language). During the arc the UI localizes its
   // CHROME (section labels, buttons, question tag, provenance) to THIS, so chrome never mismatches the content.
   readonly contentLanguage?: string | null;

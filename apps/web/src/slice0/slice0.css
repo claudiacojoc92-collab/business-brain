@@ -459,6 +459,14 @@
 .s0-strat-input textarea:focus { outline: none; border-color: var(--s0-clay); box-shadow: 0 0 0 3px color-mix(in srgb, var(--s0-clay) 22%, transparent); }
 .s0-strat-input .s0-btn-inline { width: auto; align-self: stretch; }
 
+/* ── Reflect-back goal confirmation — a positive "your turn" invitation, NOT an error (clay accent, never red) ── */
+.s0-goal-confirm { display: flex; flex-direction: column; gap: 16px; }
+.s0-goal-field { width: 100%; box-sizing: border-box; resize: vertical; min-height: 88px; background: var(--s0-bg-3); color: var(--s0-ink); border: 1px solid var(--s0-line-2); border-left: 2px solid var(--s0-clay); border-radius: 12px; padding: 14px 16px; font-family: var(--s0-sans); font-size: 16px; line-height: 1.55; transition: border-color .18s ease, box-shadow .18s ease; }
+.s0-goal-field:focus { outline: none; border-color: var(--s0-clay); box-shadow: 0 0 0 3px color-mix(in srgb, var(--s0-clay) 22%, transparent); }
+.s0-btn-quiet { width: auto; background: none; border: none; color: var(--s0-ink-2); font-family: var(--s0-sans); font-size: 15px; padding: 12px 4px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.s0-btn-quiet:hover:not(:disabled) { color: var(--s0-ink); }
+.s0-btn-quiet:disabled { opacity: .5; cursor: default; }
+
 /* ── Surface Correction — the pour-in (empty state): connectors first, website primary ── */
 .s0-pourin { display: flex; flex-direction: column; gap: 14px; margin-top: 4px; }
 .s0-pourin-web { display: flex; flex-direction: column; gap: 8px; padding: 16px; border: 1px solid var(--s0-line-2); border-left: 2px solid var(--s0-clay); border-radius: 12px; background: var(--s0-bg-2); }
