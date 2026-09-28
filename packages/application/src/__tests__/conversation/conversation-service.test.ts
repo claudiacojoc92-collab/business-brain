@@ -23,7 +23,7 @@ function makeDeps(step: Partial<ConversationStepOutput>, sourceList: any[] = [])
       create: async (i) => { const s = { id: i.id, businessId: i.businessId, conversationLanguage: i.conversationLanguage, status: 'active' as const, currentFocus: null }; sessions.push(s); return s; },
       setStatus: async (_id, status, currentFocus) => { statusSet = status; const s = sessions[0]; if (s) { s.status = status; s.currentFocus = currentFocus ?? null; } },
       setLanguage: async () => undefined,
-      appendTurn: async (i) => { const t = { id: i.id, role: i.role, content: i.content, language: i.language, seq: turns.length + 1, createdAt: '1970' }; turns.push(t); return t; },
+      appendTurn: async (i) => { const t = { id: i.id, role: i.role, content: i.content, language: i.language, infoNeedKey: i.infoNeedKey ?? null, seq: turns.length + 1, createdAt: '1970' }; turns.push(t); return t; },
       listTurns: async () => turns.slice(),
     },
     needs: {
@@ -234,6 +234,124 @@ describe('ConversationService', () => {
     const bb = m.turns.filter((t: any) => t.role === 'bb').at(-1)!;
     const occurrences = bb.content.split('And what am I missing?').length - 1;
     expect(occurrences).toBe(1); // the question appears exactly once, not twice
+  });
+
+  // ── Continuity: card 3 ("What I'll ask you about") == what BB opens on ──
+  // The founder was shown ≤3 unknowns on the understanding card. Those SAME items must become the first questions,
+  // in the same order. Both come from ONE derivation (agendaUnknowns), so this proves the wiring end-to-end:
+  // seeded == shown, and the forcing walks them in order ahead of any core/depth force.
+  const UNKNOWNS = ['whether corporate partnerships actually convert', 'what customers value most about the recovery focus', 'which channel brings the best-fit members'];
+  function withAgenda(step: Partial<ConversationStepOutput>, unknowns = UNKNOWNS) {
+    const m = makeDeps(step);
+    (m.deps as any).understanding = { save: async () => { throw new Error('n/a'); }, latest: async () => ({ understanding: {
+      offer: { summary: '', explicit: [], unclear: [], sourceRefs: [] },
+      positioning: { summary: '', evidenceBacked: [], implied: [], sourceRefs: [] },
+      audience: { addressed: [], appearsTargeted: [], unknown: [], sourceRefs: [] },
+      messaging: { recurringThemes: [], sourceRefs: [] },
+      acquisition: { visiblePaths: [], sourceRefs: [] },
+      contradictions: [],
+      unknowns,
+    } }) };
+    return m;
+  }
+
+  it('continuity: the ≤3 site unknowns shown on the card are seeded as needs with the SAME text and order', async () => {
+    const m = withAgenda({});
+    await new ConversationService(m.deps).startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    const site = m.needs.filter((n) => n.key.startsWith('site_'));
+    expect(site.map((n) => n.key)).toEqual(['site_1', 'site_2', 'site_3']);           // one per unknown, in display order
+    expect(site.map((n) => n.whatMissing)).toEqual(UNKNOWNS);                          // seeded text == card text (one derivation)
+  });
+
+  it('continuity: BB opens on site_1, then walks site_2, site_3 in order — the forced need equals the agenda', async () => {
+    // Model answers whatever it was just forced to ask and never volunteers a nextNeedKey (null). With the continuity
+    // backstop, answering the forced item immediately re-steps to the NEXT open agenda item — so the agenda converges
+    // one item per turn, in order, driven solely by the enforced agenda force.
+    const m = withAgenda({});
+    (m.deps as any).model = { step: async (input: any) => {
+      m.stepInputs.push(input);
+      // simulate the founder having answered the need this turn was forced onto (except the opener, latest===null)
+      const answered = input.latestFounderMessage !== null && input.forcedNeedKey ? [input.forcedNeedKey] : [];
+      return { ...EMPTY_STEP, answeredNeedKeys: answered, nextNeedKey: null };
+    } };
+    const svc = new ConversationService(m.deps);
+
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    expect(m.stepInputs.at(-1).forcedNeedKey).toBe('site_1');                          // the OPENER is forced onto agenda item 1
+    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'about partnerships…', P.language);
+    expect(m.stepInputs.at(-1).forcedNeedKey).toBe('site_2');                          // site_1 answered → backstop advances to item 2
+    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'what they value…', P.language);
+    expect(m.stepInputs.at(-1).forcedNeedKey).toBe('site_3');                          // → item 3, in order
+    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'best channel…', P.language);
+    const openSite = (await (m.deps as any).needs.listOpen('')).filter((n: any) => n.key.startsWith('site_'));
+    expect(openSite).toHaveLength(0);                                                  // all three agenda items covered, in order
+  });
+
+  // Queue-driven model: each step() shifts the next scripted output (opener consumes the first). Lets us script the
+  // model OVERRIDING the advisory agenda force, then complying on the re-step.
+  function queueModel(m: any, outputs: Partial<ConversationStepOutput>[]) {
+    const q = outputs.slice();
+    (m.deps as any).model = { step: async (input: any) => { m.stepInputs.push(input); return { ...EMPTY_STEP, ...(q.shift() ?? {}) }; } };
+  }
+
+  it('continuity backstop: when the model overrides the agenda force, the service re-steps and BB asks the open agenda item', async () => {
+    const m = withAgenda({});
+    queueModel(m, [
+      {},                                                                   // opener
+      { answeredNeedKeys: [], nextNeedKey: 'acquisition_today', nextQuestion: 'How do people find you?' }, // DRIFT off site_1
+      { nextNeedKey: 'site_1', nextQuestion: 'Do those clinic referrals convert?' },                      // re-step complies
+    ]);
+    const svc = new ConversationService(m.deps);
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    const before = m.stepInputs.length;
+    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'ask me anything', P.language);
+    expect(m.stepInputs.length - before).toBe(2);                          // exactly ONE re-step (bounded)
+    expect(m.stepInputs.at(-1).forcedNeedKey).toBe('site_1');              // re-step forced the open agenda item
+    expect(m.turns.filter((t: any) => t.role === 'bb').at(-1).infoNeedKey).toBe('site_1'); // BB asks the promised item
+  });
+
+  it('continuity backstop: NEVER re-asks an item the founder volunteered — it skips to the next OPEN agenda item', async () => {
+    const m = withAgenda({});
+    queueModel(m, [
+      {},                                                                   // opener (forced site_1)
+      // founder's reply volunteered items 1 AND 2; model marks both answered but drifts to a core question
+      { answeredNeedKeys: ['site_1', 'site_2'], nextNeedKey: 'acquisition_today', nextQuestion: 'How do people find you?' },
+      { nextNeedKey: 'site_3', nextQuestion: 'Which channel brings the best-fit members?' },              // re-step
+    ]);
+    const svc = new ConversationService(m.deps);
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'partnerships are untracked, and members value recovery focus', P.language);
+    expect(m.stepInputs.at(-1).forcedNeedKey).toBe('site_3');              // skipped the volunteered site_2 → item 3
+    expect(m.turns.filter((t: any) => t.role === 'bb').at(-1).infoNeedKey).toBe('site_3');
+  });
+
+  it('continuity backstop: does NOT re-step when the model already asks the open agenda item (bounded — no wasted call)', async () => {
+    const m = withAgenda({});
+    queueModel(m, [{}, { answeredNeedKeys: [], nextNeedKey: 'site_1', nextQuestion: 'Do clinic referrals convert?' }]);
+    const svc = new ConversationService(m.deps);
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    const before = m.stepInputs.length;
+    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'go', P.language);
+    expect(m.stepInputs.length - before).toBe(1);                          // single call — no re-step needed
+    expect(m.turns.filter((t: any) => t.role === 'bb').at(-1).infoNeedKey).toBe('site_1');
+  });
+
+  it('continuity: an open agenda item is never preempted by the depth cap (agendaForce wins over depthForce)', async () => {
+    // Simulate the model going down an invented side-thread (its own newNeeds, never answering the agenda). Even past
+    // the depth cap, the forced need must stay the OPEN agenda item — the founder gets asked what they were shown.
+    let side = 0;
+    const m = withAgenda({});
+    (m.deps as any).model = { step: async (input: any) => {
+      m.stepInputs.push(input);
+      side += 1;
+      // never answer a site_ need; keep spawning a side need and pointing at it
+      return { ...EMPTY_STEP, answeredNeedKeys: [], newNeeds: [{ key: `side_${side}`, whatMissing: 'x', whyMatters: 'y' }], nextNeedKey: `side_${side}` };
+    } };
+    const svc = new ConversationService(m.deps);
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    for (let i = 0; i < 5; i++) await svc.submitResponse(P.businessId, P.founderId, P.businessName, `tangent ${i}`, P.language);
+    // site_1 was never answered → every forced key is still site_1, no matter how deep the side-thread ran
+    expect(m.stepInputs.at(-1).forcedNeedKey).toBe('site_1');
   });
 
   it('pause sets status paused', async () => {

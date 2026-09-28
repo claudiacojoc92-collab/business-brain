@@ -473,6 +473,15 @@
 .s0-chip.is-covered { color: var(--s0-ink); border-color: var(--s0-clay); }
 .s0-chip-dot { color: var(--s0-clay); font-size: 9px; line-height: 1; }
 .s0-u-grounding { display: block; margin-top: 4px; color: var(--s0-ink-2); font-size: 14px; line-height: 1.4; }
+/* understanding redesign — card 1 "what I read" audience line, card 3 agenda lead, and the per-tension "why" disclosure */
+.s0-u-serves { color: var(--s0-ink-2); }
+.s0-u-agenda { color: var(--s0-ink-2); margin-bottom: 10px; }
+.s0-u-why { margin-top: 8px; }
+.s0-u-why > summary { cursor: pointer; color: var(--s0-ink-2); font-size: 13px; list-style: none; user-select: none; }
+.s0-u-why > summary::-webkit-details-marker { display: none; }
+.s0-u-why > summary::before { content: '›'; display: inline-block; margin-right: 6px; transition: transform .15s ease; }
+.s0-u-why[open] > summary::before { transform: rotate(90deg); }
+.s0-u-why-list { margin: 6px 0 0 18px; padding: 0; color: var(--s0-ink-2); font-size: 13px; line-height: 1.5; }
 
 /* ── Surface Correction — the pour-in (empty state): connectors first, website primary ── */
 .s0-pourin { display: flex; flex-direction: column; gap: 14px; margin-top: 4px; }

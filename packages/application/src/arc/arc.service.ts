@@ -1,6 +1,7 @@
 import type { StrategyVersionRecord } from '../strategy/index';
 import type { PlanVersion } from '../plan/index';
 import type { GovernedUnderstanding } from '../bi/index';
+import { agendaUnknowns } from '../bi/index';
 import type { GoalCandidate } from '../conversation/index';
 import { computeArcMoment } from './moment';
 import type {
@@ -190,12 +191,16 @@ export class ArcService {
         const tension = (c.tension ?? '').trim();
         const a = (c.statementA ?? '').trim();
         const b = (c.statementB ?? '').trim();
+        const sourceRefs = clean(c.sourceRefs);
         if (!tension && !a && !b) return null;
-        if (!tension) return { tension: a && b ? `${a} — yet ${b}` : a || b, grounding: '' };
-        return { tension, grounding: grounded(a, b) };
+        if (!tension) return { tension: a && b ? `${a} — yet ${b}` : a || b, grounding: '', sourceRefs };
+        return { tension, grounding: grounded(a, b), sourceRefs };
       })
-      .filter((x): x is { tension: string; grounding: string } => Boolean(x))
-      .slice(0, 4);
+      .filter((x): x is { tension: string; grounding: string; sourceRefs: string[] } => Boolean(x))
+      // Sharpest first. The snapshot carries NO severity, so this is an honest proxy, not a scoring model: a
+      // concrete, checkable tension (a quoted field / a number) outranks a vague one; ties break to corroboration.
+      .sort((x, y) => (concreteScore(`${y.tension} ${y.grounding}`) - concreteScore(`${x.tension} ${x.grounding}`)) || (y.sourceRefs.length - x.sourceRefs.length))
+      .slice(0, 3);
 
     // Confident = anchored in the evidence: the grounded Aha findings + what the offer states explicitly +
     // positioning the site actually backs up. Inferring = read from PATTERN (implied positioning, who the
@@ -209,7 +214,8 @@ export class ArcService {
       ...clean(u?.positioning?.implied),
       ...clean(u?.audience?.appearsTargeted),
     ]).slice(0, 4);
-    const unanswered = dedupe([...clean(u?.unknowns), ...clean(u?.offer?.unclear), ...clean(u?.audience?.unknown)]).slice(0, 5);
+    // Card 3 "What I'll ask you about" — the SAME ≤3 unknowns the conversation seeds as its opening agenda.
+    const unanswered = agendaUnknowns(u);
 
     return {
       does: first(u?.offer?.summary),

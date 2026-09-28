@@ -193,9 +193,9 @@ export class AnthropicConversationModel implements IConversationModelPort {
            `without them. Keep going and cover them (naturally, from what the founder said): ${input.requiredCoreOpen.join(', ')}`, '']
         : []),
       ...(input.forcedNeedKey
-        ? [`DEPTH CHECK — you have gone deep on one thread. Your NEXT question MUST address the need "${input.forcedNeedKey}".`,
+        ? [`FOCUS — your NEXT question MUST address the need "${input.forcedNeedKey}" (see OPEN NEEDS for what it is).`,
            'First ACKNOWLEDGE in one clause what the last answer told you, THEN bridge to it — never a hard subject change,',
-           'e.g. "Got it — that tells me X. Before we go deeper there, one thing I still don\'t know: …". Set nextNeedKey to it.', '']
+           'e.g. "Got it — that tells me X. One thing I still don\'t know: …". Set nextNeedKey to it.', '']
         : []),
       'FOUNDER STATE ALREADY KNOWN (never re-ask):',
       ...input.knownState.map((s) => `- ${s.kind}: ${s.statement}`),

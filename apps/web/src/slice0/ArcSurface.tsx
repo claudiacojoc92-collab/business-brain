@@ -54,15 +54,25 @@ function ArcInput({ ph, onSend, cta, t, text, setText, busy, act, workingKey }: 
 
 // FIX 2c — a tension card that shows each tension line + ONE muted grounding line, so the referent resolves in the
 // card (the field the tension names) without stacking three sentences.
-function TensionCard({ label, items }: { label: string; items: { tension: string; grounding: string }[] }) {
+function TensionCard({ label, items, whyLabel }: { label: string; items: { tension: string; grounding: string; sourceRefs: string[] }[]; whyLabel: string }) {
   const rows = items.filter((x) => (x.tension ?? '').trim());
-  if (!rows.length) return null;
+  if (!rows.length) return null; // zero tensions → the card is omitted silently (never narrate an absence)
   return (
     <div className="s0-u-card s0-u-card--primary">
       <div className="s0-u-card-label"><span className="s0-u-ic" aria-hidden="true">◆</span>{label}</div>
       <ul className="s0-u-list">
         {rows.map((x, i) => (
-          <li key={i}>{x.tension}{x.grounding ? <span className="s0-u-grounding">{x.grounding}</span> : null}</li>
+          <li key={i}>
+            {x.tension}
+            {x.grounding ? <span className="s0-u-grounding">{x.grounding}</span> : null}
+            {/* proof on demand: collapsed by default — the grounding already carries the concrete fact. */}
+            {x.sourceRefs.length ? (
+              <details className="s0-u-why">
+                <summary>{whyLabel}</summary>
+                <ul className="s0-u-why-list">{x.sourceRefs.map((s, j) => <li key={j}>{s}</li>)}</ul>
+              </details>
+            ) : null}
+          </li>
         ))}
       </ul>
     </div>
@@ -341,19 +351,28 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
       case 'understanding': {
         const u = m.understanding!;
         const cr = m.correctionReflection;
-        const ctx = [u.does, u.serves].filter(Boolean).join(' · ');
         return (<>
           <div className="s0-u">
             <div className="s0-u-hero">
               <div className="s0-u-hero-eyebrow">{t('arc.understanding.eyebrow')}</div>
               <p className="s0-u-hero-title">{t('arc.understanding.title', { name: m.businessName })}</p>
-              {ctx ? <p className="s0-u-hero-sub">{ctx}</p> : null}
             </div>
-            <UCard label={t('arc.understanding.standsout')} kind="primary" paragraph={u.standsOut} />
-            <TensionCard label={t('arc.understanding.tensions')} items={u.tensions} />
-            <UCard label={t('arc.understanding.confident')} kind="evidence" bullets={u.confident} />
-            <UCard label={t('arc.understanding.inferring')} kind="inference" bullets={u.inferring} />
-            <UCard label={t('arc.understanding.unanswered')} kind="question" bullets={u.unanswered} />
+            {/* 1 — What I read: proof it read the business (2–3 sentences), no connectors that would mix languages. */}
+            <div className="s0-u-card s0-u-card--read">
+              <div className="s0-u-card-label">{t('arc.understanding.read')}</div>
+              {[u.does, u.standsOut].filter(Boolean).length ? <p className="s0-u-card-lead">{[u.does, u.standsOut].filter(Boolean).join(' ')}</p> : null}
+              {u.serves ? <p className="s0-u-card-lead s0-u-serves">{t('arc.understanding.servesLead', { who: u.serves })}</p> : null}
+            </div>
+            {/* 2 — What stood out: ≤3 tensions, sharpest first, each grounded + proof on demand. Omitted if none. */}
+            <TensionCard label={t('arc.understanding.stoodout')} items={u.tensions} whyLabel={t('arc.understanding.why')} />
+            {/* 3 — What I'll ask about: the site's unknowns, framed forward as the agenda for the conversation next. */}
+            {u.unanswered.length ? (
+              <div className="s0-u-card s0-u-card--question">
+                <div className="s0-u-card-label"><span className="s0-u-ic" aria-hidden="true">→</span>{t('arc.understanding.willask')}</div>
+                <p className="s0-u-card-lead s0-u-agenda">{t('arc.understanding.willask.lead')}</p>
+                <ul className="s0-u-list">{u.unanswered.map((x, i) => <li key={i}>{x}</li>)}</ul>
+              </div>
+            ) : null}
           </div>
           {cr ? (<>
             <div className="s0-arc-reflection" role="status">

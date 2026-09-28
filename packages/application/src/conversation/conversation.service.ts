@@ -1,5 +1,6 @@
 import { generateId } from '@bb/shared';
 import type { IUnderstandingSnapshotRepository, IAhaRepository, GovernedUnderstanding } from '../bi/index';
+import { agendaUnknowns } from '../bi/index';
 import type {
   IConversationRepository,
   IInformationNeedRepository,
@@ -170,6 +171,12 @@ export class ConversationService {
     if (!session) {
       session = await this.deps.conversations.create({ id: generateId(), businessId, founderId, conversationLanguage: language });
       await this.deps.needs.seed(session.id, businessId, CORE_NEEDS);
+      // Continuity: seed the SAME ≤3 unknowns the understanding card showed ("What I'll ask you about") as needs, so
+      // BB opens on exactly what it said it didn't know. Keyed site_1..site_3 (order = display order); the opening
+      // questions are forced onto these first (see buildStepInput), so what the founder was shown is what gets asked.
+      const agenda = agendaUnknowns((await this.deps.understanding.latest(businessId))?.understanding ?? null);
+      const siteNeeds = agenda.map((text, i) => ({ key: `site_${i + 1}`, whatMissing: text, whyMatters: 'You flagged this as unknown from the site read and showed it to the founder as the agenda — ask it early.' }));
+      if (siteNeeds.length) await this.deps.needs.seed(session.id, businessId, siteNeeds);
       // Generate the opener from Aha 1 (no founder message yet).
       const out = await this.deps.model.step(await this.buildStepInput(businessId, founderId, businessName, language, session.id, null));
       const opener = openerTurnContent(out);
@@ -263,11 +270,27 @@ export class ConversationService {
     const hasGoal = (await this.deps.state.listActive(businessId)).some((s) => s.kind === 'goal');
     const coveredCore = FORCEABLE_CORE.every((k) => !openKeys.has(k));
 
-    // Backstop: the model tried to end (or ran dry) while a forceable core need is still open. Re-step ONCE with that
-    // need forced, so it asks a real, conversational question (acknowledge + bridge) instead of stranding. The first
-    // step already recorded answers/declarations; this re-step is used only for the question.
+    // At most ONE re-step per turn (bounded, never a loop). Agenda enforcement takes precedence over the core backstop.
     let finalOut = out;
-    if ((out.readyForAha2 || openNeeds.length === 0) && !coveredCore) {
+
+    // Continuity backstop — card 3 makes a WRITTEN promise ("I'll ask you about these next"). The agenda force in
+    // buildStepInput is only advisory, and the model DOES override it (verified live: forced site_2 → asked a core
+    // question instead). Enforce it. Computed AFTER markAnswered, so an item the founder just volunteered is already
+    // closed and never re-asked; the re-step forces the next OPEN agenda item, ahead of any core need. The forced-need
+    // prompt already makes the question acknowledge-then-bridge, so it never reads as a subject change. `agendaOverride`
+    // records that the model ignored the advisory force — logged so override frequency stays visible.
+    const openAgenda = [...openKeys].filter((k) => k.startsWith('site_')).sort();
+    const nextAgenda = openAgenda[0] ?? null;
+    const agendaOverride = Boolean(nextAgenda && out.nextNeedKey !== nextAgenda);
+    if (nextAgenda && agendaOverride) {
+      const reInput = await this.buildStepInput(businessId, founderId, businessName, language, session.id, message, currentContext, nextAgenda);
+      finalOut = await this.deps.model.step(reInput);
+    }
+
+    // Core backstop: the model tried to end (or ran dry) while a forceable core need is still open. Re-step ONCE with
+    // that need forced so it asks a real, conversational question (acknowledge + bridge) instead of stranding. Skipped
+    // when the agenda backstop already re-stepped this turn (one re-step per turn) — the agenda is asked first anyway.
+    if (finalOut === out && (out.readyForAha2 || openNeeds.length === 0) && !coveredCore) {
       const forced = FORCEABLE_CORE.find((k) => openKeys.has(k)) ?? null;
       if (forced && out.nextNeedKey !== forced) {
         const reInput = await this.buildStepInput(businessId, founderId, businessName, language, session.id, message, currentContext, forced);
@@ -292,6 +315,8 @@ export class ConversationService {
       businessId, answered: out.answeredNeedKeys, added: out.newNeeds.map((n) => n.key), openAfter: [...openKeys],
       requiredCoreOpen: [...(!hasGoal ? ['goal'] : []), ...FORCEABLE_CORE.filter((k) => openKeys.has(k))],
       forcedReStep: finalOut !== out, targetNeed: finalOut.nextNeedKey ?? null,
+      // Continuity: the next open agenda item, whether the model overrode the advisory force, and what it asked instead.
+      nextAgenda, agendaOverride, modelAskedInstead: agendaOverride ? (out.nextNeedKey ?? null) : null,
       readyModel: Boolean(out.readyForAha2), hasGoal, coveredCore, ready, awaitingGoal: otherwiseReady && coveredCore && !hasGoal,
     }) });
 
@@ -399,10 +424,15 @@ export class ConversationService {
     let sideDepth = 0;
     for (let i = bb.length - 1; i >= 0; i--) {
       const k = bb[i]!.infoNeedKey ?? null;
-      if (k && (REQUIRED_CORE as readonly string[]).includes(k)) break; // a core question resets the thread depth
+      // a core OR agenda (site_) question is ON-PLAN → resets thread depth; only invented side-threads accumulate.
+      if (k && ((REQUIRED_CORE as readonly string[]).includes(k) || k.startsWith('site_'))) break;
       sideDepth += 1;
     }
-    const forcedNeedKey = forcedOverride ?? (sideDepth >= DEPTH_CAP ? (FORCEABLE_CORE.find((k) => openKeys.has(k)) ?? null) : null);
+    // Continuity: force the opening questions onto the seeded agenda (site_ needs), in order, before anything else —
+    // so what the founder was shown ("What I'll ask you about") is exactly what BB asks first. Then the depth cap.
+    const agendaForce = [...openKeys].filter((k) => k.startsWith('site_')).sort()[0] ?? null;
+    const depthForce = sideDepth >= DEPTH_CAP ? (FORCEABLE_CORE.find((k) => openKeys.has(k)) ?? null) : null;
+    const forcedNeedKey = forcedOverride ?? agendaForce ?? depthForce ?? null;
     return {
       businessName,
       interfaceLanguage: language,

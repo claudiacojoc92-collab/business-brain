@@ -482,7 +482,7 @@ export interface ArcView {
   strategyChange?: { because: string } | null; // Moment 6 — transient "the bet changed because…" note
   sources?: { url: string; type: ArcSourceType; detail?: string }[];
   igConnected?: boolean;
-  understanding?: { does: string; serves: string; standsOut: string; tensions: { tension: string; grounding: string }[]; confident: string[]; inferring: string[]; unanswered: string[] };
+  understanding?: { does: string; serves: string; standsOut: string; tensions: { tension: string; grounding: string; sourceRefs: string[] }[]; confident: string[]; inferring: string[]; unanswered: string[] };
   correctionReflection?: { reflection: string; changes: string; holds: string; ask: string };
   turns?: ArcTurn[];
   coverage?: { key: string; covered: boolean }[]; // conversation — quiet progress map

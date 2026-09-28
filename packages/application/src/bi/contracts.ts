@@ -41,6 +41,21 @@ export interface GovernedUnderstanding {
   readonly unknowns: string[];
 }
 
+/** The (≤3) things BB could NOT learn from the site — the SINGLE source for both the understanding "What I'll ask
+ * you about" card AND the conversation's opening agenda (seeded as needs). Using one derivation guarantees what BB
+ * shows equals what it asks. Deterministic, order-preserving, deduped. */
+export function agendaUnknowns(u: GovernedUnderstanding | null): string[] {
+  if (!u) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const x of [...(u.unknowns ?? []), ...(u.offer?.unclear ?? []), ...(u.audience?.unknown ?? [])]) {
+    const v = (x ?? '').trim();
+    const k = v.toLowerCase();
+    if (v && !seen.has(k)) { seen.add(k); out.push(v); }
+  }
+  return out.slice(0, 3);
+}
+
 export interface AhaFinding {
   readonly finding: string;
   readonly implication?: string;

@@ -121,30 +121,31 @@ describe('ArcSurface — one surface, eight moments', () => {
     expect(document.activeElement).toBe(ta);
   });
 
-  it('Moment 3: understanding is DIAGNOSTIC — tensions, confident vs inferring, unanswered; NO strategy yet', async () => {
+  it('Moment 3: understanding is THREE cards — what I read, what stood out (grounded, proof on demand), what I’ll ask; confident/inferring dropped', async () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: {
       does: 'Physio memberships', serves: 'post-op patients', standsOut: 'recovery-led',
-      tensions: [{ tension: 'The unfilled field contradicts the expertise message', grounding: 'The site shows "Years of experience: 0+"' }],
+      tensions: [{ tension: 'The unfilled field contradicts the expertise message', grounding: 'The site shows "Years of experience: 0+"', sourceRefs: ['Homepage', 'About'] }],
       confident: ['Referrals drive members'], inferring: ['Aimed at athletes, not just patients'],
       unanswered: ['What do customers actually value most?'],
     } }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
     expect(await screen.findByText(/Physio memberships/)).toBeInTheDocument();
-    expect(screen.getByText('arc.understanding.tensions')).toBeInTheDocument();     // the diagnostic section is present
+    // card 1 — what I read (proof it read the business)
+    expect(screen.getByText('arc.understanding.read')).toBeInTheDocument();
+    // card 2 — what stood out: the tension, its grounding line, and the collapsed "why I'm saying this" → sources
+    expect(screen.getByText('arc.understanding.stoodout')).toBeInTheDocument();
     expect(screen.getByText('The unfilled field contradicts the expertise message')).toBeInTheDocument();
-    // FIX 2c — the grounding line resolves the referent (names the field) in the same card
     expect(screen.getByText('The site shows "Years of experience: 0+"')).toBeInTheDocument();
-    expect(screen.getByText('Referrals drive members')).toBeInTheDocument();        // confident (from evidence)
-    expect(screen.getByText('Aimed at athletes, not just patients')).toBeInTheDocument(); // inferring (from pattern)
-    expect(screen.getByText('What do customers actually value most?')).toBeInTheDocument(); // unanswered
-    // premium design: a hero headline card + one card per lane, each with its intentional variant
-    expect(document.querySelector('.s0-u-hero .s0-u-hero-title')).toBeTruthy();
-    expect(screen.getByText('arc.understanding.eyebrow')).toBeInTheDocument();
-    expect(screen.getByText('arc.understanding.standsout').closest('.s0-u-card--primary')).toBeTruthy();
-    expect(screen.getByText('arc.understanding.tensions').closest('.s0-u-card--primary')).toBeTruthy();
-    expect(screen.getByText('arc.understanding.confident').closest('.s0-u-card--evidence')).toBeTruthy();
-    expect(screen.getByText('arc.understanding.inferring').closest('.s0-u-card--inference')).toBeTruthy();
-    expect(screen.getByText('arc.understanding.unanswered').closest('.s0-u-card--question')).toBeTruthy();
+    expect(screen.getByText('arc.understanding.why')).toBeInTheDocument();          // per-item disclosure present
+    expect(screen.getByText('Homepage')).toBeInTheDocument();                       // sourceRefs available on demand
+    // card 3 — what I'll ask about (agenda, framed forward)
+    expect(screen.getByText('arc.understanding.willask')).toBeInTheDocument();
+    expect(screen.getByText('What do customers actually value most?')).toBeInTheDocument();
+    // dropped from the arc: confident + inferring are NOT front-and-centre here anymore
+    expect(screen.queryByText('Referrals drive members')).toBeNull();
+    expect(screen.queryByText('Aimed at athletes, not just patients')).toBeNull();
+    expect(screen.queryByText('arc.understanding.confident')).toBeNull();
+    expect(screen.queryByText('arc.understanding.inferring')).toBeNull();
     expect(screen.getByText('arc.understanding.confirm →')).toBeInTheDocument();
     expect(screen.queryByText('arc.strategy.adopt →')).toBeNull();                 // no strategy before Moment 3/4
   });
