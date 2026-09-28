@@ -233,6 +233,7 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
   const [viewIdx, setViewIdx] = useState<number | null>(null);
   const [histOpen, setHistOpen] = useState(false);
   const [discuss, setDiscuss] = useState(false); // strategy: the "let's talk about it" box, revealed on demand
+  const [stratDetails, setStratDetails] = useState(false); // strategy: the minor cards (not-now / reconsider) — collapsed by default so a tired founder reads the bet + 2 reasons + acts, details on demand
   const started = useRef(false);
 
   // Arc CHROME (labels, buttons, the question tag, provenance, error copy) follows the CONTENT language — the
@@ -246,7 +247,7 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
   const apply = useCallback((v: ArcView) => {
     if (v.moment === 'done') { onDone(); return; }
     setView(v);
-    if (v.moment !== 'strategy') setDiscuss(false); // collapse the strategy discussion box once we move on
+    if (v.moment !== 'strategy') { setDiscuss(false); setStratDetails(false); } // collapse strategy discussion + details once we move on
     const TRACK = new Set(['understanding', 'conversation', 'mirror', 'strategy', 'week_day', 'email', 'container']);
     if (TRACK.has(v.moment)) {
       setHistory((h) => {
@@ -447,9 +448,16 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
               <p className="s0-u-hero-title">{s.bet}</p>
               {s.over || s.horizon ? <p className="s0-u-hero-sub">{[s.over ? t('arc.strategy.over', { over: s.over }) : '', s.horizon ? t('arc.strategy.horizon', { horizon: s.horizon }) : ''].filter(Boolean).join(' · ')}</p> : null}
             </div>
-            <UCard label={t('arc.strategy.tradeoffs')} kind="primary" bullets={s.tradeOffs} />
-            <UCard label={t('arc.strategy.notnow')} kind="inference" bullets={s.notNow} />
-            <UCard label={t('arc.strategy.reconsider')} kind="evidence" bullets={s.reconsider} />
+            {/* Default view for a tired founder at 22:00: the bet + at most 2 reasons + the actions. The full
+                trade-offs and the minor cards (not-now / reconsider) live behind "Arată detalii". */}
+            <UCard label={t('arc.strategy.tradeoffs')} kind="primary" bullets={stratDetails ? s.tradeOffs : s.tradeOffs.slice(0, 2)} />
+            {stratDetails ? (<>
+              <UCard label={t('arc.strategy.notnow')} kind="inference" bullets={s.notNow} />
+              <UCard label={t('arc.strategy.reconsider')} kind="evidence" bullets={s.reconsider} />
+            </>) : null}
+            {!ro && (s.tradeOffs.length > 2 || s.notNow.length > 0 || s.reconsider.length > 0)
+              ? <button type="button" className="s0-linkbtn s0-strat-details" aria-expanded={stratDetails} onClick={() => setStratDetails((v) => !v)}>{stratDetails ? t('arc.strategy.detailshide') : t('arc.strategy.details')}</button>
+              : null}
           </div>
           {!ro ? (<>
             <div className="s0-strat-actions">

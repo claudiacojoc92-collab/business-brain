@@ -319,9 +319,25 @@ describe('ArcSurface — one surface, eight moments', () => {
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
     expect(await screen.findByText('arc.strategy.eyebrow')).toBeInTheDocument();
     expect(screen.getByText('referrals')).toBeInTheDocument();
-    expect(screen.getByText('if fewer than 2 of 8–10 show interest')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('arc.strategy.adopt →'));
+    // COMPRESSED default: the bet + trade-offs show; the minor cards (not-now / reconsider) are collapsed.
+    expect(screen.queryByText('if fewer than 2 of 8–10 show interest')).toBeNull();     // reconsider hidden by default
+    expect(screen.queryByText('arc.strategy.reconsider')).toBeNull();
+    fireEvent.click(screen.getByText('arc.strategy.details'));                          // "Arată detalii"
+    expect(screen.getByText('if fewer than 2 of 8–10 show interest')).toBeInTheDocument(); // now revealed
+    expect(screen.getByText('arc.strategy.reconsider')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('arc.strategy.adopt →'));                          // adopt still works
     await waitFor(() => expect(api.arcAdoptStrategy).toHaveBeenCalledWith('b1', 'ver1'));
+  });
+
+  it('Moment 6: only the first 2 trade-off reasons show by default; details reveals the rest', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'strategy', strategy: { bet: 'referrals', over: 'x', horizon: '6m', tradeOffs: ['reason one', 'reason two', 'reason three'], notNow: [], reconsider: [], proposalId: 'ver1', adoptable: true } }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    await screen.findByText('arc.strategy.eyebrow');
+    expect(screen.getByText('reason one')).toBeInTheDocument();
+    expect(screen.getByText('reason two')).toBeInTheDocument();
+    expect(screen.queryByText('reason three')).toBeNull();                              // 3rd hidden until details
+    fireEvent.click(screen.getByText('arc.strategy.details'));
+    expect(screen.getByText('reason three')).toBeInTheDocument();
   });
 
   it('Moment 6: ONE discuss button (reject collapsed away); clicking it reveals the challenge box', async () => {
