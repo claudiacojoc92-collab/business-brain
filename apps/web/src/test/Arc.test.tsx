@@ -313,6 +313,32 @@ describe('ArcSurface — one surface, eight moments', () => {
     expect(screen.getByText('arc.question.label')).toBeInTheDocument();
   });
 
+  it('Enter submits the conversation input; Shift+Enter and empty do not', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'conversation', turns: [{ id: 't1', role: 'bb', content: 'What matters?' }] }));
+    vi.mocked(api.arcConversation).mockResolvedValue(v({ moment: 'conversation', turns: [{ id: 't1', role: 'bb', content: 'next' }] }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    const ta = await screen.findByPlaceholderText('arc.conversation.ph');
+    // empty Enter → no submit
+    fireEvent.keyDown(ta, { key: 'Enter' });
+    expect(api.arcConversation).not.toHaveBeenCalled();
+    fireEvent.change(ta, { target: { value: 'referrals mostly' } });
+    // Shift+Enter → newline, no submit
+    fireEvent.keyDown(ta, { key: 'Enter', shiftKey: true });
+    expect(api.arcConversation).not.toHaveBeenCalled();
+    // Enter → submit with the trimmed text
+    fireEvent.keyDown(ta, { key: 'Enter' });
+    await waitFor(() => expect(api.arcConversation).toHaveBeenCalledWith('b1', 'referrals mostly'));
+  });
+
+  it('Enter does nothing on a whitespace-only conversation input', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'conversation', turns: [{ id: 't1', role: 'bb', content: 'What matters?' }] }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    const ta = await screen.findByPlaceholderText('arc.conversation.ph');
+    fireEvent.change(ta, { target: { value: '   ' } });
+    fireEvent.keyDown(ta, { key: 'Enter' });
+    expect(api.arcConversation).not.toHaveBeenCalled();
+  });
+
   it('Moment 6: strategy shows the bet + reconsider; Adopt drives the engine', async () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'strategy', strategy: { bet: 'referrals', over: 'a general campaign', horizon: '6 months', tradeOffs: ['referrals ↔ paid ads · trust converts here'], notNow: ['paid social · no proof yet'], reconsider: ['if fewer than 2 of 8–10 show interest'], proposalId: 'ver1', adoptable: true } }));
     vi.mocked(api.arcAdoptStrategy).mockResolvedValue(v({ moment: 'week_day', weekDay: { week: [], today: null, canCreate: false } }));

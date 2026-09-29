@@ -54,8 +54,12 @@ function ArcInput({ ph, onSend, cta, t, text, setText, busy, act, workingKey, au
     if (el) { try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { /* jsdom / unsupported */ } el.focus(); }
   }, [autoFocus]);
   return (
-    <form className="s0-strat-input" onSubmit={(e) => { e.preventDefault(); if (text.trim()) void act(() => onSend(text.trim()), workingKey); }}>
-      <textarea ref={ref} value={text} onChange={(e) => setText(e.target.value)} placeholder={ph} aria-label={ph} rows={2} disabled={busy} />
+    <form className="s0-strat-input" onSubmit={(e) => { e.preventDefault(); if (!busy && text.trim()) void act(() => onSend(text.trim()), workingKey); }}>
+      {/* Enter submits (chat convention); Shift+Enter inserts a newline. Empty/whitespace or busy → no-op. The Send
+          button below stays for mouse users. */}
+      <textarea ref={ref} value={text} onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!busy && text.trim()) void act(() => onSend(text.trim()), workingKey); } }}
+        placeholder={ph} aria-label={ph} rows={2} disabled={busy} />
       <button type="submit" className="s0-btn s0-btn-inline" disabled={busy || !text.trim()}>{cta ?? t('arc.send')}</button>
     </form>
   );
@@ -120,6 +124,7 @@ function GoalConfirm({ candidate, t, busy, onConfirm }: {
       <p className="s0-strat-msg-line">{cold ? t('arc.goal.askcold') : t('arc.goal.reflect')}</p>
       <textarea
         className="s0-goal-field" value={text} onChange={(e) => setText(e.target.value)} rows={3} disabled={busy}
+        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!busy && text.trim()) onConfirm(text.trim(), candidate?.stateId ?? null); } }}
         aria-label={t('arc.goal.fieldlabel')} placeholder={cold ? t('arc.goal.placeholder') : ''}
       />
       <div className="s0-strat-actions">
