@@ -113,10 +113,11 @@ export class ArcService {
           this.deps.log?.({ type: 'arc_moment_error', detail: JSON.stringify({ businessId, moment: 'strategy', kind: 'strategy_insufficient', gate: detail }) });
           return { ...base, error: { kind: 'strategy_insufficient', detail } };
         }
-        // "Why this, and not something else" — the explicit trade-offs read as tight "X over Y, because Z" bullets;
-        // fall back to the core reasoning only if there are none, so the card is never empty and never a wall of text.
+        // "Why this, and not something else" — render the model's founder-facing sentence for each trade-off (the
+        // `why`, which the prompt writes as complete natural prose that already carries the choice + the reason).
+        // NO symbol-stitching (no "X ↔ Y · Z") — that read as consultant shorthand; natural sentences only.
         let why = dedupe((core.tradeOffs ?? [])
-          .map((t) => { const c = (t.choosing ?? '').trim(); const o = (t.over ?? '').trim(); const w = (t.why ?? '').trim(); return c && o ? `${c} ↔ ${o}${w ? ` · ${w}` : ''}` : ''; }))
+          .map((t) => (t.why ?? '').trim() || (t.choosing ?? '').trim()))
           .filter(Boolean).slice(0, 3);
         if (why.length === 0 && core.coreBet.whyOverAlternative.trim()) why = [core.coreBet.whyOverAlternative.trim()];
         return {
@@ -127,8 +128,10 @@ export class ArcService {
             horizon: core.horizon,
             // "Why this, not something else" (was "the trade-offs"), surfaced INLINE.
             tradeOffs: why,
+            // Render the model's founder-facing sentence per item (the `reason`, written to name what's dropped +
+            // why, in plain prose) — no "item · reason" stitching.
             notNow: (core.notNow ?? [])
-              .map((n) => { const i = (n.item ?? '').trim(); const r = (n.reason ?? '').trim(); return i ? `${i}${r ? ` · ${r}` : ''}` : ''; })
+              .map((n) => (n.reason ?? '').trim() || (n.item ?? '').trim())
               .filter(Boolean).slice(0, 3),
             reconsider: (core.reconsiderTriggers ?? []).map((r) => r.condition).filter(Boolean).slice(0, 3),
             proposalId: rec.status === 'proposal' ? rec.id : null,

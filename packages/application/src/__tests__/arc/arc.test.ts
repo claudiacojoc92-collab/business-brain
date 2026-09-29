@@ -177,8 +177,10 @@ describe('ArcService.view — each moment composes from the reused engines', () 
     expect(v.strategy?.bet).toBe('The referral channel');
     expect(v.strategy?.over).toBe('a general studio campaign');
     expect(v.strategy?.reconsider[0]).toMatch(/fewer than 2/);
-    expect(v.strategy?.tradeOffs[0]).toMatch(/referrals ↔ a paid campaign/); // trade-offs surfaced inline
-    expect(v.strategy?.notNow[0]).toMatch(/paid social/);                      // not-now surfaced inline
+    // Founder-facing prose, NOT symbol-stitched fields: the trade-off renders its `why`, not "choosing ↔ over · why".
+    expect(v.strategy?.tradeOffs[0]).toBe('trust converts here');
+    expect(v.strategy?.tradeOffs[0]).not.toContain('↔');
+    expect(v.strategy?.notNow[0]).toBe('no proof yet');                         // not-now renders its `reason`, no "·"
     expect(v.strategy?.adoptable).toBe(true);
     expect(v.strategy?.proposalId).toBe('v1');
   });
