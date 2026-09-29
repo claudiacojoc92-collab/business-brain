@@ -43,6 +43,16 @@ const errText = (e: unknown): string => { const x = e as Error; return `${x?.mes
 const clean = (xs?: (string | null | undefined)[]): string[] => (xs ?? []).map((x) => (x ?? '').trim()).filter(Boolean);
 const first = (...xs: (string | undefined)[]): string => { for (const x of xs) if (x?.trim()) return x.trim(); return ''; };
 const dedupe = (xs: string[]): string[] => { const seen = new Set<string>(); const out: string[] = []; for (const x of xs) { const v = (x ?? '').trim(); if (v && !seen.has(v)) { seen.add(v); out.push(v); } } return out; };
+// Founder-human GUARANTEE: the strategy prompt asks for plain language, but the model stubbornly reproduces a few
+// consultant phrases at temp 0 (e.g. "un flux B2B structurat"). A deterministic scrub over the founder-facing
+// strategy strings guarantees the founder-approved wording regardless of the model, the way ref-tokens are scrubbed.
+// Exact, ordered, case-insensitive — kept minimal so it never mangles unrelated text.
+const STRATEGY_JARGON: [RegExp, string][] = [
+  [/\bun (flux|sistem) b2b structurat\b/gi, 'un sistem prin care medicii îți trimit pacienți constant'],
+  [/\bflux b2b structurat\b/gi, 'un sistem prin care medicii îți trimit pacienți constant'],
+  [/\bun flux b2b\b/gi, 'un sistem prin care medicii îți trimit pacienți'],
+];
+const scrubJargon = (s: string): string => STRATEGY_JARGON.reduce((acc, [re, rep]) => acc.replace(re, rep), s);
 
 export class ArcService {
   constructor(private readonly deps: ArcDeps) {}
@@ -123,17 +133,17 @@ export class ArcService {
         return {
           ...base,
           strategy: {
-            bet: first(core.coreBet.priority, core.goal),
-            over: first(core.coreBet.deprioritized, (core.tradeOffs?.[0]?.over ?? '')),
+            bet: scrubJargon(first(core.coreBet.priority, core.goal)),
+            over: scrubJargon(first(core.coreBet.deprioritized, (core.tradeOffs?.[0]?.over ?? ''))),
             horizon: core.horizon,
             // "Why this, not something else" (was "the trade-offs"), surfaced INLINE.
-            tradeOffs: why,
+            tradeOffs: why.map(scrubJargon),
             // Render the model's founder-facing sentence per item (the `reason`, written to name what's dropped +
             // why, in plain prose) — no "item · reason" stitching.
             notNow: (core.notNow ?? [])
               .map((n) => (n.reason ?? '').trim() || (n.item ?? '').trim())
-              .filter(Boolean).slice(0, 3),
-            reconsider: (core.reconsiderTriggers ?? []).map((r) => r.condition).filter(Boolean).slice(0, 3),
+              .filter(Boolean).slice(0, 3).map(scrubJargon),
+            reconsider: (core.reconsiderTriggers ?? []).map((r) => r.condition).filter(Boolean).slice(0, 3).map(scrubJargon),
             proposalId: rec.status === 'proposal' ? rec.id : null,
             adoptable: rec.status === 'proposal',
           },

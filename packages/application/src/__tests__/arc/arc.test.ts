@@ -185,6 +185,20 @@ describe('ArcService.view — each moment composes from the reused engines', () 
     expect(v.strategy?.proposalId).toBe('v1');
   });
 
+  it('scrubs consultant jargon from every founder-facing strategy string (deterministic guarantee)', async () => {
+    const jargon: any = { ...STRAT, bundle: { core: { ...STRAT.bundle.core,
+      tradeOffs: [{ choosing: 'x', over: 'y', why: 'merită să construiești un flux B2B structurat' }],
+      notNow: [{ item: 'a', reason: 'lasă un flux B2B structurat deoparte' }],
+      reconsiderTriggers: [{ condition: 'atunci merită să construiești un flux B2B structurat' }],
+    } } };
+    const { deps } = makeDeps({ strategy: { getCurrent: async () => null, proposalOrGenerate: async () => jargon } });
+    const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
+    expect(v.strategy?.reconsider[0]).toContain('un sistem prin care medicii îți trimit pacienți constant');
+    expect(v.strategy?.reconsider.join(' ')).not.toMatch(/flux B2B/i);
+    expect(v.strategy?.tradeOffs.join(' ')).not.toMatch(/flux B2B/i);
+    expect(v.strategy?.notNow.join(' ')).not.toMatch(/flux B2B/i);
+  });
+
   it('week_day names the week (priorities) + today (first action)', async () => {
     const { deps } = makeDeps({ strategy: { getCurrent: async () => ({ record: STRAT }), proposalOrGenerate: async () => STRAT } });
     const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
