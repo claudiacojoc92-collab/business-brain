@@ -13,7 +13,12 @@ const STOP = new Set(['the', 'and', 'your', 'with', 'this', 'that', 'for', 'from
 const words = (s: string): string[] => (s.toLowerCase().match(/[a-z][a-z-]{3,}/g) ?? []).filter((w) => !STOP.has(w));
 const tokenSet = (parts: string[]): Set<string> => new Set(parts.flatMap(words));
 
-const WEEK_BAND = /\bweeks?\s+\d(?:\s*[-–—]\s*\d)?\b/gi;
+// The "week" concept in the plan's OWN language — EN week(s), RO săptămână/săptămâni (with or without
+// diacritics), IT settimana/settimane. A time band is authored in the plan's language (the LANGUAGE rule), so
+// demanding the literal English "week" would force English into one field and burn repair attempts. No /g on
+// WEEK_WORD so .test() is stateless.
+const WEEK_WORD = /(weeks?|s[ăa]pt[ăa]m[âaăî]ni?|settimane?)/i;
+const WEEK_BAND = /\b(?:weeks?|s[ăa]pt[ăa]m[âaăî]ni?|settimane?)\s+\d(?:\s*[-–—]\s*\d)?\b/gi;
 // No trailing \b: "30%-burn" must still detect "30%" (a hyphen after % is not a word boundary).
 const NUMERIC = /\b\d[\d.,]*\s?%?/g;
 const DATE = /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}\b/gi;
@@ -155,7 +160,7 @@ export function validatePlan(plan: PlanVersion, strategy: PlanStrategyView): Pla
 
   for (const p of plan.priorities) {
     if (!p.betRef.trim() || !p.goalRef.trim()) f.push('priority_missing_trace');
-    if (!/week/i.test(p.timeBand)) f.push('priority_timeband_not_week_band');
+    if (!WEEK_WORD.test(p.timeBand)) f.push('priority_timeband_not_week_band');
     for (const u of numericViolations(`${p.title} ${p.why} ${p.observableSignal?.description ?? ''}`, authorized, facts)) f.push(`numeric_target:${u}`);
     if (p.observableSignal && /\d/.test(p.observableSignal.description) && !p.observableSignal.source) f.push('unsourced_signal_number');
     if (words(`${p.title} ${p.why}`).some((w) => strategyTokens.has(w))) sharesStrategyToken = true;

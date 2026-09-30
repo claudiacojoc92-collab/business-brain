@@ -141,6 +141,22 @@ describe('Slice 5 — Plan (strategy→execution) corrections', () => {
     expect(structural.failures.some((f) => f.startsWith('numeric_target'))).toBe(false);
   });
 
+  // ── TB. Time band is accepted in the plan's OWN language (EN/RO/IT), not only literal English "week" ──
+  it('TB. a Romanian or Italian week band passes; a non-week band fails', () => {
+    const build = (timeBand: string): any => ({
+      planVersionId: 'x', businessId: 'B', strategyVersionId: 'sv1', resourceEnvelope: { capacity: 'x', channels: [], constraints: [], notWilling: [], resources: [] },
+      contextVersionRefs: [], monthDirection: 'Turn proof of client outcomes into intro calls with fractional CFOs.', currentFocusPriorityId: 'p0', producedAt: 't', contentHash: 'h', notNow: [],
+      priorities: [{ priorityId: 'p0', title: 'Book intro calls with fractional CFOs', intent: 'conversion_path', why: 'executes the intro-call conversion bet', betRef: 'convert via a short intro call', goalRef: 'win more consulting clients', timeBand, feasibility: 'feasible', materialGap: null, observableSignal: null, order: 0,
+        actions: [{ actionId: 'p0-a0', priorityId: 'p0', what: 'Stand up the intro-call booking path', why: 'executes the bet', doneDefinition: 'done', effortHint: null, leadsToCreate: false, generatesDemand: false, requiredMaterial: [], prerequisites: [], planTimeFeasible: true }] }],
+    });
+    const fires = (tb: string): boolean => validatePlan(build(tb), STRATEGY).failures.includes('priority_timeband_not_week_band');
+    expect(fires('weeks 1-2')).toBe(false);          // English
+    expect(fires('săptămânile 1-2')).toBe(false);    // Romanian (with diacritics)
+    expect(fires('saptamana 1')).toBe(false);        // Romanian (no diacritics)
+    expect(fires('settimane 2-4')).toBe(false);      // Italian
+    expect(fires('luna 1')).toBe(true);              // "month", not a week band → still fails
+  });
+
   // ── CF. Complete-flow gate: a demand-generating action must be sequenced after its landing ──
   it('CF. flags a demand action with no landing prerequisite; passes once it depends on the landing; never fires on prep', () => {
     // Two priorities: a conversion_path LANDING (who receives the arrival) and an acquisition OUTREACH.
