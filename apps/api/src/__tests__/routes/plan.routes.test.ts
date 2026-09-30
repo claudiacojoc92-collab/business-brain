@@ -35,9 +35,9 @@ const draft: PlanDraft = {
   monthDirection: 'Turn your proof of client outcomes into booked intro calls with fractional CFOs.',
   priorities: [
     { title: 'Publish concrete client-outcome proof', intent: 'content', why: 'executes the bet to win trust with proof of outcomes', betRef: 'lead with proof of outcomes', goalRef: 'win more consulting clients', timeBand: 'weeks 1-2', feasibility: 'feasible', materialGap: null, observableSignal: { description: 'replies from CFOs', source: 'strategy' }, order: 0,
-      actions: [{ key: 'a1', what: 'Write up a recent client outcome as a short proof piece', why: 'proof executes the bet', doneDefinition: 'one proof piece drafted', effortHint: 'a_session', leadsToCreate: true, requiredMaterial: ['a recent client outcome writeup'], prerequisiteKeys: [], planTimeFeasible: true }] },
+      actions: [{ key: 'a1', what: 'Write up a recent client outcome as a short proof piece', why: 'proof executes the bet', doneDefinition: 'one proof piece drafted', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, requiredMaterial: ['a recent client outcome writeup'], prerequisiteKeys: [], planTimeFeasible: true }] },
     { title: 'Set up the intro-call conversion path', intent: 'conversion_path', why: 'convert proof readers into intro calls with CFOs', betRef: 'convert via a short intro call', goalRef: 'win more consulting clients', timeBand: 'weeks 2-3', feasibility: 'feasible', materialGap: null, observableSignal: null, order: 1,
-      actions: [{ key: 'b1', what: 'Add a clear intro-call booking link to CFO outreach', why: 'removes friction to the CTA', doneDefinition: 'booking link live', effortHint: 'quick', leadsToCreate: false, requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true }] },
+      actions: [{ key: 'b1', what: 'Add a clear intro-call booking link to CFO outreach', why: 'removes friction to the CTA', doneDefinition: 'booking link live', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true }] },
   ],
   currentFocusIndex: 0, notNow: [],
 };
@@ -160,7 +160,7 @@ describe('Slice 5 — blocked-move routes (kind-specific resolution)', () => {
   const missingDraft: PlanDraft = {
     monthDirection: 'Turn your proof of client outcomes into booked intro calls with fractional CFOs.',
     priorities: [{ title: 'Publish concrete client-outcome proof', intent: 'content', why: 'executes the bet to win trust with proof of outcomes', betRef: 'lead with proof of outcomes', goalRef: 'win more consulting clients', timeBand: 'weeks 1-2', feasibility: 'feasible', materialGap: null, observableSignal: { description: 'replies from CFOs', source: 'strategy' }, order: 0,
-      actions: [{ key: 'm1', what: 'Publish the proof piece with the brand logo files', why: 'proof executes the bet', doneDefinition: 'published', effortHint: 'a_session', leadsToCreate: true, requiredMaterial: ['brand logo files'], prerequisiteKeys: [], planTimeFeasible: true }] }],
+      actions: [{ key: 'm1', what: 'Publish the proof piece with the brand logo files', why: 'proof executes the bet', doneDefinition: 'published', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, requiredMaterial: ['brand logo files'], prerequisiteKeys: [], planTimeFeasible: true }] }],
     currentFocusIndex: 0, notNow: [],
   };
 
