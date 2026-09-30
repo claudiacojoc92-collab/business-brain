@@ -58,12 +58,18 @@ export class PlanService {
   /** Compose an immutable PlanVersion from a validated draft (assign ids, resolve prerequisite keys, hash). */
   private compose(businessId: string, strategy: PlanStrategyView, envelope: ResourceEnvelope, draft: PlanDraft): PlanVersion {
     const versionId = generateId();
+    // Action keys are UNIQUE ACROSS THE PLAN (the draft contract requires it), so prerequisite keys may point
+    // ACROSS priorities — e.g. an outreach action in an acquisition priority depending on the landing action in
+    // the conversion_path priority. Resolve keys→ids with ONE global map; a per-priority map silently dropped
+    // every cross-priority edge, which is exactly how a demand action lost its link to its landing ("half a
+    // channel"). Build the global map first, then compose.
+    const keyToId = new Map<string, string>();
+    draft.priorities.forEach((p, pi) => p.actions.forEach((a, ai) => { if (!keyToId.has(a.key)) keyToId.set(a.key, `${versionId}-p${pi}-a${ai}`); }));
     const priorities: Priority[] = draft.priorities.map((p, pi) => {
       const priorityId = `${versionId}-p${pi}`;
-      const keyToId = new Map(p.actions.map((a, ai) => [a.key, `${priorityId}-a${ai}`]));
       const actions: Action[] = p.actions.map((a, ai) => ({
         actionId: `${priorityId}-a${ai}`, priorityId, what: a.what, why: a.why, doneDefinition: a.doneDefinition,
-        effortHint: a.effortHint ?? null, leadsToCreate: Boolean(a.leadsToCreate), requiredMaterial: [...a.requiredMaterial],
+        effortHint: a.effortHint ?? null, leadsToCreate: Boolean(a.leadsToCreate), generatesDemand: Boolean(a.generatesDemand), requiredMaterial: [...a.requiredMaterial],
         prerequisites: a.prerequisiteKeys.map((k) => keyToId.get(k)).filter((x): x is string => Boolean(x)),
         planTimeFeasible: Boolean(a.planTimeFeasible),
       }));

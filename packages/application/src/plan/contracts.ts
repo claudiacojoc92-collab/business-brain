@@ -34,6 +34,11 @@ export interface Action {
   readonly doneDefinition: string;
   readonly effortHint: 'quick' | 'a_session' | 'larger' | null; // only where honestly knowable
   readonly leadsToCreate: boolean;            // affordance ONLY — never a ranking signal
+  /** TRUE only when the action makes someone ARRIVE or invites inbound contact (contact a referrer, publish that
+   *  invites response, launch, drive traffic). FALSE for internal prep — writing, list-building, practising, and
+   *  crucially setting up/testing the landing itself. The complete-flow gate uses it: a demand-generating action
+   *  must depend on the landing that handles what it brings in (see plan-quality). Model-set, like leadsToCreate. */
+  readonly generatesDemand: boolean;
   readonly requiredMaterial: string[];
   readonly prerequisites: string[];           // actionIds that must be DONE first
   readonly planTimeFeasible: boolean;         // feasibility AT PLAN TIME (distinct from current readiness)

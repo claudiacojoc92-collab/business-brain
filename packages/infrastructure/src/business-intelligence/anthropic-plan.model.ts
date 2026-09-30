@@ -49,6 +49,11 @@ export const PLAN_SYSTEM = [
   '  next step); why (why THIS action, traces to the priority); doneDefinition (what "done" concretely looks',
   '  like); effortHint ("quick" | "a_session" | "larger" | null — null unless honestly knowable);',
   '  leadsToCreate (true ONLY if the action produces an external audience-facing message/asset);',
+  '  generatesDemand (true ONLY when the action makes someone ARRIVE or invites inbound contact — reaching out to',
+  '    people who can send you customers, launching, publishing something that invites a reply, driving traffic.',
+  '    FALSE for internal preparation: writing a document, building a list, practising, auditing, and — importantly —',
+  '    SETTING UP OR TESTING THE LANDING itself. "Contact the doctors" = true; "write the clinical doc",',
+  '    "build the doctor list", "decide who answers the phone", "test the booking path" = false);',
   '  requiredMaterial (business/offer/proof material the action needs — [] if none); prerequisiteKeys (keys',
   '  of actions that must be DONE first — [] unless a real ordering dependency exists); planTimeFeasible',
   '  (false only if it cannot be started now, e.g. it needs a founder decision or missing material).',
@@ -66,6 +71,13 @@ export const PLAN_SYSTEM = [
   '    AUTHORIZED NUMBERS, in the same scope. A DOCUMENTED PROOF NUMBER (from a case study/licensed material)',
   '    may be cited ONLY faithfully and documentarily ("the case study documents a 30% burn reduction") — never',
   '    turned into a forward promise ("improve your burn by 30%", "target 30% conversion").',
+  '  - COMPLETE THE FLOW, never half a channel. Any action with generatesDemand=true must list in its',
+  '    prerequisiteKeys the action(s) that HANDLE what it brings in — the landing/handling that receives the',
+  '    person who arrives. Never invite anyone before the thing that receives them exists. Example (a referral',
+  '    play): "reach out to the doctors" (generatesDemand) must depend on the actions that build the receiving',
+  '    side — deciding who answers when a patient calls, and the path the arriving patient walks. If the plan',
+  '    generates demand, it MUST also build the receiving side and SEQUENCE the invite after it. A landing/',
+  '    handling action lives in a conversion_path, retention, or sales_support priority.',
   '  - NEVER write internal action keys (e.g. "a1", "b2") into any founder-facing text. Keys belong only in',
   '    prerequisiteKeys. Refer to prior steps in words ("after the proof piece is drafted"), never by key.',
   '  - No manufactured urgency ("act fast", "limited time"). No outcome/result promises ("guaranteed to',
@@ -85,8 +97,9 @@ export const PLAN_SYSTEM = [
   '{"monthDirection":"...","currentFocusIndex":0,"priorities":[{"title":"...","intent":"...","why":"...",',
   '"betRef":"...","goalRef":"...","timeBand":"weeks 1-2","feasibility":"feasible","materialGap":null,',
   '"observableSignal":{"description":"...","source":"..."}|null,"order":0,"actions":[{"key":"a1","what":"...",',
-  '"why":"...","doneDefinition":"...","effortHint":"a_session"|null,"leadsToCreate":false,"requiredMaterial":[],',
-  '"prerequisiteKeys":[],"planTimeFeasible":true}]}],"notNow":[{"item":"...","reason":"...","reasonKind":"strategic_tradeoff"}]}',
+  '"why":"...","doneDefinition":"...","effortHint":"a_session"|null,"leadsToCreate":false,"generatesDemand":false,',
+  '"requiredMaterial":[],"prerequisiteKeys":[],"planTimeFeasible":true}]}],',
+  '"notNow":[{"item":"...","reason":"...","reasonKind":"strategic_tradeoff"}]}',
 ].join('\n');
 
 function buildUser(strategy: PlanStrategyView, envelope: ResourceEnvelope, businessName: string, repairReasons?: string[], priorDraft?: PlanDraft, priorCycle?: import('@bb/application').PriorCycle): string {
@@ -176,7 +189,8 @@ export class AnthropicPlanModel implements IPlanModelPort {
       actions: (Array.isArray(p?.actions) ? p.actions : []).map((a: any, ai: number) => ({
         key: str(a?.key) || `p${pi}a${ai}`, what: str(a?.what), why: str(a?.why), doneDefinition: str(a?.doneDefinition),
         effortHint: EFFORTS.has(a?.effortHint) ? a.effortHint : null,
-        leadsToCreate: Boolean(a?.leadsToCreate), requiredMaterial: strArr(a?.requiredMaterial),
+        leadsToCreate: Boolean(a?.leadsToCreate), generatesDemand: Boolean(a?.generatesDemand),
+        requiredMaterial: strArr(a?.requiredMaterial),
         prerequisiteKeys: strArr(a?.prerequisiteKeys), planTimeFeasible: a?.planTimeFeasible !== false,
       })),
     }));

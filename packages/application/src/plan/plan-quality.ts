@@ -142,6 +142,17 @@ export function validatePlan(plan: PlanVersion, strategy: PlanStrategyView): Pla
   const allActionIds = new Set(plan.priorities.flatMap((p) => p.actions.map((a) => a.actionId)));
   let sharesStrategyToken = false;
 
+  // COMPLETE-FLOW GATE (never half a channel). An action that GENERATES DEMAND — makes someone arrive or
+  // invites inbound contact (model-set generatesDemand, NOT intent) — must be SEQUENCED after the landing that
+  // receives what it brings in. "Landing" = an action inside a conversion_path / retention / sales_support
+  // priority (the receiving side of the flow). The gate fires ONLY on demand-generating actions, never on
+  // internal prep (writing, list-building, or building/testing the landing itself), because those are
+  // generatesDemand=false. A demand action with no prerequisite on a landing action fails → repair.
+  const LANDING_INTENTS = new Set(['conversion_path', 'retention', 'sales_support']);
+  const landingActionIds = new Set(
+    plan.priorities.filter((p) => LANDING_INTENTS.has(p.intent)).flatMap((p) => p.actions.map((a) => a.actionId)),
+  );
+
   for (const p of plan.priorities) {
     if (!p.betRef.trim() || !p.goalRef.trim()) f.push('priority_missing_trace');
     if (!/week/i.test(p.timeBand)) f.push('priority_timeband_not_week_band');
@@ -153,6 +164,10 @@ export function validatePlan(plan: PlanVersion, strategy: PlanStrategyView): Pla
       if (!a.what.trim() || !a.why.trim() || !a.doneDefinition.trim()) f.push('action_incomplete');
       if (a.priorityId !== p.priorityId) f.push('orphan_action');
       for (const pre of a.prerequisites) { if (!allActionIds.has(pre)) f.push('dangling_prerequisite'); if (pre === a.actionId) f.push('self_prerequisite'); }
+      // complete-flow: a demand-generating action must depend on a landing action that handles what it brings in.
+      if (a.generatesDemand && !a.prerequisites.some((pre) => landingActionIds.has(pre))) {
+        f.push(`demand_without_landing: the action "${a.what.slice(0, 70)}" invites people in but is not sequenced after the landing that receives them — add to its prerequisiteKeys the action(s) that handle the arrival (who receives them, the path they walk), living in a conversion_path/retention/sales_support priority; if no such action exists, add it`);
+      }
       const blob = `${a.what} ${a.why} ${a.doneDefinition}`;
       for (const u of numericViolations(blob, authorized, facts)) f.push(`numeric_target:${u}`);
       if (MANUFACTURED_URGENCY.test(blob)) f.push('manufactured_urgency'); // grounded seasonality/dates pass
