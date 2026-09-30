@@ -124,10 +124,10 @@ Section 3 is enforced mechanically by `.claude/hooks/` (wired in `.claude/settin
 - A plain request to commit ("commit this") also opens `commit`. Push always needs `approve push`.
 - Every deny/approval is logged to `.claude/state/hook-log.jsonl` (git-ignored). Review it when growing
   the rules: repeated false positives → tighten the rule; repeated near-misses → add one.
-- If `guard.mjs` crashes it fails closed (blocks). Fix with `node --test .claude/hooks/`.
+- If `guard.mjs` crashes it fails closed (blocks). Fix with `node --test '.claude/hooks/*.test.mjs'`.
 
 **Adding a rule:** add an entry to `RULES` in `rules.mjs` (id, tools, match/check, action, gate,
-reason), add BLOCK and ALLOW cases to `guard.test.mjs`, run `node --test .claude/hooks/`, then note it
+reason), add BLOCK and ALLOW cases to `guard.test.mjs`, run `node --test '.claude/hooks/*.test.mjs'`, then note it
 in the changelog below. Editing hook files needs `approve rules`.
 
 ## 4. Known anti-patterns (seen in past sessions)

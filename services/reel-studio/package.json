@@ -1,0 +1,23 @@
+{
+  "name": "@bb/reel-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Internal-only Reel Studio: reproduce a target reel's structure with our own media, built on Hypit. NOT founder-facing (see README, License boundary).",
+  "type": "module",
+  "engines": {
+    "node": ">=22.15.0"
+  },
+  "bin": {
+    "reel-studio": "./bin/reel-studio.mjs"
+  },
+  "scripts": {
+    "setup": "npm ci && python3 -m venv .tools/venv && .tools/venv/bin/pip install --quiet uv && node bin/reel-studio.mjs doctor",
+    "reel-studio": "node bin/reel-studio.mjs",
+    "hypit": "hypit",
+    "doctor": "node bin/reel-studio.mjs doctor",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@hypit/hypit": "0.2.16"
+  }
+}

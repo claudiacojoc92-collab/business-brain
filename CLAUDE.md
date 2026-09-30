@@ -21,6 +21,7 @@ npm workspaces (`packages/*`, `apps/*`), TypeScript project references (`tsconfi
 | `packages/business-model-engine` | plain `.mjs` engine (no build) |
 | `apps/api` (`@bb/api`) | Fastify HTTP API: `src/main.ts` → `server.ts` (`ServerDeps`) → `routes/*.routes.ts` |
 | `apps/workers` (`@bb/workers`) | BullMQ workers + outbox relay + scheduler |
+| `services/reel-studio` | INTERNAL-ONLY Hypit wrapper (Node >= 22.15, own lockfile, not a workspace). License forbids founder-facing use without a commercial license. See its README |
 | `apps/web` (`@business-brain/web`) | React + Vite SPA, served by nginx in prod. Standalone: imports no `@bb/*` |
 | `database/migrations` | Flyway `V###__*.sql` (V001 to V080). `database/seeds` holds dev seeds |
 | `prompts/`, `deployment/prompts/` | versioned LLM prompts with sha256 checksums (hash-fragile, see `deployment/prompts/NOTE.md`) |
@@ -131,7 +132,7 @@ the operator to type `approve <gate>` (valid for that one message/turn). Gates: 
 `destructive-git`, `delete`, `deploy`, `prod`, `prod-write`, `migration`, `frozen`, `rules`. Always
 blocked, no approval path: printing/sourcing secrets, bare `railway domain`, force push, api restart
 without the preflight, editing committed migrations. Sub-agents can never commit or push. New rule =
-add it to `rules.mjs` + a case in `guard.test.mjs`, run `node --test .claude/hooks/` (needs
+add it to `rules.mjs` + a case in `guard.test.mjs`, run `node --test '.claude/hooks/*.test.mjs'` (needs
 `approve rules`).
 
 ## Git

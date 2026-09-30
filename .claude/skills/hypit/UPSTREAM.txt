@@ -1,0 +1,4 @@
+Upstream: https://github.com/hypit-ai/hypit skills/hypit
+Commit: b00532e (2026-09-28)
+Matches: @hypit/hypit 0.2.16 (services/reel-studio/package.json)
+License: Hypit modified Apache 2.0 (services/reel-studio/README.md). Update together with the npm pin.

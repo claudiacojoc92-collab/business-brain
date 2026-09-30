@@ -56,3 +56,7 @@ docker-compose.override.yml
 # Claude Code per-user settings (explicit, so it stays ignored even if the blanket
 # `.claude/` rule above is narrowed to let a shared .claude/settings.json be tracked)
 .claude/settings.local*.json
+
+# Reel Studio (internal Hypit service): per-job projects and outputs
+services/reel-studio/workspace/
+services/reel-studio/.tools/
