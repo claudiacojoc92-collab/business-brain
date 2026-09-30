@@ -456,6 +456,9 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     // Living State (TUNE read-path): active operating constraints with their scope, so Today can surface them
     // and block a move scoped to a specific actionId — no plan mutation.
     activeConstraints: async (bid) => (await founderStateRepo.listActive(bid)).filter((s) => s.kind === 'constraint').map((s) => ({ statement: s.statement, scope: s.scope })),
+    // Real wall-clock so a plan's producedAt is the actual generation time — without this the service falls back to
+    // a fixed 2026-01-01 date (harmless to logic, but misleading in the data).
+    clock: () => new Date().toISOString(),
     // eslint-disable-next-line no-console
     log: (e) => console.error('[plan]', JSON.stringify(e)),
   });
