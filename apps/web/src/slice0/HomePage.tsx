@@ -6,6 +6,7 @@ import { ArcSurface } from './ArcSurface';
 import { useLocale } from '../i18n/LocaleContext';
 import { getArc, getHomeBriefing, evaluateImpact, ApiError, type HomeBriefing, type HomeAction, type ImpactResult } from '../api/client';
 import { VerdictSurface } from './VerdictSurface';
+import { ArcWorking } from './ArcWorking';
 
 /**
  * THE HOME SURFACE. While the Day One arc is in progress (Moments 1–9), the strategist carries the founder
@@ -96,12 +97,16 @@ export function HomePage(): React.ReactElement {
           <div className="s0-strat-msg">
             {briefing.lines.map((l, i) => <p key={i} className="s0-strat-msg-line">{t(l.key, l.vars)}</p>)}
           </div>
-          <form className="s0-strat-input" onSubmit={submitClose}>
-            <textarea value={closeText} onChange={(e) => setCloseText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void submitClose(e as unknown as React.FormEvent); } }}
-              placeholder={t('home.close.answer')} aria-label={t('home.close.ask')} rows={2} disabled={closeBusy} />
-            <button type="submit" className="s0-btn s0-btn-inline" disabled={closeBusy || !closeText.trim()}>{t('home.close.answer')}</button>
-          </form>
+          {closeBusy ? (
+            <ArcWorking t={t} messageKey="arc.working.thinking" />
+          ) : (
+            <form className="s0-strat-input" onSubmit={submitClose}>
+              <textarea value={closeText} onChange={(e) => setCloseText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void submitClose(e as unknown as React.FormEvent); } }}
+                placeholder={t('home.close.answer')} aria-label={t('home.close.ask')} rows={2} />
+              <button type="submit" className="s0-btn s0-btn-inline" disabled={!closeText.trim()}>{t('home.close.answer')}</button>
+            </form>
+          )}
         </div>
       </AppShell>
     );

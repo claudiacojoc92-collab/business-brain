@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import { adoptStrategy, respondToStrategy, proposePlan, adoptPlan, type ImpactResult } from '../api/client';
+import { ArcWorking } from './ArcWorking';
 
 /**
  * LIVING STATE — the verdict surface. The signature moment of the loop: after a new reality is assessed
@@ -59,6 +60,20 @@ export function VerdictSurface(props: {
         if (p && 'planVersionId' in p && p.planVersionId) await adoptPlan(businessId, p.planVersionId);
       } catch { /* leave Today to prompt a reshape */ }
       setPhase('adopted'); onAdopted?.();
+    } catch { setErr(true); }
+    finally { setBusy(false); }
+  }
+
+  // MONTH TWO — STILL_HOLDS/TUNE at a cycle close: the bet is unchanged, so there is no strategy to adopt, but the
+  // value is the NEXT cycle's plan. Generate it (progress-aware, via the cycle-aware /plan/propose) and adopt it in
+  // one step, then head to Today — never leave the founder on the finished plan with no way forward.
+  async function seeNextPlan() {
+    if (busy) return;
+    setBusy(true); setErr(false);
+    try {
+      const p = await proposePlan(businessId);
+      if (p && 'planVersionId' in p && p.planVersionId) { await adoptPlan(businessId, p.planVersionId); setPhase('adopted'); onAdopted?.(); }
+      else setErr(true);
     } catch { setErr(true); }
     finally { setBusy(false); }
   }
@@ -148,14 +163,18 @@ export function VerdictSurface(props: {
             <button type="button" className="s0-btn-ghost" onClick={() => setPhase('view')}>{t('verdict.cancel')}</button>
           </div>
         </div>
+      ) : busy ? (
+        // A strategy adopt or a next-cycle plan generation runs 74–150s — show the SAME escalating spinner the arc
+        // uses (12s → "still working…"), so a long wait looks identical everywhere, never a frozen button.
+        <ArcWorking t={t} messageKey="arc.working.plan" />
       ) : (
         <div className="s0-today2-actions s0-verdict-actions">
-          {canAct ? <button type="button" className="s0-btn" disabled={busy} onClick={adopt}>{busy ? '…' : t('verdict.adopt')}</button> : null}
+          {canAct ? <button type="button" className="s0-btn" onClick={adopt}>{t('verdict.adopt')}</button> : null}
           {canAct ? <button type="button" className="s0-btn-ghost" onClick={() => setPhase('challenging')}>{t('verdict.challenge')}</button> : null}
-          {/* MONTH TWO — the bet held at a cycle close: the value is the NEXT month's plan (built progress-aware
-              from what got done + this report), so lead the founder straight to it. */}
+          {/* MONTH TWO — the bet held at a cycle close: the value is the NEXT month's plan (built progress-aware from
+              what got done + this report). Generate + adopt it inline, then go to Today. */}
           {!canAct && result.source === 'outcome_report'
-            ? <button type="button" className="s0-btn" onClick={() => navigate(`/b/${businessId}/plan`)}>{t('home.close.next')} →</button>
+            ? <button type="button" className="s0-btn" onClick={seeNextPlan}>{t('home.close.next')} →</button>
             : null}
           <button type="button" className={(canAct || result.source === 'outcome_report') ? 's0-linkbtn' : 's0-btn'} onClick={onDismiss}>{t('verdict.dismiss')}</button>
         </div>

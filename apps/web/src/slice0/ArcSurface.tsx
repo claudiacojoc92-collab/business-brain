@@ -12,7 +12,7 @@ import {
 // The direct Instagram Login connector + the /arc/source/instagram route are left in place, unused, for when
 // we return to it (via Facebook Login for Business). See docs/sources/instagram-arc-connector-later.md.
 
-type T = (k: string, v?: Record<string, string>) => string;
+import { ArcWorking, type T } from './ArcWorking';
 
 // These MUST live at module scope — never inside ArcSurface's body. A component defined inside another
 // component is recreated with a NEW identity on every render, so React unmounts + remounts it; a focused
@@ -185,16 +185,6 @@ function ArcThread({ turns, t }: { turns: ThreadTurn[]; t: T }) {
 // "BB is working" — an animated, alive progress state shown while a model runs (so the founder never sees a
 // frozen screen). Escalates to a "still working…" line after ~12s so a long generation (strategy/plan) still
 // reads as progress, not a hang. Message is content-language (via t).
-function ArcWorking({ t, messageKey }: { t: T; messageKey: string }) {
-  const [longWait, setLongWait] = useState(false);
-  useEffect(() => { const id = setTimeout(() => setLongWait(true), 12000); return () => clearTimeout(id); }, []);
-  return (
-    <div className="s0-arc-working" role="status" aria-live="polite">
-      <span className="s0-arc-working-dots" aria-hidden="true"><i /><i /><i /></span>
-      <span className="s0-arc-working-text">{longWait ? t('arc.working.still') : t(messageKey)}</span>
-    </div>
-  );
-}
 
 // The Moment 4 opener — a SHORT structured pointer (lead + ≤3 one-line grounded bullets + one "not sure" line +
 // the invitation). Differentiated from Moment 3 (the full diagnosis): this does NOT re-list every source. Only
