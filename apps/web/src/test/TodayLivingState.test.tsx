@@ -72,8 +72,8 @@ describe('TodayPage — Living State (return loop + outcome report)', () => {
     vi.mocked(api.getToday).mockResolvedValue(todayWith({ show: false, hasChanges: false, changes: [], strategyMoved: false, todayChanged: false, oneThing: null, since: null, awayHours: null }));
     const verdict: ImpactResult = {
       verdict: 'STILL_HOLDS', whatChanged: ['Outcome evidence exists.'], whatDidNotChange: ['Your bet.'],
-      assumptionImpacts: [], todayImpact: { changes: true, reason: 'a follow-up exists', newMove: 'Email the interested doctor.' },
-      strategyImpact: { changes: false, reason: 'unchanged', newVersion: null }, source: 'outcome_report',
+      assumptionImpacts: [], todayImpact: { changes: true, reason: 'a follow-up exists', reasonCode: null, newMove: 'Email the interested doctor.' },
+      strategyImpact: { changes: false, reasonCode: 'impact.strategy.holds', newVersion: null }, source: 'outcome_report',
     };
     vi.mocked(api.evaluateImpact).mockResolvedValue(verdict);
     render(<TodayPage />);

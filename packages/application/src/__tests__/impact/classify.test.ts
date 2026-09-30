@@ -22,7 +22,8 @@ describe('impact classify — the deterministic heart of the living-state loop',
     expect(noMove.verdict).toBe('STILL_HOLDS');
     expect(noMove.strategyImpact.changes).toBe(false);
     expect(noMove.todayImpact.changes).toBe(false);
-    expect(noMove.todayImpact.reason).toMatch(/unchanged/i);
+    expect(noMove.todayImpact.reason).toBeNull();
+    expect(noMove.todayImpact.reasonCode).toBe('impact.today.unchanged');
 
     const withMove = classify({ ...base, todayNextMove: 'Follow up with the doctor who wants a follow-up.' }, held);
     expect(withMove.verdict).toBe('STILL_HOLDS');
@@ -53,7 +54,8 @@ describe('impact classify — the deterministic heart of the living-state loop',
     const r = classify({ ...base, matchedReconsider: 'if the referral channel stops responding' }, held);
     expect(r.verdict).toBe('RECONSIDER');
     expect(r.strategyImpact.changes).toBe(true);
-    expect(r.strategyImpact.reason).toMatch(/reconsider/i);
+    expect(r.strategyImpact.reasonCode).toBe('impact.strategy.reconsider');
+    expect(r.strategyImpact.reasonVars?.condition).toMatch(/referral channel stops/i);
     expect(r.todayImpact.changes).toBe(true);
   });
 

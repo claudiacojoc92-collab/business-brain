@@ -435,8 +435,8 @@ export interface ImpactResult {
   whatChanged: string[];
   whatDidNotChange: string[];
   assumptionImpacts: AssumptionImpact[];
-  todayImpact: { changes: boolean; reason: string; newMove: string | null };
-  strategyImpact: { changes: boolean; reason: string; newVersion: { id: string; version: number; status: string; strategy: StrategyBundle } | null };
+  todayImpact: { changes: boolean; reason: string | null; reasonCode: string | null; newMove: string | null };
+  strategyImpact: { changes: boolean; reasonCode: string; reasonVars?: Record<string, string>; newVersion: { id: string; version: number; status: string; strategy: StrategyBundle } | null };
   source: ImpactSource;
 }
 export function evaluateImpact(businessId: string, source: ImpactSource, text: string): Promise<ImpactResult> {

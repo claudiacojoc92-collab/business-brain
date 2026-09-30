@@ -21,8 +21,8 @@ const holds: ImpactResult = {
   whatChanged: ['You have real outcome evidence.'],
   whatDidNotChange: ['Your bet on referrals.', 'Website-first stays not-now.'],
   assumptionImpacts: [],
-  todayImpact: { changes: true, reason: 'A concrete follow-up exists.', newMove: 'Follow up with the doctor.' },
-  strategyImpact: { changes: false, reason: 'The strategic bet is unchanged.', newVersion: null },
+  todayImpact: { changes: true, reason: 'A concrete follow-up exists.', reasonCode: null, newMove: 'Follow up with the doctor.' },
+  strategyImpact: { changes: false, reasonCode: 'impact.strategy.holds', newVersion: null },
   source: 'outcome_report',
 };
 
@@ -31,8 +31,8 @@ const revise: ImpactResult = {
   whatChanged: ['The referral channel is not responding.'],
   whatDidNotChange: ['Your goal.'],
   assumptionImpacts: [{ assumption: 'referrals will respond', direction: 'weaker', note: 'clinics said no' }],
-  todayImpact: { changes: true, reason: 'strategy v2 drafted', newMove: 'Re-derive the plan.' },
-  strategyImpact: { changes: true, reason: 'This contradicts a load-bearing assumption.', newVersion: { id: 'v2', version: 2, status: 'proposal', strategy: {} as never } },
+  todayImpact: { changes: true, reason: 'strategy v2 drafted', reasonCode: null, newMove: 'Re-derive the plan.' },
+  strategyImpact: { changes: true, reasonCode: 'impact.strategy.revise', newVersion: { id: 'v2', version: 2, status: 'proposal', strategy: {} as never } },
   source: 'add_context',
 };
 

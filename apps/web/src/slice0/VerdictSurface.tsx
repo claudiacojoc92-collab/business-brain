@@ -21,6 +21,12 @@ const BADGE_TONE: Record<ImpactResult['verdict'], string> = {
   RECONSIDER: 's0-verdict-reconsider',
 };
 
+// Today's reason is either localized model prose (`reason`) or a deterministic fallback rendered from i18n
+// (`reasonCode`) — never a hardcoded English literal.
+function todayReasonText(today: ImpactResult['todayImpact'], t: T): string {
+  return today.reason ?? (today.reasonCode ? t(today.reasonCode) : '');
+}
+
 function Lane(props: { label: string; items: string[]; tone: 'clay' | 'muted' }) {
   if (props.items.length === 0) return null;
   return (
@@ -136,16 +142,16 @@ export function VerdictSurface(props: {
         <div className="s0-verdict-today">
           <div className="s0-verdict-lane-k">{t('verdict.today')}</div>
           {result.todayImpact.newMove ? <p className="s0-verdict-move">{result.todayImpact.newMove}</p> : null}
-          <p className="s0-verdict-reason">{t('verdict.because', { reason: result.todayImpact.reason })}</p>
+          <p className="s0-verdict-reason">{t('verdict.because', { reason: todayReasonText(result.todayImpact, t) })}</p>
         </div>
       ) : (
-        <p className="s0-verdict-reason s0-verdict-nochange">{result.todayImpact.reason}</p>
+        <p className="s0-verdict-reason s0-verdict-nochange">{todayReasonText(result.todayImpact, t)}</p>
       )}
 
       {strat.changes ? (
         <div className="s0-verdict-strategy">
           <div className="s0-verdict-lane-k">{t('verdict.strategy')}</div>
-          <p className="s0-verdict-reason">{strat.reason}</p>
+          <p className="s0-verdict-reason">{t(strat.reasonCode, strat.reasonVars)}</p>
           {strat.newVersion ? <p className="s0-verdict-newver">{t('verdict.newStrategy', { v: String(strat.newVersion.version) })}</p> : null}
         </div>
       ) : (

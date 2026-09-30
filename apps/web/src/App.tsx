@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { LocaleProvider } from './i18n/LocaleContext';
+import { LocaleProvider, useLocale } from './i18n/LocaleContext';
 import type { Locale } from './i18n/messages';
 import { SessionProvider, useSession } from './slice0/session';
 import { ErrorBoundary } from './slice0/ErrorBoundary';
@@ -61,11 +61,24 @@ function syncLocale(locale: Locale): void {
   }
 }
 
+/** Fix 2 — the account locale is authoritative. On session load, seed the client locale from the account
+ *  unless the founder has explicitly overridden it in the UI. Lives inside both providers so it can read the
+ *  loaded account and set the locale; renders nothing. */
+function LocaleSync(): null {
+  const { account } = useSession();
+  const { adoptFromAccount } = useLocale();
+  useEffect(() => {
+    if (account?.interfaceLocale) adoptFromAccount(account.interfaceLocale);
+  }, [account?.interfaceLocale, adoptFromAccount]);
+  return null;
+}
+
 export function App() {
   return (
     <LocaleProvider onLocaleChange={syncLocale}>
       <BrowserRouter>
         <SessionProvider>
+          <LocaleSync />
           <TalkProvider>
           <AddContextProvider>
           <ErrorBoundary>

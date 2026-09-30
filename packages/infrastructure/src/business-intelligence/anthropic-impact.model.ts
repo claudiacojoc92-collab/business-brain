@@ -152,7 +152,11 @@ function normalize(p: Record<string, unknown>, input: ImpactAssessInput): Impact
   return {
     changeKind,
     matchedReconsider,
-    contradictsAssumption: Boolean(p['contradictsAssumption']) || impacts.some((a) => a.direction === 'weaker'),
+    // Trust the model's EXPLICIT judgment. Do NOT coerce from a "weaker" assumption impact: an assumption can
+    // weaken because reality improved past it (a negatively-phrased assumption like "doctors don't know we
+    // exist" weakens precisely when the outreach WORKS), so "weaker" is not "contradicted". Coercing it made the
+    // verdict a coin flip on identical input and fired REVISE on partial success. Fail-safe stays conservative.
+    contradictsAssumption: Boolean(p['contradictsAssumption']),
     assumptionImpacts: impacts,
     whatChanged: arr(p['whatChanged']),
     whatDidNotChange: arr(p['whatDidNotChange']),

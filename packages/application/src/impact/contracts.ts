@@ -25,7 +25,10 @@ export interface AssumptionImpact {
 
 export interface TodayImpact {
   readonly changes: boolean;
-  readonly reason: string;
+  // MODEL-provided prose is already localized (the model writes in the interface language). The classifier's
+  // own fallbacks live in `reasonCode` instead of hardcoded English, because this layer has no locale.
+  readonly reason: string | null;      // localized model prose, or null → render `reasonCode` via i18n
+  readonly reasonCode: string | null;  // i18n key for the deterministic fallback
   readonly newMove: string | null;
 }
 
@@ -39,7 +42,9 @@ export interface StrategyImpactVersion {
 
 export interface StrategyImpact {
   changes: boolean;
-  reason: string;
+  // The classifier is locale-less, so it emits an i18n key (+ params) instead of prose; VerdictSurface renders it.
+  reasonCode: string;
+  reasonVars?: Record<string, string>;
   newVersion: StrategyImpactVersion | null;
 }
 

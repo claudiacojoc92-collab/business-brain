@@ -86,7 +86,9 @@ export function registerImpactRoutes(server: FastifyInstance, deps: ServerDeps):
         verdict: result.verdict, source,
         whatChanged: result.whatChanged.slice(0, 4),
         todayChanges: result.todayImpact.changes,
-        todayReason: result.todayImpact.reason,
+        // localized model prose when present; the deterministic fallback is a code rendered client-side, so it
+        // is intentionally not carried here (the home "what changed" line just omits it in that case).
+        todayReason: result.todayImpact.reason ?? '',
         newMove: result.todayImpact.newMove,
         strategyChanges: result.strategyImpact.changes,
         newVersionId: newVersion?.id ?? null,

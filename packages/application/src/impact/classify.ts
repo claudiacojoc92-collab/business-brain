@@ -41,14 +41,21 @@ export function classify(signal: ImpactSignal, ctx: { hasHeldStrategy: boolean; 
   // concrete next move is implied even though nothing strategic moved (e.g. "follow up with that doctor").
   const todayChanges = strategyChanges || verdict === 'TUNE' || Boolean(signal.todayNextMove);
 
-  const strategyReason = strategyChanges
-    ? (verdict === 'RECONSIDER'
-        ? `A condition you named as a reason to reconsider has been met: ${signal.matchedReconsider}. I've drafted a revised strategy for you to weigh.`
-        : 'This contradicts a load-bearing assumption, so the strategy needs to change. I\'ve drafted a revised version for you to weigh.')
-    : 'The strategic bet is unchanged.';
+  // Founder-facing prose is NOT built here — this layer has no locale. Emit an i18n reason CODE (+ params);
+  // VerdictSurface renders it in the founder's language.
+  const strategyReasonCode = strategyChanges
+    ? (verdict === 'RECONSIDER' ? 'impact.strategy.reconsider' : 'impact.strategy.revise')
+    : 'impact.strategy.holds';
+  const strategyReasonVars = (strategyChanges && verdict === 'RECONSIDER' && signal.matchedReconsider)
+    ? { condition: signal.matchedReconsider }
+    : undefined;
 
-  const todayReason = signal.todayReason?.trim()
-    || (strategyChanges ? 'Your strategy is moving.' : verdict === 'TUNE' ? 'Execution shifts, the bet does not.' : '');
+  // The model's todayReason is already localized prose — pass it through. Only the deterministic fallback needs
+  // a code (never English literals). newMove is model prose (localized) and stays as-is.
+  const todayReasonProse = todayChanges ? (signal.todayReason?.trim() || null) : null;
+  const todayReasonCode = todayChanges
+    ? (todayReasonProse ? null : (strategyChanges ? 'impact.today.strategyMoving' : 'impact.today.executionShift'))
+    : 'impact.today.unchanged';
 
   return {
     verdict,
@@ -57,12 +64,14 @@ export function classify(signal: ImpactSignal, ctx: { hasHeldStrategy: boolean; 
     assumptionImpacts: signal.assumptionImpacts.filter((a) => a.assumption.trim()),
     todayImpact: {
       changes: todayChanges,
-      reason: todayChanges ? todayReason : 'Today is unchanged. The strategy holds.',
+      reason: todayReasonProse,
+      reasonCode: todayReasonCode,
       newMove: todayChanges ? (signal.todayNextMove?.trim() || null) : null,
     },
     strategyImpact: {
       changes: strategyChanges,
-      reason: strategyReason,
+      reasonCode: strategyReasonCode,
+      ...(strategyReasonVars ? { reasonVars: strategyReasonVars } : {}),
       newVersion: null, // filled by the service after regeneration, projected by the route
     },
     source: ctx.source,
