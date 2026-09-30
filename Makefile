@@ -1,4 +1,4 @@
-.PHONY: help install build type-check lint test test-all \
+.PHONY: help setup install build type-check lint test test-all \
         db-up db-down db-migrate db-seed db-reset \
         dev-api dev-workers dev-all \
         validate-prompts \
@@ -10,6 +10,7 @@ help:
 	@echo "Business Brain — Available targets:"
 	@echo ""
 	@echo "  Setup"
+	@echo "    setup            One-time local setup: node check, npm ci, .env, key preflight, db-up, db-migrate"
 	@echo "    install          Install all npm dependencies"
 	@echo "    build            Type-check all packages"
 	@echo ""
@@ -42,6 +43,24 @@ help:
 	@echo "    clean            Remove node_modules and dist/"
 
 # ─── Setup ────────────────────────────────────────────────────────────────────
+# One-command local setup. Safe to re-run: never overwrites an existing .env, never prints secrets.
+# Set SKIP_NODE_CHECK=1 to bypass the Node major-version check (.nvmrc).
+setup:
+	@want=$$(tr -d 'v[:space:]' < .nvmrc); have=$$(node -p "process.versions.node.split('.')[0]"); \
+	if [ "$$have" != "$$want" ] && [ -z "$$SKIP_NODE_CHECK" ]; then \
+	  echo "setup: Node $$want required (.nvmrc), found $$(node -v). Run 'nvm use' (or SKIP_NODE_CHECK=1)." >&2; exit 1; \
+	fi; echo "setup: node $$(node -v) ok"
+	npm ci
+	@if [ -f .env ]; then echo "setup: .env exists, leaving it untouched"; \
+	else cp .env.example .env && echo "setup: created .env from .env.example; fill in real values"; fi
+	@bash tools/preflight-env-key.sh || { \
+	  echo "setup: GOOGLE_OAUTH_ENCRYPTION_KEY missing and no backup at ~/.config/business-brain/google_oauth_encryption_key." >&2; \
+	  echo "setup: first-time dev: generate one (openssl rand -hex 32) into .env AND save a copy to that backup path, then re-run." >&2; \
+	  exit 1; }
+	$(MAKE) db-up
+	$(MAKE) db-migrate
+	@echo "setup: done. Next: 'bash tools/preflight-env-key.sh && docker compose --profile app up -d' or see README.md"
+
 install:
 	npm install
 

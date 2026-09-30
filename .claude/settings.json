@@ -1,0 +1,59 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test)",
+      "Bash(npm run test *)",
+      "Bash(npm run lint)",
+      "Bash(npm run lint *)",
+      "Bash(npm run type-check --workspace *)",
+      "Bash(npx vitest run *)",
+      "Bash(npx tsc --noEmit *)",
+      "Bash(npx eslint *)",
+      "Bash(make validate-prompts)",
+      "Bash(bash deployment/scripts/validate-prompts.sh)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git branch --show-current)",
+      "Bash(git worktree list)",
+      "Bash(docker compose ps *)",
+      "Bash(docker compose logs *)",
+      "Bash(curl -s http://localhost:3000/health)"
+    ],
+    "deny": [
+      "Bash(cat .env)",
+      "Bash(cat *.pem)",
+      "Read(./.env)",
+      "Read(./*.pem)"
+    ],
+    "ask": [
+      "Bash(git push *)",
+      "Bash(railway *)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.mjs", "timeout": 10 }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/approvals.mjs", "timeout": 10 }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit|Read|Grep|Glob",
+        "hooks": [
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard.mjs", "timeout": 10 }
+        ]
+      }
+    ]
+  }
+}

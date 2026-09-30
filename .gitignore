@@ -25,8 +25,12 @@ logs/
 *.swp
 Thumbs.db
 
-# Claude Code local tool state (not project source)
-.claude/
+# Claude Code local tool state (not project source); team config is shared
+.claude/*
+!.claude/settings.json
+!.claude/skills/
+!.claude/agents/
+!.claude/hooks/
 
 # macOS/cloud-sync duplicate artifacts ("foo 2.ts"). Enumerated by extension (NOT a broad
 # "* 2.*") so a legitimately-named "step 2.md" is never silently swallowed.
@@ -45,3 +49,10 @@ dump.rdb
 # PII / local-only (added for safety)
 database/seeds/*prod*.sql
 docker-compose.override.yml
+
+# Local git worktrees kept inside the repo
+.worktrees/
+
+# Claude Code per-user settings (explicit, so it stays ignored even if the blanket
+# `.claude/` rule above is narrowed to let a shared .claude/settings.json be tracked)
+.claude/settings.local*.json
