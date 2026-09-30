@@ -89,7 +89,7 @@ export const PLAN_SYSTEM = [
   '"prerequisiteKeys":[],"planTimeFeasible":true}]}],"notNow":[{"item":"...","reason":"...","reasonKind":"strategic_tradeoff"}]}',
 ].join('\n');
 
-function buildUser(strategy: PlanStrategyView, envelope: ResourceEnvelope, businessName: string, repairReasons?: string[], priorDraft?: PlanDraft): string {
+function buildUser(strategy: PlanStrategyView, envelope: ResourceEnvelope, businessName: string, repairReasons?: string[], priorDraft?: PlanDraft, priorCycle?: import('@bb/application').PriorCycle): string {
   const nums = strategy.authorizedNumbers.length
     ? strategy.authorizedNumbers.map((n) => `- "${n.value}" (${n.kind}; belongs to: ${n.appliesTo}; from: ${n.sourceRef})`).join('\n')
     : '(none — do NOT introduce any numeric target or deadline)';
@@ -112,6 +112,23 @@ function buildUser(strategy: PlanStrategyView, envelope: ResourceEnvelope, busin
     `Will NOT do (hard boundaries): ${envelope.notWilling.length ? envelope.notWilling.join('; ') : '(none stated)'}`,
     `Resources/team: ${envelope.resources.length ? envelope.resources.join('; ') : '(solo/unknown)'}`,
   ];
+  if (priorCycle) {
+    const list = (xs: string[]): string[] => (xs.length ? xs.map((x) => `- ${x}`) : ['- (none)']);
+    lines.push(
+      '', 'THIS IS THE NEXT CYCLE — ADVANCE, DO NOT REPEAT.',
+      'The founder already ran a full cycle on this same bet. Build the NEXT month FROM WHERE THEY FINISHED. Every',
+      'priority and action must be a genuine NEXT step — a follow-up, the next audience, a deepening, or a',
+      'deliberately not-now item that is now the right move. NEVER restate or rephrase something already done.',
+      `Last month's direction was: ${priorCycle.monthDirection}`,
+      'DONE last cycle (do NOT plan these again — take the step that comes AFTER each):', ...list(priorCycle.completed),
+      'DEFERRED last cycle (pick up with a reason, or drop):', ...list(priorCycle.deferred),
+      'DELIBERATELY NOT-NOW last cycle (promote one INTO this cycle if the finished work made it the right next move):', ...list(priorCycle.notNow),
+      `What the founder reported about how it went: "${priorCycle.outcomeReport}"`,
+      'The monthDirection MUST open by referencing the progress (e.g. "Luna trecută ai livrat X; luna aceasta duci mai',
+      'departe cu Y"). If a priority could have appeared unchanged in last month\'s plan, it is a repeat — replace it',
+      'with the real next step.',
+    );
+  }
   if (repairReasons?.length) {
     lines.push('', 'YOUR PREVIOUS DRAFT FAILED THE QUALITY GATE. Fix exactly these problems and return the COMPLETE corrected plan:', ...repairReasons.map((r) => `- ${r}`));
     if (priorDraft) lines.push('', 'PREVIOUS DRAFT (JSON):', JSON.stringify(priorDraft));
@@ -133,8 +150,8 @@ export class AnthropicPlanModel implements IPlanModelPort {
     return extractJson((block as { text?: string } | null)?.text ?? '');
   }
 
-  async draftPlan(input: { strategy: PlanStrategyView; envelope: ResourceEnvelope; businessName: string; repairReasons?: string[]; priorDraft?: PlanDraft }): Promise<PlanDraft> {
-    const user = buildUser(input.strategy, input.envelope, input.businessName, input.repairReasons, input.priorDraft);
+  async draftPlan(input: { strategy: PlanStrategyView; envelope: ResourceEnvelope; businessName: string; repairReasons?: string[]; priorDraft?: PlanDraft; priorCycle?: import('@bb/application').PriorCycle }): Promise<PlanDraft> {
+    const user = buildUser(input.strategy, input.envelope, input.businessName, input.repairReasons, input.priorDraft, input.priorCycle);
     // A governed plan draft (multiple priorities × actions, each with what/why/doneDefinition) routinely exceeds
     // 3000 output tokens; truncation there produced invalid JSON → a draft "throw" → fail-closed with no gate
     // finding (the reliability root cause). Match the strategy generator's budget so the draft completes; every

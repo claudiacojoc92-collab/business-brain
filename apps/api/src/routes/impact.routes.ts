@@ -93,7 +93,8 @@ export function registerImpactRoutes(server: FastifyInstance, deps: ServerDeps):
       },
     });
     if (source === 'outcome_report') {
-      recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'outcome_reported', surface: 'today', metadata: {} });
+      // Keep the founder's own words on the event so month two's next plan can advance from what actually happened.
+      recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'outcome_reported', surface: 'today', metadata: { text: text.slice(0, 2000) } });
     }
 
     await reply.status(200).send(out);

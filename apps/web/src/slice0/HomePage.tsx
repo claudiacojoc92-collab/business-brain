@@ -4,7 +4,8 @@ import { AppShell } from './AppShell';
 import { useTalk } from './TalkDrawer';
 import { ArcSurface } from './ArcSurface';
 import { useLocale } from '../i18n/LocaleContext';
-import { getArc, getHomeBriefing, ApiError, type HomeBriefing, type HomeAction } from '../api/client';
+import { getArc, getHomeBriefing, evaluateImpact, ApiError, type HomeBriefing, type HomeAction, type ImpactResult } from '../api/client';
+import { VerdictSurface } from './VerdictSurface';
 
 /**
  * THE HOME SURFACE. While the Day One arc is in progress (Moments 1–9), the strategist carries the founder
@@ -23,6 +24,10 @@ export function HomePage(): React.ReactElement {
   const [briefing, setBriefing] = useState<HomeBriefing | null>(null);
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // Month two — the cycle-close answer + the verdict it produces (rendered on the home surface itself).
+  const [closeText, setCloseText] = useState('');
+  const [closeBusy, setCloseBusy] = useState(false);
+  const [verdict, setVerdict] = useState<ImpactResult | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -60,6 +65,46 @@ export function HomePage(): React.ReactElement {
   // While the arc runs, the ArcSurface IS the surface (it renders its own message/actions/input per moment).
   if (mode === 'arc' && id) {
     return <AppShell home><ArcSurface businessId={id} onDone={() => void load()} /></AppShell>;
+  }
+
+  async function submitClose(e: React.FormEvent) {
+    e.preventDefault();
+    if (!id || !closeText.trim() || closeBusy) return;
+    setCloseBusy(true);
+    try { setVerdict(await evaluateImpact(id, 'outcome_report', closeText.trim())); }
+    catch { setMode('fail'); }
+    finally { setCloseBusy(false); }
+  }
+
+  // MONTH TWO — the cycle is complete. The verdict surface handles it end to end: on REVISE/RECONSIDER the founder
+  // adopts a revised strategy which proposes+adopts the next (progress-aware) plan; on STILL_HOLDS/TUNE it routes
+  // to this month's plan. Before answering, the founder sees the calm close prompt + a two-line answer field.
+  if (mode === 'briefing' && briefing?.phase === 'cycle_close' && id) {
+    if (verdict) {
+      return (
+        <AppShell home>
+          <VerdictSurface businessId={id} result={verdict}
+            onDismiss={() => { setVerdict(null); setCloseText(''); void load(); }}
+            onAdopted={() => navigate(`${base}/today`)} />
+        </AppShell>
+      );
+    }
+    return (
+      <AppShell home>
+        <div className="s0-strat">
+          <div className="s0-strat-ctx">{contextLine(briefing)}</div>
+          <div className="s0-strat-msg">
+            {briefing.lines.map((l, i) => <p key={i} className="s0-strat-msg-line">{t(l.key, l.vars)}</p>)}
+          </div>
+          <form className="s0-strat-input" onSubmit={submitClose}>
+            <textarea value={closeText} onChange={(e) => setCloseText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void submitClose(e as unknown as React.FormEvent); } }}
+              placeholder={t('home.close.answer')} aria-label={t('home.close.ask')} rows={2} disabled={closeBusy} />
+            <button type="submit" className="s0-btn s0-btn-inline" disabled={closeBusy || !closeText.trim()}>{t('home.close.answer')}</button>
+          </form>
+        </div>
+      </AppShell>
+    );
   }
 
   return (

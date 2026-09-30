@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { ServerDeps } from '../server';
-import { recordFounderEvent, readReturnSummary, readTodayNote } from '../telemetry/founder-events';
+import { recordFounderEvent, readReturnSummary, readTodayNote, readLatestOutcomeText } from '../telemetry/founder-events';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
 import type { PlanVersion, Priority, Action, ActionOutcome } from '@bb/application';
 
@@ -103,10 +103,21 @@ export function registerPlanRoutes(server: FastifyInstance, deps: ServerDeps): v
   });
 
   // Generate a PROPOSED plan from the Current Strategy (bounded repair + fail-closed inside the service).
+  // MONTH TWO: when an active plan already exists, this is a NEXT-cycle plan — generate it progress-aware
+  // (generateNextCycle builds a PriorCycle from the finished plan + the founder's outcome report) so it advances
+  // from where they finished instead of restating. The first plan of the arc has no active plan → fresh generation.
   server.post('/v1/businesses/:id/plan/propose', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { business } = await requireBusiness(request);
+    const { founderId, business } = await requireBusiness(request);
     let plan: PlanVersion | null;
-    try { plan = await deps.planService.generateProposedPlan(business.id); }
+    try {
+      const active = await deps.planService.getActivePlan(business.id);
+      if (active) {
+        const outcome = await readLatestOutcomeText(deps.db, business.id, founderId);
+        plan = await deps.planService.generateNextCycle(business.id, outcome);
+      } else {
+        plan = await deps.planService.generateProposedPlan(business.id);
+      }
+    }
     catch (e) {
       if (e instanceof ValidationError && e.code === 'NO_CURRENT_STRATEGY') { await reply.status(200).send({ state: 'no_strategy' }); return; }
       throw e;

@@ -232,6 +232,27 @@ export async function readReturnSummary(db: KyselyDB, businessId: string, accoun
   }
 }
 
+/**
+ * The founder's most recent cycle-close outcome text (from the `outcome_reported` event metadata). Month two's
+ * next plan reads this to advance from what actually happened. Best-effort: any error yields '' (the planner
+ * still advances from the prior plan's completed/deferred work, just without the founder's own words).
+ */
+export async function readLatestOutcomeText(db: KyselyDB, businessId: string, accountId: string): Promise<string> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any = await sql`
+      SELECT metadata FROM app.founder_event
+      WHERE business_id = ${businessId} AND account_id = ${accountId} AND event_type = 'outcome_reported'
+      ORDER BY occurred_at DESC LIMIT 1
+    `.execute(db);
+    const md = rows?.rows?.[0]?.metadata;
+    const text = (md && typeof md === 'object' && typeof md.text === 'string') ? md.text : '';
+    return text.trim();
+  } catch {
+    return '';
+  }
+}
+
 // ── Day One arc: durable phase flags + the email draft, read back from founder_event ──
 
 export interface ArcFlags {

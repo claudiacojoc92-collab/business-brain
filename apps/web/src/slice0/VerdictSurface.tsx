@@ -152,7 +152,12 @@ export function VerdictSurface(props: {
         <div className="s0-today2-actions s0-verdict-actions">
           {canAct ? <button type="button" className="s0-btn" disabled={busy} onClick={adopt}>{busy ? '…' : t('verdict.adopt')}</button> : null}
           {canAct ? <button type="button" className="s0-btn-ghost" onClick={() => setPhase('challenging')}>{t('verdict.challenge')}</button> : null}
-          <button type="button" className={canAct ? 's0-linkbtn' : 's0-btn'} onClick={onDismiss}>{t('verdict.dismiss')}</button>
+          {/* MONTH TWO — the bet held at a cycle close: the value is the NEXT month's plan (built progress-aware
+              from what got done + this report), so lead the founder straight to it. */}
+          {!canAct && result.source === 'outcome_report'
+            ? <button type="button" className="s0-btn" onClick={() => navigate(`/b/${businessId}/plan`)}>{t('home.close.next')} →</button>
+            : null}
+          <button type="button" className={(canAct || result.source === 'outcome_report') ? 's0-linkbtn' : 's0-btn'} onClick={onDismiss}>{t('verdict.dismiss')}</button>
         </div>
       )}
     </div>

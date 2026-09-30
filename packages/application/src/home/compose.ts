@@ -51,6 +51,20 @@ export function composeHomeBriefing(input: HomeBriefingInput): HomeBriefing {
 
   const bet = clip(input.strategy!.bet, 72);
   const day = dayOfBet(input.now, input.strategy!.adoptedAt!);
+
+  // MONTH TWO — the active plan's cycle is complete. Ask what happened, grounded in the real bet + two moves the
+  // founder actually finished. One question, answerable in two lines, same calm phrasing every visit (never a nag,
+  // never "you still haven't"). This is the trigger that turns a return visit into the next cycle.
+  if (input.cycleClose && input.cycleClose.totalCount > 0) {
+    const did = input.cycleClose.did.filter(Boolean).map((s) => clip(s, 90));
+    const closeLines: HomeLine[] = [{ key: 'home.close.bet', vars: { bet } }];
+    if (did.length >= 2) closeLines.push({ key: 'home.close.did2', vars: { a: did[0]!, b: did[1]! } });
+    else if (did.length === 1) closeLines.push({ key: 'home.close.did1', vars: { a: did[0]! } });
+    else closeLines.push({ key: 'home.close.did0' });
+    closeLines.push({ key: 'home.close.ask' });
+    return { phase: 'cycle_close', context: { name, day, bet }, lines: closeLines, actions: [{ kind: 'do', labelKey: 'home.close.answer', to: null }] };
+  }
+
   const lines: HomeLine[] = [{ key: 'home.line.bet', vars: { bet } }];
   if (input.changeLine) lines.push(input.changeLine);
 

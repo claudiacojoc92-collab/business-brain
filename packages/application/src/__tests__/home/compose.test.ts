@@ -68,6 +68,35 @@ describe('composeHomeBriefing — the strategist speaks first, from held state',
     expect(b.actions[0]!.labelKey).toBe('home.act.shape');
   });
 
+  it('cycle_close: a complete cycle switches the surface to the close prompt — bet + two done moves + one question', () => {
+    const b = composeHomeBriefing({
+      ...base,
+      strategy: { bet: 'Vorbești diferit către clase și pacienți', adoptedAt: '2026-08-16T12:00:00.000Z' },
+      today: { state: 'active', move: { what: 'do something', canCreate: false }, blocked: null },
+      cycleClose: { bet: 'Vorbești diferit către clase și pacienți', did: ['Ai publicat mesajul de clase', 'Ai vorbit cu 3 medici', 'Ai scris textul Decebal'], doneCount: 3, totalCount: 3 },
+    });
+    expect(b.phase).toBe('cycle_close');                       // takes over even though a Today move exists
+    expect(keys(b)).toEqual(['home.close.bet', 'home.close.did2', 'home.close.ask']); // names TWO done moves, one question
+    expect(b.lines.find((l) => l.key === 'home.close.did2')?.vars).toEqual({ a: 'Ai publicat mesajul de clase', b: 'Ai vorbit cu 3 medici' });
+    expect(b.actions).toHaveLength(1);                         // one calm action, never a form
+    expect(b.actions[0]!.labelKey).toBe('home.close.answer');
+  });
+
+  it('cycle_close degrades gracefully when few actions were completed (still one question, never a nag)', () => {
+    const b = composeHomeBriefing({
+      ...base,
+      strategy: { bet: 'Referrals', adoptedAt: '2026-08-16T12:00:00.000Z' },
+      cycleClose: { bet: 'Referrals', did: [], doneCount: 0, totalCount: 4 },
+    });
+    expect(b.phase).toBe('cycle_close');
+    expect(keys(b)).toEqual(['home.close.bet', 'home.close.did0', 'home.close.ask']);
+  });
+
+  it('no cycle_close when the cycle is not complete (cycleClose null) → normal briefing', () => {
+    const b = composeHomeBriefing({ ...base, strategy: { bet: 'Referrals', adoptedAt: '2026-09-15T12:00:00.000Z' }, cycleClose: null });
+    expect(b.phase).toBe('briefing');
+  });
+
   it('inserts the "what changed" line right after the bet when one is provided (never fabricated)', () => {
     const b = composeHomeBriefing({
       ...base,

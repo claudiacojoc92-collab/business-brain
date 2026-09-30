@@ -9,7 +9,7 @@ import { generateId, ValidationError } from '@bb/shared';
 import type {
   Action, ActionOutcome, CreateHandoff, IPlanModelPort, IPlanRepository, LifecycleStatus, PlanDraft,
   PlanLifecycleEvent, PlanStrategyView, PlanVersion, Priority, ResourceEnvelope,
-  PlanAttemptRecord, StrategyDigest,
+  PlanAttemptRecord, StrategyDigest, PriorCycle,
 } from './contracts';
 import { validatePlan, detectActionKeyLeaks } from './plan-quality';
 import { deriveAllReadiness } from './readiness';
@@ -18,6 +18,9 @@ import { selectToday, type TodayResult } from './today';
 // Total DRAFT attempts (one draft per attempt; a throw consumes one attempt). Deliberately small, in line
 // with Slice 3's structural-repair budget — NOT inflated to make a corpus pass.
 const MAX_PLAN_ATTEMPTS = 4;
+// Cycle-close backstop: the active plan's cycle closes when all actions are terminal (the real signal) OR it has
+// been active this many days (only to catch a stall — a founder who finishes in 12 days closes at 12, not 28).
+const CYCLE_STALL_DAYS = 28;
 
 export interface PlanDeps {
   readonly plan: IPlanRepository;
@@ -83,7 +86,7 @@ export class PlanService {
    * only when the item survives with strategy/context removed). Every attempt is recorded to an append-only
    * generation trace. Returns null (fail closed) if no clean plan is produced within the budget.
    */
-  async generateProposedPlan(businessId: string): Promise<PlanVersion | null> {
+  async generateProposedPlan(businessId: string, priorCycle?: PriorCycle): Promise<PlanVersion | null> {
     const strategy = await this.strategyOrThrow(businessId);
     const envelope = await this.resolveEnvelope(businessId);
     const digest = this.digest(strategy, envelope);
@@ -94,7 +97,7 @@ export class PlanService {
     for (let attempt = 0; attempt < MAX_PLAN_ATTEMPTS; attempt++) {
       let draft: PlanDraft;
       try {
-        draft = await this.deps.model.draftPlan({ strategy, envelope, businessName: businessId, ...(priorDraft ? { priorDraft } : {}), ...(repairReasons.length ? { repairReasons } : {}) });
+        draft = await this.deps.model.draftPlan({ strategy, envelope, businessName: businessId, ...(priorDraft ? { priorDraft } : {}), ...(repairReasons.length ? { repairReasons } : {}), ...(priorCycle ? { priorCycle } : {}) });
       } catch {
         attempts.push({ attempt, disposition: 'threw', deterministicFailures: [], semanticFailures: [] });
         this.deps.log?.({ type: 'plan_draft_threw', detail: `attempt ${attempt}` });
@@ -192,6 +195,54 @@ export class PlanService {
     if (!plan) return null;
     const strategy = await this.deps.currentStrategy(businessId);
     return { plan, strategyStale: !strategy || strategy.strategyVersionId !== plan.strategyVersionId };
+  }
+
+  /**
+   * The CYCLE BOUNDARY. The active plan's cycle is COMPLETE when every action has reached a terminal outcome
+   * (done/deferred/skipped) — completion is the real signal, so a plan finished in 12 days closes at 12 — OR the
+   * plan has been active for >= CYCLE_STALL_DAYS (a backstop that catches a stall, never the primary trigger).
+   * Returns null when there is no active plan. Pure read; the home briefing uses it to switch to the close prompt,
+   * and generateNextCycle uses the same completed/deferred/notNow to build the next plan's PriorCycle.
+   */
+  async cycleStatus(businessId: string): Promise<{
+    planVersionId: string; bet: string; complete: boolean; daysActive: number;
+    completed: string[]; deferred: string[]; notNow: string[]; doneCount: number; totalCount: number; monthDirection: string;
+  } | null> {
+    const active = await this.getActivePlan(businessId);
+    if (!active) return null;
+    const events = await this.deps.plan.listLifecycle(businessId);
+    const adopt = [...events].reverse().find((e) => e.kind === 'adopted' && e.planVersionId === active.plan.planVersionId);
+    const ledger = await this.deps.plan.listActionStates(businessId, active.plan.planVersionId);
+    const outcomeOf = new Map(ledger.map((s) => [s.actionId, s.outcome]));
+    const actions = active.plan.priorities.flatMap((p) => p.actions);
+    const total = actions.length;
+    const terminal = actions.filter((a) => outcomeOf.has(a.actionId)).length;
+    const daysActive = adopt ? Math.floor((Date.parse(this.now()) - Date.parse(adopt.at)) / 86_400_000) : 0;
+    const complete = total > 0 && (terminal === total || daysActive >= CYCLE_STALL_DAYS);
+    const strategy = await this.deps.currentStrategy(businessId);
+    return {
+      planVersionId: active.plan.planVersionId, bet: strategy?.coreBet ?? '', complete, daysActive,
+      completed: actions.filter((a) => outcomeOf.get(a.actionId) === 'done').map((a) => a.what),
+      deferred: actions.filter((a) => outcomeOf.get(a.actionId) === 'deferred').map((a) => a.what),
+      notNow: active.plan.notNow.map((n) => n.item).filter(Boolean),
+      doneCount: actions.filter((a) => outcomeOf.get(a.actionId) === 'done').length,
+      totalCount: total, monthDirection: active.plan.monthDirection,
+    };
+  }
+
+  /**
+   * MONTH TWO: generate the NEXT cycle's plan, progress-aware. Builds a PriorCycle from the active plan's
+   * completed/deferred work + its not-now list + the founder's outcome report, so the new plan ADVANCES from where
+   * they finished instead of restating. Used after a cycle close: on STILL_HOLDS/TUNE from the unchanged strategy,
+   * or (after the founder adopts a revised strategy) from the new one. Falls back to a fresh plan if no active plan.
+   */
+  async generateNextCycle(businessId: string, outcomeReport: string): Promise<PlanVersion | null> {
+    const status = await this.cycleStatus(businessId);
+    if (!status) return this.generateProposedPlan(businessId);
+    return this.generateProposedPlan(businessId, {
+      monthDirection: status.monthDirection, completed: status.completed, deferred: status.deferred,
+      notNow: status.notNow, outcomeReport: outcomeReport.trim(),
+    });
   }
 
   /** Founder marks an action done/deferred/skipped — append-only, never mutates the plan. */

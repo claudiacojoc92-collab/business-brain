@@ -30,7 +30,9 @@ export interface HomeContext {
 }
 
 export interface HomeBriefing {
-  readonly phase: 'empty' | 'briefing';
+  /** 'cycle_close' = the active plan's cycle is complete; the surface asks what happened (the month-two trigger).
+   *  The web wires its input to the outcome-report path (not Talk) in this phase. */
+  readonly phase: 'empty' | 'briefing' | 'cycle_close';
   readonly context: HomeContext;
   readonly lines: HomeLine[];    // 3–6 short lines, in order; empty when phase='empty'
   readonly actions: HomeAction[]; // up to 3: [do, talk, why]
@@ -48,4 +50,12 @@ export interface HomeBriefingInput {
   };
   /** the one "what changed" line, already resolved by the caller (from the return-loop / todayNote reader). */
   readonly changeLine: HomeLine | null;
+  /** MONTH TWO — present only when the active plan's cycle is complete (all actions terminal, or the stall
+   *  backstop). Triggers the cycle-close prompt: what happened, grounded in the real bet + two completed moves. */
+  readonly cycleClose?: {
+    readonly bet: string;
+    readonly did: string[];        // the `what` of completed actions (the prompt names the first two)
+    readonly doneCount: number;
+    readonly totalCount: number;
+  } | null;
 }

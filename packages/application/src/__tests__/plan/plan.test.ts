@@ -558,3 +558,57 @@ describe('Slice 5 — proof-number provenance, tokenization, internal-key leak',
     expect(t.attempts.some((a) => a.disposition === 'accepted')).toBe(true);
   });
 });
+
+describe('Slice 5 — cycle boundary + progress-aware next cycle (month two)', () => {
+  const mkSvc = (clockRef: { v: string }, model: IPlanModelPort = modelReturning(validDraft())) => {
+    const repo = inMemoryRepo();
+    const service = new PlanService({ plan: repo.repo, model, currentStrategy: async () => STRATEGY, clock: () => clockRef.v });
+    return { service, repo };
+  };
+  async function activate(service: PlanService): Promise<PlanVersion> {
+    const p = await service.generateProposedPlan('B'); if (!p) throw new Error('no plan'); await service.acceptPlan('B', p.planVersionId); return p;
+  }
+
+  it('completion fires the boundary regardless of days — all actions done at day 12 closes at 12', async () => {
+    const clock = { v: '2026-01-01T00:00:00.000Z' }; const { service, repo } = mkSvc(clock);
+    const p = await activate(service);
+    const actions = p.priorities.flatMap((pr) => pr.actions);
+    for (const a of actions) await repo.repo.appendActionState({ businessId: 'B', planVersionId: p.planVersionId, actionId: a.actionId, outcome: 'done', reason: null, at: '2026-01-05T00:00:00.000Z' });
+    clock.v = '2026-01-13T00:00:00.000Z'; // 12 days after adoption
+    const cs = await service.cycleStatus('B');
+    expect(cs?.complete).toBe(true);          // completion is the real signal, not the 28-day backstop
+    expect(cs?.daysActive).toBe(12);
+    expect(cs?.doneCount).toBe(actions.length);
+    expect(cs?.completed).toEqual(actions.map((a) => a.what));
+  });
+
+  it('not complete while any action remains and under 28 days', async () => {
+    const clock = { v: '2026-01-01T00:00:00.000Z' }; const { service, repo } = mkSvc(clock);
+    const p = await activate(service);
+    await repo.repo.appendActionState({ businessId: 'B', planVersionId: p.planVersionId, actionId: p.priorities[0]!.actions[0]!.actionId, outcome: 'done', reason: null, at: '2026-01-03T00:00:00.000Z' });
+    clock.v = '2026-01-06T00:00:00.000Z';
+    expect((await service.cycleStatus('B'))?.complete).toBe(false);
+  });
+
+  it('stall backstop: nothing done but 28+ days active → complete', async () => {
+    const clock = { v: '2026-01-01T00:00:00.000Z' }; const { service } = mkSvc(clock);
+    await activate(service);
+    clock.v = '2026-01-30T00:00:00.000Z'; // 29 days
+    expect((await service.cycleStatus('B'))?.complete).toBe(true);
+  });
+
+  it('generateNextCycle feeds the planner a PriorCycle (completed work + the outcome report) so it advances', async () => {
+    const clock = { v: '2026-01-01T00:00:00.000Z' };
+    let captured: any = null;
+    const model: IPlanModelPort = { draftPlan: async (input: any) => { captured = input; return validDraft(); } };
+    const { service, repo } = mkSvc(clock, model);
+    const p = await activate(service);
+    const a0 = p.priorities[0]!.actions[0]!;
+    await repo.repo.appendActionState({ businessId: 'B', planVersionId: p.planVersionId, actionId: a0.actionId, outcome: 'done', reason: null, at: '2026-01-05T00:00:00.000Z' });
+    await service.generateNextCycle('B', 'Doi medici au zis că trimit pacienți.');
+    expect(captured.priorCycle).toBeTruthy();
+    expect(captured.priorCycle.completed).toContain(a0.what);        // knows what was done
+    expect(captured.priorCycle.outcomeReport).toBe('Doi medici au zis că trimit pacienți.'); // and the founder's words
+    expect(captured.priorCycle.monthDirection).toBe(p.monthDirection);
+  });
+});

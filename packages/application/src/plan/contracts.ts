@@ -160,6 +160,20 @@ export interface PlanDraft {
   readonly notNow: NotNowItem[];
 }
 
+/**
+ * The prior cycle's outcome — the input that makes the NEXT plan advance instead of repeat. Present only for a
+ * second-or-later plan on the same business (the first plan of the arc has no prior cycle). The planner uses it
+ * to build FROM WHERE THE FOUNDER FINISHED: never re-plan a completed action, take its next step, and promote a
+ * deliberately not-now item when the cycle made it the right next move.
+ */
+export interface PriorCycle {
+  readonly monthDirection: string;   // last cycle's month direction (so the new one references it)
+  readonly completed: string[];      // the `what` of actions the founder marked done
+  readonly deferred: string[];       // the `what` of actions deferred (pick up or drop with reason)
+  readonly notNow: string[];         // last cycle's deliberately not-now items (promotion candidates)
+  readonly outcomeReport: string;    // the founder's own two-line account of what happened
+}
+
 // ── Semantic-quality (genericity) review — CAUSAL-DERIVATION test, not "could another business do this" ──
 export interface GenericityFailure { readonly ref: string; readonly reason: string; readonly missingDerivation: string }
 export interface GenericityVerdict { readonly generic: boolean; readonly failures: GenericityFailure[] }
@@ -170,7 +184,7 @@ export interface StrategyDigest {
 }
 
 export interface IPlanModelPort {
-  draftPlan(input: { strategy: PlanStrategyView; envelope: ResourceEnvelope; businessName: string; repairReasons?: string[]; priorDraft?: PlanDraft }): Promise<PlanDraft>;
+  draftPlan(input: { strategy: PlanStrategyView; envelope: ResourceEnvelope; businessName: string; repairReasons?: string[]; priorDraft?: PlanDraft; priorCycle?: PriorCycle }): Promise<PlanDraft>;
   /** Optional semantic-quality review (correction #1). A SHARED tactic passes when the strategy/context
    * causally entails it; an item FAILS only when its justification is "common best practice" and it would
    * survive unchanged with the strategy/context reasons removed. The judge never rewrites the plan — it

@@ -28,11 +28,12 @@ export function registerHomeRoutes(server: FastifyInstance, deps: ServerDeps): v
   server.get('/v1/businesses/:id/home', async (request: FastifyRequest, reply: FastifyReply) => {
     const { founderId, business } = await requireBusiness(request);
 
-    const [snap, current, today, note] = await Promise.all([
+    const [snap, current, today, note, cycle] = await Promise.all([
       deps.understandingRepo.latest(business.id),
       deps.strategyService.getCurrent(business.id),
       deps.planService.today(business.id),
       readTodayNote(deps.db, business.id, founderId),
+      deps.planService.cycleStatus(business.id),
     ]);
 
     // The one "what changed" line, resolved from the same founder_event note Today uses (never fabricated).
@@ -51,6 +52,10 @@ export function registerHomeRoutes(server: FastifyInstance, deps: ServerDeps): v
         blocked: today?.blockedFallback ? { what: today.blockedFallback.action.what } : null,
       },
       changeLine,
+      // Month two: the cycle-close prompt fires only when the active plan's cycle is complete.
+      cycleClose: (cycle && cycle.complete)
+        ? { bet: cycle.bet, did: cycle.completed, doneCount: cycle.doneCount, totalCount: cycle.totalCount }
+        : null,
     };
 
     await reply.status(200).send(composeHomeBriefing(input));

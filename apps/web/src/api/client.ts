@@ -457,7 +457,7 @@ export interface MirrorView {
 export interface HomeLine { key: string; vars?: Record<string, string> }
 export interface HomeAction { kind: 'do' | 'talk' | 'why'; labelKey: string; to: string | null }
 export interface HomeBriefing {
-  phase: 'empty' | 'briefing';
+  phase: 'empty' | 'briefing' | 'cycle_close';
   context: { name: string; day: number | null; bet: string | null };
   lines: HomeLine[];
   actions: HomeAction[];
