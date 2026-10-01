@@ -53,6 +53,20 @@ describe('TodayPage — Living State (return loop + outcome report)', () => {
     expect(line?.textContent).toContain('Follow up with the doctor.');   // the one thing
   });
 
+  it('Part 2 — surfaces a blocked move alongside a ready move, naming the prerequisite it waits on', async () => {
+    vi.mocked(api.getToday).mockResolvedValue({
+      state: 'active', ready: [readyMove], blocked: null, sinceLastHere: noSince,
+      blockedMoves: [
+        { actionId: 'out1', what: 'Reach the CFOs with the proof', kind: 'prerequisite_unfinished', prerequisite: { what: 'Publish the proof landing page' }, material: null, constraint: null },
+      ],
+    } as never);
+    render(<TodayPage />);
+    await screen.findByText('today2.donow');                                   // a ready move IS shown …
+    expect(screen.getByText('today2.blocked.title')).toBeInTheDocument();       // … and the blocked section too
+    // the line uses the prerequisite kind-key and interpolates the move + the prerequisite it waits on
+    expect(screen.getByText('today2.blocked.prereq:Reach the CFOs with the proof,Publish the proof landing page')).toBeInTheDocument();
+  });
+
   it('no "since" block on a first visit / same session (show=false)', async () => {
     vi.mocked(api.getToday).mockResolvedValue(todayWith({ show: false, hasChanges: false, changes: [], strategyMoved: false, todayChanged: false, oneThing: null, since: null, awayHours: null }));
     render(<TodayPage />);

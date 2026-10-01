@@ -97,6 +97,7 @@ export function StrategyPage() {
       <StrategyView
         resp={resp!} current={phase === 'current'} from={from} t={t} busy={busy}
         onAdopt={adopt} onChallenge={challenge} onToday={() => navigate(`/b/${id}/today`)}
+        onVoice={() => navigate(`/b/${id}/voice`)}
       />
     </AppShell>
   );
@@ -121,9 +122,9 @@ function InsufficientView({ from, t, busy, onGoal, onRegen }: { from: string; t:
   );
 }
 
-function StrategyView({ resp, current, from, t, busy, onAdopt, onChallenge, onToday }: {
+function StrategyView({ resp, current, from, t, busy, onAdopt, onChallenge, onToday, onVoice }: {
   resp: StrategyResp; current: boolean; from: string; t: T; busy: boolean;
-  onAdopt: () => void; onChallenge: (text: string) => void; onToday: () => void;
+  onAdopt: () => void; onChallenge: (text: string) => void; onToday: () => void; onVoice: () => void;
 }) {
   const s = resp.strategy!;
   const core = s.core;
@@ -203,6 +204,11 @@ function StrategyView({ resp, current, from, t, busy, onAdopt, onChallenge, onTo
           )}
           {!challenging ? (
             <button type="button" className="s0-strat2-challenge" onClick={() => { setChallenging(true); setText(''); }}>{t('strat2.challenge')}</button>
+          ) : null}
+          {/* Part 1 — Voice is reachable from Strategy (a standing capability that conditions generation).
+              Quiet link, not a push: content/voice stays downstream and conditional. */}
+          {current && !challenging ? (
+            <button type="button" className="s0-linkbtn" onClick={onVoice}>{t('strat2.voice')} →</button>
           ) : null}
         </div>
         {busy && !challenging ? <p className="s0-strat2-forming-note">{t('strat2.forming')}</p> : null}

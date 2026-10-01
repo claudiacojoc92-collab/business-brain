@@ -1061,6 +1061,15 @@
 .s0-today2-others-toggle:hover { color: var(--s0-ink); }
 .s0-today2-others-list { margin: 12px 0 0; padding-left: 18px; }
 .s0-today2-others-list li { font-size: 14px; color: var(--s0-ink-2); line-height: 1.5; margin-bottom: 6px; }
+/* Part 2 — blocked moves (the sequencing made visible). Distinct from "other moves" (which are ready): a quiet,
+   held-back section so the founder sees what's waiting on them, not an absence. */
+.s0-today2-blocked { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--s0-line); }
+.s0-today2-blocked-list { margin: 0; padding: 0; list-style: none; }
+.s0-today2-blocked-item { font-size: 14px; color: var(--s0-ink-2); line-height: 1.5; padding: 7px 0 7px 14px; border-left: 2px solid var(--s0-line); margin-bottom: 8px; }
+.s0-today2-planlink { margin-top: 20px; }
+/* Part 1 — "other ways to create" (Photos, Reel), subordinate to the strategy-led lead. */
+.s0-create-ways { margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--s0-line); }
+.s0-create-ways-list { display: flex; gap: 12px; flex-wrap: wrap; }
 .s0-today2-need { font-size: 14px; color: var(--s0-ink-2); margin: 4px 0 0; }
 .s0-today2-need span { color: var(--s0-ink-3); }
 .s0-today2-empty { max-width: 46ch; }

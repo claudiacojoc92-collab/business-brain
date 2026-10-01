@@ -8,7 +8,7 @@ import { VerdictSurface } from './VerdictSurface';
 import {
   getBusiness, getToday, getPlanState, proposePlan, adoptPlan, getCurrentStrategy,
   applyActionOutcome, createFromAction, resolveActionState, submitCorrection, evaluateImpact,
-  type Business, type TodayResp, type TodayBlocked, type PlanActiveResp, type StrategyResp,
+  type Business, type TodayResp, type TodayBlocked, type TodayBlockedMove, type PlanActiveResp, type StrategyResp,
   type ImpactResult, type ReturnSummary,
 } from '../api/client';
 
@@ -304,6 +304,14 @@ export function TodayPage() {
         ) : (
           <Empty from={t('today2.today')} lead={t('today2.allclear')} />
         )}
+            {/* Part 2 — the moves BB is holding until the founder unblocks them (the sequencing, made visible). */}
+            <BlockedMovesList moves={today?.blockedMoves ?? []} t={t} />
+            {/* Part 1 — the way into the full 30-day plan (Today is the move derived from it). */}
+            {active ? (
+              <div className="s0-today2-planlink">
+                <button type="button" className="s0-linkbtn" onClick={() => navigate(`${base}/plan`)}>{t('today2.seePlan')} →</button>
+              </div>
+            ) : null}
             {canReport ? (
               <OutcomeReporter
                 reporting={reporting} onOpen={() => setReporting(true)} onCancel={() => { setReporting(false); setOutcomeText(''); }}
@@ -389,6 +397,35 @@ function Empty({ from, lead, cta, onCta, note }: { from: string; lead: string; c
 
 type BlkMode = 'root' | 'prereqCant' | 'matCant' | 'correct';
 type Tr = (k: string, p?: Record<string, string>) => string;
+
+/**
+ * Part 2 — the moves BB is holding, each as ONE plain-language line that names the blocker as the thing the
+ * FOUNDER does next (e.g. "Contactează medicii — aștept: Publică pagina de aterizare"). Pure read: the blocker
+ * kind + the resolved prerequisite/material/constraint come straight from the Today projection. This is where
+ * the sequencing becomes visible — an outreach move waiting on its landing page, instead of silently missing.
+ */
+function BlockedMovesList({ moves, t }: { moves: TodayBlockedMove[]; t: Tr }) {
+  if (!moves.length) return null;
+  const line = (m: TodayBlockedMove): string => {
+    const what = clip(m.what, 80);
+    switch (m.kind) {
+      case 'prerequisite_unfinished': return t('today2.blocked.prereq', { what, prereq: clip(m.prerequisite?.what ?? '', 70) });
+      case 'missing_material': return t('today2.blocked.material', { what, material: clip(m.material ?? '', 70) });
+      case 'founder_decision': return t('today2.blocked.decision', { what });
+      case 'operating_constraint': return t('today2.blocked.constraint', { what, constraint: clip(m.constraint ?? '', 90) });
+      case 'strategy_stale': return t('today2.blocked.stale', { what });
+      default: return what;
+    }
+  };
+  return (
+    <div className="s0-today2-blocked">
+      <div className="s0-today2-k">{t('today2.blocked.title')}</div>
+      <ul className="s0-today2-blocked-list">
+        {moves.map((m) => <li key={m.actionId} className="s0-today2-blocked-item">{line(m)}</li>)}
+      </ul>
+    </div>
+  );
+}
 
 /**
  * The blocked-move responder. Renders controls chosen by `blk.kind` — NOT a universal button set. Each control

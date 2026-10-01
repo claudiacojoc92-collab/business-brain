@@ -101,6 +101,16 @@ export function CreateIndexPage() {
             </div>
           </>
         )}
+
+        {/* Part 1 — the asset types reachable from Create (Photos, Reel), subordinate to the strategy-led lead
+            above. Not a bare generator picker as the primary: discoverability without bypassing the move. */}
+        <div className="s0-create-ways">
+          <div className="s0-today2-k">{t('create.ways.title')}</div>
+          <div className="s0-create-ways-list">
+            <button type="button" className="s0-btn-ghost" onClick={() => navigate(`/b/${id}/photos`)}>{t('create.ways.photos')} →</button>
+            <button type="button" className="s0-btn-ghost" onClick={() => navigate(`/b/${id}/reel/create`)}>{t('create.ways.reel')} →</button>
+          </div>
+        </div>
       </div>
     </AppShell>
   );

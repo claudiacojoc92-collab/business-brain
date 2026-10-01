@@ -608,10 +608,21 @@ export type TodayNote =
   | { kind: 'strategy_adopted'; version: number }
   | { kind: 'impact'; reason: string }
   | null;
+/** A move that can't start yet, with the reason as the thing the FOUNDER has to do next (structured; the sentence
+ *  is composed per-locale in the UI). Part 2 — makes the sequencing visible instead of silently dropping moves. */
+export interface TodayBlockedMove {
+  actionId: string;
+  what: string;                                 // the blocked move, founder-facing
+  kind: BlockerKind;
+  prerequisite?: { what: string } | null;       // prerequisite_unfinished → the move to finish first
+  material?: string | null;                     // missing_material → the required material
+  constraint?: string | null;                   // operating_constraint → the founder-authored constraint text
+}
 export interface TodayResp {
   state: 'active' | 'none';
   ready?: TodayAction[];
   blocked?: TodayBlocked | null;
+  blockedMoves?: TodayBlockedMove[];
   constraints?: string[];
   sinceLastHere?: ReturnSummary;
   todayNote?: TodayNote;

@@ -39,15 +39,29 @@ function projectPlan(plan: PlanVersion, state: 'proposed' | 'active', stale: boo
   };
 }
 
+type ProjBlocker = { kind: string; detail: string; ref?: string; material?: string };
+
+// Project one blocked action into STRUCTURED, id-free data (never prose — the web renders the sentence per
+// locale). The prerequisite ref is resolved to its founder-facing name; operating_constraint carries founder text.
+function projectBlockedMove(action: Action, blocker: ProjBlocker, plan: PlanVersion) {
+  const prereqAction = blocker.kind === 'prerequisite_unfinished' && blocker.ref ? findAction(plan, blocker.ref) : null;
+  return {
+    actionId: action.actionId,
+    what: action.what,
+    kind: blocker.kind,
+    prerequisite: prereqAction ? { what: prereqAction.what } : null,
+    material: blocker.kind === 'missing_material' ? blocker.material ?? null : null,
+    constraint: blocker.kind === 'operating_constraint' ? blocker.detail : null,
+  };
+}
+
 function projectToday(
-  today: { ready: Action[]; blockedFallback: { action: Action; blocker: { kind: string; detail: string; ref?: string; material?: string } } | null; constraints: string[] },
+  today: { ready: Action[]; blockedFallback: { action: Action; blocker: ProjBlocker } | null; blocked: { action: Action; blocker: ProjBlocker }[]; constraints: string[] },
   plan: PlanVersion,
 ) {
   let blocked = null;
   if (today.blockedFallback) {
     const { action, blocker } = today.blockedFallback;
-    // Resolve the prerequisite to its FOUNDER-FACING name (never leak the raw actionId that blocker.detail
-    // carries). `actionId` here is the blocked action itself; `prerequisite.actionId` is the thing to resolve.
     const prereqAction = blocker.kind === 'prerequisite_unfinished' && blocker.ref ? findAction(plan, blocker.ref) : null;
     blocked = {
       actionId: action.actionId,
@@ -68,6 +82,8 @@ function projectToday(
       canCreate: a.leadsToCreate,
     })),
     blocked,
+    // Part 2 — all blocked moves made visible (the sequencing), each as structured data for the web to localize.
+    blockedMoves: today.blocked.map(({ action, blocker }) => projectBlockedMove(action, blocker, plan)),
     constraints: today.constraints,
   };
 }

@@ -205,6 +205,26 @@ describe('Slice 5 — Plan (strategy→execution) corrections', () => {
     expect(validatePlan(plan, STRATEGY).failures.some((f) => f.startsWith('demand_without_landing'))).toBe(false);
   });
 
+  // ── TB2. Blocked moves are surfaced in today.blocked even while another move is ready (Part 2) ──
+  it('TB2. a prerequisite-blocked move stays visible in today.blocked while other moves are ready', async () => {
+    const draft = validDraft({ priorities: [{ ...validDraft().priorities[0]!, actions: [
+      { key: 'a1', what: 'Audit the current proof assets', why: 'ready prep that executes the bet', doneDefinition: 'audited', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true },
+      { key: 'a2', what: 'Publish the proof landing page', why: 'the landing that executes the bet', doneDefinition: 'live', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true },
+      { key: 'a3', what: 'Reach the CFOs with the proof', why: 'after the landing is live', doneDefinition: 'sent', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, requiredMaterial: [], prerequisiteKeys: ['a2'], planTimeFeasible: true },
+    ] }] });
+    const { service } = svc(modelReturning(draft));
+    const plan = (await service.generateProposedPlan('B'))!;
+    await service.acceptPlan('B', plan.planVersionId);
+    const today = (await service.today('B'))!;
+    const out = plan.priorities[0]!.actions.find((a) => a.what.startsWith('Reach'))!;
+    const land = plan.priorities[0]!.actions.find((a) => a.what.startsWith('Publish'))!;
+    expect(today.ready.length).toBeGreaterThan(0);                 // some moves ARE ready …
+    const blockedOut = today.blocked.find((b) => b.action.actionId === out.actionId);
+    expect(blockedOut).toBeTruthy();                               // … and the blocked one is STILL surfaced
+    expect(blockedOut!.blocker.kind).toBe('prerequisite_unfinished');
+    expect(blockedOut!.blocker.ref).toBe(land.actionId);          // ref resolves to the landing it waits on
+  });
+
   // ── E. A legitimately narrow strategy → one priority, never padded ──
   it('E. one-priority plan is valid (no padding to two)', async () => {
     const one = validDraft({ priorities: [validDraft().priorities[0]!], currentFocusIndex: 0 });
