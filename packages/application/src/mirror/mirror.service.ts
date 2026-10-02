@@ -30,29 +30,31 @@ const clean = (xs?: (string | null | undefined)[]): string[] => (xs ?? []).map((
 function projectObserved(u: GovernedUnderstanding | null): MirrorLaneItem[] {
   if (!u) return [];
   const items: MirrorLaneItem[] = [];
-  if (u.offer?.summary?.trim()) items.push({ label: 'Your offer', statement: u.offer.summary.trim(), provenance: 'observed', sources: clean(u.offer.sourceRefs) });
-  if (u.positioning?.summary?.trim()) items.push({ label: 'Your positioning', statement: u.positioning.summary.trim(), provenance: clean(u.positioning.evidenceBacked).length ? 'observed' : 'inferred', sources: clean(u.positioning.sourceRefs) });
+  if (u.offer?.summary?.trim()) items.push({ labelKey: 'mirror.lbl.offer', statement: u.offer.summary.trim(), provenance: 'observed', sources: clean(u.offer.sourceRefs) });
+  if (u.positioning?.summary?.trim()) items.push({ labelKey: 'mirror.lbl.positioning', statement: u.positioning.summary.trim(), provenance: clean(u.positioning.evidenceBacked).length ? 'observed' : 'inferred', sources: clean(u.positioning.sourceRefs) });
   const audience = clean(u.audience?.addressed);
-  if (audience.length) items.push({ label: 'Who you address', statement: audience.join(' · '), provenance: 'observed', sources: clean(u.audience?.sourceRefs) });
+  if (audience.length) items.push({ labelKey: 'mirror.lbl.audience', statement: audience.join(' · '), provenance: 'observed', sources: clean(u.audience?.sourceRefs) });
   const acquisition = clean(u.acquisition?.visiblePaths);
-  if (acquisition.length) items.push({ label: 'How people reach you', statement: acquisition.join(' · '), provenance: 'observed', sources: clean(u.acquisition?.sourceRefs) });
+  if (acquisition.length) items.push({ labelKey: 'mirror.lbl.acquisition', statement: acquisition.join(' · '), provenance: 'observed', sources: clean(u.acquisition?.sourceRefs) });
   const themes = clean(u.messaging?.recurringThemes);
-  if (themes.length) items.push({ label: 'What your messaging repeats', statement: themes.join(' · '), provenance: 'observed', sources: clean(u.messaging?.sourceRefs) });
-  for (const x of clean(u.unknowns).slice(0, 4)) items.push({ label: 'I couldn’t establish', statement: x, provenance: 'unknown' });
+  if (themes.length) items.push({ labelKey: 'mirror.lbl.messaging', statement: themes.join(' · '), provenance: 'observed', sources: clean(u.messaging?.sourceRefs) });
+  for (const x of clean(u.unknowns).slice(0, 4)) items.push({ labelKey: 'mirror.lbl.unknown', statement: x, provenance: 'unknown' });
   return items;
 }
 
-const KIND_LABEL: Record<string, string> = {
-  goal: 'Your goal', horizon: 'Your horizon', constraint: 'A constraint you named', preference: 'A preference',
-  decision: 'A decision you made', intention: 'Something you intend', resource: 'A resource you have',
-  challenge_permission: 'A test you’d allow', business_correction: 'A correction you gave',
+// founder_state kind → i18n key. The web renders these in the founder's language (no English from the backend).
+const KIND_LABEL_KEY: Record<string, string> = {
+  goal: 'mirror.lbl.kind.goal', horizon: 'mirror.lbl.kind.horizon', constraint: 'mirror.lbl.kind.constraint',
+  preference: 'mirror.lbl.kind.preference', decision: 'mirror.lbl.kind.decision', intention: 'mirror.lbl.kind.intention',
+  resource: 'mirror.lbl.kind.resource', challenge_permission: 'mirror.lbl.kind.challenge_permission',
+  business_correction: 'mirror.lbl.kind.business_correction',
 };
 
 /** Lane 2 — what the founder told BB about the BUSINESS (declared facts, scope≠self). */
 function projectBusiness(items: FounderStateItem[]): MirrorLaneItem[] {
   return items
     .filter((s) => s.scope !== FOUNDER_SELF_SCOPE)
-    .map((s) => ({ label: KIND_LABEL[s.kind] ?? 'You told me', statement: s.statement.trim(), provenance: 'declared' as const }))
+    .map((s) => ({ labelKey: KIND_LABEL_KEY[s.kind] ?? 'mirror.lbl.kind.default', statement: s.statement.trim(), provenance: 'declared' as const }))
     .filter((i) => i.statement);
 }
 
@@ -60,7 +62,7 @@ function projectBusiness(items: FounderStateItem[]): MirrorLaneItem[] {
 function projectSelf(items: FounderStateItem[]): MirrorLaneItem[] {
   return items
     .filter((s) => s.scope === FOUNDER_SELF_SCOPE)
-    .map((s) => ({ label: 'In your words', statement: s.statement.trim(), provenance: 'declared' as const }))
+    .map((s) => ({ labelKey: 'mirror.lbl.inYourWords', statement: s.statement.trim(), provenance: 'declared' as const }))
     .filter((i) => i.statement);
 }
 

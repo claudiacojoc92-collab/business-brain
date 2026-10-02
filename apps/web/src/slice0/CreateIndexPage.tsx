@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import { AppShell } from './AppShell';
-import { isNotFound, LoadError } from './errors';
+import { isNotFound, LoadError, actionErrorKey } from './errors';
 import { getBusiness, getToday, getCurrentStrategy, createFromAction, type Business, type TodayAction } from '../api/client';
 
 const clip = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
@@ -49,7 +49,7 @@ export function CreateIndexPage() {
     if (!id || !move) return;
     setBusy(true); setActionError(null);
     try { const r = await createFromAction(id, move.actionId); navigate(`/b/${id}/create/${r.createHandoffId}`); }
-    catch { setActionError(t('common.actionFailed')); setBusy(false); }
+    catch (e) { setActionError(t(actionErrorKey(e))); setBusy(false); }
   }
 
   if (loadErr) return <LoadError onRetry={() => { if (id) void load(); }} />;
@@ -109,6 +109,7 @@ export function CreateIndexPage() {
           <div className="s0-create-ways-list">
             <button type="button" className="s0-btn-ghost" onClick={() => navigate(`/b/${id}/photos`)}>{t('create.ways.photos')} →</button>
             <button type="button" className="s0-btn-ghost" onClick={() => navigate(`/b/${id}/reel/create`)}>{t('create.ways.reel')} →</button>
+            <button type="button" className="s0-btn-ghost" onClick={() => navigate(`/b/${id}/reel/shoot`)}>{t('create.ways.reelShoot')} →</button>
           </div>
         </div>
       </div>

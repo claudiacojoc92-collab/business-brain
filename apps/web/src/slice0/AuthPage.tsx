@@ -35,9 +35,11 @@ export function AuthPage() {
       }
       navigate('/home', { replace: true });
     } catch (err) {
+      // Map the backend CODE to founder language (never render err.message — it is English only).
       if (err instanceof ApiError && err.status === 401) setError(t('auth.error.invalid'));
-      else if (err instanceof ApiError && err.status === 409) setError(err.message);
-      else if (err instanceof ApiError && err.status === 400) setError(err.message);
+      else if (err instanceof ApiError && err.code === 'EMAIL_ALREADY_REGISTERED') setError(t('auth.err.emailExists'));
+      else if (err instanceof ApiError && err.code === 'INVALID_EMAIL') setError(t('auth.err.emailInvalid'));
+      else if (err instanceof ApiError && err.code === 'NAME_REQUIRED') setError(t('auth.err.nameRequired'));
       else setError(t('auth.error.generic'));
     } finally {
       setBusy(false);

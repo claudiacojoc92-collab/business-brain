@@ -263,11 +263,11 @@ export class ArcService {
 
   private projectContainer(u: GovernedUnderstanding | null): ArcContainerItem[] {
     const items: ArcContainerItem[] = [];
-    if (u?.offer?.summary?.trim()) items.push({ label: 'Offer', statement: u.offer.summary.trim(), provenance: 'observed' });
-    if (u?.positioning?.summary?.trim()) items.push({ label: 'Positioning', statement: u.positioning.summary.trim(), provenance: clean(u.positioning.evidenceBacked).length ? 'observed' : 'inferred' });
+    if (u?.offer?.summary?.trim()) items.push({ labelKey: 'arc.container.lbl.offer', statement: u.offer.summary.trim(), provenance: 'observed' });
+    if (u?.positioning?.summary?.trim()) items.push({ labelKey: 'arc.container.lbl.positioning', statement: u.positioning.summary.trim(), provenance: clean(u.positioning.evidenceBacked).length ? 'observed' : 'inferred' });
     const aud = clean(u?.audience?.addressed);
-    if (aud.length) items.push({ label: 'Audience', statement: aud.join(' · '), provenance: 'observed' });
-    for (const x of clean(u?.unknowns).slice(0, 4)) items.push({ label: 'Still unknown', statement: x, provenance: 'unknown' });
+    if (aud.length) items.push({ labelKey: 'arc.container.lbl.audience', statement: aud.join(' · '), provenance: 'observed' });
+    for (const x of clean(u?.unknowns).slice(0, 4)) items.push({ labelKey: 'arc.container.lbl.unknown', statement: x, provenance: 'unknown' });
     return items;
   }
 

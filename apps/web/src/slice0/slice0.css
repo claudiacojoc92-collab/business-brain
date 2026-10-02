@@ -490,6 +490,7 @@
 .s0-pourin-web-k { font-size: 13px; font-weight: 550; color: var(--s0-ink); }
 .s0-pourin-web-row { display: flex; gap: 10px; align-items: stretch; }
 .s0-pourin-web-input { flex: 1; background: var(--s0-bg-3); color: var(--s0-ink); border: 1px solid var(--s0-line-2); border-radius: 10px; padding: 11px 13px; font-family: var(--s0-sans); font-size: 15px; }
+.s0-pourin-desc { width: 100%; box-sizing: border-box; background: var(--s0-bg-3); color: var(--s0-ink); border: 1px solid var(--s0-line-2); border-radius: 10px; padding: 11px 13px; font-family: var(--s0-sans); font-size: 15px; line-height: 1.5; resize: vertical; margin-bottom: 10px; }
 .s0-pourin-web-input:focus { outline: none; border-color: var(--s0-clay); }
 .s0-pourin-web .s0-btn-inline { width: auto; }
 .s0-pourin-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }

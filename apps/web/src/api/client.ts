@@ -444,7 +444,7 @@ export function evaluateImpact(businessId: string, source: ImpactSource, text: s
 }
 
 // ── The Mirror: three lanes (observed / told-business / told-self) + grounded contrast ──
-export interface MirrorLaneItem { label: string; statement: string; provenance?: 'observed' | 'declared' | 'inferred' | 'unknown'; sources?: string[] }
+export interface MirrorLaneItem { labelKey: string; statement: string; provenance?: 'observed' | 'declared' | 'inferred' | 'unknown'; sources?: string[] }
 export interface MirrorMismatch { founderWords: string; founderLane: 'business' | 'self'; against: string; againstLane: 'observed' | 'business' | 'self' | 'strategy'; tension: string }
 export interface MirrorView {
   observed: MirrorLaneItem[];
@@ -490,7 +490,7 @@ export interface ArcView {
   strategy?: { bet: string; over: string; horizon: string; tradeOffs: string[]; notNow: string[]; reconsider: string[]; proposalId: string | null; adoptable: boolean };
   weekDay?: { week: string[]; today: string | null; canCreate: boolean };
   email?: { subject: string; body: string } | null;
-  container?: { items: { label: string; statement: string; provenance: 'observed' | 'declared' | 'inferred' | 'unknown' }[] };
+  container?: { items: { labelKey: string; statement: string; provenance: 'observed' | 'declared' | 'inferred' | 'unknown' }[] };
 }
 const ARC = (b: string) => `v1/businesses/${encodeURIComponent(b)}/arc`;
 const arcPost = <T = ArcView>(b: string, path: string, body?: unknown): Promise<T> =>
@@ -499,6 +499,7 @@ export const getArc = (b: string): Promise<ArcView> => request<ArcView>(ARC(b));
 // Pour-in sources — each ingests only; the bridge fires on arcPourInDone.
 export const arcAddSource = (b: string, url: string): Promise<AddSourceResult> => arcPost<AddSourceResult>(b, 'source', { url }); // website
 export const arcAddLink = (b: string, url: string): Promise<AddSourceResult> => arcPost<AddSourceResult>(b, 'source/link', { url });
+export const arcAddText = (b: string, text: string): Promise<AddSourceResult> => arcPost<AddSourceResult>(b, 'source/text', { text }); // describe the business in words — DECLARED
 export const arcAddInstagram = (b: string): Promise<AddSourceResult> => arcPost<AddSourceResult>(b, 'source/instagram');
 export async function arcAddFile(b: string, file: File): Promise<AddSourceResult> {
   const token = getToken();

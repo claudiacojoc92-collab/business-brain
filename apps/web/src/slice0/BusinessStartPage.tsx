@@ -12,7 +12,6 @@ import {
   learnFromMaterial,
   setDiscoveredProfileStatus,
   emitEvent,
-  ApiError,
   type Business,
   type AhaFinding,
   type DiscoveredProfile,
@@ -130,7 +129,7 @@ export function BusinessStartPage() {
       const recovered = await recoverLearn(bid);
       if (recovered) return;
       setResultState('failed');
-      setError(err instanceof ApiError ? err.message : t('learn.fail.title'));
+      setError(null); // keyed failed-state title+body render; no raw err.message leak
       setPhase('result');
     }
   }
@@ -148,7 +147,7 @@ export function BusinessStartPage() {
       const recovered = await recoverLearn(bid);
       if (recovered) return;
       setResultState('failed');
-      setError(err instanceof ApiError ? err.message : t('learn.fail.title'));
+      setError(null); // keyed failed-state title+body render; no raw err.message leak
       setPhase('result');
     }
   }
@@ -208,9 +207,9 @@ export function BusinessStartPage() {
                 {t('chooser.material')}
               </button>
             </div>
-            <button type="button" className="s0-today2-defer" style={{ marginTop: 20 }} onClick={() => chooseSupplied('instagram')}>
-              {t('chooser.instagram')}
-            </button>
+            {/* The Instagram option is intentionally removed: it only emitted a demand event and never connected —
+                an advertised connection wired to nothing is worse than not offering it. Reinstate when IG connect
+                is actually built (Facebook Login for Business). */}
           </>
         )}
 

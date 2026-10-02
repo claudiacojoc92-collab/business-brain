@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import { AppShell } from './AppShell';
-import { isNotFound, LoadError } from './errors';
+import { isNotFound, LoadError, actionErrorKey } from './errors';
 import {
   getBusiness,
   getVoice,
@@ -72,7 +72,7 @@ export function VoicePage() {
       const r = await reactToSample(id, sampleId, reaction.trim());
       replaceSample(sampleId, r.sample);
       void refreshProjection();
-    } catch { setActionError(t('common.actionFailed')); } finally { setBusy(false); }
+    } catch (e) { setActionError(t(actionErrorKey(e))); } finally { setBusy(false); }
   }
   async function saveEdit(sampleId: string, text: string) {
     if (!id || !text.trim()) return;
@@ -81,7 +81,7 @@ export function VoicePage() {
       const r = await editSample(id, sampleId, text.trim());
       replaceSample(sampleId, r.sample);
       void refreshProjection();
-    } catch { setActionError(t('common.actionFailed')); } finally { setBusy(false); }
+    } catch (e) { setActionError(t(actionErrorKey(e))); } finally { setBusy(false); }
   }
 
   // Approved concept → the real Create engine, no re-entering a brief. Carousel mints a strategy-traced
@@ -93,7 +93,7 @@ export function VoicePage() {
       if (sample.channel === 'reel') { navigate(`/b/${id}/reel/shoot`); return; }
       const r = await createFromConcept(id, { objective: sample.objective, format: 'carousel', channel: sample.channel });
       navigate(`/b/${id}/create/${r.createHandoffId}`);
-    } catch { setActionError(t('common.actionFailed')); } finally { setBusy(false); }
+    } catch (e) { setActionError(t(actionErrorKey(e))); } finally { setBusy(false); }
   }
 
   if (loadErr) return <LoadError onRetry={() => { if (id) void load(); }} />;

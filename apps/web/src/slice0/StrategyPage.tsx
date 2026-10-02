@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import { AppShell } from './AppShell';
-import { isNotFound, LoadError } from './errors';
+import { isNotFound, LoadError, actionErrorKey } from './errors';
 import {
   getBusiness, getCurrentStrategy, getStrategyProposal, regenerateStrategy, adoptStrategy, respondToStrategy,
   type Business, type StrategyResp,
@@ -59,21 +59,21 @@ export function StrategyPage() {
     if (!id || !goal.trim()) return;
     setBusy(true); setActionError(null);
     try { applyProposal(await respondToStrategy(id, 'goal', goal.trim())); }
-    catch { setActionError(t('common.actionFailed')); }
+    catch (e) { setActionError(t(actionErrorKey(e))); }
     finally { setBusy(false); }
   }
   async function adopt() {
     if (!id || !resp?.id) return;
     setBusy(true); setActionError(null);
     try { const c = await adoptStrategy(id, resp.id); setResp(c); setPhase('current'); }
-    catch { setActionError(t('common.actionFailed')); }
+    catch (e) { setActionError(t(actionErrorKey(e))); }
     finally { setBusy(false); }
   }
   async function challenge(text: string) {
     if (!id || !text.trim()) return;
     setBusy(true); setActionError(null);
     try { applyProposal(await respondToStrategy(id, 'constraint', text.trim())); }
-    catch { setActionError(t('common.actionFailed')); }
+    catch (e) { setActionError(t(actionErrorKey(e))); }
     finally { setBusy(false); }
   }
 
@@ -88,7 +88,7 @@ export function StrategyPage() {
   const from = `${t('strat2.from')} ${business.name}`;
 
   if (phase === 'insufficient') {
-    return <AppShell>{banner}<InsufficientView from={from} t={t} busy={busy} onGoal={giveGoal} onRegen={async () => { if (id) { setBusy(true); setActionError(null); try { applyProposal(await regenerateStrategy(id)); } catch { setActionError(t('common.actionFailed')); } finally { setBusy(false); } } }} /></AppShell>;
+    return <AppShell>{banner}<InsufficientView from={from} t={t} busy={busy} onGoal={giveGoal} onRegen={async () => { if (id) { setBusy(true); setActionError(null); try { applyProposal(await regenerateStrategy(id)); } catch (e) { setActionError(t(actionErrorKey(e))); } finally { setBusy(false); } } }} /></AppShell>;
   }
 
   return (

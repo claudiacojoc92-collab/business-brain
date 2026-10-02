@@ -16,6 +16,28 @@ export function isNotFound(err: unknown): boolean {
   return err instanceof ApiError && (err.status === 404 || err.status === 403);
 }
 
+/**
+ * The i18n key for a failed FOUNDER ACTION (a mutation), branched on the cause. A TRANSIENT failure (network,
+ * 5xx, 408, 429, or a non-ApiError) keeps the "try again in a moment" copy. A DETERMINISTIC client error
+ * (409/403/422, other 4xx) retrying with the same input can never fix — so the copy says what happened and what
+ * the founder can actually do, and the caller must NOT offer a blind retry for these. Mirrors the classify.ts
+ * code→t() move: the backend already carries the status; the web maps it to founder language.
+ */
+export function actionErrorKey(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 409) return 'action.stale';       // superseded / changed under the founder
+    if (err.status === 403) return 'action.forbidden';   // no access to this action
+    if (err.status === 422) return 'action.rejected';    // fail-closed (e.g. claim-safety) — input must change
+    if (err.status >= 400 && err.status < 500 && err.status !== 408 && err.status !== 429) return 'action.failed';
+  }
+  return 'common.actionFailed'; // transient
+}
+
+/** True when retrying the SAME action cannot help (deterministic) — so no retry affordance should be shown. */
+export function isDeterministic(err: unknown): boolean {
+  return err instanceof ApiError && err.status >= 400 && err.status < 500 && err.status !== 408 && err.status !== 429;
+}
+
 /** Calm, branded transient-load failure with a single recovery action (Nocturne language). */
 export function LoadError({ onRetry }: { onRetry: () => void }) {
   const { t } = useLocale();

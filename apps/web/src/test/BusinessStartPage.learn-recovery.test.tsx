@@ -109,20 +109,12 @@ describe('BusinessStartPage — source-flexible entry (chooser / supplied / reco
     fireEvent.click(screen.getByText('start.cta')); // intro → chooser
   }
 
-  it('the chooser offers a website path, a supplied-material path, and a no-website/Instagram path', async () => {
+  it('the chooser offers a website path and a supplied-material path, and NO longer an Instagram path', async () => {
     await reachChooser();
     expect(screen.getByText(/chooser\.website/)).toBeInTheDocument();
     expect(screen.getByText('chooser.material')).toBeInTheDocument();
-    expect(screen.getByText('chooser.instagram')).toBeInTheDocument();
-  });
-
-  it('the Instagram/no-website path records DEMAND (never a fake OAuth) and routes into supplied material', async () => {
-    await reachChooser();
-    fireEvent.click(screen.getByText('chooser.instagram'));
-    expect(api.emitEvent).toHaveBeenCalledWith('source_instagram_interest', expect.objectContaining({ businessId: 'b1' }));
-    // no connector call exists to fake — assert we landed on the material entry, not a connection
-    expect(screen.getByText('material.title')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('material.placeholder')).toBeInTheDocument();
+    // The Instagram option was removed: it only emitted a demand event and never connected (fix 9).
+    expect(screen.queryByText('chooser.instagram')).toBeNull();
   });
 
   it('supplied material is sent to the founder-supplied learn path and its Aha surfaces', async () => {

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import { translate, isLocale, type Locale } from '../i18n/messages';
+import { isNotFound } from './errors';
 import { parseOpenerTurn, type ArcOpener } from './parse-briefing';
 import {
-  getArc, arcAddSource, arcAddLink, arcAddFile,
+  getArc, arcAddSource, arcAddLink, arcAddText, arcAddFile,
   arcPourInDone, arcConversation, arcConfirmUnderstanding, arcCorrectUnderstanding,
   arcMirrorSeen, arcAdoptStrategy, arcChallengeStrategy, arcAdoptWeekDay, arcGenerateEmail,
   arcSaveEmail, arcExportEmail, arcContainerSeen, arcConfirmGoal, arcSkipQuestion, type ArcView,
@@ -13,6 +15,17 @@ import {
 // we return to it (via Facebook Login for Business). See docs/sources/instagram-arc-connector-later.md.
 
 import { ArcWorking, type T } from './ArcWorking';
+
+// Pour-in source errors arrive from the API as stable CODES (never English) — rendered here in the founder's
+// language. Unknown/absent code falls back to the caller's generic key.
+const SRC_ERR_KEY: Record<string, string> = {
+  FILE_TOO_LARGE: 'arc.src.fileTooLarge', FILE_NONE: 'arc.src.fileNone', FILE_UNSUPPORTED: 'arc.src.fileUnsupported',
+  FILE_UNREADABLE: 'arc.src.fileUnreadable', FILE_PDF_IMAGE: 'arc.src.filePdfImage', FILE_NO_TEXT: 'arc.src.fileNoText',
+  IG_NOT_CONFIGURED: 'arc.src.igNotConfigured', IG_NOT_CONNECTED: 'arc.src.igNotConnected',
+  IG_NO_CAPTIONS: 'arc.src.igNoCaptions', IG_READ_FAILED: 'arc.src.igReadFailed',
+};
+const srcErr = (code: string | undefined, t: T, fallbackKey: string): string =>
+  (code && SRC_ERR_KEY[code]) ? t(SRC_ERR_KEY[code]) : t(fallbackKey);
 
 // These MUST live at module scope — never inside ArcSurface's body. A component defined inside another
 // component is recreated with a NEW identity on every render, so React unmounts + remounts it; a focused
@@ -216,7 +229,9 @@ function ArcOpenerView({ opener, t, asQuestion }: { opener: ArcOpener; t: T; asQ
  */
 export function ArcSurface({ businessId, onDone }: { businessId: string; onDone: () => void }) {
   const { locale } = useLocale() as { t: T; locale: string };
+  const navigate = useNavigate();
   const [view, setView] = useState<ArcView | null>(null);
+  const [loadErr, setLoadErr] = useState(false); // a TRANSIENT first-load failure (5xx/network) — never an endless spinner
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState('');
   const [err, setErr] = useState<string | null>(null);
@@ -254,7 +269,15 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
     }
     setViewIdx(null); // snap to the live moment
   }, [onDone]);
-  const load = useCallback(async () => { apply(await getArc(businessId)); }, [businessId, apply]);
+  // The arc GET can run understanding/mirror/strategy generation inline, so a slow or 5xx response must NOT
+  // leave the founder on an endless ArcWorking spinner. A thrown error here is transport-level: 404/403 means the
+  // business is genuinely gone (route away), anything else is transient → a real error state with a retry.
+  // (Deterministic generation failures come back as a view with error.kind, handled in renderMoment, not thrown.)
+  const load = useCallback(async () => {
+    setLoadErr(false);
+    try { apply(await getArc(businessId)); }
+    catch (e) { if (isNotFound(e)) { navigate('/home', { replace: true }); return; } setLoadErr(true); }
+  }, [businessId, apply, navigate]);
   useEffect(() => { if (started.current) return; started.current = true; void load(); }, [load]);
 
   // Run an arc action, replace the view (or hand off when the arc completes). A send must NEVER fail silently:
@@ -280,7 +303,19 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
 
   // Initial load: a model may be generating this moment (understanding/mirror/strategy/plan run inside the GET),
   // so show an animated "working" state that escalates after a few seconds — never a bare, frozen-looking spinner.
-  if (!view) return <div className="s0-strat"><ArcWorking t={t} messageKey="arc.working" /></div>;
+  if (!view) {
+    if (loadErr) return (
+      <div className="s0-strat">
+        <div className="s0-strat-ctx">{t('load.error.title')}</div>
+        <p className="s0-strat-msg-line">{t('load.error.body')}</p>
+        <div className="s0-strat-actions">
+          <button type="button" className="s0-btn" onClick={() => void load()}>{t('common.retry')}</button>
+          <a href="/home" className="s0-btn-quiet">{t('home.tobusinesses')}</a>
+        </div>
+      </div>
+    );
+    return <div className="s0-strat"><ArcWorking t={t} messageKey="arc.working" /></div>;
+  }
   const weekday = new Date().toLocaleDateString(locale, { weekday: 'long' });
 
   // Which view is on screen: the live one, or a past moment being re-read (read-only). Back/History never
@@ -340,9 +375,14 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
       </>);
     }
     if (m.error?.kind === 'strategy_insufficient') {
+      // Deterministic: a bet can't form from what BB has, so re-running the SAME generation is the same wall.
+      // The real forward action is to give BB more — route to the conversation. When the gate carries a concrete
+      // "what's thin" detail, lead with the colon + that detail; when it does NOT, use a variant with no dangling
+      // colon (never an empty list under a heading).
+      const lines = m.error.detail ? [t('arc.error.strategyinsufficient'), m.error.detail] : [t('arc.error.strategyinsufficientNoDetail')];
       return (<>
-        <ArcMsg lines={[t('arc.error.strategyinsufficient'), ...(m.error.detail ? [m.error.detail] : [])]} />
-        {!ro ? <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={() => void load()}>{t('arc.error.retry')} →</button><a href="/home" className="s0-btn-quiet">{t('home.tobusinesses')}</a></div> : null}
+        <ArcMsg lines={lines} />
+        {!ro ? <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={() => navigate(`/b/${businessId}/talk`)}>{t('arc.error.tellmemore')} →</button><a href="/home" className="s0-btn-quiet">{t('home.tobusinesses')}</a></div> : null}
       </>);
     }
     if (m.error?.kind === 'generation') {
@@ -524,7 +564,8 @@ function PourInAdded({ items, t }: { items: { url: string; type: string; detail?
 function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: string; view: ArcView; busy: boolean; onReload: () => Promise<void>; onDone: () => void; t: T }) {
   const [url, setUrl] = useState('');
   const [link, setLink] = useState('');
-  const [adding, setAdding] = useState<null | 'website' | 'link' | 'file'>(null);
+  const [desc, setDesc] = useState('');
+  const [adding, setAdding] = useState<null | 'website' | 'link' | 'file' | 'text'>(null);
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const sources = view.sources ?? [];
@@ -553,6 +594,16 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
     } catch { setErr(t('home.empty.unreachable')); } finally { setAdding(null); }
   }
 
+  async function addText(e: React.FormEvent) {
+    e.preventDefault();
+    const d = desc.trim(); if (!d || disabled) return;
+    setAdding('text'); setErr(null);
+    try {
+      const res = await arcAddText(businessId, d);
+      if (ok(res.state)) { setDesc(''); await onReload(); } else setErr(srcErr(res.error, t, 'home.empty.filefail'));
+    } catch { setErr(t('home.empty.filefail')); } finally { setAdding(null); }
+  }
+
   // Multi-file: the founder can select several documents at once (brochures, offers, a case study). Each is
   // uploaded as its OWN source (one request per file, in parallel) → its own added ✓ card, or its own error line.
   async function addFiles(e: React.ChangeEvent<HTMLInputElement>) {
@@ -564,7 +615,7 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
     results.forEach((r, i) => {
       const name = files[i]?.name ?? 'file';
       if (r.status === 'fulfilled' && ok(r.value.state)) return; // success → appears as its own added card after reload
-      const msg = r.status === 'fulfilled' ? (r.value.error?.trim() || t('home.empty.filefail')) : t('home.empty.filefail');
+      const msg = r.status === 'fulfilled' ? srcErr(r.value.error, t, 'home.empty.filefail') : t('home.empty.filefail');
       failures.push(`${name}: ${msg}`);
     });
     await onReload();
@@ -608,6 +659,19 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
             <input id="s0-pourin-file" ref={fileRef} className="s0-pourin-file" type="file" multiple accept=".pdf,.docx,.doc,.txt,.md" onChange={addFiles} disabled={disabled} aria-label={t('home.empty.upload')} />
             {adding === 'file' ? <span className="s0-pourin-adding-tag">{t('home.empty.adding')}</span> : null}
           </div>
+        </div>
+
+        {/* DESCRIBE IN TEXT — the always-available fallback: a founder with no website and an unreadable file can
+            still tell BB what their business is, in words, and reach the Start CTA. */}
+        <div className={`s0-pourin-web${addedOf(['description']).length ? ' s0-pourin-web-has' : ''}`}>
+          <label className="s0-pourin-web-k" htmlFor="s0-pourin-desc">{t('home.empty.describe')} <span className="s0-pourin-item-hint">· {t('home.empty.describe.hint')}</span></label>
+          <PourInAdded items={addedOf(['description'])} t={t} />
+          <form onSubmit={addText}>
+            <textarea id="s0-pourin-desc" className="s0-pourin-desc" value={desc} rows={4} placeholder={t('home.empty.describe.ph')} onChange={(e) => setDesc(e.target.value)} aria-label={t('home.empty.describe')} />
+            <div className="s0-pourin-web-row">
+              <button type="submit" className="s0-btn s0-btn-inline" disabled={disabled || !desc.trim()}>{adding === 'text' ? t('home.empty.adding') : t('home.empty.website.add')}</button>
+            </div>
+          </form>
         </div>
 
         {/* Instagram is intentionally NOT rendered here — hidden until after MVP validation (see note at top). */}
@@ -684,7 +748,7 @@ function ContainerMoment({ view, busy, readOnly, onSeen, t }: { businessId: stri
       <div className="s0-u-card">
         <ul className="s0-arc-container">
           {items.map((it, i) => (
-            <li key={i}><span className="s0-arc-container-label">{it.label}</span><span className="s0-arc-container-stmt">{it.statement}</span><span className={`s0-arc-prov s0-arc-prov-${it.provenance}`}>{t(`arc.prov.${it.provenance}`)}</span></li>
+            <li key={i}><span className="s0-arc-container-label">{t(it.labelKey)}</span><span className="s0-arc-container-stmt">{it.statement}</span><span className={`s0-arc-prov s0-arc-prov-${it.provenance}`}>{t(`arc.prov.${it.provenance}`)}</span></li>
           ))}
         </ul>
       </div>

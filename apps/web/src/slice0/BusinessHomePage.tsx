@@ -28,7 +28,9 @@ export function BusinessHomePage() {
       await refresh();
       navigate(`/b/${b.id}/home`);
     } catch (err) {
-      setError(err instanceof ApiError && err.status === 400 ? err.message : t('auth.error.generic'));
+      if (err instanceof ApiError && err.code === 'BUSINESS_NAME_REQUIRED') setError(t('biz.err.nameRequired'));
+      else if (err instanceof ApiError && err.code === 'BUSINESS_NAME_TOO_LONG') setError(t('biz.err.nameTooLong'));
+      else setError(t('auth.error.generic'));
     } finally {
       setBusy(false);
     }

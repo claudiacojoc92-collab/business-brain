@@ -406,7 +406,7 @@ describe('ArcSurface — one surface, eight moments', () => {
   });
 
   it('Moment 9: container offers, then reveals read-only items with provenance', async () => {
-    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'container', container: { items: [{ label: 'Offer', statement: 'Physio memberships', provenance: 'observed' }, { label: 'Still unknown', statement: 'corporate?', provenance: 'unknown' }] } }));
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'container', container: { items: [{ labelKey: 'arc.container.lbl.offer', statement: 'Physio memberships', provenance: 'observed' }, { labelKey: 'arc.container.lbl.unknown', statement: 'corporate?', provenance: 'unknown' }] } }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
     fireEvent.click(await screen.findByText('arc.container.show →'));
     expect(screen.getByText('Physio memberships')).toBeInTheDocument();

@@ -103,13 +103,27 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
     await reply.status(200).send({ state: stored > 0 ? 'synced' : 'empty' });
   });
 
+  // DESCRIBE IN TEXT — the founder types what their business is, in their own words (DECLARED). The no-source exit:
+  // a founder with no website and an unreadable file can still give BB something to work with. Error is a CODE.
+  server.post('/v1/businesses/:id/arc/source/text', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { founderId, business } = await requireBusiness(request);
+    const text = ((request.body as { text?: string })?.text ?? '').trim();
+    if (!text) throw new ValidationError('TEXT_REQUIRED', 'A description is required.');
+    const { stored } = await deps.learnBusinessService.ingestTextForPourIn({
+      businessId: business.id, founderId, source: 'founder_supplied', provenance: 'declared',
+      items: [{ ref: 'Your description', url: 'founder://text', text, pageType: 'founder_supplied' }],
+    });
+    if (stored > 0) mark(founderId, business.id, 'arc_source_added', { url: 'Your description', type: 'description' });
+    await reply.status(200).send({ state: stored > 0 ? 'synced' : 'empty', error: stored > 0 ? undefined : 'FILE_NO_TEXT' });
+  });
+
   // INSTAGRAM — read the founder's connected account (OAuth done via /api/sources/instagram/connect) and ingest
   // its profile + post captions as OBSERVED evidence (same lane as the website). needsAuth ⇒ connect first.
   server.post('/v1/businesses/:id/arc/source/instagram', async (request: FastifyRequest, reply: FastifyReply) => {
     const { founderId, business } = await requireBusiness(request);
     const ig = getInstagramConnector();
-    if (!ig) { await reply.status(200).send({ state: 'failed', error: 'Instagram is not configured.' }); return; }
-    if ((await ig.status(founderId)) !== 'connected') { await reply.status(200).send({ state: 'failed', needsAuth: true, error: 'Connect your Instagram first.' }); return; }
+    if (!ig) { await reply.status(200).send({ state: 'failed', error: 'IG_NOT_CONFIGURED' }); return; }
+    if ((await ig.status(founderId)) !== 'connected') { await reply.status(200).send({ state: 'failed', needsAuth: true, error: 'IG_NOT_CONNECTED' }); return; }
     try {
       const account = await ig.importAccount(founderId, { maxPosts: 12 });
       const username = account.username ?? 'instagram';
@@ -131,9 +145,9 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
       const { stored } = await deps.learnBusinessService.ingestTextForPourIn({ businessId: business.id, founderId, source: 'instagram', provenance: 'observed', items });
       const postCount = items.filter((it) => it.pageType === 'instagram_post').length;
       if (stored > 0) mark(founderId, business.id, 'arc_source_added', { url: `@${username}`, type: 'instagram', detail: `${postCount} post${postCount === 1 ? '' : 's'} read` });
-      await reply.status(200).send({ state: stored > 0 ? 'synced' : 'empty', error: stored > 0 ? undefined : 'I connected but found no post captions to read.' });
+      await reply.status(200).send({ state: stored > 0 ? 'synced' : 'empty', error: stored > 0 ? undefined : 'IG_NO_CAPTIONS' });
     } catch (e) {
-      await reply.status(200).send({ state: 'failed', error: e instanceof Error ? e.message : 'Instagram read failed.' });
+      await reply.status(200).send({ state: 'failed', error: 'IG_READ_FAILED' });
     }
   });
 
@@ -141,7 +155,7 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
   // selected file so each becomes its own source with its own ✓/error. Multipart is scoped to this route so it
   // never collides with the JSON body parser. Every failure returns a SPECIFIC message as a 200 body (the prod
   // error-handler masks thrown errors to "An error occurred.", so specific reasons must be returned, not thrown).
-  const TOO_LARGE = 'That file is too large — the maximum is 15 MB.';
+  const TOO_LARGE = 'FILE_TOO_LARGE';
   server.register(async (scope) => {
     await scope.register(multipart, { limits: { fileSize: MAX_BYTES, files: 1 } });
     scope.post('/v1/businesses/:id/arc/source/file', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -149,7 +163,7 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
       let file;
       try { file = await request.file(); }
       catch { await reply.status(200).send({ state: 'failed', error: TOO_LARGE }); return; }
-      if (!file) { await reply.status(200).send({ state: 'failed', error: 'No file came through — please try again.' }); return; }
+      if (!file) { await reply.status(200).send({ state: 'failed', error: 'FILE_NONE' }); return; }
 
       let bytes: Buffer;
       try { bytes = await file.toBuffer(); }
@@ -158,11 +172,11 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
       catch { await reply.status(200).send({ state: 'failed', error: TOO_LARGE }); return; }
 
       const type = detectType(bytes);
-      if (type === 'unsupported') { await reply.status(200).send({ state: 'failed', error: "That file type isn't supported — upload a PDF, Word (.docx), or text file." }); return; }
+      if (type === 'unsupported') { await reply.status(200).send({ state: 'failed', error: 'FILE_UNSUPPORTED' }); return; }
 
       let doc;
       try { doc = type === 'pdf' ? await extractPdf(bytes, file.filename) : type === 'docx' ? await extractDocx(bytes, file.filename) : extractText(bytes, file.filename); }
-      catch { await reply.status(200).send({ state: 'failed', error: "I couldn't read that file — it may be corrupted or password-protected." }); return; }
+      catch { await reply.status(200).send({ state: 'failed', error: 'FILE_UNREADABLE' }); return; }
 
       const slug = (file.filename.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase().slice(0, 60)) || 'file';
       const items = doc.units.slice(0, 20).map((u, i) => ({ ref: `${file.filename} · ${u.anchor.label}`, url: `founder://file/${slug}/${i + 1}`, text: u.text, pageType: 'founder_supplied' }));
@@ -176,9 +190,7 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
       // Reached the file but extracted no text. For a PDF this is almost always a scanned/image-only PDF.
       await reply.status(200).send({
         state: 'empty',
-        error: type === 'pdf'
-          ? 'This looks like a scanned PDF (no text layer) — I can only read text-based PDFs. Export a text PDF, or paste the text with "Paste a link" or in the conversation.'
-          : 'That file had no readable text.',
+        error: type === 'pdf' ? 'FILE_PDF_IMAGE' : 'FILE_NO_TEXT',
       });
     });
   });
@@ -305,7 +317,14 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
     const { founderId, business, language } = await requireBusiness(request);
     let plan = await deps.planService.getLatestProposed(business.id);
     if (!plan) plan = await deps.planService.generateProposedPlan(business.id);
-    if (plan) await deps.planService.acceptPlan(business.id, plan.planVersionId);
+    if (!plan) {
+      // Fail-closed: no plan could be produced. Surface the generation error EXPLICITLY — never a silent no-op
+      // that leaves the founder on the same screen as if the adopt did nothing.
+      const view = await viewFor(business.id, business.name, language, founderId);
+      await reply.status(200).send({ ...view, error: { kind: 'generation' } });
+      return;
+    }
+    await deps.planService.acceptPlan(business.id, plan.planVersionId);
     await reply.status(200).send(await viewFor(business.id, business.name, language, founderId));
   });
 

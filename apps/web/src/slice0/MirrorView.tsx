@@ -51,7 +51,7 @@ export function MirrorView(props: { businessId: string; onConfirm: () => void; t
               <ul className="s0-mirror-list">
                 {lane.items.map((it, i) => (
                   <li key={i} className="s0-mirror-item">
-                    <span className="s0-mirror-item-label">{it.label}</span>
+                    <span className="s0-mirror-item-label">{t(it.labelKey)}</span>
                     <span className="s0-mirror-item-stmt">{it.statement}</span>
                     {it.provenance === 'unknown' ? <span className="s0-mirror-prov">{t('mirror.prov.unknown')}</span> : null}
                     {it.provenance === 'inferred' ? <span className="s0-mirror-prov">{t('mirror.prov.inferred')}</span> : null}

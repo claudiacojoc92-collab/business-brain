@@ -10,9 +10,9 @@ import * as api from '../api/client';
 import { MirrorView } from '../slice0/MirrorView';
 
 const withContrast: MirrorData = {
-  observed: [{ label: 'Your positioning', statement: 'Six service categories promoted equally', provenance: 'observed' }],
-  business: [{ label: 'Your goal', statement: 'Grow the medical/recovery side', provenance: 'declared' }],
-  self: [{ label: 'In your words', statement: 'I avoid direct sales conversations', provenance: 'declared' }],
+  observed: [{ labelKey: 'mirror.lbl.positioning', statement: 'Six service categories promoted equally', provenance: 'observed' }],
+  business: [{ labelKey: 'mirror.lbl.kind.goal', statement: 'Grow the medical/recovery side', provenance: 'declared' }],
+  self: [{ labelKey: 'mirror.lbl.inYourWords', statement: 'I avoid direct sales conversations', provenance: 'declared' }],
   contrasts: [{
     founderWords: 'You said the medical/recovery side is your priority',
     founderLane: 'business',

@@ -14,7 +14,7 @@ export type MirrorLane = 'observed' | 'business' | 'self' | 'strategy';
 export type Provenance = 'observed' | 'declared' | 'inferred' | 'unknown';
 
 export interface MirrorLaneItem {
-  readonly label: string;       // short heading ("Your offer", "What you told me")
+  readonly labelKey: string;    // i18n key for the short heading — rendered in the founder's language by the web
   readonly statement: string;
   readonly provenance?: Provenance;
   readonly sources?: string[];  // observed lane only — where BB saw it

@@ -62,7 +62,7 @@ describe('arc pour-in file upload — real multipart HTTP path', () => {
     expect(res.statusCode).toBe(200);
     const b = res.json();
     expect(b.state).toBe('failed');
-    expect(b.error).toMatch(/isn.t supported/i);
+    expect(b.error).toBe('FILE_UNSUPPORTED'); // specific CODE (web renders it per-locale), not the masked "An error occurred."
     expect(b.error).not.toMatch(/An error occurred/i);
     await server.close();
   });
@@ -73,7 +73,7 @@ describe('arc pour-in file upload — real multipart HTTP path', () => {
     expect(res.statusCode).toBe(200);
     const b = res.json();
     expect(b.state).toBe('empty');
-    expect(b.error).toMatch(/no readable text/i);
+    expect(b.error).toBe('FILE_NO_TEXT'); // specific CODE; the web maps it to honest per-locale copy
     await server.close();
   });
 });

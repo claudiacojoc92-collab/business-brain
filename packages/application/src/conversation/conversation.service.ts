@@ -183,14 +183,19 @@ export class ConversationService {
       const agenda = agendaUnknowns((await this.deps.understanding.latest(businessId))?.understanding ?? null);
       const siteNeeds = agenda.map((text, i) => ({ key: `site_${i + 1}`, whatMissing: text, whyMatters: 'You flagged this as unknown from the site read and showed it to the founder as the agenda — ask it early.' }));
       if (siteNeeds.length) await this.deps.needs.seed(session.id, businessId, siteNeeds);
-      // Generate the opener from Aha 1 (no founder message yet).
+    }
+    // Generate the opener whenever the session has NO turns yet — a new session, OR an existing one whose opener
+    // generation previously returned empty / threw (needs are already seeded, idempotently). Without this, a single
+    // empty first result strands the founder on a permanent "preparing…" that even a refresh can't clear.
+    let turns = await this.deps.conversations.listTurns(session.id);
+    if (turns.length === 0) {
       const out = await this.deps.model.step(await this.buildStepInput(businessId, founderId, businessName, language, session.id, null));
       const opener = openerTurnContent(out);
       if (opener) {
         await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: opener, language, infoNeedKey: null });
+        turns = await this.deps.conversations.listTurns(session.id);
       }
     }
-    const turns = await this.deps.conversations.listTurns(session.id);
     return { session, turns, readyForAha2: session.status === 'ready_for_aha2' };
   }
 

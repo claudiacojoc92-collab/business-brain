@@ -3,7 +3,7 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import { AppShell } from './AppShell';
 import { useTalk } from './TalkDrawer';
-import { isNotFound, LoadError } from './errors';
+import { isNotFound, LoadError, actionErrorKey } from './errors';
 import { VerdictSurface } from './VerdictSurface';
 import {
   getBusiness, getToday, getPlanState, proposePlan, adoptPlan, getCurrentStrategy,
@@ -52,6 +52,15 @@ export function TodayPage() {
   const refresh = useCallback(async () => {
     if (!id) return;
     const [s, p, td] = await Promise.allSettled([getCurrentStrategy(id), getPlanState(id), getToday(id)]);
+    // A REJECTED read means "couldn't load", NOT "doesn't exist". Letting it fall through to setX(null) would
+    // collapse an adopted strategy/plan into no_strategy / no_plan / all_clear — i.e. show the founder their work
+    // erased. So a rejection becomes a distinct, retryable load error (404/403 → the business is genuinely gone).
+    const rejected = [s, p, td].find((r) => r.status === 'rejected') as PromiseRejectedResult | undefined;
+    if (rejected) {
+      if (isNotFound(rejected.reason)) { setBusiness(null); return; }
+      setLoadErr(true);
+      return;
+    }
     if (s.status === 'fulfilled') setStrat(s.value);
     if (p.status === 'fulfilled') setPlanState(p.value);
     if (td.status === 'fulfilled') setToday(td.value);
@@ -82,19 +91,19 @@ export function TodayPage() {
       }
       if (pv) await adoptPlan(id, pv);
       await refresh();
-    } catch { setActionError(t('common.actionFailed')); } finally { setBusy(null); }
+    } catch (e) { setActionError(t(actionErrorKey(e))); } finally { setBusy(null); }
   }
   async function outcome(actionId: string, o: 'done' | 'deferred') {
     if (!id) return;
     setBusy(actionId); setActionError(null);
     try { setToday(await applyActionOutcome(id, actionId, o)); setShowOthers(false); }
-    catch { setActionError(t('common.actionFailed')); } finally { setBusy(null); }
+    catch (e) { setActionError(t(actionErrorKey(e))); } finally { setBusy(null); }
   }
   async function makeIt(actionId: string) {
     if (!id) return;
     setBusy(actionId); setActionError(null);
     try { const r = await createFromAction(id, actionId); navigate(`/b/${id}/create/${r.createHandoffId}`); }
-    catch { setActionError(t('common.actionFailed')); }
+    catch (e) { setActionError(t(actionErrorKey(e))); }
     finally { setBusy(null); }
   }
   // Living State: the founder reports an outcome of their work → assessed against the held strategy + baseline,
@@ -105,7 +114,7 @@ export function TodayPage() {
     try {
       const r = await evaluateImpact(id, 'outcome_report', outcomeText.trim());
       setVerdict(r); setReporting(false); setOutcomeText('');
-    } catch { setActionError(t('common.actionFailed')); } finally { setBusy(null); }
+    } catch (e) { setActionError(t(actionErrorKey(e))); } finally { setBusy(null); }
   }
   async function dismissVerdict() {
     setVerdict(null);
@@ -120,7 +129,7 @@ export function TodayPage() {
     if (!id) return;
     setBusy('blk'); setActionError(null);
     try { setToday(await applyActionOutcome(id, prereqActionId, 'done')); }
-    catch { setActionError(t('common.actionFailed')); } finally { setBusy(null); }
+    catch (e) { setActionError(t(actionErrorKey(e))); } finally { setBusy(null); }
   }
   // prerequisite_unfinished · "I can't do [A] yet" → constraint + SKIP on A, then reshape (A abandoned ⇒ the
   //    plan must re-derive around it; the declared constraint now feeds the next plan's envelope).
@@ -136,7 +145,7 @@ export function TodayPage() {
       const pv = (p as { planVersionId: string }).planVersionId;
       if (pv) await adoptPlan(id, pv);
       await refresh();
-    } catch { setActionError(t('common.actionFailed')); } finally { setBusy(null); }
+    } catch (e) { setActionError(t(actionErrorKey(e))); } finally { setBusy(null); }
   }
   // missing_material · "I have this" → resource = the EXACT required material ⇒ it folds into available material
   //    and the SAME action re-derives to ready; the founder then completes it normally (no auto-done).
@@ -144,7 +153,7 @@ export function TodayPage() {
     if (!id) return;
     setBusy('blk'); setActionError(null);
     try { setToday(await resolveActionState(id, actionId, 'resource', material)); }
-    catch { setActionError(t('common.actionFailed')); } finally { setBusy(null); }
+    catch (e) { setActionError(t(actionErrorKey(e))); } finally { setBusy(null); }
   }
   // missing_material · "I can't get this" → constraint + SKIP the shown move (advances to the next; never DONE).
   async function cantMaterial(actionId: string, reason: string) {
@@ -154,7 +163,7 @@ export function TodayPage() {
       const why = reason.trim() || 'I can’t get what this move needs right now.';
       await resolveActionState(id, actionId, 'constraint', why);
       setToday(await applyActionOutcome(id, actionId, 'skipped', why));
-    } catch { setActionError(t('common.actionFailed')); } finally { setBusy(null); }
+    } catch (e) { setActionError(t(actionErrorKey(e))); } finally { setBusy(null); }
   }
   // missing_material · "That's not right" → business_correction (held truth) + SKIP the now-moot move (never DONE).
   async function correctPremise(actionId: string, subject: string, statement: string) {
@@ -163,7 +172,7 @@ export function TodayPage() {
     try {
       await submitCorrection(id, subject, statement);
       setToday(await applyActionOutcome(id, actionId, 'skipped', `Corrected: ${statement}`.slice(0, 300)));
-    } catch { setActionError(t('common.actionFailed')); } finally { setBusy(null); }
+    } catch (e) { setActionError(t(actionErrorKey(e))); } finally { setBusy(null); }
   }
   // founder_decision · the founder states the choice → decision fact + DONE on the decision action (the decision
   //    IS the action; making it completes it — sanctioned auto-done, not a generic "I handled it").
@@ -173,14 +182,14 @@ export function TodayPage() {
     try {
       await resolveActionState(id, actionId, 'decision', choice);
       setToday(await applyActionOutcome(id, actionId, 'done', choice));
-    } catch { setActionError(t('common.actionFailed')); } finally { setBusy(null); }
+    } catch (e) { setActionError(t(actionErrorKey(e))); } finally { setBusy(null); }
   }
   // "Not today" → deferred on the shown move (existing semantics; a real dependency never disappears).
   async function deferBlocked(actionId: string) {
     if (!id) return;
     setBusy('blk'); setActionError(null);
     try { setToday(await applyActionOutcome(id, actionId, 'deferred')); }
-    catch { setActionError(t('common.actionFailed')); } finally { setBusy(null); }
+    catch (e) { setActionError(t(actionErrorKey(e))); } finally { setBusy(null); }
   }
 
   if (loadErr) return <LoadError onRetry={() => { if (id) void load(); }} />;
