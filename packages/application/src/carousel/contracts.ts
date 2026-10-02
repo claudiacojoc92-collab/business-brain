@@ -56,6 +56,10 @@ export interface FeasibilityResult {
   readonly feasible: boolean;
   readonly outline: SlideRole[];          // possibly CONTRACTED to the grounded beats (no orphan, no padding)
   readonly reasons: string[];             // why a beat was dropped / why infeasible
+  // What the founder could SUPPLY to make this feasible — drives the inline "name the missing evidence" ask.
+  // 'cta' = no authorized next-step/CTA; 'substance' = no authorized substantive meaning. Absent when feasible.
+  // Additive signal only: it does NOT change any gate decision or threshold.
+  readonly missing?: 'cta' | 'substance';
 }
 
 // ── Concept — strategy-derived communication structure (family is an internal HINT, never the quality basis) ──

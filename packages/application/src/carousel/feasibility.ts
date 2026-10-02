@@ -168,8 +168,8 @@ export function checkFeasibility(outline: SlideRole[], snap: AssetAuthorizationS
   const substantiveUnitCount = units.filter((u) => u.type !== 'cta_function').length;
   const reasons: string[] = [];
 
-  if (!have.has('cta_function')) return { feasible: false, outline: [], reasons: ['no authorized CTA function — a carousel cannot close'] };
-  if (substantiveUnitCount === 0) return { feasible: false, outline: [], reasons: ['no authorized substantive meaning (only strategy framing) — concept not material-feasible; do not manufacture claims'] };
+  if (!have.has('cta_function')) return { feasible: false, outline: [], reasons: ['no authorized CTA function — a carousel cannot close'], missing: 'cta' };
+  if (substantiveUnitCount === 0) return { feasible: false, outline: [], reasons: ['no authorized substantive meaning (only strategy framing) — concept not material-feasible; do not manufacture claims'], missing: 'substance' };
 
   // grounded substantive beats from the concept outline, in order
   const grounded: SlideRole[] = [];

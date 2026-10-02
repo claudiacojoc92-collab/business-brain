@@ -274,14 +274,27 @@ export class CarouselService {
     // MATERIAL FEASIBILITY — bind each beat to authorized meaning; contract the outline to grounded beats or
     // reject BEFORE any copy generation (no manufacturing a carousel from thin material).
     const feas = checkFeasibility(concept.slideOutline, snapshot);
-    if (!feas.feasible) { this.deps.log?.({ type: 'carousel_infeasible', detail: feas.reasons.slice(0, 3).join(' | ') }); return { status: 'insufficient' }; }
+    if (!feas.feasible) {
+      this.deps.log?.({ type: 'carousel_infeasible', detail: feas.reasons.slice(0, 3).join(' | ') });
+      // Pre-draft gate (unchanged): instead of a dead "insufficient", name the specific missing evidence the
+      // founder can supply so the surface can ask for it. This only re-surfaces the gate's own verdict.
+      const requests: EvidenceRequest[] = feas.missing === 'cta'
+        ? [{ claim: 'descriptive', ask: 'What do you want people to do after seeing this — book, visit, message, or buy? Name the one next step.' }]
+        : [{ claim: 'descriptive', ask: 'Tell me one concrete thing about your offer — what it is, who it is for, or one result it produced.' }];
+      return { status: 'needs_evidence', requests };
+    }
     concept = { ...concept, slideOutline: feas.outline };
     // CLOSURE FEASIBILITY (pre-draft) — can the planned body causally EARN the authorized CTA? INFEASIBLE ⇒ fail
     // early (no 5 stochastic drafts, no invented bridge, CTA never softened). CONTRACT ⇒ add the smallest bridge
     // beat so the body develops the CTA action before the CTA. This is where a non-proof job that cannot close is
     // caught upstream, instead of exhausting attempts + a doomed CTA-only repair.
     const clo = assessClosureFeasibility(concept.slideOutline, snapshot);
-    if (clo.status === 'infeasible') { this.deps.log?.({ type: 'carousel_closure_infeasible', detail: clo.reason }); return { status: 'insufficient' }; }
+    if (clo.status === 'infeasible') {
+      this.deps.log?.({ type: 'carousel_closure_infeasible', detail: clo.reason });
+      // The body can't earn the CTA from authorized material. Ask for the bridge the founder can supply (what the
+      // next step delivers / how it works) rather than failing closed silently. CTA is never softened; gate intact.
+      return { status: 'needs_evidence', requests: [{ claim: 'descriptive', ask: 'What does someone actually get when they take that next step — a result, or how it works? One concrete line, so the carousel can earn the ask.' }] };
+    }
     if (clo.status === 'contract') { this.deps.log?.({ type: 'carousel_closure_contracted', detail: clo.reason }); concept = { ...concept, slideOutline: clo.outline }; }
     const businessName = await this.deps.businessName(businessId).catch(() => null);
     const system: VisualSystem = { ...visualSystemFor(ctx.brand), footer: businessName };
