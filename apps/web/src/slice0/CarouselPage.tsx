@@ -3,6 +3,7 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import { AppShell } from './AppShell';
 import { isNotFound, LoadError, actionErrorKey } from './errors';
+import { useAddContext } from './AddContextDrawer';
 import {
   getBusiness, generateCarousel, reviseCarousel, tryDifferentAngle, uploadCarouselMedia, fileToDataUrl,
   carouselSlideObjectUrl, downloadCarouselZip, learnFromMaterial,
@@ -30,7 +31,17 @@ export function CarouselPage() {
   const [loadErr, setLoadErr] = useState(false);   // B3 — transient load failure, distinct from a true 404
   const [actionError, setActionError] = useState<string | null>(null); // B1 — a primary action that failed
   const [evidence, setEvidence] = useState('');    // fix 11 — the founder supplies the missing evidence inline
+  const addCtx = useAddContext();                  // Task 1 — the existing business-truth input (text), reused here
+  const regenAfterCtx = useRef(false);
   const started = useRef(false);
+
+  // Task 1b — when the founder adds business truth via the Add Context drawer (opened from the post-draft
+  // insufficient screen), re-run generation so the carousel reflects the new material. This is an honest re-run
+  // (the inputs changed), not the deterministic Retry we removed.
+  useEffect(() => {
+    if (!addCtx.isOpen && regenAfterCtx.current) { regenAfterCtx.current = false; void retry(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addCtx.isOpen]);
 
   async function loadImages(v: CarouselView) {
     if (v.state !== 'ready') return;
@@ -77,6 +88,9 @@ export function CarouselPage() {
   }
   // "Add more source material" returns to the media moment so the founder can supply visuals/assets, then regenerate.
   function addMoreSource() { setView(null); setFiles([]); setPhase('gate'); }
+  // Task 1b — the post-draft failure is about business truth, not photos. Open the real business-truth input
+  // (the Add Context drawer); the effect above re-runs generation once it closes.
+  function addBusinessTruth() { regenAfterCtx.current = true; addCtx.open(); }
 
   // fix 11 — the founder supplies the specific missing evidence as DECLARED business truth (through the SAME
   // synthesis the rest of the product uses), then we re-run generation. The claim-safety kernel is untouched:
@@ -169,9 +183,10 @@ export function CarouselPage() {
           <>
             <h1 className="s0-h1">{t('carousel.insufficient.title')}</h1>
             <p className="s0-lede">{t('carousel.insufficient.body')}</p>
+            {/* Task 1 — the honest message stays; the actions no longer lie. No deterministic Retry (it re-runs the
+                same exhaustion), and "add source" now takes BUSINESS TRUTH (text), not a photo picker. */}
             <div className="s0-strat-actions">
-              <button type="button" className="s0-plan-primary" style={{ maxWidth: 320 }} onClick={retry}>{t('carousel.retry')}</button>
-              <button type="button" className="s0-linkbtn" onClick={addMoreSource}>{t('carousel.addmore')}</button>
+              <button type="button" className="s0-plan-primary" style={{ maxWidth: 360 }} onClick={addBusinessTruth}>{t('carousel.addbusiness')}</button>
             </div>
           </>
         )}
