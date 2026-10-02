@@ -57,6 +57,9 @@ docker-compose.override.yml
 # `.claude/` rule above is narrowed to let a shared .claude/settings.json be tracked)
 .claude/settings.local*.json
 
-# Reel Studio (internal Hypit service): per-job projects and outputs
+# Reel Studio (internal Hypit service): per-job projects and outputs + its ~175M install.
+# node_modules is already covered by the global rule above; listed explicitly here so the whole
+# Hypit install directory can never be accidentally committed from this non-workspace service.
 services/reel-studio/workspace/
 services/reel-studio/.tools/
+services/reel-studio/node_modules/
