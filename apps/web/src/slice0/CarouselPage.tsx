@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import { AppShell } from './AppShell';
-import { isNotFound, LoadError, actionErrorKey } from './errors';
+import { isNotFound, LoadError, actionErrorKey, uploadRejectCode, uploadRejectKey } from './errors';
 import { useAddContext } from './AddContextDrawer';
 import {
   getBusiness, generateCarousel, reviseCarousel, tryDifferentAngle, uploadCarouselMedia, fileToDataUrl,
@@ -28,6 +28,7 @@ export function CarouselPage() {
   const [phase, setPhase] = useState<'gate' | 'working'>('gate');
   const [techError, setTechError] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
+  const [skippedUploads, setSkippedUploads] = useState<{ code: string; name: string; index: number }[]>([]); // per-file upload rejections, surfaced not swallowed
   const [loadErr, setLoadErr] = useState(false);   // B3 — transient load failure, distinct from a true 404
   const [actionError, setActionError] = useState<string | null>(null); // B1 — a primary action that failed
   const [evidence, setEvidence] = useState('');    // fix 11 — the founder supplies the missing evidence inline
@@ -69,7 +70,17 @@ export function CarouselPage() {
     setPhase('working');
     setTechError(false);
     try {
-      for (const f of files.slice(0, 6)) { try { const d = await fileToDataUrl(f); await uploadCarouselMedia(id, d, f.name); } catch { /* skip a bad file */ } }
+      // Per-file: good files go through, bad ones are SKIPPED (a carousel takes files one at a time) — but the
+      // founder is told WHICH were skipped and why, instead of them silently vanishing. Transient/network errors
+      // aren't counted here; they surface through the technical-failure path below.
+      const picked = files.slice(0, 6);
+      const skipped: { code: string; name: string; index: number }[] = [];
+      for (let i = 0; i < picked.length; i++) {
+        const f = picked[i]!;
+        try { const d = await fileToDataUrl(f); await uploadCarouselMedia(id, d, f.name); }
+        catch (e) { const code = uploadRejectCode(e); if (code) skipped.push({ code, name: f.name, index: i + 1 }); }
+      }
+      setSkippedUploads(skipped);
       const v = await generateCarousel(id, handoffId);
       setView(v); await loadImages(v);
     } catch {
@@ -176,6 +187,18 @@ export function CarouselPage() {
       {actionError && <div className="s0-error" role="alert">{actionError}</div>}
       <div className="s0-panel s0-panel-wide">
         <button type="button" className="s0-linkbtn" onClick={() => navigate(`/b/${id}/today`)} style={{ marginBottom: 18 }}>← {t('carousel.back')}</button>
+
+        {/* Per-file upload rejections — the good files went through; these were skipped. Label above, reason below. */}
+        {skippedUploads.length > 0 && (
+          <div className="s0-car-skipped" role="status">
+            {skippedUploads.map((s) => (
+              <div key={s.index} className="s0-car-skipped-item">
+                <div className="s0-plan-band">{s.name ? t('upload.photoLabelNamed', { n: String(s.index), name: s.name }) : t('upload.photoLabel', { n: String(s.index) })}</div>
+                <p className="s0-lede">{t(uploadRejectKey(s.code))}</p>
+              </div>
+            ))}
+          </div>
+        )}
 
         {view?.state === 'unavailable_format' && (<><h1 className="s0-h1">{t('carousel.unavailable.title')}</h1><p className="s0-lede">{t('carousel.unavailable.body', { format: view.requested })}</p></>)}
         {view?.state === 'no_strategy' && (<><h1 className="s0-h1">{t('carousel.nostrategy.title')}</h1><p className="s0-lede">{t('carousel.nostrategy.body')}</p></>)}

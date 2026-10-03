@@ -730,7 +730,8 @@ export function uploadCarouselMedia(businessId: string, dataBase64: string, file
 export interface PhotoOpportunity { opportunityId: string; sufficiency: 'sufficient' | 'sufficient_with_gap' | 'insufficient'; recommendation: string; whyPhotos: string; usingPhotos: number; excludedPhotos: number; missing: string[]; alternativeAvailable: boolean; canCreate: boolean }
 export type PhotoSetView =
   | { state: 'recommended'; photoSetUnderstandingId: string; setSignal: string; opportunity: PhotoOpportunity }
-  | { state: 'no_strategy' } | { state: 'insufficient' } | { state: 'no_images' };
+  | { state: 'no_strategy' } | { state: 'insufficient' } | { state: 'no_images' }
+  | { state: 'rejected'; code: string; imageIndex: number; filename: string | null };
 export function uploadPhotoSet(businessId: string, images: { dataBase64: string; filename?: string }[]): Promise<PhotoSetView> {
   return request(`${CR(businessId)}/photo-set`, { method: 'POST', body: JSON.stringify({ images }) });
 }

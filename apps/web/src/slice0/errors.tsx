@@ -33,6 +33,26 @@ export function actionErrorKey(err: unknown): string {
   return 'common.actionFailed'; // transient
 }
 
+/** The known photo-upload rejection codes → their i18n reason key. The backend returns the CODE (which survives
+ *  prod serialization; only `message` is hidden), and the web maps it to the founder's language. MEDIA_INVALID =
+ *  oversized input, which shares the "too large" reason. */
+const UPLOAD_REJECT_KEY: Record<string, string> = {
+  HEIC_UNSUPPORTED: 'upload.reject.heic',
+  UNSUPPORTED_IMAGE_TYPE: 'upload.reject.type',
+  IMAGE_TOO_LARGE: 'upload.reject.large',
+  MEDIA_INVALID: 'upload.reject.large',
+  IMAGE_UNREADABLE: 'upload.reject.unreadable',
+};
+/** The i18n reason key for a photo-upload rejection code (defaults to the unsupported-type reason). */
+export function uploadRejectKey(code: string): string {
+  return UPLOAD_REJECT_KEY[code] ?? 'upload.reject.type';
+}
+/** A KNOWN upload-rejection code off a thrown error, or null — so transient/network failures are NOT surfaced as
+ *  a per-file reason (they go through the page's own technical-failure path instead). */
+export function uploadRejectCode(err: unknown): string | null {
+  return err instanceof ApiError && err.code in UPLOAD_REJECT_KEY ? err.code : null;
+}
+
 /** True when retrying the SAME action cannot help (deterministic) — so no retry affordance should be shown. */
 export function isDeterministic(err: unknown): boolean {
   return err instanceof ApiError && err.status >= 400 && err.status < 500 && err.status !== 408 && err.status !== 429;

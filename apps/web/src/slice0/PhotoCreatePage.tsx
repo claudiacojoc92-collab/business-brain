@@ -6,8 +6,9 @@ import {
   getBusiness, uploadPhotoSet, photoAlternative, acceptPhotoOpportunity, fileToDataUrl,
   type Business, type PhotoOpportunity,
 } from '../api/client';
+import { uploadRejectKey } from './errors';
 
-type Phase = 'pick' | 'working' | 'recommended' | 'blocked';
+type Phase = 'pick' | 'working' | 'recommended' | 'blocked' | 'rejected';
 
 /** Slice 6.1 — Create from Photos. Upload founder photos → BB recommends ONE strategy-specific angle → accept →
  *  hands off to the frozen Slice-6 carousel (Preview/Revision/Export). No internal ontology is shown. */
@@ -20,6 +21,7 @@ export function PhotoCreatePage() {
   const [files, setFiles] = useState<File[]>([]);
   const [phase, setPhase] = useState<Phase>('pick');
   const [opp, setOpp] = useState<PhotoOpportunity | null>(null);
+  const [rejected, setRejected] = useState<{ code: string; imageIndex: number; filename: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const started = useRef(false);
 
@@ -35,6 +37,7 @@ export function PhotoCreatePage() {
       const images = await Promise.all(files.slice(0, 10).map(async (f) => ({ dataBase64: await fileToDataUrl(f), filename: f.name })));
       const v = await uploadPhotoSet(id, images);
       if (v.state === 'recommended') { setOpp(v.opportunity); setPhase(v.opportunity.canCreate ? 'recommended' : 'blocked'); }
+      else if (v.state === 'rejected') { setRejected({ code: v.code, imageIndex: v.imageIndex, filename: v.filename }); setPhase('rejected'); }
       else setPhase('blocked');
     } catch { setPhase('blocked'); }
   }
@@ -99,6 +102,18 @@ export function PhotoCreatePage() {
             <p className="s0-lede">{opp?.recommendation || t('photo.blocked.body')}</p>
             <div className="s0-strat-actions">
               <button type="button" className="s0-plan-primary" style={{ maxWidth: 320 }} onClick={() => { setPhase('pick'); setFiles([]); setOpp(null); }}>{t('photo.addmore')}</button>
+            </div>
+          </>
+        )}
+
+        {/* One rejected photo fails the whole set (a photo set is a single composed thing). Name WHICH photo —
+            label above, reason below — and let the founder re-pick. */}
+        {phase === 'rejected' && rejected && (
+          <>
+            <div className="s0-plan-band">{rejected.filename ? t('upload.photoLabelNamed', { n: String(rejected.imageIndex), name: rejected.filename }) : t('upload.photoLabel', { n: String(rejected.imageIndex) })}</div>
+            <p className="s0-lede">{t(uploadRejectKey(rejected.code))}</p>
+            <div className="s0-strat-actions">
+              <button type="button" className="s0-plan-primary" style={{ maxWidth: 320 }} onClick={() => { setPhase('pick'); setFiles([]); setRejected(null); }}>{t('photo.add')}</button>
             </div>
           </>
         )}

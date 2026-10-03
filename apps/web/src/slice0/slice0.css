@@ -744,6 +744,13 @@
 .s0-reach-confirm { font-size: 13px; color: var(--s0-ink-2); }
 .s0-reach-del { color: var(--s0-danger); }
 .s0-reach-del:hover { color: var(--s0-danger); }
+
+/* ── Photo-upload rejections (carousel per-file skips) — label above, reason below ── */
+.s0-car-skipped { margin: 0 0 18px; padding: 12px 14px; border: 1px solid var(--s0-line); border-left: 2px solid var(--s0-danger); border-radius: 10px; background: var(--s0-bg-2); }
+.s0-car-skipped-item { padding: 6px 0; }
+.s0-car-skipped-item + .s0-car-skipped-item { border-top: 1px solid var(--s0-line); margin-top: 6px; }
+.s0-car-skipped .s0-plan-band { margin-bottom: 2px; }
+.s0-car-skipped .s0-lede { margin: 0; font-size: 14px; }
 .s0-voice-card .s0-linkbtn { margin-top: 10px; }
 .s0-voice-learned-line { font-size: 15px; line-height: 1.5; color: var(--s0-ink-2); padding: 6px 0; border-bottom: 1px solid var(--s0-line); }
 
