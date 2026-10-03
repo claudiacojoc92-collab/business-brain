@@ -969,7 +969,9 @@ export function getCycleHistory(limit = 5): Promise<CycleHistory> {
 // body even on 4xx, so socialFetch returns the body instead of throwing.
 async function socialFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(options.headers as Record<string, string>) };
+  // Only declare a JSON content-type when there's a body. A body-less POST (e.g. the Meta/Instagram disconnect
+  // calls) that still advertises application/json makes Fastify 500 on the empty body. Mirrors request().
+  const headers: Record<string, string> = { ...(options.body != null ? { 'Content-Type': 'application/json' } : {}), ...(options.headers as Record<string, string>) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   if (res.status === 204) return undefined as T;
