@@ -43,6 +43,10 @@ export function ShootPlanPage(): JSX.Element {
         else setPhase('plan');
       } catch (e) { setError((e as Error).message); setPhase('blocked'); }
     })();
+    // This is the entry bootstrap — it must run once per plan/business, not whenever a render recreates
+    // pollFulfillment (a useCallback) or on navigate's identity. navigate is stable; pollFulfillment is
+    // invoked here but its own identity changing should not re-trigger the whole bootstrap.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planId, businessId]);
 
   const pollFulfillment = useCallback(async () => {

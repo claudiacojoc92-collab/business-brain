@@ -26,6 +26,10 @@ export function BusinessBrainWorkspace({ pollIntervalMs = 1500 }: { pollInterval
     if (!inProgress) return;
     const id = setInterval(() => { void bb.pollOnce(); }, pollIntervalMs);
     return () => clearInterval(id);
+    // The poll should restart only when it starts/stops or the interval changes — the one method it calls,
+    // bb.pollOnce, is already a dep. Depending on the whole `bb` object would tear down and rebuild the
+    // interval on every unrelated change to the context, which is the opposite of bounded polling.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inProgress, pollIntervalMs, bb.pollOnce]);
 
   if (bb.phase === 'loading') {

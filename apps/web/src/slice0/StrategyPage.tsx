@@ -49,6 +49,9 @@ export function StrategyPage() {
     if (!id || started.current) return;
     started.current = true;
     void load(id);
+    // One-shot load, guarded by started.current. load takes id as an argument, so there is no stale
+    // closure over id; listing load (recreated every render) would only fight the guard, never help.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   function applyProposal(p: StrategyResp) {

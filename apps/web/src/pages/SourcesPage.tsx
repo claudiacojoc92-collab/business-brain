@@ -205,7 +205,7 @@ function FacebookCard({ autoConnected }: { autoConnected: boolean }) {
     const { authUrl, error } = await getMetaConnectUrl();
     if (authUrl) window.location.href = authUrl; else setErr(error ?? 'could not start connection');
   };
-  const usePage = async (pageId: string) => {
+  const selectPage = async (pageId: string) => {
     setBusy(true); setErr(null);
     try { const j = await readMetaPage(pageId); setSelected(j); if (!j.ok) setErr(j.error ?? 'could not read page'); }
     catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
@@ -243,7 +243,7 @@ function FacebookCard({ autoConnected }: { autoConnected: boolean }) {
                 <div style={{ ...serif, fontSize: '1rem' }}>{p.name}</div>
                 <div style={muted}>{p.hasInstagram ? 'has a linked Instagram account' : 'no linked Instagram'}</div>
               </div>
-              <button style={btn} onClick={() => void usePage(p.id)} disabled={busy}>Use this Page</button>
+              <button style={btn} onClick={() => void selectPage(p.id)} disabled={busy}>Use this Page</button>
             </div>
           ))}
           <Endpoints list={pages.endpointsCalled} kind="facebook" />
