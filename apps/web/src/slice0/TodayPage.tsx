@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Navigate, useNavigate, useParams, Link } from 'react-router-dom';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import { AppShell } from './AppShell';
 import { useTalk } from './TalkDrawer';
@@ -325,6 +325,14 @@ export function TodayPage() {
                 <button type="button" className="s0-linkbtn" onClick={() => navigate(`${base}/plan`)}>{t('today2.seePlan')} →</button>
               </div>
             ) : null}
+            {/* Persistent way into the collected reach view. Lives on Today (not a nav tab) so a founder who
+                skipped the weekly prompt — and may have nothing saved yet — can still reach it; the page has
+                its own empty state. Quiet secondary link, never a CTA. */}
+            {id ? (
+              <div className="s0-today2-reachlink">
+                <button type="button" className="s0-linkbtn" onClick={() => navigate(`${base}/reach`)}>{t('reach.see')} →</button>
+              </div>
+            ) : null}
             {canReport ? (
               <OutcomeReporter
                 reporting={reporting} onOpen={() => setReporting(true)} onCancel={() => { setReporting(false); setOutcomeText(''); }}
@@ -455,7 +463,8 @@ function WeeklyReachPrompt({ businessId, prompt, t }: { businessId: string; prom
           <button type="button" className="s0-today2-defer" disabled={busy} onClick={skip}>{t('reach.skip')}</button>
         </div>
       )}
-      <div className="s0-reach-seelink"><Link to={`/b/${businessId}/reach`} className="s0-linkbtn">{t('reach.see')} →</Link></div>
+      {/* The way into the collected view is NOT here anymore — it's a persistent link in the Today footer,
+          so it survives a skip (when this whole prompt is gone). */}
     </div>
   );
 }

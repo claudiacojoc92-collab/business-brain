@@ -728,7 +728,6 @@
 .s0-reach-teach-how { font-size: 13px; line-height: 1.5; color: var(--s0-ink-3); margin: 0; }
 .s0-reach-form { margin-top: 10px; }
 .s0-reach-form .s0-blk-input { margin-top: 8px; }
-.s0-reach-seelink { margin-top: 10px; }
 
 .s0-reach-page { max-width: 640px; margin: 0 auto; padding: 8px 0 40px; }
 .s0-reach-page-head { margin-bottom: 20px; }
@@ -1103,6 +1102,8 @@
 .s0-today2-blocked-list { margin: 0; padding: 0; list-style: none; }
 .s0-today2-blocked-item { font-size: 14px; color: var(--s0-ink-2); line-height: 1.5; padding: 7px 0 7px 14px; border-left: 2px solid var(--s0-line); margin-bottom: 8px; }
 .s0-today2-planlink { margin-top: 20px; }
+/* The persistent reach link sits just under the plan link, tighter, so it reads as a quiet secondary tail. */
+.s0-today2-reachlink { margin-top: 6px; }
 /* Part 1 — "other ways to create" (Photos, Reel), subordinate to the strategy-led lead. */
 .s0-create-ways { margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--s0-line); }
 .s0-create-ways-list { display: flex; gap: 12px; flex-wrap: wrap; }
