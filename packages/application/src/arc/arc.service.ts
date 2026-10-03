@@ -233,7 +233,7 @@ export class ArcService {
     return {
       does: first(u?.offer?.summary),
       serves: clean(u?.audience?.addressed).slice(0, 3).join(' · '),
-      standsOut: first(u?.positioning?.summary, clean(u?.messaging?.recurringThemes).join(' · ')),
+      standsOut: first(u?.positioning?.summary),
       tensions,
       confident,
       inferring,
