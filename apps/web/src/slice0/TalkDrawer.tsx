@@ -5,6 +5,7 @@ import {
   startConversation, submitTurn, getCurrentStrategy, getToday, generateCarousel,
   type ConvView,
 } from '../api/client';
+import { actionErrorKey } from './errors';
 
 /**
  * M6 — Talk to BB as a GLOBAL ACTION (not a sixth nav place). A right-side drawer that opens OVER the current
@@ -57,6 +58,7 @@ function TalkDrawer({ onClose }: { onClose: () => void }) {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [loadErr, setLoadErr] = useState(false);
+  const [sendErr, setSendErr] = useState<string | null>(null);
   const contextRef = useRef<string>('');
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -104,12 +106,19 @@ function TalkDrawer({ onClose }: { onClose: () => void }) {
   async function send() {
     const msg = input.trim();
     if (!msg || !businessId || busy) return;
-    setInput(''); setBusy(true);
+    setInput(''); setBusy(true); setSendErr(null);
     // optimistic: show the founder's line immediately
     setView((v) => v ? { ...v, turns: [...v.turns, { id: 'tmp', role: 'founder', content: msg, language: locale, seq: -1, createdAt: '' }] } : v);
-    try { setView(await submitTurn(businessId, msg, contextRef.current || undefined)); }
-    catch { setView((v) => v); }
-    finally { setBusy(false); }
+    try {
+      setView(await submitTurn(businessId, msg, contextRef.current || undefined));
+    } catch (e) {
+      // The send failed. Drop the optimistic turn, give the founder their words back in the box, and SAY it
+      // failed (via the shared actionErrorKey mapping) — never leave the message sitting there as if BB
+      // received it and chose not to answer. Pressing Send again is the retry.
+      setView((v) => v ? { ...v, turns: v.turns.filter((tn) => tn.id !== 'tmp') } : v);
+      setInput(msg);
+      setSendErr(t(actionErrorKey(e)));
+    } finally { setBusy(false); }
   }
 
   const opener = t(`talk.opener.${surface}` as string) || t('talk.opener.other');
@@ -143,10 +152,11 @@ function TalkDrawer({ onClose }: { onClose: () => void }) {
 
         <div className="s0-talk-compose">
           {view && view.turns.filter((tn) => tn.content.trim()).length <= 1 && <p className="s0-talk-opener">{opener}</p>}
+          {sendErr && <p className="s0-talk-senderr" role="alert">{sendErr}</p>}
           <textarea
             className="s0-talk-input" value={input} rows={2}
             placeholder={t('talk.placeholder')} aria-label={t('talk.placeholder')}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => { setInput(e.target.value); if (sendErr) setSendErr(null); }}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }}
           />
           <button type="button" className="s0-talk-send" disabled={busy || !input.trim()} onClick={() => void send()}>{t('talk.send')}</button>

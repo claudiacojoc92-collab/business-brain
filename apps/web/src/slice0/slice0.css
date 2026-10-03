@@ -1210,6 +1210,7 @@
 .s0-talk-bb .s0-talk-msg { border-left: 2px solid var(--s0-clay-2, #7a5233); padding-left: 12px; }
 .s0-talk-thinking { color: var(--s0-ink-3, #8f877a); font-style: italic; }
 .s0-talk-compose { border-top: 1px solid var(--s0-line, #322c25); padding: 14px 16px 16px; background: var(--s0-bg-2, #211e1a); }
+.s0-talk-senderr { color: var(--s0-danger); font-size: 13px; margin: 0 0 8px; }
 .s0-talk-opener { margin: 0 2px 10px; font-size: 13px; color: var(--s0-ink-3, #8f877a); font-style: italic; }
 .s0-talk-input {
   width: 100%; box-sizing: border-box; resize: none; border-radius: 12px;
