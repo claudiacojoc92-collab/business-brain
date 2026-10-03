@@ -66,3 +66,25 @@ later if the file gets long.
   (pick a HEIC photo from the library via the web file input, inspect the uploaded bytes' magic number) before
   deciding whether 2b needs HEIC decoding (libheif-enabled sharp, heavier image + licensing review) or whether
   the reject-with-message path is sufficient.
+
+## Strategy output has no deterministic language gate — ACCEPTED
+
+- **Found:** 2026-10-03, tracing the downstream consumers of the now-bilingual understanding (commit `86ccf75`).
+- **What:** strategy generation is supposed to produce founder-facing prose entirely in one language (the
+  founder's). That guarantee is **prompt-only**: the strategy model
+  (`packages/infrastructure/src/business-intelligence/anthropic-strategy.model.ts`) runs at **temperature 0**
+  with an explicit anti-leak instruction ("write the ENTIRE output in that ONE language … never let
+  other-language content in this prompt leak into your text"), and the understanding evidence is fed as
+  input-only context the model re-expresses — there is no field in the output where evidence is quoted
+  verbatim. The deterministic gate stack (`packages/application/src/strategy/validation.ts`) checks structure,
+  refs, constraints, coherence and claim discipline, but **does not detect language** or scrub a
+  source-language fragment from the prose.
+- **Impact:** none observed. If the model ever carried a short source-language fragment through verbatim
+  (realistically a proper noun, a service name, or a 2–3 word theme — often the *correct* thing to leave
+  untranslated), nothing downstream would catch or scrub it, and the founder would see a foreign phrase inside
+  their-language strategy prose.
+- **Status: ACCEPTED, not scheduled.** A language detector / fragment scrub is not worth building on this
+  evidence — the lifted (source-language) surface reaching strategy is narrow (three themed lists), it is
+  input-only, and temp 0 + the anti-leak instruction is aimed squarely at this case. The value of recording it
+  is that **if a founder ever reports a foreign phrase in their strategy, this turns a mystery into a known
+  limitation** with a known cause and a known (deliberately deferred) fix.
