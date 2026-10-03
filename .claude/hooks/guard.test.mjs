@@ -123,9 +123,11 @@ test('preflight rule has no approval path', () => {
   assert.ok(blocked(bash('docker compose up -d api'), ['deploy', 'delete', 'push']));
 });
 
-test('sub-agents can never commit or push, even when approved', () => {
+test('sub-agents can never commit, push, or deploy, even when approved', () => {
   assert.ok(blocked(bash('git push', { agent_id: 'a1' }), ['push']));
   assert.ok(blocked(bash('git commit -m x', { agent_id: 'a1' }), ['commit']));
+  // deploy grant is the parent's, not the sub-agent's: railway up stays blocked inside a sub-agent
+  assert.ok(blocked(bash('railway up --service web --detach', { agent_id: 'a1' }), ['deploy']));
   assert.equal(decide(bash('rm -r build', { agent_id: 'a1' }), new Set(['delete'])).decision, 'approved');
 });
 

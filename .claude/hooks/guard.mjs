@@ -77,10 +77,10 @@ export function decide(input, approvals = new Set()) {
     if (!hit || (rule.unless && rule.unless.test(subject))) continue;
     if (rule.action === 'gate') {
       const isSubagent = Boolean(input.agent_id);
-      const subagentBlocked = isSubagent && (rule.gate === 'push' || rule.gate === 'commit' || rule.gate === 'rules');
+      const subagentBlocked = isSubagent && (rule.gate === 'push' || rule.gate === 'commit' || rule.gate === 'rules' || rule.gate === 'deploy');
       if (approvals.has(rule.gate) && !subagentBlocked) return { rule, decision: 'approved' };
       const how = subagentBlocked
-        ? 'Sub-agents never commit, push, or edit hook rules. Report back to the main session instead.'
+        ? 'Sub-agents never commit, push, deploy, or edit hook rules. Report back to the main session instead.'
         : `Blocked until the operator types "approve ${rule.gate}" in their next message (${GATES[rule.gate]}). Stop, explain exactly what you want to run and why, and ask.`;
       return { rule, decision: 'deny', message: `[${rule.id}] ${rule.reason} ${how}` };
     }
