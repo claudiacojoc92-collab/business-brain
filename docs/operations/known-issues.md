@@ -35,3 +35,27 @@ shape of the fix. Remove it when it's fixed.
   a day (see the Canggu build plan). Before reusing the **reel** R2 bucket for photos, its object-lifecycle
   rules must be checked — reels are disposable and may have an expiry rule; the founder's photos must persist
   indefinitely, so an expiry rule applying to `carousel/` keys would be a loss and would force a separate bucket.
+
+## Blob keys are always named `.png` regardless of actual format
+
+- **Found:** 2026-10-03, hardening the photo-upload path.
+- **What:** `carouselService.addMedia` writes every uploaded image to a blob key `carousel/media/{id}.png`,
+  even when the stored bytes are JPEG (`packages/application/src/carousel/carousel.service.ts`). The upload path
+  now normalizes format correctly (PNG stays PNG, else JPEG), but the key extension is still hardcoded `.png`.
+- **Impact:** cosmetic **today** — the renderer reads the bytes (not the extension), the uploaded bytes are
+  never served to a browser as a file, and the serve routes set their own `content-type`. So nothing breaks.
+- **Fix (not done):** it must be corrected **if anything ever hands the founder the file itself** (a download, an
+  email attachment, a share link) — then the extension would be a real lie. `addMedia` is a frozen slice, so a
+  deliberate `approve frozen` is needed; not warranted for cosmetics alone.
+
+## HEIC uploads are rejected — verify on a real iPhone before 2b
+
+- **Found:** 2026-10-03, hardening the photo-upload path.
+- **What:** the upload path rejects HEIC/HEIF with a specific localized message ("save as JPEG and try again"),
+  because the renderer can't decode HEIC and sharp's default prebuilt has no libheif.
+- **Open question (NOT a settled fact — must be tested):** iOS Safari's file picker **may already convert HEIC
+  to JPEG on upload**, in which case the bytes arriving at the server are JPEG and the rejection never fires —
+  and libheif would be unnecessary. This is **unverified**; do not build on it. **Test it on a real iPhone**
+  (pick a HEIC photo from the library via the web file input, inspect the uploaded bytes' magic number) before
+  deciding whether 2b needs HEIC decoding (libheif-enabled sharp, heavier image + licensing review) or whether
+  the reject-with-message path is sufficient.

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { ServerDeps } from '../server';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
 import type { CarouselOpportunity } from '@bb/application';
+import { normalizeUpload } from '../media/normalize-image';
 
 interface AuthedUser { sub: string; role: string }
 function founderOf(request: FastifyRequest): string {
@@ -46,17 +47,23 @@ export function registerPhotoLedRoutes(server: FastifyInstance, deps: ServerDeps
     const body = (request.body ?? {}) as { images?: { dataBase64?: string; filename?: string }[] };
     const imgs = (body.images ?? []).slice(0, 10);
     if (!imgs.length) throw new ValidationError('IMAGES_REQUIRED', 'At least one photo is required.');
-    // ingest each into the founder media pool (founder_uploaded), then observe literally
+    // Ingest each into the founder media pool (founder_uploaded), then observe literally. Each image is validated,
+    // EXIF-rotated and re-encoded first. When one image is rejected the WHOLE set fails (predictable) — but the
+    // response names WHICH image (1-based index + filename) and WHY (code), so the founder doesn't have to guess.
     const uploaded: { sourceRefId: string; bytes: Buffer; mime?: string }[] = [];
-    for (const im of imgs) {
+    for (let i = 0; i < imgs.length; i++) {
+      const im = imgs[i]!;
       const raw = (im.dataBase64 ?? '').replace(/^data:[^;]+;base64,/, '').trim();
-      if (!raw) continue;
+      if (!raw) continue; // empty slot — not a real image the founder picked; skip it
       const bytes = Buffer.from(raw, 'base64');
-      if (bytes.length < 8 || bytes.length > 10 * 1024 * 1024) continue;
-      const ref = await deps.carouselService.addMedia(business.id, { bytes, ...(im.filename ? { filename: im.filename } : {}), reuseRight: 'founder_uploaded' });
-      uploaded.push({ sourceRefId: ref.sourceRefId, bytes });
+      // Oversized INPUT: reject before decoding (cheap DoS guard). The helper re-checks the normalized output too.
+      if (bytes.length > 10 * 1024 * 1024) { await reply.status(200).send({ state: 'rejected', code: 'IMAGE_TOO_LARGE', imageIndex: i + 1, filename: im.filename ?? null }); return; }
+      const norm = await normalizeUpload(bytes);
+      if (!norm.ok) { await reply.status(200).send({ state: 'rejected', code: norm.code, imageIndex: i + 1, filename: im.filename ?? null }); return; }
+      const ref = await deps.carouselService.addMedia(business.id, { bytes: norm.bytes, ...(im.filename ? { filename: im.filename } : {}), reuseRight: 'founder_uploaded' });
+      uploaded.push({ sourceRefId: ref.sourceRefId, bytes: norm.bytes });
     }
-    if (!uploaded.length) throw new ValidationError('IMAGES_INVALID', 'No usable images.');
+    if (!uploaded.length) throw new ValidationError('IMAGES_REQUIRED', 'At least one photo is required.');
     const obs = await deps.photoLedService.observePhotoSet(business.id, uploaded);
     if (obs.status !== 'observed') { await reply.status(200).send({ state: 'no_images' }); return; }
     const rec = await deps.photoLedService.recommend(business.id, obs.photoSet.photoSetUnderstandingId);

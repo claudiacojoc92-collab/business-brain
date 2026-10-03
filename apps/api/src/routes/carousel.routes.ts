@@ -3,6 +3,7 @@ import type { ServerDeps } from '../server';
 import { recordFounderEvent } from '../telemetry/founder-events';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
 import type { CarouselAssetVersion, RenderVersion, RevisionScopeKind } from '@bb/application';
+import { normalizeUpload, rejectMessage } from '../media/normalize-image';
 
 interface AuthedUser { sub: string; role: string }
 function founderOf(request: FastifyRequest): string {
@@ -89,10 +90,14 @@ export function registerCarouselRoutes(server: FastifyInstance, deps: ServerDeps
     if (!raw) throw new ValidationError('MEDIA_REQUIRED', 'Image data is required.');
     const bytes = Buffer.from(raw, 'base64');
     if (bytes.length < 8 || bytes.length > 10 * 1024 * 1024) throw new ValidationError('MEDIA_INVALID', 'Image is empty or too large (max 10MB).');
+    // Validate the real type from the bytes (not the declared prefix), apply EXIF rotation, and re-encode by rule
+    // (PNG stays PNG; JPEG/WebP/else → JPEG). The size ceiling is re-checked on the normalized output.
+    const norm = await normalizeUpload(bytes);
+    if (!norm.ok) throw new ValidationError(norm.code, rejectMessage(norm.code));
     const rr = (['owned', 'founder_uploaded', 'licensed'] as const).find((x) => x === body.reuseRight) ?? 'founder_uploaded';
     // a founder marking an upload as their logo becomes a real brand signal (see resolveBrandContext)
     const sourceType = body.kind === 'brand_asset' ? ('brand_asset' as const) : undefined;
-    const ref = await deps.carouselService.addMedia(business.id, { bytes, ...(body.filename ? { filename: body.filename } : {}), reuseRight: rr, ...(sourceType ? { sourceType } : {}) });
+    const ref = await deps.carouselService.addMedia(business.id, { bytes: norm.bytes, ...(body.filename ? { filename: body.filename } : {}), reuseRight: rr, ...(sourceType ? { sourceType } : {}) });
     await reply.status(201).send({ sourceRefId: ref.sourceRefId, reuseRight: ref.reuseRight });
   });
   server.get('/v1/businesses/:id/carousel/media', async (request: FastifyRequest, reply: FastifyReply) => {
