@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { ServerDeps } from '../server';
-import { recordFounderEvent, readReturnSummary, readTodayNote, readLatestOutcomeText } from '../telemetry/founder-events';
+import { recordFounderEvent, readReturnSummary, readTodayNote, readLatestOutcomeText, readWeeklyReachPrompt } from '../telemetry/founder-events';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
 import type { PlanVersion, Priority, Action, ActionOutcome } from '@bb/application';
 
@@ -164,7 +164,10 @@ export function registerPlanRoutes(server: FastifyInstance, deps: ServerDeps): v
     const active = await deps.planService.getActivePlan(business.id);
     const today = await deps.planService.today(business.id);
     if (!active || !today) { await reply.status(200).send({ state: 'none', sinceLastHere, todayNote }); return; }
-    await reply.status(200).send({ state: 'active', ...projectToday(today, active.plan), sinceLastHere, todayNote });
+    // Attribution by asking (V081): the skippable weekly reach prompt, shown only on a real operating business
+    // (one with an active plan). Reflective-only; reset/suppressed weekly via founder_event.
+    const weeklyPrompt = await readWeeklyReachPrompt(deps.db, business.id, founderId);
+    await reply.status(200).send({ state: 'active', ...projectToday(today, active.plan), sinceLastHere, todayNote, weeklyPrompt });
   });
 
   // Mark an action done/deferred/skipped — append-only; applies to the Active plan only.

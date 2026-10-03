@@ -40,6 +40,10 @@ export type FounderEventType =
   | 'talk_turn_submitted'
   | 'baseline_reopened'
   | 'goal_confirmed'         // founder confirmed a reflected-back (or cold-asked) goal → written directly as kind='goal'
+  // Attribution by asking (V081) — the weekly reach prompt on Today. These are the dedup/cadence flags; the
+  // answer CONTENT lives in workspace.reach_report, never here (founder_event stays bounded behavior telemetry).
+  | 'weekly_prompt_answered'  // the founder gave this week's reach answer (resets the prompt until next week)
+  | 'weekly_prompt_dismissed' // the founder skipped this week (suppresses the prompt until next week)
   // Living State — impact evaluator + return loop.
   | 'impact_evaluated'       // a new reality was assessed against the held strategy (carries the verdict)
   | 'outcome_reported'       // a founder reported an outcome of their work
@@ -388,5 +392,77 @@ export async function readTodayNote(db: KyselyDB, businessId: string, accountId:
     return summarizeTodayNote(events, nowIso);
   } catch {
     return null;
+  }
+}
+
+// ── Attribution by asking (V081): the weekly reach prompt's cadence + the published-work window ─────────────
+// The prompt is a skippable weekly question on Today. It never nags twice in a week: answering OR skipping
+// records a founder_event scoped to the current ISO week, and the prompt is gated on neither having happened
+// this week. The FIRST time it appears (the founder has never answered), it also teaches the door-question —
+// without that, the founder has nothing to report and the feature collects nothing. Reflective-only.
+
+/** The current ISO week window [start, end): Monday 00:00 UTC through the next Monday (exclusive). */
+export function isoWeekWindow(nowIso: string): { start: string; end: string } {
+  const d = new Date(nowIso);
+  const dowMon0 = (d.getUTCDay() + 6) % 7; // 0 = Monday … 6 = Sunday
+  const start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - dowMon0));
+  const end = new Date(start.getTime() + 7 * 86_400_000);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+export interface WeeklyReachPrompt {
+  /** whether to show the prompt this week (not yet answered or skipped). */
+  readonly show: boolean;
+  /** true until the founder has EVER answered — then the prompt teaches the door-question. */
+  readonly firstTime: boolean;
+  /** ISO date (Mon) of the window this week's answer would cover. */
+  readonly weekStart: string;
+  /** ISO date (exclusive) one week later. */
+  readonly weekEnd: string;
+}
+
+/** Decide whether the weekly reach prompt shows, and whether to teach the door-question. Best-effort: any
+ *  error yields show=false (Today never fails on this). */
+export async function readWeeklyReachPrompt(
+  db: KyselyDB, businessId: string, accountId: string, nowIso: string = new Date().toISOString(),
+): Promise<WeeklyReachPrompt> {
+  const { start, end } = isoWeekWindow(nowIso);
+  const weekStart = start.slice(0, 10);
+  const weekEnd = end.slice(0, 10);
+  try {
+    const sinceStart = async (type: string): Promise<boolean> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const r: any = await sql`SELECT 1 FROM app.founder_event WHERE business_id=${businessId} AND account_id=${accountId} AND event_type=${type} AND occurred_at >= ${start} LIMIT 1`.execute(db);
+      return (r?.rows?.length ?? 0) > 0;
+    };
+    const [answeredThisWeek, skippedThisWeek, everAnswered] = await Promise.all([
+      sinceStart('weekly_prompt_answered'),
+      sinceStart('weekly_prompt_dismissed'),
+      has(db, businessId, accountId, 'weekly_prompt_answered'),
+    ]);
+    return { show: !(answeredThisWeek || skippedThisWeek), firstTime: !everAnswered, weekStart, weekEnd };
+  } catch {
+    return { show: false, firstTime: false, weekStart, weekEnd };
+  }
+}
+
+/** The work BB published in a window (founder_event refs) — the durable link between a reach answer and what
+ *  was published that week. Reflective breadcrumb only; never a causal claim. Best-effort → [] on error. */
+export async function readPublishedRefsInWindow(
+  db: KyselyDB, businessId: string, accountId: string, startIso: string, endIso: string,
+): Promise<string[]> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r: any = await sql`
+      SELECT id, event_type FROM app.founder_event
+      WHERE business_id=${businessId} AND account_id=${accountId}
+        AND event_type IN ('create_started', 'asset_generated', 'asset_exported', 'strategy_to_asset_completed')
+        AND occurred_at >= ${startIso} AND occurred_at < ${endIso}
+      ORDER BY occurred_at ASC LIMIT 20
+    `.execute(db);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (r?.rows ?? []).map((row: any) => `${String(row.event_type)}:${String(row.id)}`);
+  } catch {
+    return [];
   }
 }

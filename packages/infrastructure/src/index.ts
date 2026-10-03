@@ -72,6 +72,7 @@ export { PgVoiceRepository } from './database/repositories/pg-voice.repository';
 export { PgPlanRepository } from './database/repositories/pg-plan.repository';
 export { PgCarouselRepository } from './database/repositories/pg-carousel.repository';
 export { PgProofRepository } from './database/repositories/pg-proof.repository';
+export { PgReachRepository } from './database/repositories/pg-reach.repository';
 export { PgPhotoLedRepository } from './database/repositories/pg-photoled.repository';
 export { ResvgCarouselRenderer } from './render/resvg-carousel.renderer';
 export { FsBlobStore } from './storage/fs-blob-store';

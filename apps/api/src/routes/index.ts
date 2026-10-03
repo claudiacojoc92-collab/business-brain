@@ -22,6 +22,7 @@ import { registerHomeRoutes } from './home.routes';
 import { registerArcRoutes } from './arc.routes';
 import { registerVoiceRoutes } from './voice.routes';
 import { registerPlanRoutes } from './plan.routes';
+import { registerReachRoutes } from './reach.routes';
 import { registerCarouselRoutes } from './carousel.routes';
 import { registerPhotoLedRoutes } from './photoled.routes';
 import { registerReelRoutes } from './reel.routes';
@@ -64,6 +65,7 @@ export async function registerRoutes(
   // Slice 4 — "BB learned my voice": example-grounded voice calibration (/v1, JWT).
   registerVoiceRoutes(server, deps);
   registerPlanRoutes(server, deps);       // Slice 5
+  registerReachRoutes(server, deps);      // Attribution by asking (V081) — reflective-only weekly reach reports
   registerCarouselRoutes(server, deps);   // Slice 6
   registerPhotoLedRoutes(server, deps);   // Slice 6.1 — Create from Photos
   registerReelRoutes(server, deps);       // Slice 7 V1 — Reel Creation (real MP4)

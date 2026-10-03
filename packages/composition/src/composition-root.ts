@@ -16,6 +16,7 @@ import {
   PgEvidenceRepository,
   PgBusinessEvidenceLinkRepository,
   PgProofRepository,
+  PgReachRepository,
   AnthropicProofModel,
   PgDiscoveredProfileRepository,
   PgUnderstandingSnapshotRepository,
@@ -128,7 +129,7 @@ import { AnthropicEmailModel, AnthropicCorrectionReflectionModel } from '@bb/inf
 import { AnthropicCarouselModel } from '@bb/infrastructure';
 import { AnthropicObservationModel, AnthropicOpportunityModel } from '@bb/infrastructure';
 import { AnthropicVideoObservationModel, AnthropicReelOpportunityModel } from '@bb/infrastructure';
-import { ReelService, ReelShootService } from '@bb/application';
+import { ReelService, ReelShootService, ReachService } from '@bb/application';
 import { PgReelShootRepository } from '@bb/infrastructure';
 import { AnthropicConceptPlanModel } from '@bb/infrastructure';
 
@@ -161,6 +162,8 @@ export interface CompositionRoot {
   reelRepo: import('@bb/application').IReelRepository;
   reelShootService: ReelShootService;
   reelShootRepo: import('@bb/application').IReelShootRepository;
+  // Attribution by asking (V081) — reflective-only. HARD-WALLED from asset authority (see WALL-END below).
+  reachService: ReachService;
 }
 
 /**
@@ -492,6 +495,9 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     log: (e) => console.error('[arc]', JSON.stringify(e)),
   });
 
+  // WALL-START:asset-authority — from here to WALL-END is the claim/asset-authority region: where
+  // `licensedPropositions` are assembled and every publishing asset service is constructed. Reflective-only
+  // founder data (V081) must NEVER be referenced in this region (enforced by the asset-authority wall test).
   // ── Slice 6: carousel (CreateHandoff → governed asset-level copy → deterministic render → export) ──
   const carouselRepo = new PgCarouselRepository(db);
   // Part 1 — proof extraction: documented proof on ingested sources → licensable proofFacts (durable provenance
@@ -669,6 +675,12 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     log: (e) => console.error('[reel-shoot]', JSON.stringify(e)),
   });
 
+  // WALL-END:asset-authority — everything ABOVE is the claim/asset-authority region: where
+  // `licensedPropositions` are assembled and every asset service (carousel / reel / voice / photo-led) is
+  // constructed. Reflective-only founder data (V081) is wired ONLY BELOW this line and must never appear
+  // above it. The guard is reach-wall.test.ts; do not remove this marker.
+  const reachService = new ReachService({ repo: new PgReachRepository(db) });
+
   return {
     commandBus, queryBus, jwtService, passwordService, internalBriefRepo,
     businessService, founderAccountService,
@@ -677,5 +689,6 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     photoLedService, photoLedRepo,
     reelService, reelObjectStore, reelRepo,
     reelShootService, reelShootRepo,
+    reachService,
   };
 }

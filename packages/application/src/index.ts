@@ -54,6 +54,9 @@ export * from './business-understanding/index';
 export * from './conversation/index';
 export * from './proof/index';
 
+// Attribution by asking (V081) — reflective-only weekly reach reports. HARD-WALLED from asset authority.
+export * from './reach/index';
+
 // Slice 3 — "BB gave me a real strategy": Strategy Candidate → Proposal → Current
 export * from './strategy/index';
 

@@ -18,6 +18,7 @@ import { StrategyPage } from './slice0/StrategyPage';
 import { VoicePage } from './slice0/VoicePage';
 import { PlanPage } from './slice0/PlanPage';
 import { TodayPage } from './slice0/TodayPage';
+import { ReachReportsPage } from './slice0/ReachReportsPage';
 import { CarouselPage } from './slice0/CarouselPage';
 import { PhotoCreatePage } from './slice0/PhotoCreatePage';
 import { ReelCreatePage } from './slice0/ReelCreatePage';
@@ -111,6 +112,7 @@ export function App() {
             <Route path="/b/:id/voice" element={<RequireSession><VoicePage /></RequireSession>} />
             <Route path="/b/:id/plan" element={<RequireSession><PlanPage /></RequireSession>} />
             <Route path="/b/:id/today" element={<RequireSession><TodayPage /></RequireSession>} />
+            <Route path="/b/:id/reach" element={<RequireSession><ReachReportsPage /></RequireSession>} />
             <Route path="/b/:id/create/:handoffId" element={<RequireSession><CarouselPage /></RequireSession>} />
             <Route path="/b/:id/photos" element={<RequireSession><PhotoCreatePage /></RequireSession>} />
 

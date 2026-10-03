@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, Link } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import { AppShell } from './AppShell';
 import { useTalk } from './TalkDrawer';
@@ -8,8 +8,9 @@ import { VerdictSurface } from './VerdictSurface';
 import {
   getBusiness, getToday, getPlanState, proposePlan, adoptPlan, getCurrentStrategy,
   applyActionOutcome, createFromAction, resolveActionState, submitCorrection, evaluateImpact,
+  submitReachReport, skipReachReport,
   type Business, type TodayResp, type TodayBlocked, type TodayBlockedMove, type PlanActiveResp, type StrategyResp,
-  type ImpactResult, type ReturnSummary,
+  type ImpactResult, type ReturnSummary, type WeeklyReach,
 } from '../api/client';
 
 /**
@@ -237,6 +238,9 @@ export function TodayPage() {
             {today?.todayNote ? <TodayNoteLine note={today.todayNote} t={t} /> : null}
             {/* Persistent operating constraints Today is holding (surfaced from founder_state). */}
             {(today?.constraints ?? []).length > 0 ? <ConstraintsLine constraints={today!.constraints!} t={t} /> : null}
+            {/* Attribution by asking (V081): the skippable weekly reach prompt. First time, it teaches the
+                door-question. Reflective-only — BB only ever shows the founder their own words back. */}
+            {today?.weeklyPrompt?.show && id ? <WeeklyReachPrompt businessId={id} prompt={today.weeklyPrompt} t={t} /> : null}
         {stage === 'no_strategy' ? (
           <Empty from={t('today2.today')} lead={t('today2.needStrategy')} cta={t('today2.toStrategy')} onCta={() => navigate(`${base}/strategy`)} />
         ) : stage === 'shaping' ? (
@@ -389,6 +393,69 @@ function OutcomeReporter(props: {
         <button type="button" className="s0-btn" disabled={busy || !text.trim()} onClick={props.onSubmit}>{busy ? t('today2.working') : t('today2.reportSubmit')}</button>
         <button type="button" className="s0-today2-defer" disabled={busy} onClick={props.onCancel}>{t('today2.blk.cancel')}</button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The weekly reach prompt — attribution by asking (V081). Skippable, non-nagging (the backend resets it per
+ * week). The FIRST time it appears, it teaches the one door-question the founder should ask every new person,
+ * and why — without that, there is nothing to report. Reflective-only: the founder's own words, never a claim.
+ */
+function WeeklyReachPrompt({ businessId, prompt, t }: { businessId: string; prompt: WeeklyReach; t: Tr }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const [count, setCount] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [gone, setGone] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  if (gone) return null;
+
+  const skip = async () => {
+    setBusy(true); setErr(null);
+    try { await skipReachReport(businessId); setGone(true); }
+    catch (e) { setErr(t(actionErrorKey(e))); }
+    finally { setBusy(false); }
+  };
+  const submit = async () => {
+    if (!text.trim()) return;
+    setBusy(true); setErr(null);
+    try {
+      const n = count.trim() ? Number(count.trim()) : null;
+      await submitReachReport(businessId, { text: text.trim(), newPeople: Number.isFinite(n as number) ? (n as number) : null });
+      setGone(true);
+    } catch (e) { setErr(t(actionErrorKey(e))); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="s0-reach" role="region" aria-label={t('reach.k')}>
+      <div className="s0-reach-k">{t('reach.k')}</div>
+      <p className="s0-reach-q">{t('reach.q')}</p>
+      {prompt.firstTime ? (
+        <div className="s0-reach-teach">
+          <p className="s0-reach-teach-why">{t('reach.teachWhy')}</p>
+          <p className="s0-reach-script">“{t('reach.script')}”</p>
+          <p className="s0-reach-teach-how">{t('reach.teachHow')}</p>
+        </div>
+      ) : null}
+      {err ? <div className="s0-error" role="alert">{err}</div> : null}
+      {open ? (
+        <div className="s0-reach-form">
+          <input className="s0-blk-input" inputMode="numeric" placeholder={t('reach.countPh')} value={count} onChange={(e) => setCount(e.target.value)} disabled={busy} />
+          <textarea className="s0-blk-input" rows={3} placeholder={t('reach.textPh')} value={text} onChange={(e) => setText(e.target.value)} disabled={busy} autoFocus />
+          <div className="s0-today2-actions">
+            <button type="button" className="s0-btn" disabled={busy || !text.trim()} onClick={submit}>{busy ? t('today2.working') : t('reach.save')}</button>
+            <button type="button" className="s0-today2-defer" disabled={busy} onClick={() => { setOpen(false); setText(''); setCount(''); }}>{t('today2.blk.cancel')}</button>
+          </div>
+        </div>
+      ) : (
+        <div className="s0-today2-actions">
+          <button type="button" className="s0-btn" disabled={busy} onClick={() => setOpen(true)}>{t('reach.answer')}</button>
+          <button type="button" className="s0-today2-defer" disabled={busy} onClick={skip}>{t('reach.skip')}</button>
+        </div>
+      )}
+      <div className="s0-reach-seelink"><Link to={`/b/${businessId}/reach`} className="s0-linkbtn">{t('reach.see')} →</Link></div>
     </div>
   );
 }

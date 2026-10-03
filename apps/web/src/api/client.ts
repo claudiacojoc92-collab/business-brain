@@ -41,8 +41,11 @@ async function request<T>(
   options: RequestInit = {},
 ): Promise<T> {
   const token = getToken();
+  // Only declare a JSON content-type when we actually send a body. A bodyless request (e.g. DELETE) that still
+  // advertises application/json makes Fastify try to parse an empty JSON body and 500 — so omit it when there's
+  // no body. GET/DELETE carry no body; POST/PATCH in this client always pass one.
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(options.body != null ? { 'Content-Type': 'application/json' } : {}),
     ...(options.headers as Record<string, string>),
   };
   if (token) {
@@ -619,6 +622,13 @@ export interface TodayBlockedMove {
   material?: string | null;                     // missing_material → the required material
   constraint?: string | null;                   // operating_constraint → the founder-authored constraint text
 }
+/** Attribution by asking (V081): the skippable weekly reach prompt on Today. Reflective-only. */
+export interface WeeklyReach {
+  show: boolean;
+  firstTime: boolean;   // the founder has never answered → teach the door-question
+  weekStart: string;
+  weekEnd: string;
+}
 export interface TodayResp {
   state: 'active' | 'none';
   ready?: TodayAction[];
@@ -627,6 +637,17 @@ export interface TodayResp {
   constraints?: string[];
   sinceLastHere?: ReturnSummary;
   todayNote?: TodayNote;
+  weeklyPrompt?: WeeklyReach;
+}
+/** One collected weekly reach report — the founder's own words, shown back to them to review/correct/delete. */
+export interface ReachReportView {
+  id: string;
+  weekStart: string;
+  weekEnd: string;
+  newPeopleCount: number | null;
+  text: string;
+  channelHint: string | null;
+  reportedAt: string;
 }
 export type PlanOutcome = 'done' | 'deferred' | 'skipped';
 const PL = (b: string) => `v1/businesses/${encodeURIComponent(b)}/plan`;
@@ -654,6 +675,23 @@ export function applyActionOutcome(businessId: string, actionId: string, outcome
  */
 export function resolveActionState(businessId: string, actionId: string, kind: 'resource' | 'constraint' | 'decision', statement: string): Promise<TodayResp> {
   return request<TodayResp>(`${PL(businessId)}/action/${encodeURIComponent(actionId)}/resolve`, { method: 'POST', body: JSON.stringify({ kind, statement }) });
+}
+// ── Attribution by asking (V081) — the founder's weekly reach reports. Reflective-only; no asset path. ──
+const RCH = (b: string) => `v1/businesses/${encodeURIComponent(b)}/reach`;
+export function listReachReports(businessId: string): Promise<{ reports: ReachReportView[] }> {
+  return request(`${RCH(businessId)}`);
+}
+export function submitReachReport(businessId: string, input: { text: string; newPeople?: number | null; channelHint?: string }): Promise<ReachReportView> {
+  return request(`${RCH(businessId)}`, { method: 'POST', body: JSON.stringify(input) });
+}
+export function skipReachReport(businessId: string): Promise<{ ok: true }> {
+  return request(`${RCH(businessId)}/skip`, { method: 'POST', body: '{}' });
+}
+export function correctReachReport(businessId: string, id: string, patch: { text?: string; newPeople?: number | null; channelHint?: string }): Promise<ReachReportView> {
+  return request(`${RCH(businessId)}/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) });
+}
+export function deleteReachReport(businessId: string, id: string): Promise<{ ok: true }> {
+  return request(`${RCH(businessId)}/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 export function createFromAction(businessId: string, actionId: string): Promise<{ state: 'ready_for_create'; objective: string; note: string; createHandoffId: string }> {
   return request(`${PL(businessId)}/action/${encodeURIComponent(actionId)}/create`, { method: 'POST', body: '{}' });

@@ -20,6 +20,7 @@ import type {
   PhotoLedService,
   ReelService,
   ReelShootService,
+  ReachService,
   IObjectStore,
   IReelRepository,
   IReelShootRepository,
@@ -62,6 +63,7 @@ export interface ServerDeps {
   reelQueue?: QueueRegistry;
   reelShootService?: ReelShootService;
   reelShootRepo?: IReelShootRepository;
+  reachService: ReachService;
 }
 
 /**
