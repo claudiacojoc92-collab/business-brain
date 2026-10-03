@@ -82,3 +82,23 @@ These steps exist in conversation only. They are **not** written down, and they 
 before they are built. Nothing about them is recorded in this document or inferable from the codebase on
 purpose — a fabricated step is worse than an empty one. Do not fill this section with plausible-sounding
 placeholders; transcribe the real steps from the operator when they are stated.
+
+## Changes outside the step sequence
+
+Work that belongs to no step, recorded so it isn't lost.
+
+- **Generated-content language follows the founder** (commit `86ccf75`, 2026-10-03). The understanding model
+  now writes the prose BB *composes* for the founder in the **founder's language** (`account.interfaceLocale`)
+  and keeps the items BB *lifts* from the source in the source language, with proper nouns preserved in both
+  halves. It previously tied the whole output to the source material's language. **Affects new ingests only**
+  (persisted understandings are immutable). **Committed but NOT deployed.** Important caveat: the tests prove
+  the **prompt contains the right instructions**, not that the model obeys them — this is **unverified against
+  a live model** until a real business is re-ingested.
+
+## Open product questions
+
+Things raised but not yet specified. Record them verbatim; do not interpret, propose, or infer what was meant
+— that has to be defined before anything is built from it.
+
+- **2026-10-03 — "BB trebuie să aibă o structură coerentă."** (*BB needs a coherent structure.*) Unspecified:
+  what "coherent" means here has not been defined. It must be defined before anything is built from it.
