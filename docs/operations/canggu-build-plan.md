@@ -14,6 +14,9 @@ How we have actually been working. They hold for every step.
 - **Full test suite green before any commit.**
 - **A step isn't done until it's verified live against real data.**
 - **Pre-existing bugs found along the way get their own commit**, never folded into the feature commit.
+- **Verify deployed configuration against the running environment, not the repo.** The repo did not show the
+  Railway `/data` volume, and a repo-only read produced a false "blobs are ephemeral" conclusion (see 2a).
+  Check the running environment (Railway variables, volumes) before building on an assumption about prod.
 
 ## Step 1 — Attribution by asking at the door
 
@@ -36,25 +39,24 @@ How we have actually been working. They hold for every step.
 ## Step 2 — Photos from the founder's own phone
 
 **Status: not started.** Reframed 2026-10-03 after investigation; the original "camera roll" framing turned
-out not to be buildable as imagined.
+out not to be buildable as imagined. Durable storage (2a) turned out to be **already met**, so **step 2 is
+2b only**.
 
-### 2a — Durable photo storage
+### 2a — Durable photo storage — ALREADY MET, not a precondition
 
-**MUST ship before any photo feature reaches a user.**
+Resolved 2026-10-03 by inspecting the running environment — it was never a bug fix.
 
-- Today: carousel and photo-set bytes go to `FsBlobStore` at `/tmp/bb-carousel-blobs`. `CAROUSEL_BLOB_DIR`
-  is set in no committed config, no persistent volume exists in any committed manifest, and R2 is wired for
-  reels only.
-- Consequence: uploaded photos are lost on every restart or redeploy, silently — the DB rows survive and
-  point at nothing.
-- Latent, not yet triggered: prod has no carousel history, so no founder has lost anything yet. It bites the
-  first real user.
-- **Decided 2026-10-03:** move carousel/photo blobs to R2, behind the existing `IBlobStore` port, reusing the
-  R2 setup already proven in prod for reels. Chosen over a Railway persistent volume because a volume pins the
-  api to a single replica, which conflicts with the horizontal scaling the repo's `hpa.yaml` already
-  anticipates — and because we would end up building the R2 path anyway, plus a migration.
-- Open, non-blocking: whether Railway's dashboard currently sets `CAROUSEL_BLOB_DIR` to a mounted volume.
-  Nothing in the repo does.
+- Prod has a Railway volume, `api-volume`, mounted at `/data`, and `CAROUSEL_BLOB_DIR=/data/bb-carousel-blobs`
+  points at it. Carousel and photo blobs persist across restarts and redeploys today.
+- The earlier claim that blobs are "lost on every restart or redeploy" was **wrong**. It was read from the
+  repo, which does not reflect the deployed configuration — the repo defines no volume and sets no
+  `CAROUSEL_BLOB_DIR`, but Railway's dashboard does both. Recorded here rather than quietly deleted: a plan
+  that erases its own mistakes is worth less than one that keeps them.
+- `R2_BUCKET` is not set on the api service. R2 is not in the api's path at all today.
+- Durable storage is therefore **not a precondition for step 2** — it is already met. There is no R2 decision
+  to make here; that line was removed.
+- The volume does carry two non-urgent consequences — a single-replica scaling limit and no backup story of
+  its own — parked in [known-issues.md](./known-issues.md), not a blocker for step 2.
 
 ### 2b — Photos into the product
 
