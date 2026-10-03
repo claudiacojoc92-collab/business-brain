@@ -10,6 +10,7 @@ import {
   LearnBusinessService,
   type LearnBusinessDeps,
   type SynthesisOutput,
+  type UnderstandingModelInput,
   type WebsiteIngestionResult,
   type DiscoveredProfileInput,
   type DiscoveredProfile,
@@ -56,10 +57,11 @@ function makeDeps(over: {
   ingestion?: WebsiteIngestionResult;
   synth?: SynthesisOutput;
   discovered?: DiscoveredProfileInput[];
-}): { deps: LearnBusinessDeps; bindCalls: string[][]; savedUnderstanding: SaveUnderstandingInput[]; synthCalls: number } {
+}): { deps: LearnBusinessDeps; bindCalls: string[][]; savedUnderstanding: SaveUnderstandingInput[]; synthCalls: number; synthInputs: UnderstandingModelInput[] } {
   const fragments = over.fragments ?? [pageFrag('https://acme.com/', 'Custom builds for teams. Contact us.')];
   const bindCalls: string[][] = [];
   const savedUnderstanding: SaveUnderstandingInput[] = [];
+  const synthInputs: UnderstandingModelInput[] = [];
   const ledgerObs: NormalizedObservation[] = [];
   const boundSet = new Set<string>();
   const profileStore: DiscoveredProfile[] = [];
@@ -77,7 +79,7 @@ function makeDeps(over: {
     evidenceRepo,
     ingestion: { ingest: async () => over.ingestion ?? { state: 'synced', url: 'https://acme.com', pagesRead: fragments.length, fragmentsStored: fragments.length, gaps: [] } },
     discovery: { discover: async () => over.discovered ?? [] },
-    model: { synthesize: async () => { synthCalls += 1; return over.synth ?? GROUNDED_SYNTH; } },
+    model: { synthesize: async (inp: UnderstandingModelInput) => { synthCalls += 1; synthInputs.push(inp); return over.synth ?? GROUNDED_SYNTH; } },
     links: {
       bind: async (_b, links) => {
         bindCalls.push(links.map((l) => l.fragmentId));
@@ -118,7 +120,7 @@ function makeDeps(over: {
     },
     clock: { now: () => '1970-01-01T00:00:00.000Z' },
   };
-  return { deps, bindCalls, savedUnderstanding, synthCalls };
+  return { deps, bindCalls, savedUnderstanding, synthCalls, synthInputs };
 }
 
 const P = { businessId: 'B', founderId: 'F', businessName: 'Acme', url: 'https://acme.com', interfaceLanguage: 'en' };
@@ -132,6 +134,15 @@ describe('LearnBusinessService', () => {
     expect(r.aha.findings).toHaveLength(1);
     expect(bindCalls[0]).toEqual(['frag-https://acme.com/']); // bound the immutable fragment (by id)
     expect(savedUnderstanding).toHaveLength(1);
+  });
+
+  // The founder's language (account.interfaceLocale) must reach the synthesis model as interfaceLanguage — it
+  // drives the composed/founder-facing half of the understanding, independent of the source material's language.
+  it('threads the founder interfaceLanguage through to the synthesis model', async () => {
+    const { deps, synthInputs } = makeDeps({});
+    await new LearnBusinessService(deps).learn({ ...P, interfaceLanguage: 'ro' });
+    expect(synthInputs).toHaveLength(1);
+    expect(synthInputs[0]?.interfaceLanguage).toBe('ro');
   });
 
   it('unreachable site → failed, synthesis never called', async () => {

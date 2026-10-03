@@ -31,7 +31,7 @@ function buildSourcesBlock(observations: PageObservation[]): string {
     .join('\n\n');
 }
 
-function systemPrompt(lang: string): string {
+export function systemPrompt(lang: string): string {
   const langName = LANG_NAME[lang] ?? 'English';
   return [
     'You are the analyst inside Business Brain. You read a business\'s SOURCE material and produce',
@@ -49,8 +49,12 @@ function systemPrompt(lang: string): string {
     'You will receive labelled blocks. Cite evidence ONLY by the exact `ref` labels given.',
     'Never cite a ref that was not provided.',
     '',
-    `LANGUAGE — write ALL founder-facing prose (summaries, findings, implications) in the SAME language as the SOURCE material below (the website text and any founder-supplied blocks), whatever it is (an English site→English, Romanian→Romanian, Italian→Italian). Write the ENTIRE understanding — every field and every sentence — in that ONE language; NEVER mix languages within the output. Fall back to ${langName} only if the source language is genuinely unclear. Keep the`,
-    'business name and product/brand terms in their original language.',
+    `LANGUAGE — two halves, each internally consistent. The FOUNDER'S LANGUAGE is ${langName} (the language they read the app in). The dividing axis is PROSE YOU COMPOSE vs ITEMS YOU LIFT.`,
+    `(a) PROSE YOU COMPOSE — your own sentences, written FOR the founder, in whatever section they appear: offer.summary, positioning.summary, offer.unclear, positioning.implied, audience.appearsTargeted, audience.unknown, understanding.unknowns, contradictions[].tension, and every aha.findings[].finding and aha.findings[].implication. Write ALL of these in ${langName}, whatever language the site is in.`,
+    '(b) ITEMS YOU LIFT — material taken from the source so the founder recognises it on their own site: offer.explicit, positioning.evidenceBacked, audience.addressed, messaging.recurringThemes, acquisition.visiblePaths, and contradictions[].statementA / contradictions[].statementB. Keep these in the LANGUAGE OF THE SOURCE they come from.',
+    `Business, brand, product and service names — and any specific page or service you cite — stay in their ORIGINAL language in BOTH halves. A ${langName} summary or tension still names "ghișeu unic" / "Atelier Automasaj" exactly as the site writes it.`,
+    `MIXED-LANGUAGE SOURCE — the blocks may be in different languages (e.g. a Romanian website plus English founder-supplied answers). This does NOT change the rule. A lifted item keeps the language of the block it came from; when you compose prose drawing across blocks of different languages, write it in ${langName} and keep the foreign terms verbatim. Half (a) is ALWAYS ${langName}, regardless of the source mix.`,
+    `NO DRIFT within each half: every lifted item is one consistent source language; every composed field is entirely ${langName}. Never mix languages inside a single field except for the preserved proper nouns above.`,
     '',
     'Return ONLY valid JSON (no markdown, no commentary) with EXACTLY this shape:',
     '{',
@@ -163,7 +167,7 @@ export class AnthropicUnderstandingModel implements IUnderstandingModelPort {
       // Enough headroom for a full governed-understanding JSON over MANY sources (a founder can pour in a whole
       // site + several brochures) — 4096 truncated it mid-array → malformed JSON.
       max_tokens: 8192,
-      temperature: 0, // deterministic → one language throughout, no mid-response drift
+      temperature: 0, // deterministic → one language PER HALF (composed = founder, lifted = source); no drift within a field
       system: systemPrompt(input.interfaceLanguage),
       messages: [{ role: 'user', content: user }],
     });
