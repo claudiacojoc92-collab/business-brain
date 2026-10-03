@@ -78,7 +78,7 @@ export function ConversationPage() {
     } catch (e) {
       if (isNotFound(e)) setBusiness(null); else setLoadErr(true);
     }
-  }, [id]);
+  }, [id, refreshMode]);
 
   useEffect(() => {
     if (!id || started.current) return;
