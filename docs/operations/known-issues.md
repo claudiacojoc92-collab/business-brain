@@ -2,10 +2,17 @@
 
 Product issues we've found and consciously parked — real, not yet scheduled. Add one when you find a gap you're
 deliberately not fixing now, so it isn't rediscovered from scratch. Each entry: what, where, impact, and the
-shape of the fix. Remove it when it's fixed.
+shape of the fix. When one is fixed, mark it **RESOLVED** in place with the fix and the commit — a list that
+shows what was found *and* what was done is worth more than a list of only open items. Prune the resolved ones
+later if the file gets long.
 
-## Reach collected view is discoverable only from the weekly prompt
+## ✅ RESOLVED — Reach collected view was discoverable only from the weekly prompt
 
+- **Resolved:** 2026-10-03, commit `c6d2d8f`. The link into the collected view is now a persistent quiet link
+  in the Today footer (`apps/web/src/slice0/TodayPage.tsx`), under "see the 30-day plan", rendered in every
+  active stage and gated only on the business id — so it survives a skip (the page carries its own empty state).
+  No new nav tab (a sixth phone tab was rejected as too much permanent space for a once-a-week page) and no new
+  strings (reuses `reach.see`). The copy inside the weekly prompt was removed so it isn't shown twice.
 - **Found:** 2026-10-03, during the attribution-by-asking (V081) live walkthrough.
 - **What:** The reach collected view, "What you've told me" at `/b/:id/reach`
   (`apps/web/src/slice0/ReachReportsPage.tsx`), is linked from exactly one place — the `See what you've told me →`
@@ -15,8 +22,8 @@ shape of the fix. Remove it when it's fixed.
   reappears next week. So a founder who skips can review / correct / delete their collected reports only by typing
   the URL until then. Low severity (the data is safe and the view returns next week), but it undercuts the
   feature's "your report, your data — correct or delete anything" promise.
-- **Fix (not done):** give `/b/:id/reach` a persistent entry point independent of the prompt's visibility — a nav
-  item, or a small always-present link somewhere on Today / Business. No backend change needed.
+- **Fix (done):** gave `/b/:id/reach` a persistent entry point independent of the prompt's visibility — the
+  always-present Today-footer link described under **Resolved** above. No backend change needed.
 
 ## Carousel/photo blobs sit on a single Railway volume
 
