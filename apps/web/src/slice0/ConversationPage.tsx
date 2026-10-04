@@ -4,7 +4,7 @@ import { useLocale } from '../i18n/LocaleContext';
 import { AppShell } from './AppShell';
 import { VerdictSurface } from './VerdictSurface';
 import { MirrorView } from './MirrorView';
-import { isNotFound, LoadError } from './errors';
+import { isNotFound, LoadError, actionErrorKey } from './errors';
 import {
   getBusiness,
   startConversation,
@@ -126,8 +126,11 @@ export function ConversationPage() {
     const answers = turns.filter((tn) => tn.role === 'founder').map((tn) => tn.content).join('\n').trim();
     if (!answers) { navigate(`/b/${id}/strategy`); return; }
     setActionError(null);
+    // On failure, DON'T bounce to Strategy — that silently drops the assessment the founder asked for. Keep them
+    // here, say why (busy vs broke, via actionErrorKey), and leave the Mirror's confirm button up so they retry.
+    // (The success and legit "nothing to assess" navigations above are untouched.)
     try { setVerdict(await evaluateImpact(id, 'baseline_refresh', answers)); }
-    catch { navigate(`/b/${id}/strategy`); }
+    catch (e) { setActionError(t(actionErrorKey(e))); }
   }
 
   if (loadErr) return <LoadError onRetry={() => { if (id) void load(); }} />;

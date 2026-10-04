@@ -96,10 +96,12 @@ rethrows after its own retries, never wrapping in `LLMError`) all fall through t
    planning is only written on success). *Founder sees:* types the cycle-close outcome, hits a generic fail,
    textarea gone, reload wipes it. *Work lost:* **typed reflection.** Recurring monthly loop.
 
-4. **Baseline refresh silently drops the verdict and navigates away.**
-   `apps/web/src/slice0/ConversationPage.tsx:129-130` — `catch { navigate('/strategy') }`. *Founder sees:*
-   asked for an impact assessment; on failure silently bounced to Strategy with no message.
-   *Work lost:* none (answers persisted earlier), but the requested action disappears.
+4. **Baseline refresh silently drops the verdict and navigates away.** ✅ **FIXED 2026-10-04.** `confirmBaseline`'s
+   failure `catch` no longer navigates to Strategy; it surfaces the reason via `actionErrorKey` (busy-vs-broke
+   wording) and keeps the founder on the page with the Mirror's confirm button up, so they can retry the
+   assessment. The success path and the legit "not a refresh / nothing to assess" navigations (lines 125, 127) are
+   untouched. Original finding: `apps/web/src/slice0/ConversationPage.tsx:129-130` — `catch { navigate('/strategy') }`;
+   the founder asked for an impact assessment and on failure was silently bounced to Strategy with no message.
 
 5. **Create reads as "you have nothing" when it actually failed to load.** ✅ **FIXED 2026-10-04.** `load()` now
    promotes ANY rejection of `getToday` / `getCurrentStrategy` to the existing `loadErr` path (a real error with a
