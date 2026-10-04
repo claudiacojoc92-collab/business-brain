@@ -25,6 +25,11 @@ export function isNotFound(err: unknown): boolean {
  */
 export function actionErrorKey(err: unknown): string {
   if (err instanceof ApiError) {
+    // Read the LLM-provider code FIRST (it rides on a 500, so the status checks below would miss it): the API
+    // now distinguishes a busy provider from a genuine our-side break. Collapse to two founder messages — is a
+    // retry worth it or not. Every other code falls through to the unchanged status logic below.
+    const model = MODEL_ERROR_KEY[err.code];
+    if (model) return model;
     if (err.status === 409) return 'action.stale';       // superseded / changed under the founder
     if (err.status === 403) return 'action.forbidden';   // no access to this action
     if (err.status === 422) return 'action.rejected';    // fail-closed (e.g. claim-safety) — input must change
@@ -32,6 +37,17 @@ export function actionErrorKey(err: unknown): string {
   }
   return 'common.actionFailed'; // transient
 }
+
+/** LLM-provider codes (from the API error-handler) → one of two founder messages: "busy, worth a retry" vs
+ *  "broke on our side, a retry won't help". Any code NOT here keeps the status-based handling above. */
+const MODEL_ERROR_KEY: Record<string, string> = {
+  MODEL_RATE_LIMITED: 'action.busy',
+  MODEL_OVERLOADED:   'action.busy',
+  MODEL_TIMEOUT:      'action.busy',
+  MODEL_UNAVAILABLE:  'action.busy',
+  MODEL_REQUEST_INVALID: 'action.broke',
+  MODEL_AUTH:            'action.broke',
+};
 
 /** The known photo-upload rejection codes → their i18n reason key. The backend returns the CODE (which survives
  *  prod serialization; only `message` is hidden), and the web maps it to the founder's language. MEDIA_INVALID =

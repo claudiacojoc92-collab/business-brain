@@ -25,7 +25,31 @@ else from the list was changed that night.
 
 ---
 
-## The root amplifier (do this first)
+## The root amplifier — ✅ FIXED 2026-10-04
+
+Commit A (`classifyProviderError` in `packages/infrastructure` + the error-handler branch) emits granular
+`MODEL_*` codes for raw Anthropic SDK failures; Commit B (web `actionErrorKey`) collapses them to two
+founder messages — `action.busy` (rate-limit/overload/timeout/unavailable → a retry is worth it) and
+`action.broke` (our-side request-invalid/auth → a retry won't help). HTTP status stayed 500 and the prod
+message masking is unchanged, per the decisions below. `MODEL_AUTH` (a rejected API key) logs at **error**
+level — it is an operational emergency, the whole product can't generate until a human acts. The original
+analysis of the pre-fix behavior is kept below for the record.
+
+**Open questions / gaps surfaced while fixing it (not done, deliberately):**
+- **`MODEL_REQUEST_INVALID` has no dedicated message.** A 400/413 (our request was malformed / the context was
+  too long) is folded into `action.broke`. A message like "your material was too long — try with less" would be
+  more actionable, but `BadRequestError` does not cleanly separate the founder's oversized *input* from a request
+  WE built badly, and telling someone they wrote too much when it was our bug is worse than the generic. **If
+  `MODEL_REQUEST_INVALID` ever appears in logs with any frequency, it earns its own message.**
+- **`action.broke` is an honest dead end — and the reporting path it should point at is not reachable in-app.**
+  With no alerting in the product, a founder telling us is the *only* way anyone learns of a break. A contact
+  affordance exists (`/contact` route + `contact@getbusinessbrain.com`, `apps/web/src/legal/LegalPages.tsx`) but
+  is linked only from the *public* landing and the legal footer — the authenticated AppShell account menu has
+  just Language + Sign out. So **no alerting AND no in-app reporting path means a broken founder is a silent
+  founder.** Fix shape: either surface contact in the account menu / on `action.broke`, or add a report-a-problem
+  affordance. (Deferred pending a decision on the exact clause + its RO/IT wording.)
+
+## The root amplifier (original analysis — pre-fix)
 
 **`apps/api/src/plugins/error-handler.plugin.ts:23-45`.** Only `DomainError` / `ApplicationError` are mapped
 to a real status + code. `InfrastructureError`, its subclass `LLMError` (httpStatus 503), and the **raw
