@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { LocaleProvider, useLocale } from './i18n/LocaleContext';
 import type { Locale } from './i18n/messages';
 import { SessionProvider, useSession } from './slice0/session';
+import { LoadError } from './slice0/errors';
 import { ErrorBoundary } from './slice0/ErrorBoundary';
 import { LandingV0 } from './slice0/LandingV0';
 import { AuthPage } from './slice0/AuthPage';
@@ -40,15 +41,21 @@ function Loading() {
 }
 
 function RequireSession({ children }: { children: React.ReactNode }) {
-  const { account, isLoading } = useSession();
+  const { account, isLoading, loadError, refresh } = useSession();
   if (isLoading) return <Loading />;
+  // A startup load that couldn't reach us (network / 5xx / failed business list) is NOT a sign-out — show a
+  // retry, keep them here. Must come BEFORE the account check, or a kept token still bounces to /signin.
+  if (loadError) return <LoadError onRetry={() => void refresh()} />;
   if (!account) return <Navigate to="/signin" replace />;
   return <>{children}</>;
 }
 
 function RedirectIfAuthed({ children }: { children: React.ReactNode }) {
-  const { account, isLoading } = useSession();
+  const { account, isLoading, loadError, refresh } = useSession();
   if (isLoading) return <Loading />;
+  // Same here: a transient load failure with a token present must not fall through to the sign-in page (which
+  // would invite a needless re-login over a blip) — offer a retry.
+  if (loadError) return <LoadError onRetry={() => void refresh()} />;
   if (account) return <Navigate to="/home" replace />;
   return <>{children}</>;
 }

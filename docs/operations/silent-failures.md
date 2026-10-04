@@ -151,10 +151,21 @@ rethrows after its own retries, never wrapping in `LLMError`) all fall through t
     (`catch { setErr(true) }`) on adopt / seeNextPlan / sendChallenge — drops the code. `sendChallenge` keeps
     the typed text (no loss). Living-state loop.
 
-11. **Transient load error at app start logs the founder out.** `apps/web/src/slice0/session.tsx:36-39` and
-    `apps/web/src/auth/AuthContext.tsx:22-24` — *any* failure of the initial `getMe` / `listBusinesses` clears
-    the token. *Founder sees:* a network blip on load drops them to the sign-in screen as if logged out.
-    *Work lost:* none; conflates transient with auth.
+11. **Transient load error at app start logs the founder out.** ✅ **FIXED 2026-10-04** (live path). `session.tsx`
+    now splits the startup load: `getMe` is the auth check — a definitive **401/403** clears the token and signs
+    out (unchanged), but **anything else** (network `TypeError`, 5xx, timeout) keeps the token and sets a new
+    `loadError`; and `listBusinesses` is treated as a data read — a failure there is a load failure of one screen,
+    never an auth failure, so it also sets `loadError` instead of signing out. `App.tsx`'s `RequireSession` /
+    `RedirectIfAuthed` render a retry (reusing `LoadError`) when `loadError` is set, *before* the account/redirect
+    checks — without that gate, keeping the token still bounced a founder to `/signin` (account was null).
+    - **`auth/AuthContext.tsx:22-24` left as-is, deliberately.** It is **dead on the live path** — `useAuth` is
+      imported only by `pages/LoginPage`, `pages/DashboardPage`, `pages/OnboardingPage`, none of which are wired
+      into `App.tsx`'s router (the live SPA is `slice0/`). It still embodies the old clear-on-any-failure pattern,
+      but it cannot fire for a founder, and editing it would churn retired code and risk its retired-page tests for
+      zero live benefit. If those pages are ever revived, apply the same split there.
+    - Original finding: `apps/web/src/slice0/session.tsx:36-39` + `apps/web/src/auth/AuthContext.tsx:22-24` — *any*
+      failure of the initial `getMe` / `listBusinesses` cleared the token; a network blip dropped a founder to the
+      sign-in screen as if logged out. *Work lost:* none; it conflated transient with auth.
 
 ---
 
