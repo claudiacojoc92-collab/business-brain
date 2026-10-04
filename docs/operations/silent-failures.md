@@ -41,13 +41,13 @@ analysis of the pre-fix behavior is kept below for the record.
   more actionable, but `BadRequestError` does not cleanly separate the founder's oversized *input* from a request
   WE built badly, and telling someone they wrote too much when it was our bug is worse than the generic. **If
   `MODEL_REQUEST_INVALID` ever appears in logs with any frequency, it earns its own message.**
-- **`action.broke` is an honest dead end — and the reporting path it should point at is not reachable in-app.**
-  With no alerting in the product, a founder telling us is the *only* way anyone learns of a break. A contact
-  affordance exists (`/contact` route + `contact@getbusinessbrain.com`, `apps/web/src/legal/LegalPages.tsx`) but
-  is linked only from the *public* landing and the legal footer — the authenticated AppShell account menu has
-  just Language + Sign out. So **no alerting AND no in-app reporting path means a broken founder is a silent
-  founder.** Fix shape: either surface contact in the account menu / on `action.broke`, or add a report-a-problem
-  affordance. (Deferred pending a decision on the exact clause + its RO/IT wording.)
+- **`action.broke` now points at a reporting path — but only in its own text.** With no alerting in the product,
+  a founder telling us is the *only* way anyone learns of a break, so `action.broke` now carries
+  `contact@getbusinessbrain.com` inline (the error banners render plain text, so a raw address beats a mailto link
+  that wouldn't fire). **The better long-term home is a first-class support affordance in the account menu** — the
+  authenticated AppShell menu is still just Language + Sign out, and `/contact` is linked only from the public
+  landing + legal footer. That belongs with a broader decision about where support lives in the product, not
+  bolted onto one error string; left for that decision.
 
 ## The root amplifier (original analysis — pre-fix)
 
