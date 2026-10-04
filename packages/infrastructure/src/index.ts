@@ -173,6 +173,10 @@ export { getMeter, registerMetrics } from './telemetry/meter';
 export { createLogger } from './telemetry/logger';
 export type { Logger } from './telemetry/logger';
 
+// LLM provider error classification (granular MODEL_* codes for the API error-handler)
+export { classifyProviderError } from './llm/classify-provider-error';
+export type { ProviderErrorInfo } from './llm/classify-provider-error';
+
 // Health
 export { HealthChecks } from './health/health-checks';
 export type { HealthCheckResult, HealthStatus } from './health/health-checks';
