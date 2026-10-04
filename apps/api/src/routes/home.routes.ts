@@ -28,13 +28,26 @@ export function registerHomeRoutes(server: FastifyInstance, deps: ServerDeps): v
   server.get('/v1/businesses/:id/home', async (request: FastifyRequest, reply: FastifyReply) => {
     const { founderId, business } = await requireBusiness(request);
 
-    const [snap, current, today, note, cycle] = await Promise.all([
+    // ESSENTIAL reads — the briefing is a lie without them. These already distinguish absent (null → a legit
+    // empty, e.g. no strategy yet) from errored (throws). A throw here must stay fail-closed: it surfaces as an
+    // honest error (the web shows its fail screen), NEVER a fabricated "start here" empty.
+    const [snap, current, today] = await Promise.all([
       deps.understandingRepo.latest(business.id),
       deps.strategyService.getCurrent(business.id),
       deps.planService.today(business.id),
-      readTodayNote(deps.db, business.id, founderId),
-      deps.planService.cycleStatus(business.id),
     ]);
+
+    // ENHANCEMENT reads — additive lines whose absence is indistinguishable from "nothing to add". A transient
+    // failure here must NOT take down the whole briefing (one failed read should not kill the landing surface),
+    // so degrade to null. NOTE: with no alerting and no one reading logs today, this warn is effectively silent
+    // to us as well as to the founder — recorded as an accepted degrade in docs/operations/silent-failures.md.
+    let note: Awaited<ReturnType<typeof readTodayNote>> | null = null;
+    try { note = await readTodayNote(deps.db, business.id, founderId); }
+    catch (e) { deps.logger.warn({ err: e, businessId: business.id }, 'home: readTodayNote failed — "what changed" line omitted this load'); }
+
+    let cycle: Awaited<ReturnType<typeof deps.planService.cycleStatus>> | null = null;
+    try { cycle = await deps.planService.cycleStatus(business.id); }
+    catch (e) { deps.logger.warn({ err: e, businessId: business.id }, 'home: cycleStatus failed — month-close prompt skipped this load'); }
 
     // The one "what changed" line, resolved from the same founder_event note Today uses (never fabricated).
     let changeLine: HomeLine | null = null;

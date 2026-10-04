@@ -75,10 +75,19 @@ rethrows after its own retries, never wrapping in `LLMError`) all fall through t
    call), so on refresh it reappears as a dangling turn with no answer — not lost, but zero failure signal.
    Talk is the persistent global action; highest everyday frequency. **(Fixed 2026-10-03.)**
 
-2. **Home screen dies whole on one read failure.** `apps/api/src/routes/home.routes.ts:31-37,61` — five reads
-   in an unwrapped `Promise.all`; any one throwing → generic 500 for the entire Home surface (compounded by
-   the amplifier). *Founder sees:* the first screen of each session fails to load with no reason.
-   *Work lost:* none (read path).
+2. **Home screen dies whole on one read failure.** ✅ **FIXED 2026-10-04.** `apps/api/src/routes/home.routes.ts`
+   now splits the five reads: the three ESSENTIAL ones (understanding / current strategy / today) stay in a
+   `Promise.all` and fail-closed to an honest error (they already return `null` for a legit empty vs *throw* for a
+   failure, so a throw never becomes a fabricated "start here" empty); the two ENHANCEMENT reads (`readTodayNote`
+   → the "what changed" line, `cycleStatus` → the month-close prompt) are each caught to `null`, so one failed
+   additive read no longer takes down the landing surface. `HomePage` retry is now a real `load()` re-fetch, not a
+   full `navigate(0)` reload. No API shape change (the composer already accepts `note`/`cycle` null).
+   - **Accepted degrade (recorded honestly):** a transient `cycleStatus` failure skips the month-close prompt for
+     *that load* (it returns on the next load). The catch logs at warn — but with no alerting and nobody reading
+     logs today (established this session), that warn is **effectively silent to us as well as to the founder**.
+     The call stands (killing Home over a change-line read would be worse), but it rests on no observability we
+     actually have. **If a founder ever reports "the month-close prompt never showed up," this is the first place
+     to look** — and a persistent `cycleStatus` failure would only surface if someone deliberately reads the logs.
 
 3. **Month-close reflection lost behind a generic fail screen.** `apps/web/src/slice0/HomePage.tsx:71-78`
    (`catch { setMode('fail') }`, retry = full reload at `:125`) + `apps/api/src/routes/impact.routes.ts:75`

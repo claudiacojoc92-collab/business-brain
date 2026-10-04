@@ -128,7 +128,7 @@ export function HomePage(): React.ReactElement {
             <div className="s0-strat-ctx">{t('home.failctx')}</div>
             <p className="s0-strat-msg-line">{t('home.fail')}</p>
             <div className="s0-strat-actions">
-              <button type="button" className="s0-btn" onClick={() => id && navigate(0 as never)}>{t('common.retry')}</button>
+              <button type="button" className="s0-btn" onClick={() => { if (id) void load(); }}>{t('common.retry')}</button>
               {/* FIX 4C — every fail screen carries a way out, so a founder is never trapped on one URL. */}
               <a href="/home" className="s0-btn-quiet">{t('home.tobusinesses')}</a>
             </div>
