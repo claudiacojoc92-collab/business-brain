@@ -40,7 +40,8 @@ function Loading() {
   return <div className="s0-loading">Loading…</div>;
 }
 
-function RequireSession({ children }: { children: React.ReactNode }) {
+// Exported for the session test — the loadError gate is the piece that made keeping the token actually work.
+export function RequireSession({ children }: { children: React.ReactNode }) {
   const { account, isLoading, loadError, refresh } = useSession();
   if (isLoading) return <Loading />;
   // A startup load that couldn't reach us (network / 5xx / failed business list) is NOT a sign-out — show a
