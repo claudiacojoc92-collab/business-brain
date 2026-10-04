@@ -7,6 +7,7 @@ import { useLocale } from '../i18n/LocaleContext';
 import { getArc, getHomeBriefing, evaluateImpact, ApiError, type HomeBriefing, type HomeAction, type ImpactResult } from '../api/client';
 import { VerdictSurface } from './VerdictSurface';
 import { ArcWorking } from './ArcWorking';
+import { actionErrorKey } from './errors';
 
 /**
  * THE HOME SURFACE. While the Day One arc is in progress (Moments 1–9), the strategist carries the founder
@@ -28,6 +29,7 @@ export function HomePage(): React.ReactElement {
   // Month two — the cycle-close answer + the verdict it produces (rendered on the home surface itself).
   const [closeText, setCloseText] = useState('');
   const [closeBusy, setCloseBusy] = useState(false);
+  const [closeErr, setCloseErr] = useState<string | null>(null);
   const [verdict, setVerdict] = useState<ImpactResult | null>(null);
 
   const load = useCallback(async () => {
@@ -71,9 +73,12 @@ export function HomePage(): React.ReactElement {
   async function submitClose(e: React.FormEvent) {
     e.preventDefault();
     if (!id || !closeText.trim() || closeBusy) return;
-    setCloseBusy(true);
+    setCloseBusy(true); setCloseErr(null);
+    // The server evaluates (model call) BEFORE it persists, so a failure here wrote nothing — keep the founder's
+    // reflection in the box and show why, so a retry runs on the same text with no retyping and no risk of a
+    // duplicate. (Do NOT drop to the generic 'fail' surface, which hid the text and offered only a full reload.)
     try { setVerdict(await evaluateImpact(id, 'outcome_report', closeText.trim())); }
-    catch { setMode('fail'); }
+    catch (e) { setCloseErr(t(actionErrorKey(e))); }
     finally { setCloseBusy(false); }
   }
 
@@ -101,9 +106,10 @@ export function HomePage(): React.ReactElement {
             <ArcWorking t={t} messageKey="arc.working.thinking" />
           ) : (
             <form className="s0-strat-input" onSubmit={submitClose}>
-              <textarea value={closeText} onChange={(e) => setCloseText(e.target.value)}
+              <textarea value={closeText} onChange={(e) => { setCloseText(e.target.value); if (closeErr) setCloseErr(null); }}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void submitClose(e as unknown as React.FormEvent); } }}
                 placeholder={t('home.close.answer')} aria-label={t('home.close.ask')} rows={2} />
+              {closeErr && <p className="s0-error" role="alert">{closeErr}</p>}
               <button type="submit" className="s0-btn s0-btn-inline" disabled={!closeText.trim()}>{t('home.close.answer')}</button>
             </form>
           )}
