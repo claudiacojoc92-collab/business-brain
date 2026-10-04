@@ -34,11 +34,14 @@ export function CreateIndexPage() {
     try { setBusiness(await getBusiness(id)); }
     catch (e) { if (isNotFound(e)) setBusiness(null); else setLoadErr(true); return; }
     const [td, st] = await Promise.allSettled([getToday(id), getCurrentStrategy(id)]);
-    if (td.status === 'fulfilled') setMove((td.value.ready ?? []).find((a) => a.canCreate) ?? null);
-    if (st.status === 'fulfilled') {
-      setBet(st.value.strategy?.core?.coreBet?.priority ?? '');
-      setContentRole((st.value.strategy?.branch?.contentRole ?? '').trim());
-    }
+    // Create leads with the strategy-derived move, so a partial render is meaningless: a rejected read would
+    // otherwise fall through to "nothing to create yet" (false empty) or the "not now" stance (a false claim
+    // about the strategy). Promote ANY rejection to the transient-load path — a real error with a real retry —
+    // never a fabricated empty. (getBusiness's own 404 vs transient split already happened above.)
+    if (td.status === 'rejected' || st.status === 'rejected') { setLoadErr(true); return; }
+    setMove((td.value.ready ?? []).find((a) => a.canCreate) ?? null);
+    setBet(st.value.strategy?.core?.coreBet?.priority ?? '');
+    setContentRole((st.value.strategy?.branch?.contentRole ?? '').trim());
     setLoaded(true);
   }, [id]);
 

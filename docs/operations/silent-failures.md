@@ -101,7 +101,11 @@ rethrows after its own retries, never wrapping in `LLMError`) all fall through t
    asked for an impact assessment; on failure silently bounced to Strategy with no message.
    *Work lost:* none (answers persisted earlier), but the requested action disappears.
 
-5. **Create reads as "you have nothing" when it actually failed to load.**
+5. **Create reads as "you have nothing" when it actually failed to load.** ✅ **FIXED 2026-10-04.** `load()` now
+   promotes ANY rejection of `getToday` / `getCurrentStrategy` to the existing `loadErr` path (a real error with a
+   real `load()` retry), instead of ignoring it and falling through to `create.none` / the "not now" stance. A
+   partial Create is meaningless (the surface leads with the strategy-derived move), so this is whole-surface
+   error + retry, matching TodayPage. Original finding:
    `apps/web/src/slice0/CreateIndexPage.tsx:36-42,93-102` — `getToday` / `getCurrentStrategy` rejections in a
    `Promise.allSettled` are ignored, then `setLoaded(true)` runs unconditionally → render falls through to
    `create.none` ("nothing to create yet"), no retry offered. *Founder sees:* a top-level tab telling them the
