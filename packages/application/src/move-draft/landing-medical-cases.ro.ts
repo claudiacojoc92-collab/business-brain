@@ -51,6 +51,10 @@ export const LANDING_CLAIM_CASES_RO: LandingClaimCase[] = [
   { ro: 'Până la 31 octombrie, ai 20% reducere la abonamente.', gloss: 'Until Oct 31, 20% off subscriptions.', expect: 'pass', construction: 'nominal', note: 'OOS: a DISCOUNT %, not a health statistic — must not fire the stat rule' },
   { ro: 'Plan stabilit de medic specialist.', gloss: 'A plan set by a specialist doctor.', expect: 'pass', construction: 'nominal', note: 'OOS: "medic specialist" is a held credential, not borrowed authority' },
   { ro: 'Specialiști în fiziokinetoterapie și masaj terapeutic.', gloss: 'Specialists in physiokinetotherapy and therapeutic massage.', expect: 'pass', construction: 'nominal', note: 'OOS: a team naming its own discipline — not a condition-scoped specialty claim' },
+  // PASS — added from out-of-sample run 2 (nominalizations are LEFT, point 3; reflexive/hedged descriptive passes)
+  { ro: 'Tratamentul afecțiunilor coloanei.', gloss: 'The treatment of spine conditions. (nominal)', expect: 'pass', construction: 'nominal', note: 'OOS r2: nominal form of service-for-condition — point 3, must PASS (judge territory, not the deterministic layer)' },
+  { ro: 'Pacientul se recuperează în ritmul lui.', gloss: 'The patient recovers at their own pace. (reflexive)', expect: 'pass', construction: 'first_person', note: 'OOS r2: reflexive descriptive "se recuperează" — a person recovering, not a clinic claim' },
+  { ro: 'Programul sprijină îmbunătățirea coordonării.', gloss: 'The program supports the improvement of coordination.', expect: 'pass', construction: 'nominal', note: 'OOS r2: hedged nominalization, responsible copy — ruled PASS' },
 
   // ───────────────── FAIL — first-person treatment / therapeutic / causal verbs ─────────────────
   { ro: 'Tratăm herniile de disc.', gloss: 'We treat herniated discs.', expect: 'fail', blockedClass: 2, construction: 'first_person', note: 'treatment verb / clinical scope' },
@@ -82,6 +86,11 @@ export const LANDING_CLAIM_CASES_RO: LandingClaimCase[] = [
   { ro: 'Scapă de durere în trei ședințe.', gloss: 'Get rid of the pain in three sessions. (imperative)', expect: 'fail', blockedClass: 2, construction: 'second_person', note: 'OOS: imperative "scapă de durere" — only informal "scapi" was covered before' },
   { ro: 'Vă întoarceți la alergat în șase săptămâni.', gloss: 'You (pl./polite) return to running in six weeks.', expect: 'fail', blockedClass: 1, construction: 'second_person', note: 'OOS: polite-plural outcome — the dominant RO register; only informal singular was covered' },
   { ro: 'Vă ajutăm să vă recuperați după operație.', gloss: 'We help you (polite) recover after surgery.', expect: 'fail', blockedClass: 1, construction: 'second_person', note: 'OOS: polite-plural "vă recuperați"' },
+  // FAIL — added from out-of-sample run 2 (infinitive closed via stems; third-person-with-service-subject)
+  { ro: 'Programe personalizate pentru a trata cauza durerii.', gloss: 'Personalized programs to treat the cause of pain.', expect: 'fail', blockedClass: 2, construction: 'nominal', note: 'OOS r2: INFINITIVE "a trata" — caught by stem, not a "pentru a" pattern' },
+  { ro: 'Programe pentru a-ți reda mobilitatea completă.', gloss: 'Programs to restore your full mobility.', expect: 'fail', blockedClass: 1, construction: 'nominal', note: 'OOS r2: infinitive "a-ți reda"' },
+  { ro: 'Masajul reduce durerea și inflamația.', gloss: 'The massage reduces pain and inflammation.', expect: 'fail', blockedClass: 2, construction: 'first_person', note: 'OOS r2: THIRD-person, service-subject — same hole as second person, different subject' },
+  { ro: 'Terapia crește mobilitatea și imunitatea organismului.', gloss: 'The therapy increases mobility and the body\'s immunity.', expect: 'fail', blockedClass: 1, construction: 'first_person', note: 'OOS r2: third-person service-subject health claim ("crește imunitatea")' },
 
   // ───────────────── FAIL — outcome statistics / guarantees ─────────────────
   { ro: 'Mulți clienți revin la sport în 6-8 săptămâni.', gloss: 'Many clients return to sport in 6–8 weeks.', expect: 'fail', blockedClass: 1, construction: 'first_person', note: 'our-clients results statistic, unsourced; "many" does not rescue it' },

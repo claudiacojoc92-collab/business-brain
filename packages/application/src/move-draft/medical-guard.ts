@@ -43,19 +43,31 @@ function fold(s: string): string {
 // "medic specialist" (a held title) is not. Narrowed after out-of-sample run 1 (see plan status log).
 const RO_CONDITION = 'coloana|coloanei|hernie|disc|discopatie|lombar|cervical|spate|genunchi|umar|sold|glezn|articula|durere|dureri|durerea|postura|posturii|scolioz|cifoz|sciatic|tendinit|entors|nevralgie|afectiun|avc|parkinson|paraliz';
 
+// RO verb inflection endings (folded) — infinitive / finite (all persons) / subjunctive / gerund / participle.
+// Deliberately NOT the noun-forming suffixes (-ament, -are, -ere): a nominalization is left for the judge.
+const RO_V = '(a|e|i|ez|ezi|eaza|am|em|im|ati|eze|easca|este|at|and|ind)';
+
 // ── Romanian (diacritic-folded patterns) ──
 const RO = {
-  // First-person-plural THERAPEUTIC/causal verbs (effect ON a condition). NOT descriptive verbs (lucram,
-  // oferim, ne concentram, construim, evaluam) — those are how you describe what you do.
-  therapeuticFP: /\b(tratam|vindecam|amelioram|reducem|combatem|remediem|detensionam|rezolvam|corectam|imbunatatim|eliminam|scapam|refacem|recuperam)\b/,
-  // First-person OUTCOME / restoration / prevention verbs (promise about the body's future state).
-  outcomeFP: /\b(redam|prevenim)\b|\bpunem\b[^.?!]{0,20}\bpe picioare\b/,
-  // SECOND-person outcome constructions — the structural gap a we-verb list misses. Covers informal singular
-  // (te/tu), the IMPERATIVE ("scapă de durere"), AND the polite plural (dumneavoastră: vă/reveniți) — the
-  // dominant register in RO clinic copy. Both holes from out-of-sample run 1.
+  // THERAPEUTIC/causal verbs by STEM in ANY inflected form (generalized after run 2, not a "pentru a" pattern
+  // which breaks on "scopul de a trata" / "menite să trateze"). Catches the infinitive ("a trata cauza
+  // durerii"), the finite first/third person ("tratăm", "masajul reduce durerea", "terapia crește mobilitatea"),
+  // and the subjunctive ("să trateze"). NOT descriptive verbs (lucrăm, oferim, ne concentrăm). Nominalizations
+  // (tratament, tratarea, recuperare, îmbunătățirea, creșterea) are not verb inflections → NOT matched (point 3:
+  // "tratamentul afecțiunilor coloanei" is the nominal form of service-for-condition and PASSES). The reflexive
+  // descriptive "se recuperează / se vindecă" (a person recovering) is excluded via lookbehind.
+  therapeuticFP: new RegExp(
+    '\\b(?:trat|amelior|combat|remedi|detension|rezolv|corect|imbunatat|elimin|refac|reduc|crest)' + RO_V + '\\b' +
+    '|(?<!se\\s)\\b(?:vindec|recuper)' + RO_V + '\\b',
+  ),
+  // OUTCOME / restoration / prevention verbs, incl. the infinitive ("a-ți reda calitatea vieții", "a-ți recăpăta
+  // mobilitatea", "a preveni").
+  outcomeFP: /\bred(a|am|au|e)\b|\brecapat(a|am|ati|eze)\b|\bpreven(i|im|ati)\b|\bprevin(e|em)\b|\bpunem\b[^.?!]{0,20}\bpe picioare\b/,
+  // SECOND-person / imperative outcome constructions — informal singular (te/tu), the IMPERATIVE ("scapă de
+  // durere"), the polite plural (dumneavoastră: vă/reveniți), plus the infinitive "a reveni la …".
   outcomeSP: new RegExp(
-    '\\bscap(i|a|ati)\\b[^.?!]{0,30}\\b(durere|dureri|durerea)\\b' +              // scapi / scapă / scăpați ... de durere
-    '|\\b(revii|reveniti|te intorci|va intoarceti)\\b[^.?!]{0,25}\\b(la|in)\\b' + // (te/vă) return to · reveniți la
+    '\\bscap(a|i|am|ati|e)\\b[^.?!]{0,30}\\b(durere|dureri|durerea)\\b' +         // scapi/scapă/scăpăm/scăpați ... de durere
+    '|\\b(revii|reveniti|reveni|te intorci|va intoarceti)\\b[^.?!]{0,25}\\b(la|in)\\b' + // (te/vă) return to · reveniți/a reveni la
     '|\\b(te recuperezi|va recuperati)\\b' +                                      // you recover (informal / polite)
     '|\\b(te misti|va miscati)\\b[^.?!]{0,25}\\b(din nou|fara durere)\\b' +       // you move again / without pain
     '|\\bte faci bine\\b|\\bte vindeci\\b|\\bva vindecati\\b',

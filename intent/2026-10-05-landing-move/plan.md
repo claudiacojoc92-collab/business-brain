@@ -148,6 +148,15 @@ patterns (that way lies blocking every service-for-condition line). It is covere
 Layer-3 judge. Recorded here so that in three months no one assumes the deterministic layer handles it — by
 design, it does not.
 
+### Nominalizations are left to the judge (point 3, recorded)
+
+A nominalization of a blocked verb — "tratamentul afecțiunilor coloanei", "reducerea durerii", "creșterea
+mobilității", "restabilirea echilibrului" — is NOT blocked by the deterministic layer, deliberately. Under our
+own rule "tratamentul afecțiunilor coloanei" is the nominal form of *service-for-condition*, which PASSES;
+blocking it would contradict the definition and make the product invisible to its market. The deterministic
+guard therefore matches verb inflections (infinitive/finite/subjunctive) but not the noun-forming suffixes
+(-ament, -are, -ere). The marginal nominal claim is the judge's to catch.
+
 ### The hard middle — sourced vs unsourced
 
 - "Recovery typically takes 6–8 weeks." **WITH a credible source** (a ProofFact carrying provenance — a
@@ -316,3 +325,21 @@ mapping are new each time.
     INFINITIVE purpose-clauses ("pentru a trata cauza durerii", "pentru a-ți reda calitatea vieții") and
     NOMINALIZATIONS ("tratamentul afecțiunilor", "scăderea durerii") that carry the claim with no finite verb; plus
     3rd-person-with-service-subject ("crește imunitatea organismului"). Under-represented in run 1's sites.
+- 2026-10-05: **FIX (stem generalization + 3rd-person-service) + OUT-OF-SAMPLE RUN 3 (6 THIRD-batch fresh clinics:
+  fiziothera, clinicaremed, biocentermedical, kineto-brasov, osteokinesisbrasov, centrulrafael).** Closed the run-2
+  families by matching the verb STEM in any inflection (so the infinitive "a reduce/trata/reda" and 3rd-person
+  service-subject "masajul reduce" / "reface mobilitatea" are caught — not a brittle "pentru a" pattern), with a
+  lookbehind so reflexive descriptive "se recuperează" stays clean; nominalizations LEFT (point 3). 7 regression
+  cases added (59 in-sample green). Run 3: **32 sentences, 3 flagged, ALL 3 TRUE POSITIVES, 0 false positives.**
+  - The run-2 holes are verified closed on fresh copy: infinitive "pentru a reduce durerea" (Arch Kinetic) and
+    service-subject "reface mobilitatea" (Remed) both caught; "tratăm simptomele" (Osteokinesis) caught.
+  - Nominalizations correctly PASSED: "Reducerea durerii", "creșterea mobilității", "restabilirea echilibrului",
+    "Specialiști în mobilitate/fiziokinetoterapie" — all clean (point 3 + narrowed authority held). Zero FPs.
+  - Remaining misses are SCATTERED individuals, not a family: one uncovered verb ("readucem echilibrul"), one
+    missing inflection of an already-covered verb ("recapete"), slogans ("Redescoperă mobilitatea…"). Per the
+    stopping rule these belong to the judge.
+- 2026-10-05: **STOPPING RULE MET — the deterministic guard is DONE.** Three fresh out-of-sample runs; run 3
+  surfaced NO new systematic family (only scattered individuals). 0 false positives across runs 2 and 3. Next:
+  wire the guard into the generate→gate→repair→fail-closed orchestration + the landing prose generator. No
+  further guard tuning — chasing the scattered misses would be tuning against specific sites, which the rule
+  forbids; they are the judge's.
