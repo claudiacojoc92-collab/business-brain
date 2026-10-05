@@ -38,6 +38,11 @@ function fold(s: string): string {
     .replace(/[àèéìòù]/g, (m) => ({ 'à': 'a', 'è': 'e', 'é': 'e', 'ì': 'i', 'ò': 'o', 'ù': 'u' }[m] ?? m));
 }
 
+// A named condition / diagnosis / body-region lexicon (folded). Used ONLY to scope the authority rule:
+// "specialist/specializat în [a condition]" is a scope claim; "specialist în kinetoterapie" (a discipline) or
+// "medic specialist" (a held title) is not. Narrowed after out-of-sample run 1 (see plan status log).
+const RO_CONDITION = 'coloana|coloanei|hernie|disc|discopatie|lombar|cervical|spate|genunchi|umar|sold|glezn|articula|durere|dureri|durerea|postura|posturii|scolioz|cifoz|sciatic|tendinit|entors|nevralgie|afectiun|avc|parkinson|paraliz';
+
 // ── Romanian (diacritic-folded patterns) ──
 const RO = {
   // First-person-plural THERAPEUTIC/causal verbs (effect ON a condition). NOT descriptive verbs (lucram,
@@ -45,21 +50,39 @@ const RO = {
   therapeuticFP: /\b(tratam|vindecam|amelioram|reducem|combatem|remediem|detensionam|rezolvam|corectam|imbunatatim|eliminam|scapam|refacem|recuperam)\b/,
   // First-person OUTCOME / restoration / prevention verbs (promise about the body's future state).
   outcomeFP: /\b(redam|prevenim)\b|\bpunem\b[^.?!]{0,20}\bpe picioare\b/,
-  // SECOND-person outcome constructions — the structural gap a we-verb list misses.
-  outcomeSP: /\bscapi\b[^.?!]{0,30}\b(durere|dureri|durerea)\b|\brevii\b[^.?!]{0,20}\b(la|in)\b|\bte misti\b|\bte faci bine\b|\bte vindeci\b|\bte recuperezi\b|\bte intorci\b[^.?!]{0,20}\bla\b/,
-  // Outcome statistics / client-results / guarantees.
-  stat: /\d+\s*%|\bgarantat(e|a)?\b|\bmulti clienti\b|\bclienti\b[^.?!]{0,40}\b(revin|scapa|se recupereaza)\b/,
-  // Clinical authority beyond a stated credential — "specialist" borrows the regulated "medic specialist" title.
-  authority: /\bspeciali(st|sti|stii|sta)\b/,
+  // SECOND-person outcome constructions — the structural gap a we-verb list misses. Covers informal singular
+  // (te/tu), the IMPERATIVE ("scapă de durere"), AND the polite plural (dumneavoastră: vă/reveniți) — the
+  // dominant register in RO clinic copy. Both holes from out-of-sample run 1.
+  outcomeSP: new RegExp(
+    '\\bscap(i|a|ati)\\b[^.?!]{0,30}\\b(durere|dureri|durerea)\\b' +              // scapi / scapă / scăpați ... de durere
+    '|\\b(revii|reveniti|te intorci|va intoarceti)\\b[^.?!]{0,25}\\b(la|in)\\b' + // (te/vă) return to · reveniți la
+    '|\\b(te recuperezi|va recuperati)\\b' +                                      // you recover (informal / polite)
+    '|\\b(te misti|va miscati)\\b[^.?!]{0,25}\\b(din nou|fara durere)\\b' +       // you move again / without pain
+    '|\\bte faci bine\\b|\\bte vindeci\\b|\\bva vindecati\\b',
+  ),
+  // Outcome STATISTIC / guarantee / client-results — a percentage counts ONLY when attached to clients/patients
+  // plus an outcome. A bare % (discount, price), a duration or a session count is NOT a health statistic
+  // (false positives from run 1: "20% REDUCERE", "-40% SENIORI").
+  stat: new RegExp(
+    '\\bgarantat(e|a)?\\b' +                                                      // guarantee
+    '|\\d+\\s*%[^.?!]{0,30}\\b(clien|pacien)' +                                   // N% ... clients/patients
+    '|\\b(clien|pacien)\\w*[^.?!]{0,30}\\d+\\s*%' +                               // clients/patients ... N%
+    '|\\bmul(t|)i\\s+(clien|pacien)\\w*[^.?!]{0,40}\\b(revin|scapa|se recupereaza|se vindeca)\\b', // many clients return/recover
+  ),
+  // Clinical AUTHORITY — only "specialist/specializat în [a named condition]". Plain discipline ("specialist în
+  // kinetoterapie") and held credentials ("medic specialist") PASS; the marginal case goes to the judge
+  // (narrowed after run 1 blocked a real credential and a team naming its own profession).
+  authority: new RegExp('\\bspeciali(st|sti|stii|sta|zat|zati|zata|zate)\\b[^.?!]{0,25}\\b(in|pe|pentru)\\b[^.?!]{0,25}\\b(' + RO_CONDITION + ')'),
 };
 
-// ── English (base-definition language) ──
+// ── English (base-definition language) — mirrors the RO narrowing; not out-of-sample validated. ──
+const EN_CONDITION = 'spine|back|disc|herniat|lumbar|cervical|knee|shoulder|hip|ankle|joint|pain|posture|sciatic|tendon|sprain|neuralgia|injur|stroke|parkinson';
 const EN = {
   therapeuticFP: /\bwe\b[^.?!]{0,20}\b(treat|cure|heal|relieve|reduce|combat|remedy|release|resolve|solve|fix|correct|improve|eliminate|rehabilitate)\b|\bget(s)? rid of\b/,
   outcomeFP: /\bwe\b[^.?!]{0,20}\b(restore|prevent)\b|\bget(s)? you (back|moving|running)\b|\bback on your feet\b/,
   outcomeSP: /\byou(\b|'ll| will)[^.?!]{0,30}\b(get rid of|return to|move again|recover|run again|be pain[- ]free)\b/,
-  stat: /\d+\s*%|\bguaranteed?\b|\bmany clients\b|\bclients\b[^.?!]{0,40}\b(return|recover|get rid)\b/,
-  authority: /\bspecialists?\b/,
+  stat: new RegExp('\\bguaranteed?\\b|\\d+\\s*%[^.?!]{0,30}\\b(client|patient)|\\b(client|patient)s?\\b[^.?!]{0,30}\\d+\\s*%|\\bmany (client|patient)s?\\b[^.?!]{0,40}\\b(return|recover|get rid)\\b'),
+  authority: new RegExp('\\bspeciali(st|sts|zed|zing)\\b[^.?!]{0,25}\\b(in|for)\\b[^.?!]{0,25}\\b(' + EN_CONDITION + ')'),
 };
 
 /**

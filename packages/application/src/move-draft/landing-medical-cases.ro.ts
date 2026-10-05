@@ -47,6 +47,10 @@ export const LANDING_CLAIM_CASES_RO: LandingClaimCase[] = [
   { ro: 'Lucrăm pe postură și mobilitate.', gloss: 'We work on posture and mobility.', expect: 'pass', construction: 'first_person', pair: 'posture', note: 'describes the activity, not an effect on posture' },
   { ro: 'Pentru cei care vor să revină la alergat.', gloss: 'For those who want to return to running.', expect: 'pass', construction: 'nominal', pair: 'running', note: 'the client\'s goal as audience, not a promise by the clinic' },
   { ro: 'Recuperare blândă, în ritmul tău.', gloss: 'Gentle recovery, at your pace.', expect: 'pass', construction: 'nominal', pair: 'post-op', note: '"recuperare" as a service noun + approach; no outcome' },
+  // PASS — added from out-of-sample run 1 (narrowed % and specialist rules must keep these clean)
+  { ro: 'Până la 31 octombrie, ai 20% reducere la abonamente.', gloss: 'Until Oct 31, 20% off subscriptions.', expect: 'pass', construction: 'nominal', note: 'OOS: a DISCOUNT %, not a health statistic — must not fire the stat rule' },
+  { ro: 'Plan stabilit de medic specialist.', gloss: 'A plan set by a specialist doctor.', expect: 'pass', construction: 'nominal', note: 'OOS: "medic specialist" is a held credential, not borrowed authority' },
+  { ro: 'Specialiști în fiziokinetoterapie și masaj terapeutic.', gloss: 'Specialists in physiokinetotherapy and therapeutic massage.', expect: 'pass', construction: 'nominal', note: 'OOS: a team naming its own discipline — not a condition-scoped specialty claim' },
 
   // ───────────────── FAIL — first-person treatment / therapeutic / causal verbs ─────────────────
   { ro: 'Tratăm herniile de disc.', gloss: 'We treat herniated discs.', expect: 'fail', blockedClass: 2, construction: 'first_person', note: 'treatment verb / clinical scope' },
@@ -74,6 +78,10 @@ export const LANDING_CLAIM_CASES_RO: LandingClaimCase[] = [
   { ro: 'Scapi de durere în trei ședințe.', gloss: 'You get rid of the pain in three sessions.', expect: 'fail', blockedClass: 1, construction: 'second_person', note: 'second-person outcome + timeframe; no "we" verb to key on' },
   { ro: 'Revii la alergat în șase săptămâni.', gloss: 'You return to running in six weeks.', expect: 'fail', blockedClass: 1, construction: 'second_person', pair: 'running' },
   { ro: 'Te miști din nou fără durere.', gloss: 'You move again without pain.', expect: 'fail', blockedClass: 1, construction: 'second_person' },
+  // FAIL — added from out-of-sample run 1 (the two construction holes: imperative + polite plural "dumneavoastră")
+  { ro: 'Scapă de durere în trei ședințe.', gloss: 'Get rid of the pain in three sessions. (imperative)', expect: 'fail', blockedClass: 2, construction: 'second_person', note: 'OOS: imperative "scapă de durere" — only informal "scapi" was covered before' },
+  { ro: 'Vă întoarceți la alergat în șase săptămâni.', gloss: 'You (pl./polite) return to running in six weeks.', expect: 'fail', blockedClass: 1, construction: 'second_person', note: 'OOS: polite-plural outcome — the dominant RO register; only informal singular was covered' },
+  { ro: 'Vă ajutăm să vă recuperați după operație.', gloss: 'We help you (polite) recover after surgery.', expect: 'fail', blockedClass: 1, construction: 'second_person', note: 'OOS: polite-plural "vă recuperați"' },
 
   // ───────────────── FAIL — outcome statistics / guarantees ─────────────────
   { ro: 'Mulți clienți revin la sport în 6-8 săptămâni.', gloss: 'Many clients return to sport in 6–8 weeks.', expect: 'fail', blockedClass: 1, construction: 'first_person', note: 'our-clients results statistic, unsourced; "many" does not rescue it' },

@@ -304,3 +304,15 @@ mapping are new each time.
     regex); "sprijină îmbunătățirea coordonării" (hedged, responsible — PASS); "Mișcarea fără durere începe cu
     primul pas" (slogan — judge territory, same class as the named gap); "Specializați în Recuperare Medicală"
     (resolved by narrowing the specialist rule to condition-scoped claims).
+- 2026-10-05: **FIX + OUT-OF-SAMPLE RUN 2 (fixed guard, 7 FRESH clinics, NOT tuned against them).** Fixed the two
+  construction holes (imperative "scapă de durere"; polite-plural dumneavoastră "vă întoarceți/recuperați/vindecați")
+  and narrowed the two over-broad rules (the % fires only attached to clients/patients + outcome; "specialist"
+  fires only over a named condition, letting held credentials and own-discipline naming pass). 6 real-copy
+  regression cases added to the RO fixture (52 in-sample green). Re-ran on 7 clinics none of which were in run 1
+  (kinetonext, urbankineticstherapy, fizioteraconcept, kinetikcluj, kineticimpact, cardiokinetic, fiziotop):
+  **45 sentences, 5 flagged, 40 clean. 5/5 flagged are TRUE POSITIVES, 0 false positives** (the narrowings held;
+  the run-1 imperative/polite-plural fixes caught fresh claims on sites never seen).
+  - **NEW hole run 2 revealed (reported raw, not tuned):** the layer keys on FINITE verbs, but RO clinic copy uses
+    INFINITIVE purpose-clauses ("pentru a trata cauza durerii", "pentru a-ți reda calitatea vieții") and
+    NOMINALIZATIONS ("tratamentul afecțiunilor", "scăderea durerii") that carry the claim with no finite verb; plus
+    3rd-person-with-service-subject ("crește imunitatea organismului"). Under-represented in run 1's sites.
