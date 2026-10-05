@@ -124,4 +124,21 @@ mapping are new each time.
 
 - 2026-10-05: design approved by Claudia. Channel = extend `SampleChannel` (not reuse `'caption'`).
   Honest estimate ~1.5 weeks; the medical guard (RO/EN/IT) is the long pole. One-week cut, if forced:
-  Romanian-only + landing-only, storage/gate still shaped for reuse. NOT started.
+  Romanian-only + landing-only, storage/gate still shaped for reuse.
+- 2026-10-05: **proof-first (riskiest assumption settled).** Ran the real frozen kernel + backstop against
+  hand-fed landing prose (scratchpad harness): clean copy passes; an unlicensed numeric is caught by the
+  backstop (`fabricated_claim`); parroting is caught; the **medical outcome "get you back to running" passes
+  everything deterministic** — confirming no positive medical detection exists (auditAssertions has no medical
+  vocab; `predictsUnlicensedOutcome` is a closed business-outcome list). Kernel is usable as-is on prose; a
+  found nuance (CTA-survival is channel-shaped — caption expects the CTA in the caption field, carousel/reel
+  use a separate `cta`) reinforces adding a real `'landing'` channel with carousel-like CTA semantics.
+- 2026-10-05: **Day 1 built.** `packages/application/src/move-draft/` (contracts: MoveDraft / LandingDraft /
+  LandingAuthorizationSnapshot / IMoveDraftRepository; landing-safety: `specFromLandingSnapshot` +
+  `landingDraftToSampleContent` + `landingSectionToSampleContent`); migration **V082** `workspace.move_draft`
+  (applied locally, verified: columns + PK + action index + FK to businesses); `PgMoveDraftRepository`.
+  tsc -b clean; 6 new unit tests (incl. a mapped-clean-draft → kernel-clean wiring proof); full suite
+  1695 green. NOT the generator/gate/worker/routes/UI yet.
+- **Day 2 note (do NOT lose):** before writing the medical classifier, run case C ("get you back to running")
+  through the **live Layer-3 N=3 judge** and report what it does. If the judge already catches it, the
+  deterministic guard is a second line and can be tighter; if not, the guard carries it alone. Either way the
+  guard is built (a regulated-claim surface can't rest on a stochastic judge) — the result only shapes coverage.

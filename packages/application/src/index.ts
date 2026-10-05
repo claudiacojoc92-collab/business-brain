@@ -84,3 +84,6 @@ export * from './home/index';
 
 // Day One — the nine-moment arc (state machine over the existing engines + the one new email)
 export * from './arc/index';
+
+// The move arrives written — a produced artifact attached to a plan move (landing-page copy first).
+export * from './move-draft/index';

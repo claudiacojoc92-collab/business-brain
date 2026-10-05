@@ -70,6 +70,7 @@ export {
 // Slice 4 — voice: example-grounded Voice Model persistence
 export { PgVoiceRepository } from './database/repositories/pg-voice.repository';
 export { PgPlanRepository } from './database/repositories/pg-plan.repository';
+export { PgMoveDraftRepository } from './database/repositories/pg-move-draft.repository';
 export { PgCarouselRepository } from './database/repositories/pg-carousel.repository';
 export { PgProofRepository } from './database/repositories/pg-proof.repository';
 export { PgReachRepository } from './database/repositories/pg-reach.repository';
