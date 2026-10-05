@@ -290,3 +290,17 @@ mapping are new each time.
   on any unenabled language. 46 tests green: all 18 pass cases pass (no false positives), all 25 non-gap fails
   caught, the gap passes deterministically (judge-only), Italian fails closed. tsc -b clean; full suite 1741.
   Next: wire the guard into the generate→gate→repair→fail-closed orchestration + the landing prose generator.
+- 2026-10-05: **OUT-OF-SAMPLE RUN 1 (raw, PRE-FIX — recorded before any change).** 46/46 in-sample was hollow
+  (we wrote both the spec and the classifier). Ran the guard unchanged over **42 verbatim sentences from 6 real
+  RO clinics** (kinetoconsult, fiziokinetoclinic, kinetovital, smartkineto, cabinet-kinetoterapie, orthocareclinic;
+  bodymovestudio.ro UNREACHABLE — host refused, ECONNREFUSED). Result: **5 flagged, 37 clean.**
+  - 1 TRUE POSITIVE: "Tratăm afecțiuni ale coloanei…" (class 2) — a real published treatment claim, correctly caught.
+  - 4 FALSE POSITIVES from two over-broad rules: bare `\d+%` caught two discounts ("20% REDUCERE", "-40% SENIORI");
+    blanket `specialist` caught a held credential ("plan stabilit de medic specialist") and a team naming its own
+    profession ("specialiști în fiziokinetoterapie").
+  - 2 clear FALSE NEGATIVES (construction holes): imperative "scapă … de durere" (only `scapi` covered) and
+    polite-plural "să vă întoarceți la sport" (only informal singular `te întorci` covered).
+  - 4 borderline FNs left ALONE by ruling: "asigurând diagnosticarea timpurie" (licensing/snapshot decides, not a
+    regex); "sprijină îmbunătățirea coordonării" (hedged, responsible — PASS); "Mișcarea fără durere începe cu
+    primul pas" (slogan — judge territory, same class as the named gap); "Specializați în Recuperare Medicală"
+    (resolved by narrowing the specialist rule to condition-scoped claims).
