@@ -2,3 +2,4 @@
 // See intent/2026-10-05-landing-move.
 export * from './contracts';
 export * from './landing-safety';
+export * from './medical-guard';

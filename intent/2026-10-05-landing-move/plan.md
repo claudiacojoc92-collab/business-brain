@@ -279,3 +279,14 @@ mapping are new each time.
   judge; legal-scope note added (product rule, not legal advice — RO/EU health-ad rules need a qualified check).
   Next: build the RO test set (service-for-condition dominated), **show it to Claudia before the classifier is
   written.** Classifier still NOT coded.
+- 2026-10-05: **RO test set reviewed + enriched + committed** (`landing-medical-cases.ro.ts`, 18 pass / 26 fail):
+  full first-person verb set, prevention claims, SECOND-person outcome constructions (the structural
+  requirement — the classifier must catch the construction, not a we-verb list), paired same-truth fail/pass
+  lines, and the named deterministic gap.
+- 2026-10-05: **medical guard BUILT + green against the spec.** `medical-guard.ts` — `detectRegulatedClaims`
+  keyed on constructions (first-person therapeutic verbs / second-person outcome / prevention / statistics-
+  guarantee / clinical-authority), diacritic-folded (robust to RO typed without diacritics), RO + EN vocab;
+  **Italian config-DISABLED** (`GUARD_ENABLED_LANGUAGES`, with a reason comment, not a TODO) and **fail-closed**
+  on any unenabled language. 46 tests green: all 18 pass cases pass (no false positives), all 25 non-gap fails
+  caught, the gap passes deterministically (judge-only), Italian fails closed. tsc -b clean; full suite 1741.
+  Next: wire the guard into the generate→gate→repair→fail-closed orchestration + the landing prose generator.
