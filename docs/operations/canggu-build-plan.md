@@ -5,6 +5,22 @@
 This is the program roadmap across steps. Individual pieces still get their own `intent/<date>-<slug>/`
 records as they're built; this document is the index above them and the continuation handoff between steps.
 
+## Product thesis (settled 2026-10-05)
+
+The organizing principle the rest of the roadmap now answers to.
+
+- **People pay because it does something they can't or won't do themselves. Advice is not that;
+  production is.** A tool that tells a founder what to do is advice. A tool that shows up with the
+  thing made is production. BB has been giving advice.
+- **Therefore moves should arrive done or drafted, not assigned.** BB currently knows the answer and
+  hands the founder the question. The site-audit move is the clearest example: BB has already read the
+  site and holds the strategy, yet it asks the founder to go write the page. The move should arrive with
+  the page written.
+- **First instance being built:** the landing-page move arrives written —
+  [intent/2026-10-05-landing-move](../../intent/2026-10-05-landing-move/plan.md). It is deliberately
+  built as the first `kind` of a general "a move arrives with its content produced" shape, so the message
+  and carousel moves reuse the spine rather than each being a special case.
+
 ## Governing rules
 
 How we have actually been working. They hold for every step.
@@ -18,9 +34,17 @@ How we have actually been working. They hold for every step.
   Railway `/data` volume, and a repo-only read produced a false "blobs are ephemeral" conclusion (see 2a).
   Check the running environment (Railway variables, volumes) before building on an assumption about prod.
 
-## Step 1 — Attribution by asking at the door
+## Step 1 — Attribution by asking at the door — WITHDRAWN 2026-10-05
 
-**Status: built, NOT YET DEPLOYED.**
+**Status: the manual-asking feature is WITHDRAWN.** It fails the product thesis — asking the founder
+to go collect attribution by hand is assigning work, not doing it — and it is inapplicable to
+location-less businesses (a coach has no door to greet people at). **The storage and the weekly rhythm
+stay** (the `reach_report` table, the weekly-prompt cadence — reusable scaffolding for a future
+attribution approach that BB does *for* the founder). **The manual asking goes** — the door-question
+teaching, the "say this sentence at the door" first-run copy, and the ask-the-founder framing are
+retired. What shipped is recorded below for history; do not extend it.
+
+**(Historical — what was built, NOT YET DEPLOYED at the time of writing.)**
 
 - Weekly prompt on Today: how many new people came, and how they heard about the business.
 - First run teaches three things: why no analytics tool can answer this at their size, the exact sentence to
@@ -102,3 +126,10 @@ Things raised but not yet specified. Record them verbatim; do not interpret, pro
 
 - **2026-10-03 — "BB trebuie să aibă o structură coerentă."** (*BB needs a coherent structure.*) Unspecified:
   what "coherent" means here has not been defined. It must be defined before anything is built from it.
+- **2026-10-05 — Instagram and the connected online presence as the centre of the first session, rather than
+  the website.** Raised today, NOT part of the landing-move build. Unspecified; record and define before building.
+- **2026-10-05 — A visible onboarding / working boundary with named steps.** The founder should be able to see
+  where onboarding ends and the working product begins, as named steps. Raised today, NOT part of this build.
+- **2026-10-05 — Where new material comes from.** The founder rejected recycling existing posts, so the source
+  of fresh material is an open question. Raised today, NOT part of this build; must be answered before anything
+  that depends on a material source is built.
