@@ -102,6 +102,28 @@ const EN = {
   authority: new RegExp('\\bspeciali(st|sts|zed|zing)\\b[^.?!]{0,25}\\b(in|for)\\b[^.?!]{0,25}\\b(' + EN_CONDITION + ')'),
 };
 
+// ── NEGATED SYMPTOM PERSISTENCE (RO) — the most common prohibited claim in RO recovery marketing ──────────
+// "Nu (vei / te / o) mai … <persistence-verb> … <symptom>" promises the reader's symptom will cease — an
+// OUTCOME claim (blockedClass 1). It is a CLOSED construction family, not an open class: a negated-persistence
+// FRAME + either a pain verb (self-sufficient) or a persistence verb WITH a symptom/condition/treatment term.
+// Tested per sentence so a frame in one sentence can't borrow a symptom from another. The therapeutic negation
+// exemption (C3) deliberately does NOT reach here — here the negation IS the claim, so negating never exempts.
+// Boundary (must PASS): negated persistence with no symptom term — "Nu mai primim programări", "Nu mai este
+// nevoie de recomandare medicală", "Nu mai avem locuri la clasa de prenatal" — administrative, not therapeutic.
+const RO_PERSIST_FRAME = /(?:\bnu\b|\bn-o\b)[^.?!;:]{0,14}\bmai\b/;
+const RO_PAIN_VERB = /\b(?:doare|durea|doara|duri)\b/;                 // "it hurts / to hurt" — a symptom in itself
+const RO_PERSIST_VERB = /\b(?:avea|avem|ai|are|vei|exista|exist|fi|revine|revin|simti|simt|nevoie)\b/;
+const RO_SYMPTOM_TERM = new RegExp('\\b(?:durere|dureri|durerea|spate|spatele|boala|boli|tratament|' + RO_CONDITION + ')\\b');
+/** Fires iff a sentence has the negated-persistence frame AND a pain verb, or a persistence verb + a symptom term. */
+function negSymptomPersistenceFiresRo(folded: string): boolean {
+  for (const s of folded.split(/[.?!]+/)) {
+    if (!RO_PERSIST_FRAME.test(s)) continue;
+    if (RO_PAIN_VERB.test(s)) return true;
+    if (RO_PERSIST_VERB.test(s) && RO_SYMPTOM_TERM.test(s)) return true;
+  }
+  return false;
+}
+
 /**
  * Detect regulated claims in `text`. Returns one finding per construction class matched (empty ⇒ the
  * deterministic layer finds nothing — still subject to the Layer-3 judge upstream). Fail-closed on an
@@ -117,6 +139,7 @@ export function detectRegulatedClaims(text: string, language: GuardLanguage): Re
   const add = (cls: RegulatedClass, reason: string) => findings.push({ clause: text.trim(), blockedClass: cls, reason });
 
   if (P.therapeuticFP.test(t)) add(2, 'therapeutic-effect verb asserting an effect on a condition');
+  if (language === 'ro' && negSymptomPersistenceFiresRo(t)) add(1, 'negated symptom-persistence promise (the reader\'s symptom will cease)');
   if (P.outcomeSP.test(t)) add(1, 'second-person outcome construction (promises what will happen to the reader)');
   if (P.outcomeFP.test(t)) add(1, 'first-person outcome / restoration / prevention claim');
   if (P.stat.test(t)) add(1, 'outcome statistic, guarantee, or client-results claim');

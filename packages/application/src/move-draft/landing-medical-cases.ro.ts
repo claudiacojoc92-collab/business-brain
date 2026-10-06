@@ -106,4 +106,20 @@ export const LANDING_CLAIM_CASES_RO: LandingClaimCase[] = [
   // ───────── C1 PARTICIPLE COVERAGE (2026-10-06): the passive participle is a treatment claim; now caught ─────────
   { ro: 'Boala este tratată la noi.', gloss: 'The condition is treated here. (passive participle)', expect: 'fail', blockedClass: 2, construction: 'first_person', note: 'passive "tratată" was a stem gap — extended -ată/-ate so this no longer slips' },
   { ro: 'Afecțiunile coloanei sunt tratate complet.', gloss: 'Spine conditions are fully treated.', expect: 'fail', blockedClass: 2, construction: 'first_person', note: 'plural participle "tratate"' },
+
+  // ───────── C2 NEGATED SYMPTOM PERSISTENCE (2026-10-06): a closed OUTCOME family, blockedClass 1 ─────────
+  // "the reader's symptom will cease" — the single most common prohibited claim in RO recovery marketing,
+  // which passed before this work. Independent of the therapeutic rule; the C3 exemption does NOT reach it.
+  // MUST-BLOCK
+  { ro: 'Nu vei mai avea dureri.', gloss: "You won't have pain anymore.", expect: 'fail', blockedClass: 1, construction: 'second_person', note: 'frame "nu vei mai" + avea + dureri' },
+  { ro: 'Nu te mai doare după primele ședințe.', gloss: "It won't hurt anymore after the first sessions.", expect: 'fail', blockedClass: 1, construction: 'second_person', note: 'frame + pain verb "doare" (self-sufficient symptom)' },
+  { ro: 'Nu mai simți durerea.', gloss: "You no longer feel the pain.", expect: 'fail', blockedClass: 1, construction: 'second_person', note: 'frame + simți + durerea' },
+  { ro: 'Nu vei mai avea probleme cu spatele.', gloss: "You won't have back problems anymore.", expect: 'fail', blockedClass: 1, construction: 'second_person', note: 'frame + avea + spate' },
+  { ro: 'Durerea nu mai revine.', gloss: 'The pain does not come back.', expect: 'fail', blockedClass: 1, construction: 'nominal', note: 'frame "nu mai" + revine + durerea' },
+  { ro: 'Nu mai ai nevoie de tratament.', gloss: "You no longer need treatment.", expect: 'fail', blockedClass: 1, construction: 'second_person', note: 'frame + nevoie + tratament' },
+  // MUST-PASS — negated persistence with NOTHING to do with symptoms (the boundary; matters as much)
+  { ro: 'Nu mai primim programări luna aceasta.', gloss: "We're not taking bookings this month.", expect: 'pass', construction: 'first_person', note: 'negated persistence, no symptom/condition term' },
+  { ro: 'Nu mai lucrăm cu abonamente de 6 luni.', gloss: "We no longer work with 6-month subscriptions.", expect: 'pass', construction: 'first_person', note: 'commercial, not therapeutic' },
+  { ro: 'Nu mai este nevoie de recomandare medicală pentru o ședință.', gloss: 'A medical referral is no longer needed for a session.', expect: 'pass', construction: 'nominal', note: 'administrative; "nevoie" present but no symptom term ("medicală" is not one)' },
+  { ro: 'Nu mai avem locuri la clasa de prenatal.', gloss: 'No spots left in the prenatal class.', expect: 'pass', construction: 'first_person', note: 'availability; no symptom term' },
 ];
