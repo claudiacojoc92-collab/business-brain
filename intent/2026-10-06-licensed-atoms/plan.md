@@ -1,0 +1,239 @@
+# Plan: the language-neutral atom extractor + proof-extraction repairs
+
+Governing intent: [intent.md](./intent.md). Decision is made (operator, 2026-10-06); this plan reflects
+it rather than re-opening it. Build nothing until the plan is approved.
+
+## Design
+
+### The extractor (sibling to proof extraction, mirrors its proven shape)
+
+Proof extraction already has the exact safety spine we want, so we copy its structure and strip the
+English coupling:
+
+- **Input:** the same ingested fragments proof extraction reads — `links.listFragmentIds(businessId)` →
+  `evidence.findByIds(ids)` → projected to readable `SourceUnit`s (website pages via
+  `bridgeFragmentsToObservations`, plus declared/poured-in docs). Reuse `toUnits` (lift the shared
+  projection into a small helper both services call; no behaviour change to proof).
+- **Model proposes, code licenses.** `IAtomExtractionModel.extract({ units })` returns candidates
+  `{ atomClass, value, sourceRef }`. `value` MUST be a verbatim span of the cited unit. The model is a
+  *proposer only* — it never decides what is licensed.
+- **Deterministic licensing = verbatim anchoring** (the single safety mechanism). For each candidate:
+  `normalize(unit.text).includes(normalize(value))` or drop it. `normalize` = whitespace-collapse +
+  **diacritic-fold for matching only**; the stored/licensed `value` keeps original diacritics. No
+  language gate, no about-business regex, no wrap template. This is why it works for RO/IT/EN
+  identically.
+- **Provenance pointer, stored:** each licensed atom persists `{ atomClass, value, sourceRef,
+  sourceUrl, charStart, charEnd, sourceFingerprint, modelId, extractedAt }`. The span offsets are
+  computed deterministically from the verbatim match, so "where did this fact come from" is answerable
+  from the DB alone (same guarantee proof facts give, V080).
+- **Cache by fingerprint** over the bound fragment id set (reuse proof's `fingerprint`), so re-extract
+  only when sources change.
+- **Closed scope — SHIP four `AtomClass` values, frozen in code:** `service | location |
+  contact_booking | people`. The model prompt names exactly these and is told to emit nothing else;
+  unknown classes are dropped deterministically. **Deferred** (operator, 2026-10-06; additive later — new
+  enum value + prompt line + test, no schema change): `schedule` (hours tables are weak copy, live on a
+  subpage) and `price` (a published price is a business decision, not a copy decision, and goes stale —
+  BB must not publish a price the owner changed last month). Rationale for shipping these four and not
+  two: a landing page needs offer + location + CTA + proof; `service`+`location` give two, `contact_booking`
+  is the CTA (no CTA = not a landing page), `people` is the proof section.
+
+### How atoms reach the substrate
+
+One additive block in `carouselContext` (`packages/composition/src/composition-root.ts`, in the
+asset-authority region, ~line 544 where `licensedPropositions` is assembled):
+
+```
+const atoms = await atomExtractionService.facts(bid);        // provenance-carrying, cached
+const atomProps = atoms.map((a, i) => ({ ref: `A${i+1}`, text: a.value, source: 'business_evidence' }));
+const licensedPropositions = [ ...businessEvidence, ...atomProps, ...founderCorrections, ...founderProps ];
+```
+
+`source: 'business_evidence'` means `specFromSnapshot` / `specFromLandingSnapshot` already treat them
+as licensed external facts — no change to the frozen spec projection. Carousel, reel, reel-shoot and
+(later) move-draft inherit them with zero per-generator change.
+
+### What we deliberately do NOT do
+
+- No `GovernedUnderstanding` change, no understanding-prompt change (the one working path stays frozen).
+- No touching the dead V052/V053 facet pipeline.
+- Atoms never license as proof (`behavior_result`); only as `business_evidence`.
+
+## Commit sequence (each reversible on its own)
+
+1. **docs:** the known-issues shipped-feature defect + dead-schema note + this intent/plan. *(done this
+   session, uncommitted — lands first.)*
+2. **feat(atoms): contracts + closed AtomClass + ports.** `packages/application/src/atoms/contracts.ts`
+   (`AtomClass`, `AtomCandidate`, `BusinessAtom`, `IAtomExtractionModel`, `IAtomRepository`,
+   `IAtomFragmentSource`). Pure types; reversible by deletion.
+3. **refactor(proof): extract the shared fragment→unit projection** into a tiny shared helper used by
+   both proof and atoms. Behaviour-identical for proof (covered by existing proof tests). Reversible.
+4. **feat(atoms): the extraction service** — verbatim-anchor licensing, diacritic-fold matching, span
+   offsets, fingerprint cache, dedup. Unit tests with inline fragment fixtures (RO + EN) asserting:
+   licensed only on verbatim match; diacritics folded for matching but preserved in the value; unknown
+   class dropped; span points back to the source. Reversible.
+5. **feat(atoms): `AnthropicAtomModel` adapter** (`packages/infrastructure/src/business-intelligence/`)
+   — proposer prompt over the six classes, JSON out, temp 0, fail-safe to `[]` (empty, never
+   fabricated). Reversible.
+6. **feat(atoms): V083 `workspace.business_atom` + `PgAtomRepository`** — mirrors V080 proof_facts
+   (provenance columns + fingerprint). New forward migration; reversible by a later drop (never edit).
+   **Needs `approve migration`.**
+7. **feat(atoms): wire into `carouselContext` + composition root** — the additive block above.
+   Reversible (removing the block restores today's substrate).
+8. **test(atoms): the Body Move acceptance test** (fixture-based — see below).
+9. **fix(proof): de-anglicize `BIZ_REF_RE` + `wrap()` for RO/IT** — *propose the approach first* (see
+   open question). Separate, reversible.
+10. **fix(proof): numeric sanity bound on checkable proof** — reject non-positive / absurd tenure,
+    team_size, service_count, independent of language. **Test case = the live Body Move counter: the exact
+    text `Ani de experiență` followed by `0 +` must NOT license a tenure fact.** Separate, reversible, small.
+11. **fix(guard): the negated-treatment false-positive** — see "Guard bug" below. Needs an operator
+    decision (widening a safety guard), NOT silent. Belongs to the landing-move medical guard
+    (`packages/application/src/move-draft/medical-guard.ts`), recorded here because the real site proves it.
+12. **verify:** re-run carousel + reel on a real business (output changes once atoms flow) and confirm
+    no gate regression; record the before/after.
+
+Commits 9 and 10 are independent of 2–8 and could land first (they repair production now); sequencing
+them after keeps one reviewable arc, but either order is fine — operator's call.
+
+## Acceptance test (explicit, runnable)
+
+**The fixture (operator-supplied).** The operator is handing over `bodymovestudio.ro` as a **text file —
+the page's VISIBLE TEXT in reading order, not raw HTML.** That is faithful: ingestion stores *text*
+fragments (the website connector projects pages to text via `bridgeFragmentsToObservations`, and the
+atom extractor reads that text), and verbatim anchoring makes it a valid test either way — an atom is
+licensed iff its exact text is a span of the fragment. Committed under
+`intent/2026-10-06-licensed-atoms/fixtures/bodymove-home.txt` (+ `bodymove-despre.txt` if supplied). The
+build network cannot reach the host, so the committed test runs on the fixture; a live ingest on the
+operator's network is the final manual confirmation. **Blocked until the operator confirms the file path.**
+
+**Assert ONLY what the fixture actually contains** (operator-confirmed contents of the homepage):
+
+- **service** (positive, verbatim pointer each): `Clase & Personal Training`, `Kinetoterapie`,
+  `Gimnastică Prenatală & Recuperare Postpartum`, `Masaj`.
+- **location** (positive, verbatim pointer each): `Strada Decebal nr.110, Cluj-Napoca`; and the second
+  address, which is **split across two lines** on the page — `Strada Nicolae Tonitza, nr.2A` +
+  `Cartier Bună Ziua, Cluj-Napoca`.
+- **contact_booking** (positive): `+40 728 126 481`; `contact@bodymovestudio.ro`; and the booking
+  sentence `Programările se realizează online prin aplicația Evo Beauty sau prin contactarea recepției.`
+- **people** (NEGATIVE assertion): the homepage holds only the generic `Specialiști cu experiență în
+  recuperare, mișcare și wellbeing.` — there is **no atomic staff credential**. Assert the extractor
+  **does NOT fabricate a `people` atom** from that generic phrase (a class that invents is worse than a
+  class that finds nothing). If the `Despre noi` page fixture is supplied and ingestion reaches it, test
+  a real positive there; otherwise **`people` ships untested-positive and this plan says so** — its only
+  committed test is the no-fabrication one.
+- **Absent, must NOT appear:** session duration (that came from the operator, not the site), prices.
+
+**Multi-line address — anchoring decision (stated, because `fixture.slice(start,end)` must equal the
+stored value exactly):** matching is **whitespace-insensitive** (collapse internal runs including
+newlines to a single space) **+ diacritic-folded**, used only to LOCATE the span. The **stored `value`
+is the exact fixture substring** `fixture.slice(charStart,charEnd)` — so for the split address the value
+is the contiguous two-line span *including its newline*, and slice-equality holds by construction. The
+model may propose the address comma-joined; the whitespace-insensitive locate still finds it, and we
+store the original (newline-preserving) span. The generator reflows for display. So a multi-line fact is
+**one atom whose value contains the line break**, not two atoms — unless the two lines are genuinely
+separate facts, which for this address they are not.
+
+```
+service  ⊇ ['Clase & Personal Training','Kinetoterapie','Gimnastică Prenatală & Recuperare Postpartum','Masaj']
+location ⊇ ['Strada Decebal nr.110, Cluj-Napoca', <the two-line Tonitza span, verbatim incl. newline>]
+contact_booking ⊇ ['+40 728 126 481','contact@bodymovestudio.ro', <the Evo Beauty booking sentence>]
+people: no atom minted from 'Specialiști cu experiență în recuperare, mișcare și wellbeing.'
+every positive atom: fixture.slice(charStart,charEnd) === value  (newline preserved where present)
+```
+
+## Guard bug found on the real site (reported, NOT silently widened)
+
+Running Body Move's own published RO copy through `detectRegulatedClaims(text,'ro')`:
+
+- ❌ **`Nu tratăm simptome. Ne concentrăm pe cauze, prevenție și rezultate pe termen lung.`** → BLOCKED,
+  `class2: therapeutic-effect verb`. The `therapeuticFP` rule matches `tratăm` (trat+ăm) and **ignores
+  the negation `Nu`**. This false-positives the client's *legitimate* "we do **not** treat symptoms"
+  marketing — a bug that would surface mid-demo on copy the client already publishes.
+- ✅ `Specialiști cu experiență în recuperare, mișcare și wellbeing.` — PASS (the `recuperare` noun
+  doesn't match `recuper`+verb-ending; the known reversal holds).
+- ✅ `să previi apariția unor probleme` — PASS (`previi` is not a matched inflection of `preven-`).
+- ✅ service names (`Kinetoterapie`, `Gimnastică Prenatală & Recuperare Postpartum`) and the booking
+  sentence — PASS (won't trip the guard when quoted in generated copy).
+
+**Proposed fix (needs operator go — widening a safety guard is a conscious decision):** a tight negation
+guard on the therapeutic/outcome verb match — a `nu`/`nu mai`/`fără a` adjacency window immediately
+before the verb (mirroring the existing `(?<!se\s)` reflexive lookbehind). It must be **narrow**: only a
+directly-negated verb passes; `Nu doar tratăm — vindecăm` still trips on `vindecăm`. I will bring the
+exact regex + an expanded must-pass/must-still-block test set (the three phrases above as MUST-PASS, plus
+adversarial negations as MUST-BLOCK) **before** implementing, so the widening is reviewed, not silent.
+The three phrases become committed MUST-PASS cases in `landing-medical-cases.ro.ts` only once the fix
+lands (adding them red now would break the green suite).
+
+## Open question to settle before commit 9 (de-anglicize proof)
+
+I expect the English **reference guard** (`BIZ_REF_RE`, the "is this about THIS business" test) needs
+**replacing, not translating** — a bigger RO/IT pronoun/determiner list is brittle and still English in
+spirit. Proposed replacement: drop the language-keyed reference regex and lean on the *same* mechanism
+the atom extractor uses — the claim is about this business if its anchor is a verbatim span of *this
+business's* ingested fragments (which it already must be). The business-name token check stays as a
+secondary positive signal. Net: proof's about-business guard becomes provenance-based (language-neutral)
+rather than English-lexical. The `wrap()` templates get RO/IT variants keyed off the business/content
+language (the same language the generator runs in). **I'll bring this as a concrete proposal with the
+diff shape before implementing commit 9**, per your instruction.
+
+## Frozen-slice impact (flagged before starting)
+
+- **No frozen code is edited.** The atom service, adapter, migration, repo, and the `carouselContext`
+  block are all in the asset-authority region (above `WALL-END:asset-authority`) or net-new packages.
+  Proof extraction is not a frozen slice.
+- **But the frozen carousel/reel generators change behaviour** — they will suddenly receive real
+  licensed facts and produce different (richer) copy. That is the point, and it is safety-neutral (more
+  *licensed* facts can only make more copy licensable; they never bypass a gate). Still, it is a change
+  to shipped, frozen features via their inputs, so commit 11 **re-verifies carousel + reel on a real
+  business** and records before/after. No `approve frozen` is needed (no frozen file is touched), but
+  the re-verification is non-optional.
+
+## Sizing (honest, in work-sessions)
+
+- Commit 1 (docs): done.
+- Commits 2–4 (contracts + shared projection + service + unit tests): **~1.5 sessions.**
+- Commit 5 (model adapter + prompt iteration): **~1 session** (prompt tuning for clean six-class output).
+- Commit 6 (V083 + repo): **~0.5 session.**
+- Commit 7 (wiring): **~0.5 session.**
+- Commit 8 (acceptance fixture test): **~0.5 session** once the fixture exists.
+- Commits 9–10 (proof repairs): **~1.5 sessions** (9 needs the proposal round; 10 is small).
+- Commit 11 (carousel/reel re-verification, live): **~0.5–1 session.**
+
+**Total ≈ 6–7 work-sessions.** This is a real build, not a patch.
+
+**Does it fit before Canggu?** If the window is tight, cut scope deliberately rather than late:
+- **Minimum viable substrate fix (~3 sessions):** atom classes `service` + `location` only (the two the
+  acceptance test names, and the highest-value facts), commits 2–8 restricted to those, plus the two
+  proof repairs (9–10). Defer `schedule / contact_booking / people / price` to a follow-up — the
+  extractor is closed-scope but adding a class later is additive (new enum value + prompt line + test),
+  no schema change.
+- The proof repairs (9–10) should ship regardless of the atom scope — they fix live content now and are
+  cheap.
+
+## Where move-draft wiring lands
+
+**After** this intent. The move-draft wiring's acceptance test is "produces a publishable draft on Body
+Move's real facts," and that cannot pass until atoms exist (Run B proved it: a starved substrate →
+positioning overreach → kernel block). Sequence: this intent (atoms + proof repairs) → re-verify
+carousel/reel → **then** resume `intent/2026-10-05-landing-move` wiring (compose-root, routes, the
+draft-on-surface job, the Today UI), now with a substrate that can pass its acceptance test. The
+parroting known-issue is addressed as part of that wiring, not here.
+
+## Status log
+
+- 2026-10-06: Plan written from the operator's decision (separate language-neutral atom extractor;
+  verbatim anchoring as the sole safety mechanism; closed classes; do-not-extend-GovernedUnderstanding;
+  two proof repairs alongside). Shipped-feature defect + dead-schema recorded in known-issues.md.
+- 2026-10-06: **Plan APPROVED; scope locked to FOUR classes** (`service | location | contact_booking |
+  people`; `schedule`/`price` deferred additively — operator's reasons recorded in Design). Acceptance test
+  rewritten to the operator's confirmed fixture contents (4 services, 2 addresses incl. a two-line one,
+  contact + booking sentence; `people` = no-fabrication from a generic phrase; session-duration/prices
+  absent). Multi-line-address anchoring decided (whitespace-insensitive locate → store the exact
+  newline-preserving span). Fixture = page visible text in reading order (faithful; text fragments +
+  verbatim anchor), operator supplying `fixtures/bodymove-home.txt` — **acceptance test (commit 8) blocked
+  on that path.**
+- 2026-10-06: **Guard bug CONFIRMED on real client copy** (measurement): `Nu tratăm simptome…` false-positives
+  (negation ignored). Reported, not widened — fix is commit 11, operator decision pending. Two other must-pass
+  phrases + service names + booking line all PASS. Numeric-bound (commit 10) has its real case: `Ani de
+  experiență 0 +`.
+- 2026-10-06: Building from commit 2 (contracts + ports). de-anglicize approach (commit 9) comes as its own
+  proposal before implementation.

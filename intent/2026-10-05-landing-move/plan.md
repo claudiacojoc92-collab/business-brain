@@ -368,3 +368,29 @@ mapping are new each time.
   no repo literal changed. tsc -b 0 (full graph); move-draft 71/71; frozen voice suite 93/93 (unchanged). NOT
   committed (no `approve commit` this turn). Deferred/optional: a one-line CTA-shape comment at validation.ts:212
   (pure doc, blocked when the frozen grant lapsed mid-turn — the enum already documents it). Still: the wiring.
+- 2026-10-06: **enum committed (`022c568`); real-facts re-run BLOCKED twice — the block IS the finding; substrate
+  trace done (measurement, no building).** Ran the full chain on the operator's REAL Body Move facts (4 services,
+  2 Cluj addresses, Evo Beauty booking, 1h sessions, staff mix, ~7-8y; positioning passed as TONE ONLY;
+  proofFacts=[]). Run A (short voice slogans): BLOCKED at backstop/**parroting** (model lifted the slogans
+  verbatim). Run B (voiceLines=[], the faithful condition — Body Move has no calibrated voice): BLOCKED at
+  **kernel**/Layer-1 after both repairs on "totul într-un singur studio" (invented one-stop positioning) + "Un
+  studio construit în timp" (tenure dressed as positioning). **No publishable draft.** Both blocks = the gate
+  correctly refusing positioning-as-fact on a STARVED substrate, NOT an over-strict gate.
+  **CORRECTED FRAMING (the earlier "sees and forgets" was wrong and does not survive):** understanding DOES feed
+  the licensed substrate (`carouselContext` composition-root.ts:516 → `allowedBusinessFacts` over the LLM
+  `GovernedUnderstanding`), and proof extraction is a 2nd site-derived path. Accurate finding, narrower: the
+  pipeline **SYNTHESIZES AND DISCARDS THE ATOMS** — `GovernedUnderstanding` (bi/contracts.ts:34) is an
+  interpretation schema with no slot for operational specifics. **Atom coverage measured:** service names
+  absent-in-licensable-form (survive only if the LLM enumerates `offer.explicit[]`, no per-item provenance);
+  addresses absent (proof `location` can pass as an unstructured reported-speech blob); session duration absent;
+  booking tool-name absent (facet only records presence of the word "book"); staff roles absent. The deterministic
+  facet layer (V052/V053) is **not wired in the composition root at all**, is 5 interpretive kinds over a **pinned
+  English physio regex catalog** (no diacritic folding → Romanian matches nothing), and does NOT feed the
+  substrate — so fix (a) "read the facet layer" is **insufficient**. Structural fix (b) = an atomic-facts lane
+  (extend `GovernedUnderstanding` OR a new deterministic atom extractor sibling to proof extraction); operator
+  decides. Also found: proof extraction has **NO numeric sanity bound** (a "0 years" tenure / 0 team_size isn't
+  rejected on value — only accidentally, by an English-only about-business regex that also drops legitimate RO
+  tenure), and the proof extractor is English-coupled throughout. All three recorded in `known-issues.md`.
+  **DO NOT WIRE move-draft yet** — the wiring's acceptance test ("publishable draft on Body Move's real facts")
+  cannot pass until the atomic-fact lane exists; operator decides the substrate fix first. No commits beyond
+  `022c568` this step.
