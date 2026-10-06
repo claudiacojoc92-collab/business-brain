@@ -20,12 +20,14 @@ const RULES = [
   '  - "contact_booking": a phone number, an email address, a booking tool/app name, a booking URL, or the one-line booking instruction.',
   '  - "people": a NAMED individual together with their stated role/qualification (name + title as written). NEVER a group or collective phrase ("our team", "specialists", "echipa noastră") — a group noun is not a person.',
   'VERBATIM: every "value" MUST be copied character-for-character from the cited unit\'s text — do NOT paraphrase, translate, fix spelling or diacritics, summarise, or join text across units. If you cannot copy it verbatim, OMIT it (it would be dropped anyway).',
-  'Cite in "sourceRef" the exact sourceRef of the unit the value was copied from.',
+  'Cite in "sourceRef" the unit label shown after "sourceRef:" in the header, copied EXACTLY and nothing else — no page type, no parenthetical, no URL.',
   'Extract only what is actually present. No prices, no opening hours. No invented or inferred facts. If a unit has no atoms, return none for it.',
 ].join('\n');
 
 function units(i: AtomExtractionInput): string {
-  return i.units.map((u) => `=== sourceRef: ${u.sourceRef} (${u.pageType}) ===\n${u.text}`).join('\n\n');
+  // The sourceRef line carries the ref ALONE (no pageType parenthetical) so the model copies it unambiguously —
+  // it previously echoed "Homepage (home)" and every atom was dropped on the mismatch.
+  return i.units.map((u) => `=== sourceRef: ${u.sourceRef} ===\n${u.text}`).join('\n\n');
 }
 
 function extractJson(text: string): unknown {
