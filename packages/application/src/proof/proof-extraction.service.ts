@@ -32,6 +32,17 @@ function aboutThisBusiness(q: string, businessName: string): boolean {
   const tok = businessName.toLowerCase().split(/\s+/).filter((w) => w.length > 3)[0];
   return Boolean(tok && q.toLowerCase().includes(tok));
 }
+// Numeric plausibility for the counted checkable kinds — language-independent. Rejects non-positive and absurd
+// values (a live site that renders "Ani de experiență 0 +" must not license a tenure of 0). Caps are generous
+// so legitimate values pass: tenure allows a founding YEAR (≤ 3000), counts allow large-but-real teams/catalogs.
+// A counted kind with no positive number in range is not a checkable fact.
+function plausibleCount(kind: ProofKind, quote: string): boolean {
+  const nums = (quote.match(/\d+/g) ?? []).map(Number);
+  if (!nums.length) return false;
+  const cap = kind === 'tenure' ? 3000 : 10000;
+  return nums.some((n) => n > 0 && n <= cap);
+}
+
 // Part B: team_size must be a clean count or short named roster, never a concatenated bio blob.
 function cleanTeamSize(q: string): boolean {
   const t = q.trim();
@@ -113,6 +124,10 @@ export class ProofExtractionService {
       }
       // Part B: team_size must resolve to a clean count / short roster, else drop.
       if (kind === 'team_size' && !cleanTeamSize(c.anchorQuote)) { this.deps.log?.({ type: 'proof_teamsize_unclean', detail: c.anchorQuote.slice(0, 60) }); continue; }
+      // Numeric sanity: a counted fact (tenure/team_size/service_count) must carry a positive, non-absurd value.
+      if ((kind === 'tenure' || kind === 'team_size' || kind === 'service_count') && !plausibleCount(kind, c.anchorQuote)) {
+        this.deps.log?.({ type: 'proof_implausible_numeric', detail: c.anchorQuote.slice(0, 60) }); continue;
+      }
       const attribution = ext || (c.attribution ?? '').trim() || null;
       proofs.push({ id: generateId(), businessId, kind, licensedText: wrap(kind, c.anchorQuote, attribution), anchorQuote: c.anchorQuote.trim(), attribution, sourceRef: unit.sourceRef, sourceUrl: unit.sourceUrl, sourceFingerprint: fp, modelId: this.deps.modelId ?? null, extractedAt: now });
     }
