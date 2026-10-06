@@ -2,6 +2,7 @@
 // See intent/2026-10-05-landing-move.
 export * from './contracts';
 export * from './landing-routing';
+export * from './people-fidelity';
 export * from './landing-safety';
 export * from './medical-guard';
 export * from './move-draft.service';

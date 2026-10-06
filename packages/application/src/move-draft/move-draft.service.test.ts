@@ -41,6 +41,21 @@ function model(scripts: LandingDraft[]): ILandingModelPort & { calls: string[] }
 }
 const args = { businessId: 'b1', actionId: 'p1-a1', planVersionId: 'pv1', snapshot: SNAP, communicationJob: 'landing page', voiceLines: [], language: 'ro' };
 
+// A snapshot carrying a licensed PERSON (atomClass 'people') whose name the draft must reproduce faithfully.
+const SNAP_PEOPLE: LandingAuthorizationSnapshot = {
+  ...SNAP,
+  licensedPropositions: [...SNAP.licensedPropositions, { ref: 'A1', text: 'Florin Laza Kinetoterapeut', source: 'business_evidence', atomClass: 'people' }],
+};
+const argsPeople = { ...args, snapshot: SNAP_PEOPLE };
+const CORRUPT_NAME: LandingDraft = {
+  sections: [{ role: 'hero_headline', body: 'Body Move — un studio de mișcare din București.' }, { role: 'proof', heading: 'Echipa', body: 'Florin Lazăr este alături de tine.' }],
+  cta: 'Programează o primă ședință.',
+};
+const FAITHFUL_NAME: LandingDraft = {
+  sections: [{ role: 'hero_headline', body: 'Body Move — un studio de mișcare din București.' }, { role: 'proof', heading: 'Echipa', body: 'Florin Laza este alături de tine.' }],
+  cta: 'Programează o primă ședință.',
+};
+
 describe('MoveDraftService — orchestration', () => {
   it('a clean draft → status drafted, draft stored', async () => {
     const r = repo();
@@ -91,6 +106,21 @@ describe('MoveDraftService — orchestration', () => {
     expect(md.status).toBe('blocked');
     expect(md.safetyDecision.failingLayer).toBe('judge');
     expect(judge).toHaveBeenCalled();                     // judge DID run (cheap tiers passed)
+  });
+
+  it('people fidelity: a corrupted licensed name blocks the draft (after repair), never ships', async () => {
+    const r = repo();
+    const svc = new MoveDraftService({ model: model([CORRUPT_NAME, CORRUPT_NAME, CORRUPT_NAME]), repo: r });
+    const md = await svc.produceLanding(argsPeople);
+    expect(md.status).toBe('blocked');
+    expect(md.safetyDecision.failingLayer).toBe('people_fidelity');
+    expect(r.saved[0]?.safetyDecision.failures.some((f) => f.rule.includes('Florin Laza'))).toBe(true);
+  });
+
+  it('people fidelity: the faithful name (diacritics aside) passes', async () => {
+    const svc = new MoveDraftService({ model: model([FAITHFUL_NAME]), repo: repo() });
+    const md = await svc.produceLanding(argsPeople);
+    expect(md.status).toBe('drafted');
   });
 
   it('a language with no reviewed guard vocabulary is blocked WITHOUT calling the model', async () => {

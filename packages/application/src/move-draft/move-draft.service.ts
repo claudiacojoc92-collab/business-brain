@@ -5,6 +5,7 @@ import { classifyLayers } from '../voice/proposition-classes';
 import { classifyVoiceSample, type VoiceSampleContext } from '../voice/validation';
 import { detectRegulatedClaims, isGuardLanguageEnabled } from './medical-guard';
 import { specFromLandingSnapshot, landingDraftToSampleContent, landingSectionToSampleContent } from './landing-safety';
+import { checkPeopleFidelity } from './people-fidelity';
 import type {
   ILandingModelPort, IMoveDraftRepository, LandingAuthorizationSnapshot, LandingDraft,
   MoveDraft, MoveSafetyDecision,
@@ -21,7 +22,7 @@ const MAX_REPAIRS = 2;
 // value flows into every voice-gate call for a web page, so the channel reads 'landing' — not a borrowed label.
 const GATE_CHANNEL = 'landing' as const;
 
-type GateLayer = 'medical' | 'kernel' | 'backstop' | 'judge';
+type GateLayer = 'medical' | 'kernel' | 'backstop' | 'people_fidelity' | 'judge';
 interface GateFailure { readonly section: string; readonly layer: string; readonly rule: string }
 interface GateResult { readonly failingLayer: GateLayer | null; readonly failures: GateFailure[]; readonly layersRun: GateLayer[] }
 
@@ -70,7 +71,7 @@ export class MoveDraftService {
    * (deterministic Layer 1/2) + the backstop. All synchronous, no model. The first failing tier is the reason.
    * (The Layer-3 judge runs afterwards in runGate, only if this returns clean.)
    */
-  private gateDeterministic(draft: LandingDraft, spec: AuthorizedMessageSpec, language: 'ro' | 'en', ctx: VoiceSampleContext): GateResult {
+  private gateDeterministic(draft: LandingDraft, spec: AuthorizedMessageSpec, language: 'ro' | 'en', ctx: VoiceSampleContext, peopleValues: string[]): GateResult {
     const layersRun: GateLayer[] = ['medical'];
     const sections = this.sectionList(draft);
 
@@ -96,12 +97,25 @@ export class MoveDraftService {
     }
     if (t2.length) return { failingLayer: t2.some((f) => f.layer === 'kernel') ? 'kernel' : 'backstop', failures: t2, layersRun };
 
+    // Tier 3 — PEOPLE FIDELITY (deterministic): no licensed person's name may be corrupted (diacritic-folded
+    // boundary). A wrong surname on a public staff page is a concrete harm, so this BLOCKS (after the repair
+    // loop), never silently drops the person.
+    if (peopleValues.length) {
+      layersRun.push('people_fidelity');
+      const draftText = draft.sections.map((s) => `${s.heading ?? ''} ${s.body}`).join(' ') + ' ' + draft.cta;
+      const pf = checkPeopleFidelity(draftText, peopleValues).map((f): GateFailure => ({
+        section: 'proof', layer: 'people_fidelity',
+        rule: `name "${f.expected}" is wrong or missing${f.foundVariant ? ` (draft wrote "${f.foundVariant}")` : ''} — write it exactly as licensed`,
+      }));
+      if (pf.length) return { failingLayer: 'people_fidelity', failures: pf, layersRun };
+    }
+
     return { failingLayer: null, failures: [], layersRun };
   }
 
   /** Deterministic tiers, then the Layer-3 judge (3 model calls) ONLY if the cheap tiers passed. */
-  private async runGate(draft: LandingDraft, spec: AuthorizedMessageSpec, language: 'ro' | 'en', ctx: VoiceSampleContext): Promise<GateResult> {
-    const det = this.gateDeterministic(draft, spec, language, ctx);
+  private async runGate(draft: LandingDraft, spec: AuthorizedMessageSpec, language: 'ro' | 'en', ctx: VoiceSampleContext, peopleValues: string[]): Promise<GateResult> {
+    const det = this.gateDeterministic(draft, spec, language, ctx, peopleValues);
     if (det.failingLayer !== null || !this.deps.judge) return det;
     const judged = await validateAgainstAuthorization(landingDraftToSampleContent(draft), GATE_CHANNEL, spec, this.deps.judge, 3);
     const layersRun: GateLayer[] = [...det.layersRun, 'judge'];
@@ -119,14 +133,16 @@ export class MoveDraftService {
     const language = args.language as 'ro' | 'en';
     const spec = specFromLandingSnapshot(args.snapshot, args.communicationJob);
     const ctx = this.ctx(language, args.voiceLines, this.factual(args.snapshot));
+    // Licensed people whose names the draft must reproduce faithfully (diacritic-folded boundary).
+    const peopleValues = args.snapshot.licensedPropositions.filter((p) => p.atomClass === 'people').map((p) => p.text);
 
     let draft = await this.deps.model.draft({ snapshot: args.snapshot, communicationJob: args.communicationJob, voiceLines: args.voiceLines, language });
-    let result = await this.runGate(draft, spec, language, ctx);
+    let result = await this.runGate(draft, spec, language, ctx, peopleValues);
     let attempts = 0;
     while (result.failingLayer !== null && attempts < MAX_REPAIRS) {
       attempts++;
       draft = await this.deps.model.repair({ snapshot: args.snapshot, communicationJob: args.communicationJob, voiceLines: args.voiceLines, language, previous: draft, failures: result.failures.map((f) => ({ section: f.section, rule: `${f.layer} — ${f.rule}` })) });
-      result = await this.runGate(draft, spec, language, ctx);
+      result = await this.runGate(draft, spec, language, ctx, peopleValues);
     }
 
     const passed = result.failingLayer === null;
