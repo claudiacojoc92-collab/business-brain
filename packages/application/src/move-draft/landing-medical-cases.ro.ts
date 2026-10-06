@@ -102,4 +102,8 @@ export const LANDING_CLAIM_CASES_RO: LandingClaimCase[] = [
 
   // ───────────────── NAMED GAP — correct verdict FAIL, deterministic layer passes it (judge-only) ─────────────────
   { ro: 'Dureri lombare? Terapie manuală, 50 de minute.', gloss: 'Lower-back pain? Manual therapy, 50 minutes.', expect: 'fail', blockedClass: 2, construction: 'nominal', deterministicGap: true, note: 'question-then-service implies relief with NO verb/construction to key on; deterministic passes by design; judge-only' },
+
+  // ───────── C1 PARTICIPLE COVERAGE (2026-10-06): the passive participle is a treatment claim; now caught ─────────
+  { ro: 'Boala este tratată la noi.', gloss: 'The condition is treated here. (passive participle)', expect: 'fail', blockedClass: 2, construction: 'first_person', note: 'passive "tratată" was a stem gap — extended -ată/-ate so this no longer slips' },
+  { ro: 'Afecțiunile coloanei sunt tratate complet.', gloss: 'Spine conditions are fully treated.', expect: 'fail', blockedClass: 2, construction: 'first_person', note: 'plural participle "tratate"' },
 ];

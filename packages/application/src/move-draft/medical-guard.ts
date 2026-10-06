@@ -44,8 +44,13 @@ function fold(s: string): string {
 const RO_CONDITION = 'coloana|coloanei|hernie|disc|discopatie|lombar|cervical|spate|genunchi|umar|sold|glezn|articula|durere|dureri|durerea|postura|posturii|scolioz|cifoz|sciatic|tendinit|entors|nevralgie|afectiun|avc|parkinson|paraliz';
 
 // RO verb inflection endings (folded) — infinitive / finite (all persons) / subjunctive / gerund / participle.
+// Participle now covers gender+number: -at (m.sg, was present), -ati (m.pl, was present), -ata (f.sg), -ate
+// (f.pl) — so the PASSIVE "boala este tratată la noi" is caught, not only the active "tratăm". NOTE: this
+// commit (C1) INTENTIONALLY leaves the client's legitimate "Nu tratăm simptome" false-positive STANDING — the
+// coverage hole is closed first; the per-occurrence negation exemption that resolves that FP lands last (C3),
+// so the loosening change is revertible on its own without removing this coverage.
 // Deliberately NOT the noun-forming suffixes (-ament, -are, -ere): a nominalization is left for the judge.
-const RO_V = '(a|e|i|ez|ezi|eaza|am|em|im|ati|eze|easca|este|at|and|ind)';
+const RO_V = '(a|e|i|ez|ezi|eaza|am|em|im|ati|ata|ate|eze|easca|este|at|and|ind)';
 
 // ── Romanian (diacritic-folded patterns) ──
 const RO = {
