@@ -65,8 +65,12 @@ as licensed external facts — no change to the frozen spec projection. Carousel
 2. **feat(atoms): contracts + closed AtomClass + ports.** `packages/application/src/atoms/contracts.ts`
    (`AtomClass`, `AtomCandidate`, `BusinessAtom`, `IAtomExtractionModel`, `IAtomRepository`,
    `IAtomFragmentSource`). Pure types; reversible by deletion.
-3. **refactor(proof): extract the shared fragment→unit projection** into a tiny shared helper used by
-   both proof and atoms. Behaviour-identical for proof (covered by existing proof tests). Reversible.
+3. **refactor(proof): extract the shared fragment→unit projection** (`ProofExtractionService.toUnits` →
+   `bi/source-units.ts`, a pure `toSourceUnits(frags)`) used by both proof and atoms. **Correction:** proof
+   extraction has **no tests today**, so the refactor can't lean on existing coverage — it ships with a new
+   characterization test for `toSourceUnits` (website bridging, supplied material, block/sitemap skip, dedup)
+   that protects both callers. The move is mechanical (identical logic); structural typing keeps
+   `ProofSourceUnit` unchanged. Reversible.
 4. **feat(atoms): the extraction service** — verbatim-anchor licensing, diacritic-fold matching, span
    offsets, fingerprint cache, dedup. Unit tests with inline fragment fixtures (RO + EN) asserting:
    licensed only on verbatim match; diacritics folded for matching but preserved in the value; unknown
