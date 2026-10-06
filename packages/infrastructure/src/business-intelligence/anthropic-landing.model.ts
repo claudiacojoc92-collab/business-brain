@@ -8,15 +8,16 @@ import { routeFacts, type ILandingModelPort, type LandingGenInput, type LandingR
  * is NOT the gate — the deterministic layers are. Fails SAFE to a thin, licensed-only draft (still gated).
  */
 const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian' };
-const ROLES: LandingSectionRole[] = ['hero_headline', 'hero_subhead', 'what', 'who', 'proof', 'cta'];
+const ROLES: LandingSectionRole[] = ['hero_headline', 'hero_subhead', 'what', 'who', 'proof', 'how_it_works', 'cta'];
 
 function rules(l: string): string {
   return [
     `You are Business Brain writing ONE business's landing-page copy, entirely in ${l}. Write everything in ${l}; never mix languages.`,
-    'OUTPUT — your ENTIRE response is ONE JSON object and nothing else (first char "{"): {"sections":[{"role":"hero_headline","heading":"","body":"..."},{"role":"hero_subhead","body":"..."},{"role":"what","heading":"...","body":"..."},{"role":"who","heading":"...","body":"..."},{"role":"proof","heading":"...","body":"..."}],"cta":"..."}',
+    'OUTPUT — your ENTIRE response is ONE JSON object and nothing else (first char "{"): {"sections":[{"role":"hero_headline","heading":"","body":"..."},{"role":"hero_subhead","body":"..."},{"role":"what","heading":"...","body":"..."},{"role":"who","heading":"...","body":"..."},{"role":"proof","heading":"...","body":"..."},{"role":"how_it_works","heading":"...","body":"..."}],"cta":"..."}',
     'FACTS ARE ROUTED TO SECTIONS. Use each group ONLY in its named section, and use ALL of the items in it:',
     '  • "what" names EVERY item under SERVICES, as written. Do NOT collapse them into a category or summary.',
     '  • "proof" NAMES EVERY person under PEOPLE, each with the role given. NEVER replace them with a generic phrase like "our team of specialists" — list the actual names.',
+    '  • "how_it_works" states EVERY rule under POLICY as a short, concrete line (e.g. group size, cancellation window, arrival time). These are the practical rules a visitor needs — keep them plain and specific. OMIT this section only if POLICY is empty.',
     '  • "hero_headline" / "hero_subhead" / "who" use POSITIONING/AUDIENCE and LOCATIONS — the general framing, never a specific unlisted claim.',
     '  • the CTA uses CONTACT/BOOKING + the required next action.',
     'GROUND every statement in the routed facts + PROOF below. State NOTHING not entailed by them — no invented facts, numbers, testimonials, results, timeframes or offers.',
@@ -38,6 +39,7 @@ function facts(i: LandingGenInput): string {
     `REQUIRED NEXT ACTION (CTA): ${i.snapshot.ctaFunction || '(a clear next step)'}`,
     '', 'SERVICES → the "what" section (name every one):', ...list(r.services, '(none)'),
     '', 'PEOPLE → the "proof" section (NAME EVERY ONE with their role):', ...list(r.people, '(none)'),
+    '', 'POLICY → the "how_it_works" section (state every rule as a short concrete line):', ...list(r.policy, '(none — omit how_it_works)'),
     '', 'CONTACT / BOOKING → the CTA:', ...list(r.contact, '(none — use the required next action)'),
     '', 'LOCATIONS → hero / subhead context:', ...list(r.locations, '(none)'),
     '', 'POSITIONING / AUDIENCE (synthesis) → hero, subhead, who (general framing only):', ...list([...r.general, ...(i.snapshot.audienceUseContext ? [`audience: ${i.snapshot.audienceUseContext}`] : [])], '(none)'),

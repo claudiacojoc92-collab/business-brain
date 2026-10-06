@@ -23,7 +23,9 @@ export interface MoveSafetyDecision {
 export type MoveDraftKind = 'landing'; // extensible: | 'message' | 'carousel' | 'reel'
 
 // ── the landing-page draft content (kind: 'landing') ──
-export type LandingSectionRole = 'hero_headline' | 'hero_subhead' | 'what' | 'who' | 'proof' | 'cta';
+// 'how_it_works' is the home for operational POLICY rules (capacity, cancellation window, arrival/lead time,
+// membership terms). Without it those atoms had nowhere to go and the generator dropped them.
+export type LandingSectionRole = 'hero_headline' | 'hero_subhead' | 'what' | 'who' | 'proof' | 'how_it_works' | 'cta';
 export interface LandingSection {
   readonly role: LandingSectionRole;
   readonly heading?: string;
