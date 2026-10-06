@@ -122,4 +122,20 @@ export const LANDING_CLAIM_CASES_RO: LandingClaimCase[] = [
   { ro: 'Nu mai lucrăm cu abonamente de 6 luni.', gloss: "We no longer work with 6-month subscriptions.", expect: 'pass', construction: 'first_person', note: 'commercial, not therapeutic' },
   { ro: 'Nu mai este nevoie de recomandare medicală pentru o ședință.', gloss: 'A medical referral is no longer needed for a session.', expect: 'pass', construction: 'nominal', note: 'administrative; "nevoie" present but no symptom term ("medicală" is not one)' },
   { ro: 'Nu mai avem locuri la clasa de prenatal.', gloss: 'No spots left in the prenatal class.', expect: 'pass', construction: 'first_person', note: 'availability; no symptom term' },
+
+  // ───────── C3 THERAPEUTIC-RULE NEGATION EXEMPTION (2026-10-06): per occurrence, never per sentence ─────────
+  // The only LOOSENING change. MUST-PASS — the client's OWN published copy + boundary negations (every
+  // therapeutic verb is directly negated). These would FAIL before C3 (proof the exemption does the work).
+  { ro: 'Nu tratăm simptome. Ne concentrăm pe cauze, prevenție și rezultate pe termen lung.', gloss: "We don't treat symptoms. We focus on causes, prevention and long-term results.", expect: 'pass', construction: 'first_person', note: 'client live copy; "tratăm" is directly negated — the former false positive' },
+  { ro: 'sănătatea nu ar trebui tratată doar atunci când apar problemele, ci cultivată în fiecare etapă a vieții', gloss: 'health should not be treated only when problems appear, but cultivated at every stage of life', expect: 'pass', construction: 'first_person', note: 'client live copy; negated PASSIVE participle "nu ar trebui tratată" — the C1 participle coverage makes it matchable, the C3 exemption passes it' },
+  { ro: 'Nu urmărim soluții rapide și nici rezultate de moment.', gloss: "We don't chase quick fixes or instant results.", expect: 'pass', construction: 'first_person', note: 'client live copy; no therapeutic verb at all' },
+  { ro: 'Nu tratăm boli, ci susținem mișcarea.', gloss: "We don't treat diseases, we support movement.", expect: 'pass', construction: 'first_person', note: '"tratăm" negated; "susținem" is not a therapeutic verb' },
+  { ro: 'Specialiști cu experiență în recuperare, mișcare și wellbeing.', gloss: 'Specialists experienced in recovery, movement and wellbeing.', expect: 'pass', construction: 'nominal', note: 'client live copy; "recuperare" is a discipline noun, not a condition' },
+  { ro: 'să previi apariția unor probleme', gloss: 'to prevent problems from appearing (possibility, not certainty)', expect: 'pass', construction: 'second_person', note: '"previi" is not a matched inflection of preven-' },
+  { ro: 'Specialist Kinetoterapeut', gloss: 'Physiotherapy Specialist (a role)', expect: 'pass', construction: 'nominal', note: 'a stated role, no condition scope' },
+  // MUST-BLOCK — a negated verb must NOT exempt an un-negated claim verb (per-occurrence)
+  { ro: 'Nu tratăm simptome, tratăm cauza.', gloss: "We don't treat symptoms, we treat the cause.", expect: 'fail', blockedClass: 2, construction: 'first_person', note: 'second "tratăm" (cauza) is un-negated — the exemption is per occurrence, never per sentence' },
+  { ro: 'Nu doar reducem durerea — o eliminăm.', gloss: 'We don\'t just reduce the pain — we eliminate it.', expect: 'fail', blockedClass: 2, construction: 'first_person', note: '"nu doar" AFFIRMS; "eliminăm" is un-negated' },
+  { ro: 'Nu tratăm — vindecăm.', gloss: "We don't treat — we cure.", expect: 'fail', blockedClass: 2, construction: 'first_person', note: '"tratăm" negated but "vindecăm" (after the dash) is un-negated — must still block' },
+  { ro: 'Nu doar tratăm, vindecăm.', gloss: "We don't just treat, we cure.", expect: 'fail', blockedClass: 2, construction: 'first_person', note: '"not only" affirms both verbs' },
 ];

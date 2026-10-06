@@ -124,6 +124,39 @@ function negSymptomPersistenceFiresRo(folded: string): boolean {
   return false;
 }
 
+// ── Per-occurrence negation exemption for the THERAPEUTIC rule (RO) — the ONLY loosening change in the set ──
+// Negating a treatment verb is usually innocuous ("nu tratăm simptome"); negating an OUTCOME/prevention verb
+// manufactures the claim the guard exists to stop ("nu vei mai avea dureri"). So this exemption attaches ONLY
+// to the therapeutic rule — NEVER to the outcome, stat, prevention or negated-symptom-persistence rules. It is
+// PER VERB OCCURRENCE, never per clause or sentence: a negated verb earlier must not license an un-negated
+// claim verb later, so "Nu tratăm simptome, tratăm cauza" still BLOCKS on the second "tratăm", and
+// "Nu tratăm — vindecăm" BLOCKS on "vindecăm". "nu doar / nu numai" AFFIRMS and is excluded.
+// NOTE ON NUMBERING: in code the therapeutic rule is blockedClass 2 and the OUTCOME rules are blockedClass 1 —
+// the INVERSE of the prose shorthand ("class 1 = treating a condition"). Anchor on the RULE, not the number:
+// aligning to the prose number would have put the exemption on the outcome rule, the one case where negation
+// manufactures the claim. (EN therapeutic matches a "we <...> verb" compound whose index is at "we", not the
+// verb, so this verb-anchored exemption is RO-only for now; EN carries the same latent FP — recorded follow-up.)
+const RO_CLAUSE_BREAK = /[.,;:!?—–\-]/;
+function therapeuticOccurrenceNegated(folded: string, verbStart: number): boolean {
+  let clauseStart = 0;
+  for (let i = verbStart - 1; i >= 0; i--) { if (RO_CLAUSE_BREAK.test(folded[i] as string)) { clauseStart = i + 1; break; } }
+  const before = folded.slice(clauseStart, verbStart);
+  if (/\bnu\s+doar\b|\bnu\s+numai\b/.test(before)) return false; // "not only X" AFFIRMS X — never an exemption
+  if (/\bnu\b(?:\s+\w+){0,3}\s*$/.test(before)) return true;      // nu / nu mai / nu te mai / nu ar trebui <verb>
+  if (/\bfara\s+(?:a|sa)\b(?:\s+\w+){0,2}\s*$/.test(before)) return true; // fără a / fără să <verb>
+  return false;
+}
+/** The RO therapeutic rule fires iff ANY verb occurrence is NOT directly negated (per-occurrence). */
+function therapeuticFiresRo(re: RegExp, folded: string): boolean {
+  const g = new RegExp(re.source, 'g');
+  let m: RegExpExecArray | null;
+  while ((m = g.exec(folded)) !== null) {
+    if (!therapeuticOccurrenceNegated(folded, m.index)) return true;
+    if (m.index === g.lastIndex) g.lastIndex++; // zero-width guard
+  }
+  return false; // no occurrences, or every occurrence negated
+}
+
 /**
  * Detect regulated claims in `text`. Returns one finding per construction class matched (empty ⇒ the
  * deterministic layer finds nothing — still subject to the Layer-3 judge upstream). Fail-closed on an
@@ -138,7 +171,8 @@ export function detectRegulatedClaims(text: string, language: GuardLanguage): Re
   const findings: RegulatedFinding[] = [];
   const add = (cls: RegulatedClass, reason: string) => findings.push({ clause: text.trim(), blockedClass: cls, reason });
 
-  if (P.therapeuticFP.test(t)) add(2, 'therapeutic-effect verb asserting an effect on a condition');
+  const therapeuticHit = language === 'ro' ? therapeuticFiresRo(P.therapeuticFP, t) : P.therapeuticFP.test(t);
+  if (therapeuticHit) add(2, 'therapeutic-effect verb asserting an effect on a condition');
   if (language === 'ro' && negSymptomPersistenceFiresRo(t)) add(1, 'negated symptom-persistence promise (the reader\'s symptom will cease)');
   if (P.outcomeSP.test(t)) add(1, 'second-person outcome construction (promises what will happen to the reader)');
   if (P.outcomeFP.test(t)) add(1, 'first-person outcome / restoration / prevention claim');
