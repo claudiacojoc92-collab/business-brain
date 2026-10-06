@@ -52,6 +52,10 @@ export function registerMoveDraftRoutes(server: FastifyInstance, deps: ServerDep
     // No draft yet — say WHY, plainly, and what unblocks it (never a silent empty state).
     const current = await deps.strategyService.getCurrent(business.id);
     if (!current) return reply.send({ status: 'blocked', reason: 'no_adopted_strategy', message: NO_ADOPTED_STRATEGY_MESSAGE, unblock: 'adopt_strategy' });
+    // Draft-on-surface: a strategy IS adopted but no draft yet — enqueue production (deterministic jobId dedupes
+    // repeated loads), and tell the founder it's coming.
+    const planVersionId = (request.query as { planVersionId?: string }).planVersionId ?? '';
+    await deps.moveDraftQueue?.enqueueMoveDraft({ jobType: 'MOVE_DRAFT', businessId: business.id, actionId, planVersionId, jobId: `move-draft:${business.id}:${actionId}`, correlationId: `move-draft:${business.id}:${actionId}`, traceId: `move-draft:${business.id}:${actionId}`, founderId: null, enqueuedAt: new Date().toISOString() });
     return reply.send({ status: 'pending', message: 'Se pregătește pagina ta — revino în scurt timp.' });
   });
 

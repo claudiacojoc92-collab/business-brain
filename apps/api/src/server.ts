@@ -68,6 +68,7 @@ export interface ServerDeps {
   reelShootRepo?: IReelShootRepository;
   moveDraftService?: MoveDraftService;
   moveDraftRepo?: IMoveDraftRepository;
+  moveDraftQueue?: QueueRegistry;
   produceLandingMove?: (businessId: string, actionId: string, planVersionId: string) => Promise<
     | { status: 'blocked'; reason: 'no_adopted_strategy'; message: string }
     | { status: 'produced'; moveDraft: MoveDraft }

@@ -1,6 +1,7 @@
 import { createKyselyClient, createRedisClient, createBullMqConnection, createLogger } from '@bb/infrastructure';
 import { buildCompositionRoot } from '@bb/composition';
 import { ReelShootWorker } from './reel-shoot/reel-shoot.worker';
+import { MoveDraftWorker } from './move-draft/move-draft.worker';
 import { MemoryAccumulatorWorker } from './memory/memory-accumulator.worker';
 import { NotificationWorker }      from './notification/notification.worker';
 import { AttributionWorker }       from './attribution/outcome-attribution.worker';
@@ -105,6 +106,10 @@ async function main(): Promise<void> {
     logger,
   );
   reelShootWorker.start();
+
+  // Landing move — draft-on-surface, same composition. Produces the draft off the API request path.
+  const moveDraftWorker = new MoveDraftWorker(bullMq, reelComposition.produceLandingMove, logger);
+  moveDraftWorker.start();
 
   // Outbox relay — continuous loop, publishes domain events to the in-process bus
   const outboxRelay = new OutboxRelayWorker(

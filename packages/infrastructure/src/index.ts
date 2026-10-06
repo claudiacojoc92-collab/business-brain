@@ -148,6 +148,7 @@ export type {
   AttributionJobPayload,
   ProjectionJobPayload,
   ContentDeliveryJobPayload,
+  MoveDraftJobPayload,
 } from './queue/queue-registry';
 
 // LLM
