@@ -252,6 +252,36 @@ parroting known-issue is addressed as part of that wiring, not here.
    (b) **17 strategies produced and none adopted is a PRODUCT problem, not an engineering one — and may be the
    most important thing in this report.** Flagged for the product owner, not the build queue.
 
+## Reach correction, the full-page result, and the price reason (2026-10-06)
+
+- **ATOM-LANE REACH — record corrected.** The atom lane reads EVERY ingested page in production
+  (`carouselContext` → `atomExtractionService.facts(bid)` → `PgEvidenceRepository.findByIds(all bound ids)` →
+  `toSourceUnits`). The earlier live runs used a TWO-page fixture (home + despre) and under-counted the lane's
+  reach — that was a fixture artifact, not the lane's behaviour.
+- **FULL-PAGE RUN (all 4 ingested content pages): 27 atoms, 0 dropped, spans exact.** service **11**
+  (+7 re-anchored from the `/servicii/*` pages: Pilates, Functional Training, Aerial Yoga, Balet Adulți,
+  Balet & Dans Copii, Group Training, Personal Training — the exact set the understanding lane had emitted as
+  synthesized prose), location 2, contact_booking 1, people 13. **Re-anchoring recovers the laundered services
+  with provenance** — they were about to be discarded as synthesized.
+- **SHRUNK CLASSIFIER SCOPE (Decision 1).** After full-page re-anchoring, the synthesized-only residue the
+  claim-type classifier must withhold is small: general positioning/audience prose (kept), deferred-class
+  **prices** (withheld), **policy** facts until that class ships, and `karate`. The classifier is a backstop over
+  a mostly-re-anchored lane, not a salvage mechanism.
+- **`karate` SUB-FINDING: the understanding model treats URL STRUCTURE as evidence.** `karate` appears NOWHERE in
+  page body text — only as a sitemap URL (`/lista-preturi-karate-copii/`). The understanding lane derived a
+  service claim from the sitemap. Not wrong (the page exists), but **not anchorable** (no body text), and it
+  explains a whole category of synthesized-only facts that re-anchoring can never recover. Recorded, not solved.
+- **`price` STAYS DEFERRED — corrected reason.** NOT staleness (their prices are published by them, as anchorable
+  as a service name). The real reason: **the generator must not volunteer prices into a landing page on its own
+  initiative — that is the owner's decision, not the copy's.** Long-term shape is "licensed but not volunteered"
+  (BB knows the price, uses it only when asked); that machinery doesn't exist yet, so `price` stays deferred and
+  fail-closed withholding handles it meanwhile. Do not re-litigate from the weak staleness argument.
+- **PRODUCTION-PATH CHECK (the snake/camel silent-zero).** Traced: `findByIds` → `toDomain` maps `source_url →
+  sourceUrl` + parses `payload`, so production feeds camelCase fragments end-to-end — NOT vulnerable. The
+  mismatch was harness-only (raw export JSON bypassing `toDomain`). But the symptom (0 units / 0 atoms / 0 error)
+  is a silent total failure of the same shape as the English-regex drop, so `toSourceUnits` now FAILS LOUDLY:
+  non-empty fragments → empty projection logs at error with the keys it actually saw. Shipped with the policy class.
+
 ## Status log
 
 - 2026-10-06: Plan written from the operator's decision (separate language-neutral atom extractor;
