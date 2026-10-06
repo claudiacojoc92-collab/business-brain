@@ -3,6 +3,7 @@
 export * from './contracts';
 export * from './landing-routing';
 export * from './people-fidelity';
+export * from './divergence';
 export * from './landing-safety';
 export * from './medical-guard';
 export * from './move-draft.service';

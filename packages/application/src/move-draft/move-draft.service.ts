@@ -6,6 +6,7 @@ import { classifyVoiceSample, type VoiceSampleContext } from '../voice/validatio
 import { detectRegulatedClaims, isGuardLanguageEnabled } from './medical-guard';
 import { specFromLandingSnapshot, landingDraftToSampleContent, landingSectionToSampleContent } from './landing-safety';
 import { checkPeopleFidelity } from './people-fidelity';
+import { measureDivergence, summarizeDivergence } from './divergence';
 import type {
   ILandingModelPort, IMoveDraftRepository, LandingAuthorizationSnapshot, LandingDraft,
   MoveDraft, MoveSafetyDecision,
@@ -30,7 +31,7 @@ export interface MoveDraftDeps {
   readonly model: ILandingModelPort;
   readonly judge?: PropositionJudge;          // Layer-3; omitted ⇒ deterministic-only (kernel + backstop)
   readonly repo: IMoveDraftRepository;
-  readonly log?: (e: { type: string; actionId: string; disposition: string; failingLayer: string | null; repairAttempts: number }) => void;
+  readonly log?: (e: { type: string; actionId: string; disposition: string; failingLayer: string | null; repairAttempts: number; divergence?: string }) => void;
   readonly clock?: () => string;
   readonly idgen?: () => string;
 }
@@ -150,7 +151,10 @@ export class MoveDraftService {
     if (!passed) return this.persistBlocked(base, safety);
     const md: MoveDraft = { ...base, draft, safetyDecision: safety, status: 'drafted' };
     await this.deps.repo.save(md);
-    this.deps.log?.({ type: 'move_draft', actionId: args.actionId, disposition: 'drafted', failingLayer: null, repairAttempts: attempts });
+    // Measure (do NOT block) per-class divergence of drafted copy from the licensed values — data for a later
+    // decision about constraining other classes. People are the hard guard above; this covers the rest.
+    const draftText = draft.sections.map((s) => `${s.heading ?? ''} ${s.body}`).join(' ') + ' ' + draft.cta;
+    this.deps.log?.({ type: 'move_draft', actionId: args.actionId, disposition: 'drafted', failingLayer: null, repairAttempts: attempts, divergence: summarizeDivergence(measureDivergence(draftText, args.snapshot.licensedPropositions)) });
     return md;
   }
 

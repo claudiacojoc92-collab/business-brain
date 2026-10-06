@@ -282,6 +282,29 @@ parroting known-issue is addressed as part of that wiring, not here.
   is a silent total failure of the same shape as the English-regex drop, so `toSourceUnits` now FAILS LOUDLY:
   non-empty fragments → empty projection logs at error with the keys it actually saw. Shipped with the policy class.
 
+## Generator-utilization findings (2026-10-06) — routing, variance, fidelity
+
+- **VARIANCE IS A FINDING IN ITS OWN RIGHT.** The discriminator run proved it: identical 63-proposition
+  substrate, one run NAMED all 13 people, the next wrote a vague paragraph. For a product handing drafts to
+  paying customers that is a **quality-floor** problem — two clients with the same data get different quality,
+  and a demo becomes a coin flip. Section routing is partly a fix for it (a section handed 13 people and told to
+  name them drifts far less than one handed 63 facts and told to write "proof"); the LLM's run-to-run
+  non-determinism under a flat bag is the mechanism.
+- **Section routing + how_it_works WORKED on completeness** (3× acceptance, identical substrate): all three runs
+  listed all 10 services, populated how_it_works with all 4 policy rules, and listed 13 people. The coin-flip on
+  completeness is gone.
+- **But the 3× run exposed NAME CORRUPTION** (now guarded): the generator wrote `Florin Lazăr` (for `Florin
+  Laza`) in all three and `Carmen Mureșan` (for `Carmen Constantinescu`, borrowing the adjacent surname) in two.
+  Deterministic people-fidelity guard added (diacritic-folding boundary, `people` only, blocks after repair).
+- **THE PRICE/SHOP SENTENCE DISAPPEARING IN ALL THREE RUNS IS LUCK, NOT A GATE.** Routing happened to send the
+  synthesized price fact to the `general` bucket, which feeds hero/subhead/who — sections that didn't reach for
+  it. The fact is STILL in the licensed set and could resurface. **Three clean runs are NOT evidence the
+  licensing asymmetry is fixed.** The Decision-1 claim-type classifier is still owed; until it lands, the price
+  sentence is suppressed by luck, not prevented.
+- **Divergence is MEASURED, not blocked, for the non-people classes** (`measureDivergence`): data for a later
+  decision about constraining a class — RO inflection means services/policy diverge from verbatim by design, so
+  we do not constrain on it today.
+
 ## Status log
 
 - 2026-10-06: Plan written from the operator's decision (separate language-neutral atom extractor;
