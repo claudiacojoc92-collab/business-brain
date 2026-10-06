@@ -89,7 +89,10 @@ export class AtomExtractionService {
     if ((await this.deps.repo.latestFingerprint(businessId)) === fp) return this.deps.repo.listAtoms(businessId);
     if (ids.length === 0) { await this.deps.repo.replaceForBusiness(businessId, fp, []); return []; }
 
-    const units = toSourceUnits(await this.deps.evidence.findByIds(ids));
+    const units = toSourceUnits(
+      await this.deps.evidence.findByIds(ids),
+      (e) => this.deps.log?.({ type: 'source_units_empty', detail: JSON.stringify(e) }), // loud: mapping break
+    );
     if (units.length === 0) { await this.deps.repo.replaceForBusiness(businessId, fp, []); return []; }
 
     let proposals;

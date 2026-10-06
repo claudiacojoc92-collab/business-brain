@@ -142,6 +142,22 @@ describe('AtomExtractionService — verbatim anchoring', () => {
     expect(logs.find((l) => l.type === 'atoms_extracted')?.detail).toContain('dropped_unit=2');
   });
 
+  it('licenses policy atoms (capacity, cancellation window) with correct spans', async () => {
+    const page = 'Clasele se desfășoară în grupuri restrânse (max. 4 persoane). Anulările se realizează cu minimum 8 ore înainte de ora programată.';
+    const svc2 = new AtomExtractionService({
+      links: { listFragmentIds: async () => ['p'] } as never,
+      evidence: { findByIds: async () => [{ ...frag(), id: 'p', payload: { ref: 'home', text: page } }] } as never,
+      model: model([
+        { atomClass: 'policy', value: '(max. 4 persoane)', sourceRef: 'home' },
+        { atomClass: 'policy', value: 'Anulările se realizează cu minimum 8 ore înainte de ora programată.', sourceRef: 'home' },
+      ]), repo: repo(), clock: () => '2026-10-06T00:00:00.000Z',
+    });
+    const atoms = await svc2.facts('b1');
+    expect(atoms.map((a) => a.atomClass)).toEqual(['policy', 'policy']);
+    expect(atoms.map((a) => a.value)).toEqual(['(max. 4 persoane)', 'Anulările se realizează cu minimum 8 ore înainte de ora programată.']);
+    for (const a of atoms) expect(page.slice(a.charStart, a.charEnd)).toBe(a.value);
+  });
+
   it('instruments the drop rate: proposed vs licensed, with the breakdown', async () => {
     const logs: { type: string; detail?: string }[] = [];
     const md = svc([

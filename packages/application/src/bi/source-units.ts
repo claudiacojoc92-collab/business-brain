@@ -12,6 +12,10 @@ export interface SourceUnit {
   readonly text: string;
 }
 
+/** Emitted when a non-empty fragment list projects to ZERO units — never a legitimate state (a field-mapping
+ *  break: fragments present but their text/url unreadable). Carries the keys actually seen, to name the break. */
+export interface SourceUnitsAnomaly { readonly reason: string; readonly fragmentCount: number; readonly sampleKeys: string[] }
+
 /**
  * Project bound evidence fragments into readable source units WITH resolvable provenance. Declared/handed
  * material (brochures, PDFs, IG) keeps its own ref + a founder:// URI; observed website pages go through
@@ -21,7 +25,7 @@ export interface SourceUnit {
  * Extracted verbatim from ProofExtractionService.toUnits (2026-10-06, intent/2026-10-06-licensed-atoms);
  * behaviour is pinned by source-units.characterization.test.ts.
  */
-export function toSourceUnits(frags: EvidenceFragment[]): SourceUnit[] {
+export function toSourceUnits(frags: EvidenceFragment[], onAnomaly?: (e: SourceUnitsAnomaly) => void): SourceUnit[] {
   const units: SourceUnit[] = [];
   // Declared/handed material (brochures, PDFs, IG) — page/doc text with a founder:// or platform URI.
   for (const f of frags) {
@@ -42,5 +46,17 @@ export function toSourceUnits(frags: EvidenceFragment[]): SourceUnit[] {
   // De-dup by sourceRef (bridge refs are stable); keep first.
   const byRef = new Map<string, SourceUnit>();
   for (const u of units) if (!byRef.has(u.sourceRef)) byRef.set(u.sourceRef, u);
-  return [...byRef.values()];
+  const result = [...byRef.values()];
+  // FAIL LOUDLY: fragments in, zero units out is never legitimate — it is a field-mapping break (the
+  // snake/camel silent-zero that produced 0 atoms / 0 errors). Surface it with the keys actually seen so the
+  // next mapping break is caught, not swallowed. (A business with only sitemap/block fragments is the rare
+  // benign case; an error log there is acceptable noise vs. a silent total failure.)
+  if (frags.length > 0 && result.length === 0) {
+    onAnomaly?.({
+      reason: 'non-empty fragment list projected to ZERO source units — a field-mapping break (never a legitimate state)',
+      fragmentCount: frags.length,
+      sampleKeys: Object.keys((frags[0] ?? {}) as Record<string, unknown>).sort(),
+    });
+  }
+  return result;
 }

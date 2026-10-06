@@ -80,6 +80,21 @@ describe('fragment→unit projection — characterization (pre-refactor behaviou
     expect(u.map((x) => x.text)).toEqual(['ig', 'echipa']);
   });
 
+  it('fails loudly: non-empty fragments → zero units invokes onAnomaly with the keys seen', () => {
+    const anomalies: { fragmentCount: number; sampleKeys: string[] }[] = [];
+    const out = toSourceUnits([frag({ source: 'website', payload: { kind: 'block', text: 'x' } })], (e) => anomalies.push(e));
+    expect(out).toHaveLength(0);
+    expect(anomalies).toHaveLength(1);
+    expect(anomalies[0]?.fragmentCount).toBe(1);
+    expect(anomalies[0]?.sampleKeys).toContain('payload'); // names what it actually saw
+  });
+
+  it('does not cry wolf: a normal projection does not invoke onAnomaly', () => {
+    const anomalies: unknown[] = [];
+    toSourceUnits([frag({ source: 'upload', payload: { ref: 'u', text: 'hello' } })], (e) => anomalies.push(e));
+    expect(anomalies).toHaveLength(0);
+  });
+
   // Post-refactor: the extracted shared function is byte-for-byte equivalent to the private projection on
   // a combined fixture. (The service's private toUnits now delegates to this; asserting equality covers the
   // shared function directly, so it stays covered even if the delegate is later removed.)

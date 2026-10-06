@@ -149,6 +149,6 @@ export class ProofExtractionService {
    *  never empty). Shared with atom extraction — see bi/source-units.ts (behaviour pinned by its
    *  characterization test). Kept as a thin delegate so call sites and the private seam are unchanged. */
   private toUnits(frags: EvidenceFragment[]): ProofSourceUnit[] {
-    return toSourceUnits(frags);
+    return toSourceUnits(frags, (e) => this.deps.log?.({ type: 'source_units_empty', detail: JSON.stringify(e) }));
   }
 }

@@ -16,10 +16,19 @@
  * (one enum value + one prompt line + one test) and needs no schema change.
  */
 
-/** The shipped atom classes. Deferred (additive later): 'schedule' (weak copy, subpage) | 'price' (a
- *  published price is a business decision, not a copy decision, and goes stale). */
-export type AtomClass = 'service' | 'location' | 'contact_booking' | 'people';
-export const ATOM_CLASSES: readonly AtomClass[] = ['service', 'location', 'contact_booking', 'people'];
+/**
+ * The shipped atom classes.
+ *  - `policy`: rules of HOW the service works — group size / capacity, cancellation & rescheduling windows,
+ *    arrival / lead time, booking requirements, membership terms. Concrete detail that makes a page credible
+ *    (e.g. "max. 4 persoane", "anulările se realizează cu minimum 8 ore înainte"). Same verbatim anchoring.
+ * Deferred (additive later): 'schedule' (opening-hours tables — weak copy, live on a subpage); 'price' —
+ * NOT for staleness (their prices are published, as anchorable as a service name) but because the generator
+ * must not VOLUNTEER a price into a landing page on its own initiative; that is the owner's decision, not the
+ * copy's. The long-term shape is "licensed but not volunteered" (known, used only when asked), which needs
+ * machinery that does not exist yet — so `price` stays deferred and fail-closed withholding handles it.
+ */
+export type AtomClass = 'service' | 'location' | 'contact_booking' | 'people' | 'policy';
+export const ATOM_CLASSES: readonly AtomClass[] = ['service', 'location', 'contact_booking', 'people', 'policy'];
 
 /** One readable source unit handed to the extractor (a page or a poured-in document), with resolvable
  *  provenance. (Same shape proof extraction projects; unified with proof's via the shared projection.) */

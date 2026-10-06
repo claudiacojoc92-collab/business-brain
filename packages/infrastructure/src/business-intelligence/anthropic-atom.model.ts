@@ -14,11 +14,12 @@ import { ATOM_CLASSES, type AtomClass, type AtomCandidate, type AtomExtractionIn
 const RULES = [
   'You extract a business\'s VERIFIABLE OPERATIONAL ATOMS from ITS OWN page text, to be licensed as facts the business may state about itself.',
   'OUTPUT — your ENTIRE response is ONE JSON object and nothing else (first char "{"): {"atoms":[{"atomClass":"…","value":"…","sourceRef":"…"}]}',
-  'Exactly four atom classes, nothing else:',
+  'Exactly five atom classes, nothing else:',
   '  - "service": an exact service / offering NAME as written (e.g. a class, a therapy, a session type).',
   '  - "location": a physical address — street + number (+ area/city), one atom per location.',
   '  - "contact_booking": a phone number, an email address, a booking tool/app name, a booking URL, or the one-line booking instruction.',
   '  - "people": a NAMED individual together with their stated role/qualification (name + title as written). NEVER a group or collective phrase ("our team", "specialists", "echipa noastră") — a group noun is not a person.',
+  '  - "policy": a RULE of how the service works — group size / capacity, cancellation / rescheduling window, arrival or lead time, booking requirement, membership term (e.g. "(max. 4 persoane)", "anulările se realizează cu minimum 8 ore înainte de ora programată"). NOT a price.',
   'VERBATIM: every "value" MUST be copied character-for-character from the cited unit\'s text — do NOT paraphrase, translate, fix spelling or diacritics, summarise, or join text across units. If you cannot copy it verbatim, OMIT it (it would be dropped anyway).',
   'Cite in "sourceRef" the unit label shown after "sourceRef:" in the header, copied EXACTLY and nothing else — no page type, no parenthetical, no URL.',
   'Extract only what is actually present. No prices, no opening hours. No invented or inferred facts. If a unit has no atoms, return none for it.',
