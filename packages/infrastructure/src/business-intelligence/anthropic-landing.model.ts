@@ -1,5 +1,5 @@
 import { createAnthropicClient } from '../llm/anthropic-client';
-import type { ILandingModelPort, LandingGenInput, LandingRepairInput, LandingDraft, LandingSection, LandingSectionRole } from '@bb/application';
+import { routeFacts, type ILandingModelPort, type LandingGenInput, type LandingRepairInput, type LandingDraft, type LandingSection, type LandingSectionRole } from '@bb/application';
 
 /**
  * Landing prose generator (move-draft). Produces a STRUCTURED landing page grounded ONLY in licensed facts —
@@ -14,26 +14,35 @@ function rules(l: string): string {
   return [
     `You are Business Brain writing ONE business's landing-page copy, entirely in ${l}. Write everything in ${l}; never mix languages.`,
     'OUTPUT — your ENTIRE response is ONE JSON object and nothing else (first char "{"): {"sections":[{"role":"hero_headline","heading":"","body":"..."},{"role":"hero_subhead","body":"..."},{"role":"what","heading":"...","body":"..."},{"role":"who","heading":"...","body":"..."},{"role":"proof","heading":"...","body":"..."}],"cta":"..."}',
-    'GROUND every statement in the LICENSED FACTS and PROOF below. State NOTHING not entailed by them — no invented facts, numbers, testimonials, results, timeframes or offers.',
+    'FACTS ARE ROUTED TO SECTIONS. Use each group ONLY in its named section, and use ALL of the items in it:',
+    '  • "what" names EVERY item under SERVICES, as written. Do NOT collapse them into a category or summary.',
+    '  • "proof" NAMES EVERY person under PEOPLE, each with the role given. NEVER replace them with a generic phrase like "our team of specialists" — list the actual names.',
+    '  • "hero_headline" / "hero_subhead" / "who" use POSITIONING/AUDIENCE and LOCATIONS — the general framing, never a specific unlisted claim.',
+    '  • the CTA uses CONTACT/BOOKING + the required next action.',
+    'GROUND every statement in the routed facts + PROOF below. State NOTHING not entailed by them — no invented facts, numbers, testimonials, results, timeframes or offers.',
     'FORBIDDEN (never write these — this is a recovery/health business and the copy is public):',
     '  1. Promising a health OUTCOME — what will happen to the reader\'s body/health ("get you back to running", "you\'ll be pain-free").',
     '  2. Claiming a THERAPEUTIC EFFECT — that you treat/heal/cure/correct/reduce/prevent a condition.',
     '  3. Implying CLINICAL COMPETENCE beyond a stated credential — a specialty/scope not backed by a credential in the facts.',
     'DESCRIBE what you DO and WHO it is for; name a condition only as the context of a service ("for lower-back pain"), never as something you act on. Do not promise what WILL happen.',
     'Sound like THIS business — follow the VOICE examples for tone (how to say it), never to introduce a new claim.',
-    'Keep each section tight: a hero line, a one-line subhead, two or three short sentences per section, one clear CTA.',
+    'Keep each section tight — but "what" and "proof" are complete lists, not samples: every service, every person.',
   ].join('\n');
 }
 
 function facts(i: LandingGenInput): string {
-  const lp = i.snapshot.licensedPropositions.map((p, n) => `${n + 1}. ${p.text}`);
+  const r = routeFacts(i.snapshot.licensedPropositions);
+  const list = (xs: string[], empty: string) => (xs.length ? xs.map((x, n) => `  ${n + 1}. ${x}`) : [`  ${empty}`]);
   return [
     `BUSINESS LANDING JOB: ${i.communicationJob}`,
-    `AUDIENCE: ${i.snapshot.audienceUseContext || '(the business\'s audience)'}`,
     `REQUIRED NEXT ACTION (CTA): ${i.snapshot.ctaFunction || '(a clear next step)'}`,
-    '', 'LICENSED FACTS (the ONLY things you may state):', ...(lp.length ? lp : ['(none — write only non-claim framing + the CTA)']),
-    '', 'PROOF (documented, licensed — the only numbers/results you may cite):', ...(i.snapshot.proofFacts.length ? i.snapshot.proofFacts.map((p, n) => `${n + 1}. ${p}`) : ['(none — cite no results or numbers)']),
-    '', 'VOICE (tone only, not new claims):', ...(i.voiceLines.length ? i.voiceLines.map((v, n) => `${n + 1}. ${v}`) : ['(none captured — plain, warm, specific)']),
+    '', 'SERVICES → the "what" section (name every one):', ...list(r.services, '(none)'),
+    '', 'PEOPLE → the "proof" section (NAME EVERY ONE with their role):', ...list(r.people, '(none)'),
+    '', 'CONTACT / BOOKING → the CTA:', ...list(r.contact, '(none — use the required next action)'),
+    '', 'LOCATIONS → hero / subhead context:', ...list(r.locations, '(none)'),
+    '', 'POSITIONING / AUDIENCE (synthesis) → hero, subhead, who (general framing only):', ...list([...r.general, ...(i.snapshot.audienceUseContext ? [`audience: ${i.snapshot.audienceUseContext}`] : [])], '(none)'),
+    '', 'PROOF (documented, licensed — the only numbers/results you may cite):', ...list(i.snapshot.proofFacts, '(none — cite no results or numbers)'),
+    '', 'VOICE (tone only, not new claims):', ...list(i.voiceLines, '(none captured — plain, warm, specific)'),
   ].join('\n');
 }
 

@@ -1,3 +1,5 @@
+import type { AtomClass } from '../atoms/contracts';
+
 /**
  * The safety decision stored on every MoveDraft — drafted OR blocked — so the outcome is QUERYABLE, not just
  * logged. With no alerting in the product, a guard that silently blocks most drafts would be invisible; this
@@ -36,7 +38,10 @@ export interface LandingDraft {
 
 // ── the authorization snapshot (mirrors carousel's AssetAuthorizationSnapshot; keyed to the MOVE) ──
 export type LandingPropositionSource = 'business_evidence' | 'founder_owned' | 'behavior_result' | 'strategy_decision';
-export interface LandingProposition { readonly ref: string; readonly text: string; readonly source: LandingPropositionSource }
+/** `atomClass` (when present) is the anchored-atom class this proposition came from; it ROUTES the proposition
+ *  to a section (service→what, people→proof, contact_booking→cta, policy→how-it-works). Absent ⇒ synthesized /
+ *  founder prose, available to hero / subhead / who. Routing is a generation concern; the safety spec stays flat. */
+export interface LandingProposition { readonly ref: string; readonly text: string; readonly source: LandingPropositionSource; readonly atomClass?: AtomClass }
 
 /** Immutable record of exactly what BB was authorized to claim when this draft was produced — stored so a
  *  later audit replays from this, never from mutable strategy. */
