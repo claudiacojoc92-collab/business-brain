@@ -241,3 +241,24 @@ parroting known-issue is addressed as part of that wiring, not here.
   experiență 0 +`.
 - 2026-10-06: Building from commit 2 (contracts + ports). de-anglicize approach (commit 9) comes as its own
   proposal before implementation.
+- 2026-10-06: **Commit 3 LANDED** (`2376078`, shared projection, characterization-first). Guard work done +
+  verified (pending `approve commit` to land — the grant is one-commit-per-approval):
+  - **CLASS-NUMBER INVERSION (record so the next reader does not repeat it):** in CODE the therapeutic rule
+    (treat/cure/reduce a condition) is `blockedClass 2`, and the OUTCOME rules are `blockedClass 1` — the INVERSE
+    of the prose shorthand ("class 1 = treating a condition"). The negation exemption anchors on the **rule**
+    (therapeutic), NOT the number. Aligning to the prose number would have put the exemption on the outcome rule
+    — the one case where negation manufactures the claim. Noted in-code at the exemption too.
+  - **Commit A (participle coverage + therapeutic negation exemption):** stem extended to `-ată/-ate` so the
+    passive "boala este tratată" is caught (was a gap); then a PER-OCCURRENCE negation exemption on the
+    therapeutic rule only (never outcome/stat/prevention). Coverage first, then the exemption. Fixes the
+    confirmed FP on the client's "Nu tratăm simptome…" while keeping "Nu tratăm simptome, tratăm cauza" and
+    "Nu tratăm — vindecăm" BLOCKED. EN exemption deferred (its match anchors on "we", not the verb) — recorded.
+  - **Commit B (negated symptom persistence):** a new CLOSED outcome family (`blockedClass 1`) — "nu (vei/te/o)
+    mai … <persist-verb> … <symptom>" / pain-verb. Blocks the category's most common illegal claim ("Nu vei mai
+    avea dureri"), which passed before this work; the four administrative boundary lines ("Nu mai primim
+    programări", etc.) PASS. Separate rule, separate commit, separate decision.
+  - Guard suite 82/82 (was 59): +13 (commit A) +10 (commit B). tsc 0, no regression.
+  - **B1/B2/B3 decision = ADD COVERAGE** (done, commit B) — not the judge: the kernel is the deterministic floor
+    and the gravest claim must not depend on a model's mood or a demo retry.
+  - Still pending: land A+B, then atom commits 4 (service+tests) / 5 (adapter) / 6 (V083 migration), and the
+    fixture derivation from the BB exports (public page text ONLY).

@@ -222,3 +222,19 @@ later if the file gets long.
 - **Fix (not done — do NOT touch):** recorded deliberately. Removing dead schema means a new forward migration (never
   edit applied ones), and the slice may be intended for a later knowledge-architecture build (ADR-011). Leave it;
   just know it is not wired.
+
+## The medical guard's negation exemption is RO-only — EN still false-positives on negated treatment
+
+- **Found:** 2026-10-06, implementing the per-occurrence negation exemption (commit `c024162`).
+- **What:** the guard now exempts a directly-negated therapeutic verb in Romanian, so "Nu tratăm simptome"
+  (we do *not* treat symptoms) PASSES. English has **no** such exemption: `EN.therapeuticFP`
+  (`packages/application/src/move-draft/medical-guard.ts`) matches a `\bwe\b[^.?!]{0,20}\b(treat|cure|…)\b`
+  **compound**, so its match index is at "we", not at the verb — the RO exemption, which scans the clause
+  immediately before each *verb* occurrence for a negator, cannot be pointed at it as-is. So "We do not treat
+  symptoms" still BLOCKS as a false positive on the EN path.
+- **Impact:** low today — the demo and the first businesses are Romanian, and the generator only emits
+  guard-enabled languages. But it is a real EN/RO **asymmetry**: identical copy, opposite verdict, depending on
+  language. A founder writing EN "we don't treat X" copy would hit a spurious block.
+- **Fix (not done):** give EN a verb-anchored therapeutic match (so the negator scan has a verb position to look
+  before), then apply the same per-occurrence exemption with EN negators (not / don't / doesn't / without / no
+  longer). Scope it exactly as RO: therapeutic rule only, never the outcome/prevention rules.
