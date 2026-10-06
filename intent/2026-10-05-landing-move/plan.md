@@ -355,3 +355,16 @@ mapping are new each time.
   gate incl. the live judge, 1 repair — grounded, warm, no therapeutic claims, and the proof section correctly
   cited no results (none licensed). Remaining: compose-root wiring + API routes + BullMQ draft-on-surface + Today
   UI; and a real-data run once a fresh prod token is available.
+- 2026-10-06: **SampleChannel `'landing'` added (frozen-slice change, `approve frozen`) — the borrowed-'carousel'
+  label removed.** `SampleChannel = 'reel' | 'carousel' | 'caption' | 'landing'` (voice/contracts.ts); documented
+  at the enum that landing shares the carousel-like discrete-CTA shape (CTA in its own field, never in a section
+  body), which the existing `channel === 'caption' ? … : …` split in validation.ts carries over for free — landing
+  takes the same discrete-`cta` branch as reel/carousel, so the CTA-survival check is byte-identical and no branch
+  was restructured. `MoveDraftService.GATE_CHANNEL` switched `'carousel'` → `'landing'`: every voice-gate call for a
+  web page now reads the real channel. No persisted leak either way — move-draft stores only MoveSafetyDecision +
+  the snapshot, neither of which carries a channel, so GATE_CHANNEL was always transient. DB/repo: the voice
+  `channel` columns are permissive `TEXT` with NO CHECK (V068, committed — can't and needn't touch it; it already
+  stores 'landing'); the repo's addSample/addExample type-flow from the widened enum and read back pass-through, so
+  no repo literal changed. tsc -b 0 (full graph); move-draft 71/71; frozen voice suite 93/93 (unchanged). NOT
+  committed (no `approve commit` this turn). Deferred/optional: a one-line CTA-shape comment at validation.ts:212
+  (pure doc, blocked when the frozen grant lapsed mid-turn — the enum already documents it). Still: the wiring.

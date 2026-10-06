@@ -16,10 +16,10 @@ import type {
  *  attempts have low upside. */
 const MAX_REPAIRS = 2;
 
-// The gate uses an existing SampleChannel for the backstop's CTA semantics only (carousel-like: the CTA is a
-// discrete field, not inside a caption). It is NEVER persisted — the record's kind is 'landing'. A real
-// 'landing' SampleChannel is a separate frozen-slice change; the kernel reads channel for no safety decision.
-const GATE_CHANNEL = 'carousel' as const;
+// A landing page is its own SampleChannel. It shares the carousel-like CTA shape (the CTA is a discrete field,
+// not embedded in a caption), so the backstop's CTA-survival check treats it exactly as carousel/reel. This
+// value flows into every voice-gate call for a web page, so the channel reads 'landing' — not a borrowed label.
+const GATE_CHANNEL = 'landing' as const;
 
 type GateLayer = 'medical' | 'kernel' | 'backstop' | 'judge';
 interface GateFailure { readonly section: string; readonly layer: string; readonly rule: string }

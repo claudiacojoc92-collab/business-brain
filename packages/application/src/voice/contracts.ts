@@ -14,7 +14,10 @@ import type { AuthorizationSnapshot, SafetyDecision } from './authorization-snap
 export type VoiceSubject = 'founder_public' | 'brand';
 export type ExampleSubject = VoiceSubject | 'founder_conversational';
 export type SpeakingRole = 'founder_self' | 'founder_for_brand' | 'brand_institutional' | 'founder_led_brand';
-export type SampleChannel = 'reel' | 'carousel' | 'caption';
+// CTA shape by channel: 'caption' embeds the next action inside the caption text; 'reel' | 'carousel' | 'landing'
+// carry it in the discrete `cta` field. 'landing' is a web page (move-draft), not an Instagram format, but it
+// shares the carousel-like discrete-CTA shape — the CTA lives in its own field, never inside a section body.
+export type SampleChannel = 'reel' | 'carousel' | 'caption' | 'landing';
 
 export type VoiceExampleKind =
   | 'seed' | 'founder_written' | 'accepted' | 'strongly_accepted' | 'rejected'
