@@ -17,7 +17,9 @@ import {
   PgBusinessEvidenceLinkRepository,
   PgProofRepository,
   PgReachRepository,
+  PgAtomRepository,
   AnthropicProofModel,
+  AnthropicAtomModel,
   PgDiscoveredProfileRepository,
   PgUnderstandingSnapshotRepository,
   PgAhaRepository,
@@ -97,6 +99,7 @@ import {
   ConversationService,
   BoundSourceReader,
   ProofExtractionService,
+  AtomExtractionService,
   BusinessCorrectionService,
   Aha2Service,
   StrategyService,
@@ -511,6 +514,18 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     // eslint-disable-next-line no-console
     log: (e) => console.error('[proof]', JSON.stringify(e)),
   });
+  // Licensed atoms — the verifiable operational facts (services, locations, contact/booking, named people) the
+  // business states about ITSELF, verbatim-anchored to its ingested pages. Reuses the same bound-fragment ports
+  // as proof extraction; feeds carouselContext below as business_evidence, so carousel/reel/move-draft inherit it.
+  const atomExtractionService = new AtomExtractionService({
+    links: new PgBusinessEvidenceLinkRepository(db),
+    evidence: new PgEvidenceRepository(db),
+    model: new AnthropicAtomModel(anthropicKey),
+    repo: new PgAtomRepository(db),
+    modelId: process.env['LLM_STRONG_MODEL'] ?? undefined,
+    // eslint-disable-next-line no-console
+    log: (e) => console.error('[atoms]', JSON.stringify(e)),
+  });
   // Carousel governance context — reused by both the carousel service (claim authority) and the Slice-6.1
   // photo-led recommender (strategy conditioning). Photos NEVER add to this; claim authority stays here.
   const carouselContext = async (bid: string) => {
@@ -541,8 +556,14 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
       const founderCorrections = active.filter((s) => s.kind === 'business_correction').map((s) => s.statement.trim()).filter(Boolean);
       const snap = await understandingRepo.latest(bid);
       const businessEvidence = allowedBusinessFacts(snap?.understanding ?? null);
+      // Verbatim-anchored operational atoms (services/locations/contact/people) — licensed business_evidence
+      // alongside the understanding synthesis. Additive and fail-soft: a flaky extraction never blocks context.
+      let atomFacts: string[] = [];
+      try { atomFacts = (await atomExtractionService.facts(bid)).map((a) => a.value); }
+      catch { /* atoms are additive; never block the context on them */ }
       const licensedPropositions = [
         ...businessEvidence.map((t, i) => ({ ref: `B${i + 1}`, text: t, source: 'business_evidence' as const })),
+        ...atomFacts.map((t, i) => ({ ref: `A${i + 1}`, text: t, source: 'business_evidence' as const })),
         ...founderCorrections.map((t, i) => ({ ref: `C${i + 1}`, text: t, source: 'founder_owned' as const })),
         ...founderProps.map((t, i) => ({ ref: `F${i + 1}`, text: t, source: 'founder_owned' as const })),
       ];
