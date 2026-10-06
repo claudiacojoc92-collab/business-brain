@@ -54,6 +54,9 @@ export * from './business-understanding/index';
 export * from './conversation/index';
 export * from './proof/index';
 
+// Licensed atoms — language-neutral verbatim-anchored business facts → the shared substrate (intent 2026-10-06)
+export * from './atoms/index';
+
 // Attribution by asking (V081) — reflective-only weekly reach reports. HARD-WALLED from asset authority.
 export * from './reach/index';
 
