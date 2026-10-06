@@ -1,4 +1,4 @@
-import { generateId } from '@bb/shared';
+import { generateId, NotFoundError, ValidationError } from '@bb/shared';
 import type { AuthorizedMessageSpec, SampleContent } from '../voice/contracts';
 import { validateAgainstAuthorization, type PropositionJudge } from '../voice/proposition-safety';
 import { classifyLayers } from '../voice/proposition-classes';
@@ -156,6 +156,55 @@ export class MoveDraftService {
     const draftText = draft.sections.map((s) => `${s.heading ?? ''} ${s.body}`).join(' ') + ' ' + draft.cta;
     this.deps.log?.({ type: 'move_draft', actionId: args.actionId, disposition: 'drafted', failingLayer: null, repairAttempts: attempts, divergence: summarizeDivergence(measureDivergence(draftText, args.snapshot.licensedPropositions)) });
     return md;
+  }
+
+  /** The founder accepts the current draft: append an 'accepted' version (append-only; a blocked draft can't be accepted). */
+  async accept(businessId: string, actionId: string): Promise<MoveDraft> {
+    const latest = await this.deps.repo.latestForAction(businessId, actionId);
+    if (!latest) throw new NotFoundError('MOVE_DRAFT_NOT_FOUND', 'There is no draft to accept.');
+    if (latest.status === 'blocked' || !latest.draft) throw new ValidationError('NOT_ACCEPTABLE', 'A blocked draft cannot be accepted.');
+    if (latest.status === 'accepted') return latest;
+    const accepted: MoveDraft = { ...latest, status: 'accepted', version: latest.version + 1, producedAt: this.clock() };
+    await this.deps.repo.save(accepted);
+    this.deps.log?.({ type: 'move_draft', actionId, disposition: 'accepted', failingLayer: null, repairAttempts: 0 });
+    return accepted;
+  }
+
+  /** Rewrite ONE section: regenerate it from its routed facts, re-gate the whole draft, append a new version.
+   *  Re-gates from the PERSISTED snapshot (communicationJob + voice are stored there) — no context provider
+   *  needed. Fail-closed: a rewrite that cannot pass the gate is rejected and the previous draft stays intact. */
+  async rewriteSection(businessId: string, actionId: string, role: LandingDraft['sections'][number]['role']): Promise<MoveDraft> {
+    const latest = await this.deps.repo.latestForAction(businessId, actionId);
+    if (!latest || !latest.draft) throw new NotFoundError('MOVE_DRAFT_NOT_FOUND', 'There is no draft to rewrite.');
+    const snap = latest.snapshot;
+    if (!isGuardLanguageEnabled(snap.language)) throw new ValidationError('LANGUAGE_NOT_SUPPORTED', 'This language is not guard-enabled.');
+    const language = snap.language as 'ro' | 'en';
+    const communicationJob = snap.communicationJob ?? '';
+    const voiceLines = snap.voiceLines ?? [];
+    const spec = specFromLandingSnapshot(snap, communicationJob);
+    const ctx = this.ctx(language, voiceLines, this.factual(snap));
+    const peopleValues = snap.licensedPropositions.filter((p) => p.atomClass === 'people').map((p) => p.text);
+
+    let draft = await this.deps.model.rewriteSection({ snapshot: snap, communicationJob, voiceLines, language, previous: latest.draft, role });
+    let result = await this.runGate(draft, spec, language, ctx, peopleValues);
+    let attempts = 0;
+    while (result.failingLayer !== null && attempts < MAX_REPAIRS) {
+      attempts++;
+      draft = await this.deps.model.repair({ snapshot: snap, communicationJob, voiceLines, language, previous: draft, failures: result.failures.map((f) => ({ section: f.section, rule: `${f.layer} — ${f.rule}` })) });
+      result = await this.runGate(draft, spec, language, ctx, peopleValues);
+    }
+    if (result.failingLayer !== null) {
+      // Fail-closed: do not replace a good draft with an ungated rewrite. Legible to the caller.
+      this.deps.log?.({ type: 'move_draft', actionId, disposition: 'rewrite_blocked', failingLayer: result.failingLayer, repairAttempts: attempts });
+      throw new ValidationError('REWRITE_BLOCKED', `The rewritten "${role}" section could not pass the safety gate; the previous draft is unchanged.`);
+    }
+    const next: MoveDraft = {
+      ...latest, draft, safetyDecision: { layersRun: result.layersRun, failingLayer: null, failures: [], repairAttempts: attempts, disposition: 'drafted' },
+      status: 'drafted', version: latest.version + 1, producedAt: this.clock(),
+    };
+    await this.deps.repo.save(next);
+    this.deps.log?.({ type: 'move_draft', actionId, disposition: 'drafted', failingLayer: null, repairAttempts: attempts });
+    return next;
   }
 
   private async persistBlocked(base: Omit<MoveDraft, 'draft' | 'safetyDecision' | 'status'>, safety: MoveSafetyDecision): Promise<MoveDraft> {

@@ -37,7 +37,12 @@ function repo(): IMoveDraftRepository & { saved: MoveDraft[] } {
 function model(scripts: LandingDraft[]): ILandingModelPort & { calls: string[] } {
   const calls: string[] = []; let i = 0;
   const next = () => scripts[Math.min(i++, scripts.length - 1)]!;
-  return { calls, draft: async () => { calls.push('draft'); return next(); }, repair: async () => { calls.push('repair'); return next(); } };
+  return {
+    calls,
+    draft: async () => { calls.push('draft'); return next(); },
+    repair: async () => { calls.push('repair'); return next(); },
+    rewriteSection: async () => { calls.push('rewriteSection'); return next(); },
+  };
 }
 const args = { businessId: 'b1', actionId: 'p1-a1', planVersionId: 'pv1', snapshot: SNAP, communicationJob: 'landing page', voiceLines: [], language: 'ro' };
 
@@ -121,6 +126,34 @@ describe('MoveDraftService — orchestration', () => {
     const svc = new MoveDraftService({ model: model([FAITHFUL_NAME]), repo: repo() });
     const md = await svc.produceLanding(argsPeople);
     expect(md.status).toBe('drafted');
+  });
+
+  it('accept: appends an accepted version; a blocked draft cannot be accepted', async () => {
+    const r = repo();
+    const svc = new MoveDraftService({ model: model([CLEAN]), repo: r });
+    await svc.produceLanding(args);
+    const acc = await svc.accept('b1', 'p1-a1');
+    expect(acc.status).toBe('accepted');
+    expect(acc.version).toBe(2);
+    const r2 = repo();
+    const svc2 = new MoveDraftService({ model: model([MEDICAL, MEDICAL, MEDICAL]), repo: r2 });
+    await svc2.produceLanding(args); // blocked
+    await expect(svc2.accept('b1', 'p1-a1')).rejects.toThrow();
+  });
+
+  it('rewriteSection: a clean rewrite appends a drafted version; a gate-failing rewrite is rejected (previous intact)', async () => {
+    const r = repo();
+    const svc = new MoveDraftService({ model: model([CLEAN]), repo: r });
+    await svc.produceLanding(args);
+    const re = await svc.rewriteSection('b1', 'p1-a1', 'what');
+    expect(re.status).toBe('drafted');
+    expect(re.version).toBe(2);
+
+    const r2 = repo();
+    const svc2 = new MoveDraftService({ model: model([CLEAN, MEDICAL]), repo: r2 });
+    await svc2.produceLanding(args); // drafted v1
+    await expect(svc2.rewriteSection('b1', 'p1-a1', 'what')).rejects.toThrow('could not pass the safety gate');
+    expect(r2.saved.at(-1)?.status).toBe('drafted'); // unchanged
   });
 
   it('a language with no reviewed guard vocabulary is blocked WITHOUT calling the model', async () => {

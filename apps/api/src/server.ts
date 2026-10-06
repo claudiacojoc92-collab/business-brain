@@ -20,10 +20,13 @@ import type {
   PhotoLedService,
   ReelService,
   ReelShootService,
+  MoveDraftService,
   ReachService,
   IObjectStore,
   IReelRepository,
   IReelShootRepository,
+  IMoveDraftRepository,
+  MoveDraft,
   IDiscoveredProfileRepository,
   IUnderstandingSnapshotRepository,
   IAhaRepository,
@@ -63,6 +66,12 @@ export interface ServerDeps {
   reelQueue?: QueueRegistry;
   reelShootService?: ReelShootService;
   reelShootRepo?: IReelShootRepository;
+  moveDraftService?: MoveDraftService;
+  moveDraftRepo?: IMoveDraftRepository;
+  produceLandingMove?: (businessId: string, actionId: string, planVersionId: string) => Promise<
+    | { status: 'blocked'; reason: 'no_adopted_strategy'; message: string }
+    | { status: 'produced'; moveDraft: MoveDraft }
+  >;
   reachService: ReachService;
 }
 

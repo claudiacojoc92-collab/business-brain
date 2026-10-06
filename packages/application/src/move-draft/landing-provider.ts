@@ -44,13 +44,15 @@ export function assembleLandingMove(ctx: LandingContextView | null, ids: Landing
     ...ctx.synthesizedFacts.map((t, i): LandingProposition => ({ ref: `B${i + 1}`, text: t, source: 'business_evidence' })),
     ...ctx.founderOwned.map((t, i): LandingProposition => ({ ref: `F${i + 1}`, text: t, source: 'founder_owned' })),
   ];
+  // STRATEGY CONDITIONING — the job is the adopted strategy's direction, not a generic studio landing.
+  const communicationJob = `Pagina de prezentare care servește strategia adoptată — obiectiv: ${ctx.goal}; pentru: ${ctx.audience}. Exprimă această direcție folosind doar faptele licențiate.`;
+  const voiceLines = [...ctx.voiceLines];
   const snapshot: LandingAuthorizationSnapshot = {
     snapshotId: genId(), businessId: ids.businessId, actionId: ids.actionId, createHandoffId: null,
     strategyVersionId: ctx.strategyVersionId, language: ctx.language, speakingRole: 'brand',
     audienceUseContext: ctx.audience, licensedPropositions, proofFacts: [...ctx.proofFacts],
     ctaFunction: ctx.ctaDirection, ownedStances: [...ctx.founderOwned], safetyContractHash: null, producedAt: now(),
+    communicationJob, voiceLines, // persisted so a single-section rewrite can re-gate without the provider
   };
-  // STRATEGY CONDITIONING — the job is the adopted strategy's direction, not a generic studio landing.
-  const communicationJob = `Pagina de prezentare care servește strategia adoptată — obiectiv: ${ctx.goal}; pentru: ${ctx.audience}. Exprimă această direcție folosind doar faptele licențiate.`;
-  return { status: 'ready', snapshot, communicationJob, voiceLines: [...ctx.voiceLines] };
+  return { status: 'ready', snapshot, communicationJob, voiceLines };
 }

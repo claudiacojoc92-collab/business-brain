@@ -171,6 +171,7 @@ export interface CompositionRoot {
   reelShootService: ReelShootService;
   reelShootRepo: import('@bb/application').IReelShootRepository;
   moveDraftService: MoveDraftService;
+  moveDraftRepo: import('@bb/application').IMoveDraftRepository;
   produceLandingMove: (businessId: string, actionId: string, planVersionId: string) => Promise<
     | { status: 'blocked'; reason: 'no_adopted_strategy'; message: string }
     | { status: 'produced'; moveDraft: import('@bb/application').MoveDraft }
@@ -708,10 +709,11 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
 
   // Move-draft (landing page): same substrate as carousel/reel (carouselContext), routed through the
   // regulated-claim guard + kernel + people-fidelity + judge by MoveDraftService.
+  const moveDraftRepo = new PgMoveDraftRepository(db);
   const moveDraftService = new MoveDraftService({
     model: new AnthropicLandingModel(anthropicKey),
     judge: voiceModel.checkPropositions ? (i) => voiceModel.checkPropositions!(i) : undefined,
-    repo: new PgMoveDraftRepository(db),
+    repo: moveDraftRepo,
     // eslint-disable-next-line no-console
     log: (e) => console.error('[move-draft]', JSON.stringify(e)),
   });
@@ -754,7 +756,7 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     photoLedService, photoLedRepo,
     reelService, reelObjectStore, reelRepo,
     reelShootService, reelShootRepo,
-    moveDraftService, produceLandingMove,
+    moveDraftService, moveDraftRepo, produceLandingMove,
     reachService,
   };
 }

@@ -63,6 +63,10 @@ export interface LandingAuthorizationSnapshot {
   readonly ownedStances: string[];
   readonly safetyContractHash: string | null;
   readonly producedAt: string;
+  // Persisted so a single section can be re-gated on rewrite without re-running the context provider (JSON on
+  // the snapshot — no migration). The communication job + voice are what the generator/gate need beyond facts.
+  readonly communicationJob?: string;
+  readonly voiceLines?: string[];
 }
 
 export type MoveDraftStatus =
@@ -107,7 +111,13 @@ export interface LandingRepairInput extends LandingGenInput {
   readonly previous: LandingDraft;
   readonly failures: readonly { section: string; rule: string }[];
 }
+/** A section rewrite regenerates ONE section (its facts, routed) and keeps the others verbatim. */
+export interface LandingRewriteSectionInput extends LandingGenInput {
+  readonly previous: LandingDraft;
+  readonly role: LandingSectionRole;
+}
 export interface ILandingModelPort {
   draft(input: LandingGenInput): Promise<LandingDraft>;
   repair(input: LandingRepairInput): Promise<LandingDraft>;
+  rewriteSection(input: LandingRewriteSectionInput): Promise<LandingDraft>;
 }

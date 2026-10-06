@@ -22,6 +22,7 @@ async function main(): Promise<void> {
     learnBusinessService, discoveredProfileRepo, understandingRepo, ahaRepo,
     conversationService, businessCorrectionService, aha2Service, strategyService, impactService, mirrorService, arcService, voiceService, planService, carouselService,
     photoLedService, photoLedRepo, reelService, reelObjectStore, reelRepo, reelShootService, reelShootRepo,
+    moveDraftService, moveDraftRepo, produceLandingMove,
     reachService,
   } = buildCompositionRoot(db);
 
@@ -32,6 +33,7 @@ async function main(): Promise<void> {
     learnBusinessService, discoveredProfileRepo, understandingRepo, ahaRepo,
     conversationService, businessCorrectionService, aha2Service, strategyService, impactService, mirrorService, arcService, voiceService, planService, carouselService,
     photoLedService, photoLedRepo, reelService, reelObjectStore, reelRepo, reelQueue, reelShootService, reelShootRepo,
+    moveDraftService, moveDraftRepo, produceLandingMove,
     reachService,
   });
 

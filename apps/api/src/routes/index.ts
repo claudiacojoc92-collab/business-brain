@@ -24,6 +24,7 @@ import { registerVoiceRoutes } from './voice.routes';
 import { registerPlanRoutes } from './plan.routes';
 import { registerReachRoutes } from './reach.routes';
 import { registerCarouselRoutes } from './carousel.routes';
+import { registerMoveDraftRoutes } from './move-draft.routes';
 import { registerPhotoLedRoutes } from './photoled.routes';
 import { registerReelRoutes } from './reel.routes';
 import { registerReelShootRoutes } from './reel-shoot.routes';
@@ -67,6 +68,7 @@ export async function registerRoutes(
   registerPlanRoutes(server, deps);       // Slice 5
   registerReachRoutes(server, deps);      // Attribution by asking (V081) — reflective-only weekly reach reports
   registerCarouselRoutes(server, deps);   // Slice 6
+  registerMoveDraftRoutes(server, deps);  // landing move — draft / accept / rewrite-section
   registerPhotoLedRoutes(server, deps);   // Slice 6.1 — Create from Photos
   registerReelRoutes(server, deps);       // Slice 7 V1 — Reel Creation (real MP4)
   registerReelShootRoutes(server, deps);  // Slice 7 V2 — Tell me what to film

@@ -317,6 +317,28 @@ live hole the classifier closes: a different business whose synthesized specific
 sentence. Real hole — but not the one that leaves us with nothing to demonstrate. Build order: wiring first,
 classifier owed next.
 
+## Finding: BB produced an adoptable strategy and the founder never adopted it (2026-10-06)
+
+Body Move: 16 of 17 strategy versions were correctly refused (`inputs_sufficient: false — "No founder goal
+captured yet"`), and **v17 is a COMPLETE, adoptable Proposal — all 22 gates pass** — sitting at status
+`proposal`, never adopted. `getCurrent` returns null only because the adoption pointer was never set. So the
+system worked; **the adoption click never came.** If the adoption step were visible and convincing on the
+surface, she would have clicked it — so the surface either doesn't show it or doesn't sell it. This belongs
+next to the onboarding / working-boundary question already open: **same class of problem — a produced thing
+the founder can't see or act on.** Decision for the demo: adopt v17 through the product (founder action, not an
+operator edit); the resulting landing serves the B2B-medical strategy, which is the stronger "system with
+judgment" story. `adopt(businessId, versionId, founderId)` (status must be `proposal`) sets the pointer; one
+founder action unblocks the whole move. NOT a re-strategizing effort.
+
+## PRE-DEPLOY NOTE (for when the deploy comes — state plainly, do not imply it's been exercised)
+
+- **V082 (`workspace.move_draft`) AND V083 (`workspace.business_atom`) both need the migrate step** before the
+  move-draft / atom paths work in a live environment.
+- **The end-to-end path has NEVER run against a live database.** Only the provider LOGIC (unit tests) and the
+  COMPILED wiring are proven; the live DB → carouselContext → atoms → generator → gate → persisted MoveDraft
+  chain has not executed. The 3× acceptance + landing runs used harness scripts over the export data, not the
+  deployed stack. Say so in the pre-deploy report rather than implying it has been exercised.
+
 ## Status log
 
 - 2026-10-06: Plan written from the operator's decision (separate language-neutral atom extractor;

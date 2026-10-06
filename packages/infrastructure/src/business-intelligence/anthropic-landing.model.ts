@@ -1,5 +1,5 @@
 import { createAnthropicClient } from '../llm/anthropic-client';
-import { routeFacts, type ILandingModelPort, type LandingGenInput, type LandingRepairInput, type LandingDraft, type LandingSection, type LandingSectionRole } from '@bb/application';
+import { routeFacts, type ILandingModelPort, type LandingGenInput, type LandingRepairInput, type LandingRewriteSectionInput, type LandingDraft, type LandingSection, type LandingSectionRole } from '@bb/application';
 
 /**
  * Landing prose generator (move-draft). Produces a STRUCTURED landing page grounded ONLY in licensed facts —
@@ -97,6 +97,17 @@ export class AnthropicLandingModel implements ILandingModelPort {
 
   async draft(input: LandingGenInput): Promise<LandingDraft> {
     return this.call(rules(LANG[input.language] ?? 'English'), facts(input), input);
+  }
+
+  async rewriteSection(input: LandingRewriteSectionInput): Promise<LandingDraft> {
+    const prev = JSON.stringify({ sections: input.previous.sections, cta: input.previous.cta });
+    const user = [
+      facts(input),
+      '', `REWRITE ONLY the "${input.role}" section — a fresh take using that section's routed facts. Keep EVERY other section and the CTA byte-for-byte as in the previous draft.`,
+      '', 'PREVIOUS DRAFT:', prev,
+      '', 'Return the corrected full JSON object (all sections, only the named one changed).',
+    ].join('\n');
+    return this.call(rules(LANG[input.language] ?? 'English'), user, input);
   }
 
   async repair(input: LandingRepairInput): Promise<LandingDraft> {
