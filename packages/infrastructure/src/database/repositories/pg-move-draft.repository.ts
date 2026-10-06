@@ -1,6 +1,5 @@
 import type { KyselyDB } from '../client';
-import type { IMoveDraftRepository, MoveDraft, LandingDraft, LandingAuthorizationSnapshot, MoveDraftKind, MoveDraftStatus } from '@bb/application';
-import type { SafetyDecision } from '@bb/application';
+import type { IMoveDraftRepository, MoveDraft, LandingDraft, LandingAuthorizationSnapshot, MoveDraftKind, MoveDraftStatus, MoveSafetyDecision } from '@bb/application';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const iso = (v: any): string => (v instanceof Date ? v.toISOString() : String(v));
@@ -12,7 +11,7 @@ function toDraft(r: any): MoveDraft {
     kind: r.kind as MoveDraftKind, language: r.language,
     draft: r.draft == null ? null : parse<LandingDraft>(r.draft, null as unknown as LandingDraft),
     snapshot: parse<LandingAuthorizationSnapshot>(r.snapshot, {} as LandingAuthorizationSnapshot),
-    safetyDecision: parse<SafetyDecision>(r.safety_decision, {} as SafetyDecision),
+    safetyDecision: parse<MoveSafetyDecision>(r.safety_decision, {} as MoveSafetyDecision),
     status: r.status as MoveDraftStatus, version: Number(r.version), producedAt: iso(r.produced_at),
   };
 }

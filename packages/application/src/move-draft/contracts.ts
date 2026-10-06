@@ -1,4 +1,15 @@
-import type { SafetyDecision } from '../voice/authorization-snapshot';
+/**
+ * The safety decision stored on every MoveDraft — drafted OR blocked — so the outcome is QUERYABLE, not just
+ * logged. With no alerting in the product, a guard that silently blocks most drafts would be invisible; this
+ * row makes the drafted/blocked ratio and the failing layer answerable with a query over plan_move_draft.
+ */
+export interface MoveSafetyDecision {
+  readonly layersRun: readonly ('medical' | 'kernel' | 'backstop' | 'judge')[];
+  readonly failingLayer: 'medical' | 'kernel' | 'backstop' | 'judge' | null; // null ⇒ passed every layer
+  readonly failures: readonly { section: string; layer: string; rule: string }[];
+  readonly repairAttempts: number;
+  readonly disposition: 'drafted' | 'blocked';
+}
 
 /**
  * MoveDraft — a produced artifact that arrives ATTACHED to a plan move, so a `leadsToCreate` move shows up
@@ -64,7 +75,7 @@ export interface MoveDraft {
   // Becomes a per-kind union when a second kind lands; landing-only today.
   readonly draft: LandingDraft | null;
   readonly snapshot: LandingAuthorizationSnapshot;
-  readonly safetyDecision: SafetyDecision;
+  readonly safetyDecision: MoveSafetyDecision;
   readonly status: MoveDraftStatus;
   readonly version: number;                  // append-only; an edit or regeneration writes a new version row
   readonly producedAt: string;
@@ -75,4 +86,21 @@ export interface IMoveDraftRepository {
   save(draft: MoveDraft): Promise<void>;
   latestForAction(businessId: string, actionId: string): Promise<MoveDraft | null>;
   get(businessId: string, moveDraftId: string): Promise<MoveDraft | null>;
+}
+
+// ── the landing prose generator port (model adapter implemented in infrastructure) ──
+export interface LandingGenInput {
+  readonly snapshot: LandingAuthorizationSnapshot;
+  readonly communicationJob: string;
+  readonly voiceLines: string[];   // accepted voice examples — HOW to say it, never new WHAT
+  readonly language: string;       // 'ro' | 'en' (guard-enabled only; 'it' is disabled)
+}
+/** A repair is TARGETED: the model is told exactly which section failed and on what rule, never just "try again". */
+export interface LandingRepairInput extends LandingGenInput {
+  readonly previous: LandingDraft;
+  readonly failures: readonly { section: string; rule: string }[];
+}
+export interface ILandingModelPort {
+  draft(input: LandingGenInput): Promise<LandingDraft>;
+  repair(input: LandingRepairInput): Promise<LandingDraft>;
 }

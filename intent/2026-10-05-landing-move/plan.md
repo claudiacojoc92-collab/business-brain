@@ -343,3 +343,15 @@ mapping are new each time.
   wire the guard into the generate→gate→repair→fail-closed orchestration + the landing prose generator. No
   further guard tuning — chasing the scattered misses would be tuning against specific sites, which the rule
   forbids; they are the judge's.
+- 2026-10-05: **generator + orchestration BUILT, live draft produced.** `AnthropicLandingModel` (structured
+  LandingDraft, grounded-only, three classes forbidden in-prompt, fail-safe to a thin licensed-only draft) +
+  `MoveDraftService`: gate in CHEAP-FIRST order (medical → kernel+backstop → Layer-3 judge last, fail-fast so the
+  3-call judge never runs on copy the regex rejected), **2 targeted repairs** (told which section + rule) then
+  fail-closed, and the drafted/blocked outcome + failing layer STORED on every row (MoveSafetyDecision) so the
+  ratio is queryable, not just logged. Generator must never emit a non-guard-enabled language (fail-closed before
+  generating). 6 orchestration tests (gate order / repair recovery / bounded-2-then-blocked / judge-blocks /
+  language-disabled) + tsc -b clean + full suite 1760. LIVE on a representative Body-Move snapshot (real host
+  unreachable; NO licensed results): produced a DRAFTED RO landing page (hero/what/who/proof/cta) through the full
+  gate incl. the live judge, 1 repair — grounded, warm, no therapeutic claims, and the proof section correctly
+  cited no results (none licensed). Remaining: compose-root wiring + API routes + BullMQ draft-on-surface + Today
+  UI; and a real-data run once a fresh prod token is available.

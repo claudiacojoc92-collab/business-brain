@@ -3,3 +3,4 @@
 export * from './contracts';
 export * from './landing-safety';
 export * from './medical-guard';
+export * from './move-draft.service';
