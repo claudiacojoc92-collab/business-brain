@@ -170,6 +170,21 @@ export class MoveDraftService {
     return accepted;
   }
 
+  /** The founder edits ONE section in their OWN words: append an 'edited' version (NOT re-gated — their words
+   *  are theirs). CTA edits set the cta; any other role edits that section's heading/body. */
+  async editSection(businessId: string, actionId: string, role: LandingDraft['sections'][number]['role'] | 'cta', heading: string | undefined, body: string): Promise<MoveDraft> {
+    const latest = await this.deps.repo.latestForAction(businessId, actionId);
+    if (!latest || !latest.draft) throw new NotFoundError('MOVE_DRAFT_NOT_FOUND', 'There is no draft to edit.');
+    const prev = latest.draft;
+    const draft: LandingDraft = role === 'cta'
+      ? { ...prev, cta: body }
+      : { ...prev, sections: prev.sections.map((s) => (s.role === role ? { role: s.role, ...(heading !== undefined && heading !== '' ? { heading } : {}), body } : s)) };
+    const next: MoveDraft = { ...latest, draft, status: 'edited', version: latest.version + 1, producedAt: this.clock() };
+    await this.deps.repo.save(next);
+    this.deps.log?.({ type: 'move_draft', actionId, disposition: 'edited', failingLayer: null, repairAttempts: 0 });
+    return next;
+  }
+
   /** Rewrite ONE section: regenerate it from its routed facts, re-gate the whole draft, append a new version.
    *  Re-gates from the PERSISTED snapshot (communicationJob + voice are stored there) — no context provider
    *  needed. Fail-closed: a rewrite that cannot pass the gate is rejected and the previous draft stays intact. */

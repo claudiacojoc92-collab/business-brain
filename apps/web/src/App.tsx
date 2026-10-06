@@ -21,6 +21,7 @@ import { PlanPage } from './slice0/PlanPage';
 import { TodayPage } from './slice0/TodayPage';
 import { ReachReportsPage } from './slice0/ReachReportsPage';
 import { CarouselPage } from './slice0/CarouselPage';
+import { LandingMovePage } from './slice0/LandingMovePage';
 import { PhotoCreatePage } from './slice0/PhotoCreatePage';
 import { ReelCreatePage } from './slice0/ReelCreatePage';
 import { ShootPlanPage } from './slice0/ShootPlanPage';
@@ -122,6 +123,7 @@ export function App() {
             <Route path="/b/:id/today" element={<RequireSession><TodayPage /></RequireSession>} />
             <Route path="/b/:id/reach" element={<RequireSession><ReachReportsPage /></RequireSession>} />
             <Route path="/b/:id/create/:handoffId" element={<RequireSession><CarouselPage /></RequireSession>} />
+            <Route path="/b/:id/landing/:actionId" element={<RequireSession><LandingMovePage /></RequireSession>} />
             <Route path="/b/:id/photos" element={<RequireSession><PhotoCreatePage /></RequireSession>} />
 
             <Route path="*" element={<Navigate to="/" replace />} />

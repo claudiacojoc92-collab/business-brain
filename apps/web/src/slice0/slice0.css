@@ -1224,3 +1224,18 @@
 }
 .s0-talk-send:disabled { opacity: 0.5; cursor: default; }
 @media (max-width: 520px) { .s0-talk-drawer { width: 100vw; border-left: 0; } }
+
+/* Landing move — the draft is the primary object: readable copy first, quiet per-section controls. */
+.s0-landing { max-width: 42rem; }
+.s0-landing-section { margin: 0 0 1.75rem; }
+.s0-landing-h { font-size: 1.15rem; font-weight: 600; margin: 0 0 .4rem; }
+.s0-landing-body { font-size: 1rem; line-height: 1.55; margin: 0; white-space: pre-wrap; }
+.s0-landing-controls { display: flex; gap: .75rem; margin-top: .5rem; }
+.s0-btn-quiet { background: none; border: none; color: var(--s0-muted, #6b7280); font-size: .85rem; cursor: pointer; padding: .15rem 0; }
+.s0-btn-quiet:hover { color: var(--s0-ink, #111); text-decoration: underline; }
+.s0-landing-edit { display: flex; flex-direction: column; gap: .5rem; }
+.s0-textarea, .s0-input { width: 100%; font: inherit; padding: .5rem; border: 1px solid var(--s0-line, #d1d5db); border-radius: .375rem; }
+.s0-landing-err { color: var(--s0-danger, #b91c1c); font-size: .85rem; margin: .4rem 0 0; }
+.s0-landing-cta { margin: 1.5rem 0; font-weight: 600; }
+.s0-landing-accept { margin-top: .5rem; }
+.s0-landing-accepted { color: var(--s0-ok, #047857); font-weight: 600; }

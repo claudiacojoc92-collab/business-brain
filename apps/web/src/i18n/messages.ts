@@ -23,6 +23,22 @@ export function isLocale(v: unknown): v is Locale {
 type Dict = Record<string, string>;
 
 const en: Dict = {
+  'landing.loading': 'Loading your page…',
+  'landing.error': 'Something went wrong loading your page.',
+  'landing.retry': 'Try again',
+  'landing.accept': 'Accept this page',
+  'landing.accepted': 'Accepted — this is your page.',
+  'landing.edit': 'Edit',
+  'landing.rewrite': 'Rewrite',
+  'landing.rewriting': 'Rewriting…',
+  'landing.save': 'Save',
+  'landing.cancel': 'Cancel',
+  'landing.pending': 'Your page is being written — check back in a moment.',
+  'landing.blocked.noStrategy.title': 'No page yet',
+  'landing.blocked.noStrategy.body': 'A landing page is built around the strategy you adopt. There isn’t an adopted strategy yet — so there’s nothing to write a page for.',
+  'landing.blocked.noStrategy.action': 'Adopt a strategy',
+  'landing.blocked.noSafeCopy.title': 'No page yet',
+  'landing.blocked.noSafeCopy.body': 'We couldn’t produce safe copy for this page. The move keeps its plain instruction for now.',
   'brand.name': 'Business Brain',
   'lang.label': 'Language',
 
@@ -802,6 +818,22 @@ const en: Dict = {
 };
 
 const ro: Dict = {
+  'landing.loading': 'Se încarcă pagina ta…',
+  'landing.error': 'A apărut o problemă la încărcarea paginii.',
+  'landing.retry': 'Încearcă din nou',
+  'landing.accept': 'Acceptă pagina',
+  'landing.accepted': 'Acceptată — aceasta este pagina ta.',
+  'landing.edit': 'Editează',
+  'landing.rewrite': 'Rescrie',
+  'landing.rewriting': 'Se rescrie…',
+  'landing.save': 'Salvează',
+  'landing.cancel': 'Renunță',
+  'landing.pending': 'Pagina ta se pregătește — revino în scurt timp.',
+  'landing.blocked.noStrategy.title': 'Încă nu există o pagină',
+  'landing.blocked.noStrategy.body': 'Pagina de prezentare se construiește în jurul strategiei pe care o adopți. Încă nu există o strategie adoptată — deci nu avem pe ce să scriem o pagină.',
+  'landing.blocked.noStrategy.action': 'Adoptă o strategie',
+  'landing.blocked.noSafeCopy.title': 'Încă nu există o pagină',
+  'landing.blocked.noSafeCopy.body': 'Nu am putut genera copie sigură pentru această pagină. Mișcarea rămâne cu instrucțiunea ei simplă.',
   'brand.name': 'Business Brain',
   'lang.label': 'Limbă',
 
@@ -1569,6 +1601,22 @@ const ro: Dict = {
 };
 
 const it: Dict = {
+  'landing.loading': 'Caricamento della tua pagina…',
+  'landing.error': 'Si è verificato un problema nel caricare la pagina.',
+  'landing.retry': 'Riprova',
+  'landing.accept': 'Accetta la pagina',
+  'landing.accepted': 'Accettata — questa è la tua pagina.',
+  'landing.edit': 'Modifica',
+  'landing.rewrite': 'Riscrivi',
+  'landing.rewriting': 'Riscrittura…',
+  'landing.save': 'Salva',
+  'landing.cancel': 'Annulla',
+  'landing.pending': 'La tua pagina è in preparazione — torna tra poco.',
+  'landing.blocked.noStrategy.title': 'Ancora nessuna pagina',
+  'landing.blocked.noStrategy.body': 'La pagina di presentazione si costruisce attorno alla strategia che adotti. Non c’è ancora una strategia adottata — quindi non c’è nulla su cui scrivere una pagina.',
+  'landing.blocked.noStrategy.action': 'Adotta una strategia',
+  'landing.blocked.noSafeCopy.title': 'Ancora nessuna pagina',
+  'landing.blocked.noSafeCopy.body': 'Non siamo riusciti a produrre testo sicuro per questa pagina. La mossa mantiene la sua istruzione semplice per ora.',
   'brand.name': 'Business Brain',
   'lang.label': 'Lingua',
 

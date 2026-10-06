@@ -1197,3 +1197,26 @@ export function reelGetFulfillment(businessId: string, planId: string): Promise<
 export function reelCreateFromPlan(businessId: string, planId: string): Promise<{ status: string; assetId?: string; ready?: boolean; reason?: string }> {
   return request(`v1/businesses/${businessId}/reel/plans/${planId}/create-reel`, { method: 'POST', body: '{}' });
 }
+
+// ── Landing move (draft / accept / edit / rewrite) ──────────────────────────────────────────────────────
+export interface LandingSectionView { role: string; heading: string | null; body: string }
+/** Provenance per licensed fact: anchored (verbatim from a page, with sourceUrl), synthesized (BB's reading),
+ *  or founder (the founder's own statement). Populated once the API exposes it (provenance build). */
+export interface LandingFactView { text: string; source: 'anchored' | 'synthesized' | 'founder'; sourceUrl: string | null }
+export type LandingDraftView =
+  | { status: 'drafted' | 'edited' | 'accepted'; version: number; sections: LandingSectionView[]; cta: string; facts?: LandingFactView[] }
+  | { status: 'blocked'; reason: string; message: string; unblock?: string }
+  | { status: 'pending'; message: string };
+
+export function getLandingDraft(businessId: string, actionId: string): Promise<LandingDraftView> {
+  return request(`v1/businesses/${businessId}/moves/${encodeURIComponent(actionId)}/landing-draft`);
+}
+export function acceptLandingDraft(businessId: string, actionId: string): Promise<LandingDraftView> {
+  return request(`v1/businesses/${businessId}/moves/${encodeURIComponent(actionId)}/landing-draft/accept`, { method: 'POST', body: '{}' });
+}
+export function rewriteLandingSection(businessId: string, actionId: string, role: string): Promise<LandingDraftView> {
+  return request(`v1/businesses/${businessId}/moves/${encodeURIComponent(actionId)}/landing-draft/sections/${role}/rewrite`, { method: 'POST', body: '{}' });
+}
+export function editLandingSection(businessId: string, actionId: string, role: string, body: string, heading?: string): Promise<LandingDraftView> {
+  return request(`v1/businesses/${businessId}/moves/${encodeURIComponent(actionId)}/landing-draft/sections/${role}/edit`, { method: 'POST', body: JSON.stringify({ heading, body }) });
+}

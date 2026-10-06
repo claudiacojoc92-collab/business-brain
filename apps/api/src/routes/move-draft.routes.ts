@@ -68,6 +68,18 @@ export function registerMoveDraftRoutes(server: FastifyInstance, deps: ServerDep
     return reply.send(projectDraft(md.draft!, md.status, md.version));
   });
 
+  // POST edit one section — the founder's OWN words; append an 'edited' version (not re-gated). CTA allowed.
+  server.post('/v1/businesses/:businessId/moves/:actionId/landing-draft/sections/:role/edit', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { businessId, actionId, role } = request.params as { businessId: string; actionId: string; role: string };
+    if (!ROLES.includes(role)) throw new ValidationError('BAD_SECTION', 'Unknown section.');
+    const { heading, body } = (request.body ?? {}) as { heading?: string; body?: string };
+    if (typeof body !== 'string' || !body.trim()) throw new ValidationError('EMPTY_BODY', 'The section text cannot be empty.');
+    const { business } = await requireBusiness(request, businessId);
+    const s = services(reply); if (!s) return;
+    const md = await s.svc.editSection(business.id, actionId, role as LandingDraft['sections'][number]['role'] | 'cta', heading, body);
+    return reply.send(projectDraft(md.draft!, md.status, md.version));
+  });
+
   // POST rewrite one section — regenerate it, re-gate, append. Fail-closed: a rewrite that can't pass the gate
   // is rejected with a legible message (REWRITE_BLOCKED) and the previous draft stays intact.
   server.post('/v1/businesses/:businessId/moves/:actionId/landing-draft/sections/:role/rewrite', async (request: FastifyRequest, reply: FastifyReply) => {
