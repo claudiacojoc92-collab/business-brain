@@ -241,6 +241,21 @@ parroting known-issue is addressed as part of that wiring, not here.
   experiență 0 +`.
 - 2026-10-06: Building from commit 2 (contracts + ports). de-anglicize approach (commit 9) comes as its own
   proposal before implementation.
+- 2026-10-06: **Commits 4–7 landed + the acceptance reorder paid off.** service (`01be462`), AnthropicAtomModel
+  (`5baa5de`), V083 + PgAtomRepository (`4c38355`), fixtures + acceptance test (`31193b8`). Fixture derived from
+  the BB production export — PUBLIC page text only (website fragments; strategy/conversation/understanding tables
+  cleanly excluded). First LIVE run (before wiring, per operator): proposed=20 but licensed=0 — a sourceRef
+  round-trip bug (the prompt header rendered "Homepage (home)" and the model copied it; unit ref was "Homepage").
+  Recall was already strong (20/20 anchor). FIXED in two commits: `8ea4d93` (unambiguous sourceRef header) +
+  `9ad6132` (LENIENT ref resolution — resolve only to exactly one normalized unit, else drop as dropped_unit,
+  never a blind any-unit guess; + EXACT-CASE anchoring preference so "Kinetoterapie"/"Masaj" store with capitals,
+  verbatim-equals-source). Re-run: **proposed=20 licensed=20 dropped=0**; 4 services, 2 studios-by-name, the Evo
+  Beauty booking line, 13 named people-with-roles; no-fabrication clean (nothing minted from "Echipa … formată
+  din specialiști"); spans exact. **Usability verdict: a landing page can be written from this** (offer / where /
+  CTA / proof). Atom suite 12/12. RECORDED in known-issues.md (not fixed): the INGESTION GAP — addresses/phone/
+  email are on the live site but were never ingested (crawl missed the footer / "Vezi locația"), upstream of this
+  feature, its own piece of work. NOT wired into carouselContext yet (operator gate). Remaining: de-anglicize
+  proof proposal (diff-shape first), numeric-bound repair, then the wiring.
 - 2026-10-06: **Commit 3 LANDED** (`2376078`, shared projection, characterization-first). Guard work done +
   verified (pending `approve commit` to land — the grant is one-commit-per-approval):
   - **CLASS-NUMBER INVERSION (record so the next reader does not repeat it):** in CODE the therapeutic rule

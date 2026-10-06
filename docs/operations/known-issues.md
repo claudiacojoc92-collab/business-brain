@@ -223,6 +223,28 @@ later if the file gets long.
   edit applied ones), and the slice may be intended for a later knowledge-architecture build (ADR-011). Leave it;
   just know it is not wired.
 
+## Ingestion missed the footer: addresses, phone and email on the live site were never captured
+
+- **Found:** 2026-10-06, the first live atom extraction on real Body Move pages (intent/2026-10-06-licensed-atoms).
+- **What:** the website crawl that feeds the licensed-fact substrate captured the page BODY but **missed the
+  contact details**. On the home page the ingested text has `Body Move Studio Decebal` / `Body Move Studio
+  Bună Ziua` as location NAMES followed by a `Vezi locația` link — but **no street address, no phone, no email**.
+  Those live in a footer / behind the "Vezi locația" link the crawl did not follow or did not render. Confirmed
+  against the production export (`evidence.fragments`): the strings `Strada Decebal nr. 110`, `Tonitza`,
+  `+40 728 126 481`, `contact@bodymovestudio.ro` are absent from every ingested page fragment, though they are on
+  the live site (operator's own fetch has them).
+- **Impact:** this is **upstream of the atom extractor and everything else built today** — the extractor can only
+  license what was ingested, and it correctly licensed the two studios by name and the Evo Beauty booking line but
+  could not license an address/phone/email that isn't in the text. Concretely: it's the difference between a
+  landing page that can tell someone **where to go and how to reach the studio** and one that can't. For a
+  bricks-and-mortar business that gap is material.
+- **Fix (not done — its own piece of work, operator to schedule):** improve website ingestion to capture the
+  footer / contact block and follow (or render) the `Vezi locația` target — i.e. the crawl's page model, not the
+  atom layer. Sized separately because it touches the ingestion/crawl pipeline, not the licensed-atoms feature;
+  once the contact details are ingested, the existing `location` / `contact_booking` atom classes license them
+  with no change. Until then, address/phone/email simply won't appear in generated copy for any business whose
+  crawl missed them.
+
 ## The medical guard's negation exemption is RO-only — EN still false-positives on negated treatment
 
 - **Found:** 2026-10-06, implementing the per-occurrence negation exemption (commit `c024162`).
