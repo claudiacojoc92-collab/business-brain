@@ -305,6 +305,18 @@ parroting known-issue is addressed as part of that wiring, not here.
   decision about constraining a class — RO inflection means services/policy diverge from verbatim by design, so
   we do not constrain on it today.
 
+## The Decision-1 classifier is DEFERRED, DELIBERATELY, AND OWED (2026-10-06)
+
+The claim-type classifier (tier synthesized facts by provenance; a synthesized specific may not back a
+checkable assertion) is **deferred, deliberately, and recorded as owed.** Reason: with 20 days to Canggu the
+piece with no substitute is the WIRING (route, job, screen), not the classifier — everything built today lives
+in harness scripts, so if it had to be shown tomorrow there would be nothing to show. The price sentence is
+absent today because section routing keeps synthesized facts in the bucket feeding hero/subhead/who, and those
+sections don't enumerate specifics — which is more structural than "luck", but still **not a guarantee.** The
+live hole the classifier closes: a different business whose synthesized specific lands INSIDE a positioning
+sentence. Real hole — but not the one that leaves us with nothing to demonstrate. Build order: wiring first,
+classifier owed next.
+
 ## Status log
 
 - 2026-10-06: Plan written from the operator's decision (separate language-neutral atom extractor;
