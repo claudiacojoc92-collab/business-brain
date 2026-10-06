@@ -35,14 +35,28 @@ function buildFolded(raw: string): { f: string; starts: number[]; ends: number[]
   }
   return { f: chars.join(''), starts, ends };
 }
-/** The FIRST verbatim span of `needle` in `raw` (folded, whitespace-insensitive), or null. Never fuzzy. */
+/**
+ * The verbatim span of `needle` in `raw`, or null. Never fuzzy. Two tiers:
+ *   1. EXACT — case + diacritics + spacing identical. First exact occurrence wins, so a title-case service
+ *      label ("Kinetoterapie") is preferred over an earlier lowercase prose mention, and the stored value
+ *      equals the model's proposed casing — verbatim-equals-source stays literally true.
+ *   2. FOLDED — whitespace-insensitive + diacritic-folded, for when the proposal differs in case/diacritics
+ *      (e.g. "Postnatală" vs the page's "Postnatala") or spans lines; the span found is stored AS WRITTEN.
+ */
 function locate(raw: string, needle: string): { start: number; end: number } | null {
+  const trimmed = needle.trim();
+  if (trimmed) { const ex = raw.indexOf(trimmed); if (ex !== -1) return { start: ex, end: ex + trimmed.length }; }
   const N = normalizeNeedle(needle);
   if (!N) return null;
   const { f, starts, ends } = buildFolded(raw);
   const idx = f.indexOf(N);
   if (idx === -1) return null;
   return { start: starts[idx] as number, end: ends[idx + N.length - 1] as number };
+}
+
+/** Normalize a sourceRef for LENIENT resolution: fold case + diacritics, strip a trailing parenthetical. */
+function normRef(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s*\([^)]*\)\s*$/, '').trim();
 }
 
 export interface AtomExtractionDeps {
@@ -82,7 +96,12 @@ export class AtomExtractionService {
     try { proposals = (await this.deps.model.extract({ units })).atoms; }
     catch { this.deps.log?.({ type: 'atoms_extract_threw' }); return this.deps.repo.listAtoms(businessId); }
 
-    const unitByRef = new Map(units.map((u) => [u.sourceRef, u]));
+    // LENIENT RESOLUTION, never blind fallback: a cited ref resolves only if it maps to EXACTLY ONE unit
+    // (normalized). Zero or ambiguous → DROP + count. Attestation must resolve; it is never replaced by a guess,
+    // and dropped_unit stays the smoke alarm for a prompt that confabulates refs.
+    const byNormRef = new Map<string, typeof units>();
+    for (const u of units) { const k = normRef(u.sourceRef); const g = byNormRef.get(k); if (g) g.push(u); else byNormRef.set(k, [u]); }
+
     const atoms: BusinessAtom[] = [];
     const seen = new Set<string>();
     const now = this.now();
@@ -90,8 +109,9 @@ export class AtomExtractionService {
 
     for (const c of proposals) {
       if (!ATOM_CLASSES.includes(c.atomClass as AtomClass)) { droppedClass++; continue; } // closed scope
-      const unit = unitByRef.get(c.sourceRef);
-      if (!unit) { droppedUnit++; continue; }
+      const matches = byNormRef.get(normRef(c.sourceRef)) ?? [];
+      if (matches.length !== 1) { droppedUnit++; continue; } // unresolved / ambiguous → drop (never guess the unit)
+      const unit = matches[0] as (typeof units)[number];
       const span = locate(unit.text, c.value);
       if (!span) { droppedAnchor++; continue; }                 // NOT a verbatim span → DROP (never repair)
       const value = unit.text.slice(span.start, span.end);      // the EXACT original span — store as written
