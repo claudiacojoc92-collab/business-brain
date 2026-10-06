@@ -18,8 +18,10 @@ import {
   PgProofRepository,
   PgReachRepository,
   PgAtomRepository,
+  PgMoveDraftRepository,
   AnthropicProofModel,
   AnthropicAtomModel,
+  AnthropicLandingModel,
   PgDiscoveredProfileRepository,
   PgUnderstandingSnapshotRepository,
   PgAhaRepository,
@@ -100,6 +102,9 @@ import {
   BoundSourceReader,
   ProofExtractionService,
   AtomExtractionService,
+  MoveDraftService,
+  assembleLandingMove,
+  type LandingContextView,
   BusinessCorrectionService,
   Aha2Service,
   StrategyService,
@@ -165,6 +170,11 @@ export interface CompositionRoot {
   reelRepo: import('@bb/application').IReelRepository;
   reelShootService: ReelShootService;
   reelShootRepo: import('@bb/application').IReelShootRepository;
+  moveDraftService: MoveDraftService;
+  produceLandingMove: (businessId: string, actionId: string, planVersionId: string) => Promise<
+    | { status: 'blocked'; reason: 'no_adopted_strategy'; message: string }
+    | { status: 'produced'; moveDraft: import('@bb/application').MoveDraft }
+  >;
   // Attribution by asking (V081) — reflective-only. HARD-WALLED from asset authority (see WALL-END below).
   reachService: ReachService;
 }
@@ -696,6 +706,40 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     log: (e) => console.error('[reel-shoot]', JSON.stringify(e)),
   });
 
+  // Move-draft (landing page): same substrate as carousel/reel (carouselContext), routed through the
+  // regulated-claim guard + kernel + people-fidelity + judge by MoveDraftService.
+  const moveDraftService = new MoveDraftService({
+    model: new AnthropicLandingModel(anthropicKey),
+    judge: voiceModel.checkPropositions ? (i) => voiceModel.checkPropositions!(i) : undefined,
+    repo: new PgMoveDraftRepository(db),
+    // eslint-disable-next-line no-console
+    log: (e) => console.error('[move-draft]', JSON.stringify(e)),
+  });
+  /**
+   * Produce the landing move for a business. Draws from the SAME carouselContext substrate — no hand-built
+   * snapshot. FAILS CLOSED with a legible reason when there is no adopted strategy (carouselContext → null),
+   * and conditions the draft on the adopted strategy. Returns either the MoveDraft or a legible blocked result
+   * a surface can render (never a silent empty state).
+   */
+  const produceLandingMove = async (businessId: string, actionId: string, planVersionId: string) => {
+    const ctx = await carouselContext(businessId); // null ⇒ no adopted strategy
+    let landingCtx: LandingContextView | null = null;
+    if (ctx) {
+      const atoms = (await atomExtractionService.facts(businessId)).map((a) => ({ value: a.value, atomClass: a.atomClass }));
+      const snap = await understandingRepo.latest(businessId);
+      landingCtx = {
+        strategyVersionId: ctx.strategyVersionId, language: snap?.sourceLanguage ?? 'ro',
+        goal: ctx.goal, audience: ctx.audience, ctaDirection: ctx.ctaDirection,
+        atoms, synthesizedFacts: allowedBusinessFacts(snap?.understanding ?? null),
+        founderOwned: ctx.ownedStances, proofFacts: ctx.proofFacts, voiceLines: ctx.voiceLines,
+      };
+    }
+    const assembled = assembleLandingMove(landingCtx, { businessId, actionId, planVersionId }, () => new Date().toISOString(), generateId);
+    if (assembled.status === 'blocked') return assembled; // legible: { status, reason, message }
+    const md = await moveDraftService.produceLanding({ businessId, actionId, planVersionId, snapshot: assembled.snapshot, communicationJob: assembled.communicationJob, voiceLines: assembled.voiceLines, language: assembled.snapshot.language });
+    return { status: 'produced' as const, moveDraft: md };
+  };
+
   // WALL-END:asset-authority — everything ABOVE is the claim/asset-authority region: where
   // `licensedPropositions` are assembled and every asset service (carousel / reel / voice / photo-led) is
   // constructed. Reflective-only founder data (V081) is wired ONLY BELOW this line and must never appear
@@ -710,6 +754,7 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     photoLedService, photoLedRepo,
     reelService, reelObjectStore, reelRepo,
     reelShootService, reelShootRepo,
+    moveDraftService, produceLandingMove,
     reachService,
   };
 }
