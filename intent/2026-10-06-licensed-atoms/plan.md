@@ -222,6 +222,36 @@ carousel/reel → **then** resume `intent/2026-10-05-landing-move` wiring (compo
 draft-on-surface job, the Today UI), now with a substrate that can pass its acceptance test. The
 parroting known-issue is addressed as part of that wiring, not here.
 
+## Open questions raised by the live landing run (2026-10-06) — recorded, not solved
+
+1. **The licensing asymmetry (Decision 1, proposal in flight).** The atom lane is verbatim-anchored; the
+   understanding lane is LLM synthesis treated as equally licensing. The real Body Move run proved the cost: the
+   33 synthesized "facts" include exact prices (PT 150 lei/ședință; abonament 8=800/12=1000), class caps
+   (max. 4), a cancellation policy (min. 8h), an online shop + vouchers, and `karate` (a service the atoms never
+   saw) — all currently able to license public copy. The draft asserted "Prețurile sunt afișate transparent…
+   magazinul nostru online" on that basis. **Fix the asymmetry, not the sentence.** Proposed design: tier the
+   substrate by provenance (`anchored` | `synthesized` | `founder_owned`) and gate by CLAIM TYPE — a synthesized
+   proposition may back a GENERAL statement (positioning/audience/approach) but NOT a SPECIFIC CHECKABLE one
+   (prices/pricing practice, counts, facilities, channels, availability, credentials). Preferred enforcement:
+   assembly-time (carouselContext) — withhold specific-checkable synthesized facts from the licensed set so the
+   generator never sees them and the frozen kernel's concept-grounding blocks any it invents (NON-frozen; the
+   in-kernel alternative would need approve frozen). See the chat proposal for the enforcement point + the
+   concrete Body Move loss (price + shop sentences + unanchored extras drop; the 4 service atoms, 2 locations, 13
+   people, booking survive — NOT a section collapse).
+2. **Generator↔licensed divergence (Decision 2, queued).** The generator wrote `Borșan` where the atom holds the
+   site's `Borsan` — and the generator is right (the site dropped the diacritics). Neither constrain nor allow:
+   SURFACE the divergence to the founder ("we wrote Borșan; your site says Borsan — which is right?"); the answer
+   becomes a `founder_owned` fact that supersedes the site permanently. Turns the bug into the accumulation
+   mechanism. Propose the divergence-detection rule (what's worth asking vs ordinary rewording) before building.
+3. **Move-draft production wiring (Decision 3, queued).** Context provider + strategy conditioning + adopted-
+   strategy gate.
+4. **STRATEGY FINDING — recorded, not for engineering today.** Body Move has **17 strategy versions, every one
+   `proposal`/`insufficient`, none adopted**; the one live direction is **B2B medical referral**, not a consumer
+   landing. So the draft we produced answers a question nobody asked. Two open questions follow:
+   (a) a demo must show BB producing the move its OWN (adopted) strategy calls for, not a generic one;
+   (b) **17 strategies produced and none adopted is a PRODUCT problem, not an engineering one — and may be the
+   most important thing in this report.** Flagged for the product owner, not the build queue.
+
 ## Status log
 
 - 2026-10-06: Plan written from the operator's decision (separate language-neutral atom extractor;
