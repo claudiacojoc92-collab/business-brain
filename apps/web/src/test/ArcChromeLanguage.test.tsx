@@ -2,9 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import type { ArcView } from '../api/client';
 
-// Arc CHROME follows the CONTENT language (view.contentLanguage), NOT the UI locale. Here the UI locale is 'en'
-// but the business content is Romanian — the section labels/buttons must render in Romanian. Uses the REAL
-// translate() (not mocked) so we see actual localized chrome.
+// Arc CHROME is UI, so it is English for every founder (operator rule 2026-10-07); the content BB wrote stays in the
+// business's language. Uses the REAL translate() (not mocked) so we see the actual chrome.
 vi.mock('../i18n/LocaleContext', () => ({ useLocale: () => ({ t: (k: string) => k, locale: 'en' }) }));
 vi.mock('react-router-dom', async (orig) => {
   const actual = await (orig() as Promise<Record<string, unknown>>);
@@ -25,23 +24,20 @@ const strat: ArcView = {
   strategy: { bet: 'canalul de recomandări', over: 'o campanie generală', horizon: '6 luni', tradeOffs: [], notNow: [], reconsider: [], proposalId: 'v1', adoptable: true },
 } as ArcView;
 
-describe('arc chrome follows the CONTENT language, not the UI locale', () => {
+describe('arc chrome is English UI; the content stays in the business language (rule 2026-10-07)', () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => cleanup());
 
-  it('renders Romanian chrome for a Romanian business even when the UI locale is English', async () => {
+  it('a Romanian business: English labels and buttons, Romanian content untouched', async () => {
     vi.mocked(api.getArc).mockResolvedValue(strat);
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
-    // the strategy hero uses the RO eyebrow, not the EN one
-    expect(await screen.findByText(/Iată ce cred că ar trebui să faci/)).toBeInTheDocument();
-    expect(screen.queryByText(/what I think you should do/i)).toBeNull();
-    // the recommendation itself renders as the hero title
-    expect(screen.getByText(/canalul de recomandări/)).toBeInTheDocument();
-    // the accept action is Romanian
-    expect(screen.getByText(/Da, îmi place/i)).toBeInTheDocument();
+    expect(await screen.findByText(/what I think you should do/i)).toBeInTheDocument();   // English chrome
+    expect(screen.queryByText(/Iată ce cred că ar trebui să faci/)).toBeNull();            // no Romanian chrome
+    expect(screen.queryByText(/Da, îmi place/i)).toBeNull();
+    expect(screen.getByText(/canalul de recomandări/)).toBeInTheDocument();                  // content as BB wrote it
   });
 
-  it('falls back to the UI locale (en) when there is no content language yet', async () => {
+  it('no content language yet: still English', async () => {
     vi.mocked(api.getArc).mockResolvedValue({ ...strat, contentLanguage: null });
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
     expect(await screen.findByText(/what I think you should do/i)).toBeInTheDocument();

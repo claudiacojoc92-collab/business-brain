@@ -63,3 +63,4 @@ docker-compose.override.yml
 services/reel-studio/workspace/
 services/reel-studio/.tools/
 services/reel-studio/node_modules/
+tools/acceptance/out/

@@ -35,9 +35,9 @@ const draft: PlanDraft = {
   monthDirection: 'Turn your proof of client outcomes into booked intro calls with fractional CFOs.',
   priorities: [
     { title: 'Publish concrete client-outcome proof', intent: 'content', why: 'executes the bet to win trust with proof of outcomes', betRef: 'lead with proof of outcomes', goalRef: 'win more consulting clients', timeBand: 'weeks 1-2', feasibility: 'feasible', materialGap: null, observableSignal: { description: 'replies from CFOs', source: 'strategy' }, order: 0,
-      actions: [{ key: 'a1', what: 'Write up a recent client outcome as a short proof piece', why: 'proof executes the bet', doneDefinition: 'one proof piece drafted', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, requiredMaterial: ['a recent client outcome writeup'], prerequisiteKeys: [], planTimeFeasible: true }] },
+      actions: [{ key: 'a1', what: 'Write up a recent client outcome as a short proof piece', why: 'proof executes the bet', doneDefinition: 'one proof piece drafted', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, executableFormat: 'carousel', gathersFactClass: 'none', requiredMaterial: ['a recent client outcome writeup'], prerequisiteKeys: [], planTimeFeasible: true }] },
     { title: 'Set up the intro-call conversion path', intent: 'conversion_path', why: 'convert proof readers into intro calls with CFOs', betRef: 'convert via a short intro call', goalRef: 'win more consulting clients', timeBand: 'weeks 2-3', feasibility: 'feasible', materialGap: null, observableSignal: null, order: 1,
-      actions: [{ key: 'b1', what: 'Add a clear intro-call booking link to CFO outreach', why: 'removes friction to the CTA', doneDefinition: 'booking link live', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true }] },
+      actions: [{ key: 'b1', what: 'Add a clear intro-call booking link to CFO outreach', why: 'removes friction to the CTA', doneDefinition: 'booking link live', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, executableFormat: null, gathersFactClass: 'none', requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true }] },
   ],
   currentFocusIndex: 0, notNow: [],
 };
@@ -47,9 +47,9 @@ const model: IPlanModelPort = { draftPlan: async () => draft };
 function makeLogger(): Logger { return { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() } as unknown as Logger; }
 
 // Build a server whose business boundary is owned by `ownerId`; requests authenticate as `asFounder`.
-function buildServer(asFounder: string, ownerId = 'founder-1') {
+function buildServer(asFounder: string, ownerId = 'founder-1', planModel: IPlanModelPort = model) {
   const mem = inMemoryRepo();
-  const planService = new PlanService({ plan: mem.repo, model, currentStrategy: async () => STRATEGY, clock: () => '2026-01-01T00:00:00.000Z' });
+  const planService = new PlanService({ plan: mem.repo, model: planModel, currentStrategy: async () => STRATEGY, clock: () => '2026-01-01T00:00:00.000Z' });
   const businessService = { getBusiness: async (id: string, founderId: string) => (founderId === ownerId ? { id, name: 'Acme' } : null) } as any;
   const deps = { planService, businessService } as any;
   const server = Fastify();
@@ -160,7 +160,7 @@ describe('Slice 5 — blocked-move routes (kind-specific resolution)', () => {
   const missingDraft: PlanDraft = {
     monthDirection: 'Turn your proof of client outcomes into booked intro calls with fractional CFOs.',
     priorities: [{ title: 'Publish concrete client-outcome proof', intent: 'content', why: 'executes the bet to win trust with proof of outcomes', betRef: 'lead with proof of outcomes', goalRef: 'win more consulting clients', timeBand: 'weeks 1-2', feasibility: 'feasible', materialGap: null, observableSignal: { description: 'replies from CFOs', source: 'strategy' }, order: 0,
-      actions: [{ key: 'm1', what: 'Publish the proof piece with the brand logo files', why: 'proof executes the bet', doneDefinition: 'published', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, requiredMaterial: ['brand logo files'], prerequisiteKeys: [], planTimeFeasible: true }] }],
+      actions: [{ key: 'm1', what: 'Publish the proof piece with the brand logo files', why: 'proof executes the bet', doneDefinition: 'published', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, executableFormat: 'carousel', gathersFactClass: 'none', requiredMaterial: ['brand logo files'], prerequisiteKeys: [], planTimeFeasible: true }] }],
     currentFocusIndex: 0, notNow: [],
   };
 
@@ -231,5 +231,45 @@ describe('Slice 5 — blocked-move routes (kind-specific resolution)', () => {
     await adoptAndToday(s2);
     const bad = await s2.inject({ method: 'POST', url: `${B}/action/not-a-real-action/resolve`, payload: { kind: 'resource', statement: 'x' } });
     expect(bad.statusCode).toBe(404);
+  });
+});
+
+describe('C5/C6 — the create entry routes by format (BUS-11, BUS-12)', () => {
+  const landingDraft: PlanDraft = { ...draft, priorities: draft.priorities.map((p, i) => (i === 0 ? { ...p, actions: p.actions.map((a) => ({ ...a, executableFormat: 'landing' as const })) } : p)) };
+
+  it('a landing move: Today exposes the format, and create returns the landing surface for that action', async () => {
+    const { server } = buildServer('founder-1', 'founder-1', { draftPlan: async () => landingDraft });
+    const proposed = (await server.inject({ method: 'POST', url: `${B}/propose`, payload: {} })).json<any>();
+    await server.inject({ method: 'POST', url: `${B}/${proposed.planVersionId}/adopt`, payload: {} });
+    const today = (await server.inject({ method: 'GET', url: `${B}/today` })).json<any>();
+    const move = today.ready.find((a: any) => a.canCreate);
+    expect(move.executableFormat).toBe('landing');
+    const r = (await server.inject({ method: 'POST', url: `${B}/action/${move.actionId}/create`, payload: {} })).json<any>();
+    expect(r).toMatchObject({ state: 'ready_for_create', surface: 'landing', actionId: move.actionId });
+  });
+
+  it('a carousel move still returns the carousel surface', async () => {
+    const { server } = buildServer('founder-1');
+    const proposed = (await server.inject({ method: 'POST', url: `${B}/propose`, payload: {} })).json<any>();
+    await server.inject({ method: 'POST', url: `${B}/${proposed.planVersionId}/adopt`, payload: {} });
+    const today = (await server.inject({ method: 'GET', url: `${B}/today` })).json<any>();
+    const move = today.ready.find((a: any) => a.canCreate);
+    expect(move.executableFormat).toBe('carousel');
+    const r = (await server.inject({ method: 'POST', url: `${B}/action/${move.actionId}/create`, payload: {} })).json<any>();
+    expect(r.surface).toBe('carousel');
+  });
+
+  it('a plan stored before formats existed (no executableFormat) keeps going to the carousel', async () => {
+    const { server, mem } = buildServer('founder-1');
+    const proposed = (await server.inject({ method: 'POST', url: `${B}/propose`, payload: {} })).json<any>();
+    // simulate a pre-C1 row: the stored action has no format at all
+    for (const v of (mem as any).versions) for (const p of v.priorities) for (const a of p.actions) delete a.executableFormat;
+    await server.inject({ method: 'POST', url: `${B}/${proposed.planVersionId}/adopt`, payload: {} });
+    const today = (await server.inject({ method: 'GET', url: `${B}/today` })).json<any>();
+    const move = today.ready.find((a: any) => a.canCreate);
+    expect(move.executableFormat).toBeNull();
+    const r = (await server.inject({ method: 'POST', url: `${B}/action/${move.actionId}/create`, payload: {} })).json<any>();
+    expect(r.surface).toBe('carousel');
+    expect(typeof r.createHandoffId).toBe('string');
   });
 });

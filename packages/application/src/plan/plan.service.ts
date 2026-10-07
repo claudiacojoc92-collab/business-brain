@@ -7,11 +7,13 @@
 import { createHash } from 'node:crypto';
 import { generateId, ValidationError } from '@bb/shared';
 import type {
-  Action, ActionOutcome, CreateHandoff, IPlanModelPort, IPlanRepository, LifecycleStatus, PlanDraft,
+  Action, ActionOutcome, CreateHandoff, IPlanModelPort, IPlanRepository, LifecycleStatus, PlanDraft, HeldFactsSummary,
   PlanLifecycleEvent, PlanStrategyView, PlanVersion, Priority, ResourceEnvelope,
   PlanAttemptRecord, StrategyDigest, PriorCycle,
 } from './contracts';
-import { validatePlan, detectActionKeyLeaks } from './plan-quality';
+import { validatePlan, detectActionKeyLeaks, validateCapabilityTags } from './plan-quality';
+import { EXECUTABLE_FORMATS } from './contracts';
+import type { AtomClass } from '../atoms/contracts';
 import { deriveAllReadiness } from './readiness';
 import { selectToday, type TodayResult } from './today';
 
@@ -27,6 +29,9 @@ export interface PlanDeps {
   readonly model: IPlanModelPort;
   readonly currentStrategy: (businessId: string) => Promise<PlanStrategyView | null>;
   readonly founderIntelligence?: (businessId: string) => Promise<Partial<ResourceEnvelope>>;
+  /** What BB already HOLDS about the business (atom classes + counts + examples). Given to the planner and to the
+   *  capability gate, which rejects founder work that gathers a held class. Absent ⇒ nothing held. Wired in C4. */
+  readonly heldFacts?: (businessId: string) => Promise<HeldFactsSummary | null>;
   /** Append a founder-owned resolution (resource | constraint | decision) scoped to a blocked action.
    *  Durable append only — never regenerates the strategy and never mutates the plan. */
   readonly recordFounderState?: (input: { businessId: string; founderId: string; actionId: string; kind: 'resource' | 'constraint' | 'decision'; statement: string; language: string }) => Promise<void>;
@@ -69,7 +74,8 @@ export class PlanService {
       const priorityId = `${versionId}-p${pi}`;
       const actions: Action[] = p.actions.map((a, ai) => ({
         actionId: `${priorityId}-a${ai}`, priorityId, what: a.what, why: a.why, doneDefinition: a.doneDefinition,
-        effortHint: a.effortHint ?? null, leadsToCreate: Boolean(a.leadsToCreate), generatesDemand: Boolean(a.generatesDemand), requiredMaterial: [...a.requiredMaterial],
+        effortHint: a.effortHint ?? null, leadsToCreate: Boolean(a.leadsToCreate), generatesDemand: Boolean(a.generatesDemand),
+        executableFormat: a.executableFormat ?? null, gathersFactClass: a.gathersFactClass ?? 'none', requiredMaterial: [...a.requiredMaterial],
         prerequisites: a.prerequisiteKeys.map((k) => keyToId.get(k)).filter((x): x is string => Boolean(x)),
         planTimeFeasible: Boolean(a.planTimeFeasible),
       }));
@@ -96,6 +102,8 @@ export class PlanService {
     const strategy = await this.strategyOrThrow(businessId);
     const envelope = await this.resolveEnvelope(businessId);
     const digest = this.digest(strategy, envelope);
+    const held = this.deps.heldFacts ? await this.deps.heldFacts(businessId).catch(() => null) : null;
+    const heldClasses = new Set<AtomClass>((held?.classes ?? []).filter((c) => c.count > 0).map((c) => c.atomClass));
     const attempts: PlanAttemptRecord[] = [];
     let priorDraft: PlanDraft | undefined;
     let repairReasons: string[] = [];
@@ -103,7 +111,7 @@ export class PlanService {
     for (let attempt = 0; attempt < MAX_PLAN_ATTEMPTS; attempt++) {
       let draft: PlanDraft;
       try {
-        draft = await this.deps.model.draftPlan({ strategy, envelope, businessName: businessId, ...(priorDraft ? { priorDraft } : {}), ...(repairReasons.length ? { repairReasons } : {}), ...(priorCycle ? { priorCycle } : {}) });
+        draft = await this.deps.model.draftPlan({ strategy, envelope, businessName: businessId, executableFormats: EXECUTABLE_FORMATS, ...(held ? { heldFacts: held } : {}), ...(priorDraft ? { priorDraft } : {}), ...(repairReasons.length ? { repairReasons } : {}), ...(priorCycle ? { priorCycle } : {}) });
       } catch {
         attempts.push({ attempt, disposition: 'threw', deterministicFailures: [], semanticFailures: [] });
         this.deps.log?.({ type: 'plan_draft_threw', detail: `attempt ${attempt}` });
@@ -113,7 +121,7 @@ export class PlanService {
 
       const plan = this.compose(businessId, strategy, envelope, draft);
       const draftKeys = draft.priorities.flatMap((p) => p.actions.map((a) => a.key));
-      const detFailures = [...validatePlan(plan, strategy).failures, ...detectActionKeyLeaks(plan, draftKeys)];
+      const detFailures = [...validatePlan(plan, strategy).failures, ...detectActionKeyLeaks(plan, draftKeys), ...validateCapabilityTags(draft, heldClasses)];
       let semFailures: string[] = [];
       // Semantic causal-derivation review runs ONLY when the deterministic gate is clean.
       if (detFailures.length === 0 && this.deps.model.reviewGenericity) {
@@ -304,7 +312,9 @@ export class PlanService {
       founderGoalTrace: priority.goalRef, strategicBetTrace: priority.betRef, executionObjective: action.what,
       communicationJob: priority.intent === 'content' || priority.intent === 'messaging_test' ? action.what : null,
       authorizedAudienceUseContext: strategy.audience, channel: active.plan.resourceEnvelope.channels[0] ?? 'unspecified',
-      requestedAssetFormat: null, ctaDirection: strategy.ctaDirection || null, requiredSourceMaterial: [...action.requiredMaterial],
+      // C5: the format BB writes routes the create entry (landing → the landing draft, carousel → Create). A plan
+      // stored before C1 has no format; it stays null and keeps going to the carousel, exactly as before.
+      requestedAssetFormat: action.executableFormat ?? null, ctaDirection: strategy.ctaDirection || null, requiredSourceMaterial: [...action.requiredMaterial],
       knownGapsBlockers: missing.map((m) => `missing material: ${m}`), relevantConstraints: [...active.plan.resourceEnvelope.constraints], producedAt: this.now(),
     };
     await this.deps.plan.saveCreateHandoff(handoff);

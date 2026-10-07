@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { ServerDeps } from '../server';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
 import { recordFounderEvent } from '../telemetry/founder-events';
+import { contentLanguageFor, noteFounderText } from './content-language';
 
 interface AuthedUser { sub: string; role: string }
 function founderOf(request: FastifyRequest): string {
@@ -21,7 +22,7 @@ export function registerConversationRoutes(server: FastifyInstance, deps: Server
     const business = await deps.businessService.getBusiness(id, founderId);
     if (!business) throw new NotFoundError('BUSINESS_NOT_FOUND', 'Business not found.');
     const account = await deps.founderAccountService.getById(founderId);
-    return { founderId, business, language: account?.interfaceLocale ?? 'en' };
+    return { founderId, business, language: await contentLanguageFor(deps.contentLanguageStore, business.id, account?.interfaceLocale) };
   }
 
   server.post('/v1/businesses/:id/conversation', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -41,12 +42,14 @@ export function registerConversationRoutes(server: FastifyInstance, deps: Server
   });
 
   server.post('/v1/businesses/:id/conversation/turn', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { founderId, business, language } = await requireBusiness(request);
+    const { founderId, business, language: current } = await requireBusiness(request);
     const body = (request.body ?? {}) as { message?: string; context?: string };
     const message = (body.message ?? '').trim();
     if (!message) throw new ValidationError('MESSAGE_REQUIRED', 'A message is required.');
     // M6: optional, compact current-surface context (never persisted as a turn; grounds "what do you mean by this").
     const context = typeof body.context === 'string' ? body.context.slice(0, 1500).trim() || null : null;
+    // An explicit "reply in English" switches the business's content language; otherwise it stays as decided.
+    const language = await noteFounderText(deps.contentLanguageStore, business.id, message, current);
     const view = await deps.conversationService.submitResponse(business.id, founderId, business.name, message, language, context);
     recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'talk_turn_submitted', surface: 'talk', metadata: { hasContext: Boolean(context) } });
     await reply.status(200).send(view);

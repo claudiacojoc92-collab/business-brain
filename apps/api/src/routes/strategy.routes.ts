@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { ServerDeps } from '../server';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
 import { recordFounderEvent } from '../telemetry/founder-events';
+import { contentLanguageFor } from './content-language';
 import type { StrategyVersionRecord, FounderStateKind } from '@bb/application';
 
 interface AuthedUser { sub: string; role: string }
@@ -53,7 +54,7 @@ export function registerStrategyRoutes(server: FastifyInstance, deps: ServerDeps
     const business = await deps.businessService.getBusiness(id, founderId);
     if (!business) throw new NotFoundError('BUSINESS_NOT_FOUND', 'Business not found.');
     const account = await deps.founderAccountService.getById(founderId);
-    return { founderId, business, language: account?.interfaceLocale ?? 'en' };
+    return { founderId, business, language: await contentLanguageFor(deps.contentLanguageStore, business.id, account?.interfaceLocale) };
   }
 
   // Generate (or regenerate) a Strategy Proposal. Never adopts.

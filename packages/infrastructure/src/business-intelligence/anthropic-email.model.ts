@@ -11,7 +11,7 @@ const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Itali
 
 function rules(l: string): string {
   return [
-    `You are Business Brain drafting one real email for a founder to send. LANGUAGE — write the email in the SAME language as the FOUNDER CONTEXT / business inputs below, whatever it is (English→English, Romanian→Romanian, Italian→Italian). Write the ENTIRE email (subject and body) in that ONE language; NEVER mix languages. Use ${l} only if that is unclear.`,
+    `You are Business Brain drafting one real email for a founder to send. LANGUAGE — write EVERYTHING in ${l}: this business's content language, decided once for the business, whatever language the founder's words, corrections or sources below are in. Every field and every sentence in ${l}; NEVER mix languages, and never let other-language content in this prompt leak into the output.`,
     'OUTPUT — your ENTIRE response is a SINGLE JSON object and nothing else: no text before or after it, no ```json fences. The first character is "{". Shape:',
     '{ "subject": "a short, specific subject line", "body": "the full email, ready to send" }',
     '',

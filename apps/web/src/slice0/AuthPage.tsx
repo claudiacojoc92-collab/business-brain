@@ -4,11 +4,17 @@ import { useLocale } from '../i18n/LocaleContext';
 import { useSession } from './session';
 import { AppShell } from './AppShell';
 import { login as apiLogin, registerAccount, getGoogleSigninUrl, ApiError } from '../api/client';
+import { isLocale } from '../i18n/messages';
+
+/** The browser's language if BB writes content in it (ro / en / it), else English. */
+function browserLanguage(): string {
+  try { const l = navigator.language.slice(0, 2).toLowerCase(); return isLocale(l) ? l : 'en'; } catch { return 'en'; }
+}
 
 type Mode = 'signin' | 'register';
 
 export function AuthPage() {
-  const { t, locale } = useLocale();
+  const { t } = useLocale();
   const { login } = useSession();
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -27,7 +33,9 @@ export function AuthPage() {
     setBusy(true);
     try {
       if (mode === 'register') {
-        const r = await registerAccount({ email, name, password, interfaceLocale: locale });
+        // The UI is always English; the account locale is only the LAST fallback for the founder's CONTENT language
+        // (their material decides it first). The browser's language is the best signal we have at sign-up.
+        const r = await registerAccount({ email, name, password, interfaceLocale: browserLanguage() });
         await login(r.access_token);
       } else {
         const r = await apiLogin(email, password);

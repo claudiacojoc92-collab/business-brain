@@ -6,8 +6,8 @@ import type { AtomClass } from '../atoms/contracts';
  * row makes the drafted/blocked ratio and the failing layer answerable with a query over plan_move_draft.
  */
 export interface MoveSafetyDecision {
-  readonly layersRun: readonly ('medical' | 'kernel' | 'backstop' | 'people_fidelity' | 'judge')[];
-  readonly failingLayer: 'medical' | 'kernel' | 'backstop' | 'people_fidelity' | 'judge' | null; // null ⇒ passed every layer
+  readonly layersRun: readonly ('medical' | 'kernel' | 'backstop' | 'grounding' | 'people_fidelity' | 'judge')[];
+  readonly failingLayer: 'medical' | 'kernel' | 'backstop' | 'grounding' | 'people_fidelity' | 'judge' | null; // null ⇒ passed every layer
   readonly failures: readonly { section: string; layer: string; rule: string }[];
   readonly repairAttempts: number;
   readonly disposition: 'drafted' | 'blocked';

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect } from 'vitest';
-import { PlanService, validatePlan, deriveReadiness, detectActionKeyLeaks, founderMaterialStatements } from '../../plan/index';
+import { PlanService, validatePlan, deriveReadiness, detectActionKeyLeaks, founderMaterialStatements, validateCapabilityTags, heldFactsFromAtoms } from '../../plan/index';
 import type { IPlanRepository, IPlanModelPort, PlanStrategyView, PlanDraft, PlanVersion, PlanLifecycleEvent, ActionStateEntry, CreateHandoff, PlanGenerationTrace } from '../../plan/contracts';
 
 function inMemoryRepo() {
@@ -33,9 +33,9 @@ const validDraft = (over: Partial<PlanDraft> = {}): PlanDraft => ({
   monthDirection: 'Turn your proof of client outcomes into booked intro calls with fractional CFOs.',
   priorities: [
     { title: 'Publish concrete client-outcome proof', intent: 'content', why: 'executes the bet to win trust with proof of outcomes', betRef: 'lead with proof of outcomes', goalRef: 'win more consulting clients', timeBand: 'weeks 1-2', feasibility: 'feasible', materialGap: null, observableSignal: { description: 'replies from CFOs', source: 'strategy' }, order: 0,
-      actions: [{ key: 'a1', what: 'Write up a recent client outcome as a short proof piece', why: 'proof executes the bet', doneDefinition: 'one proof piece drafted', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, requiredMaterial: ['a recent client outcome writeup'], prerequisiteKeys: [], planTimeFeasible: true }] },
+      actions: [{ key: 'a1', what: 'Write up a recent client outcome as a short proof piece', why: 'proof executes the bet', doneDefinition: 'one proof piece drafted', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, executableFormat: 'carousel', gathersFactClass: 'none', requiredMaterial: ['a recent client outcome writeup'], prerequisiteKeys: [], planTimeFeasible: true }] },
     { title: 'Set up the intro-call conversion path', intent: 'conversion_path', why: 'convert proof readers into intro calls', betRef: 'convert via a short intro call', goalRef: 'win more consulting clients', timeBand: 'weeks 2-3', feasibility: 'feasible', materialGap: null, observableSignal: { description: 'booked intro calls', source: 'strategy' }, order: 1,
-      actions: [{ key: 'b1', what: 'Add a clear intro-call booking link to outreach to CFOs', why: 'removes friction to the CTA', doneDefinition: 'booking link live', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true }] },
+      actions: [{ key: 'b1', what: 'Add a clear intro-call booking link to outreach to CFOs', why: 'removes friction to the CTA', doneDefinition: 'booking link live', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, executableFormat: null, gathersFactClass: 'none', requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true }] },
   ],
   currentFocusIndex: 0, notNow: [], ...over,
 });
@@ -72,8 +72,8 @@ describe('Slice 5 — Plan (strategy→execution) corrections', () => {
   it('B. a prerequisite blocks; completing it via the ledger makes the action READY (no plan mutation)', async () => {
     const draft = validDraft({ priorities: [{ title: 'Proof then convert', intent: 'conversion_path', why: 'sequence proof before conversion for fractional CFOs', betRef: 'convert via a short intro call', goalRef: 'win more consulting clients', timeBand: 'weeks 1-2', feasibility: 'feasible', materialGap: null, observableSignal: null, order: 0,
       actions: [
-        { key: 'B', what: 'Draft the proof piece from the client outcome', why: 'proof first', doneDefinition: 'proof drafted', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true },
-        { key: 'A', what: 'Send the proof to CFOs with the intro-call link', why: 'convert after proof', doneDefinition: 'sent', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, requiredMaterial: [], prerequisiteKeys: ['B'], planTimeFeasible: true },
+        { key: 'B', what: 'Draft the proof piece from the client outcome', why: 'proof first', doneDefinition: 'proof drafted', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, executableFormat: 'carousel', gathersFactClass: 'none', requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true },
+        { key: 'A', what: 'Send the proof to CFOs with the intro-call link', why: 'convert after proof', doneDefinition: 'sent', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, executableFormat: null, gathersFactClass: 'none', requiredMaterial: [], prerequisiteKeys: ['B'], planTimeFeasible: true },
       ] }] });
     const { service } = svc(modelReturning(draft));
     const plan = (await service.generateProposedPlan('B'))!;
@@ -92,9 +92,9 @@ describe('Slice 5 — Plan (strategy→execution) corrections', () => {
   it('C. a higher-leverage non-content action outranks a leadsToCreate content action', async () => {
     const draft = validDraft({ priorities: [{ title: 'Convert first, publish second', intent: 'conversion_path', why: 'the strategy prioritizes the intro-call conversion path for CFOs', betRef: 'convert via a short intro call', goalRef: 'win more consulting clients', timeBand: 'weeks 1-2', feasibility: 'feasible', materialGap: null, observableSignal: null, order: 0,
       actions: [
-        { key: 'x1', what: 'Stand up the intro-call booking path for CFOs', why: 'unblocks outreach', doneDefinition: 'path live', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true },
-        { key: 'c1', what: 'Draft a proof piece about a client outcome', why: 'content proof', doneDefinition: 'drafted', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true },
-        { key: 'x2', what: 'Send outreach to CFOs via the booking path', why: 'depends on the path', doneDefinition: 'sent', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, requiredMaterial: [], prerequisiteKeys: ['x1'], planTimeFeasible: true },
+        { key: 'x1', what: 'Stand up the intro-call booking path for CFOs', why: 'unblocks outreach', doneDefinition: 'path live', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, executableFormat: null, gathersFactClass: 'none', requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true },
+        { key: 'c1', what: 'Draft a proof piece about a client outcome', why: 'content proof', doneDefinition: 'drafted', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, executableFormat: 'carousel', gathersFactClass: 'none', requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true },
+        { key: 'x2', what: 'Send outreach to CFOs via the booking path', why: 'depends on the path', doneDefinition: 'sent', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, executableFormat: null, gathersFactClass: 'none', requiredMaterial: [], prerequisiteKeys: ['x1'], planTimeFeasible: true },
       ] }] });
     const { service } = svc(modelReturning(draft));
     const plan = (await service.generateProposedPlan('B'))!;
@@ -147,7 +147,7 @@ describe('Slice 5 — Plan (strategy→execution) corrections', () => {
       planVersionId: 'x', businessId: 'B', strategyVersionId: 'sv1', resourceEnvelope: { capacity: 'x', channels: [], constraints: [], notWilling: [], resources: [] },
       contextVersionRefs: [], monthDirection: 'Turn proof of client outcomes into intro calls with fractional CFOs.', currentFocusPriorityId: 'p0', producedAt: 't', contentHash: 'h', notNow: [],
       priorities: [{ priorityId: 'p0', title: 'Book intro calls with fractional CFOs', intent: 'conversion_path', why: 'executes the intro-call conversion bet', betRef: 'convert via a short intro call', goalRef: 'win more consulting clients', timeBand, feasibility: 'feasible', materialGap: null, observableSignal: null, order: 0,
-        actions: [{ actionId: 'p0-a0', priorityId: 'p0', what: 'Stand up the intro-call booking path', why: 'executes the bet', doneDefinition: 'done', effortHint: null, leadsToCreate: false, generatesDemand: false, requiredMaterial: [], prerequisites: [], planTimeFeasible: true }] }],
+        actions: [{ actionId: 'p0-a0', priorityId: 'p0', what: 'Stand up the intro-call booking path', why: 'executes the bet', doneDefinition: 'done', effortHint: null, leadsToCreate: false, generatesDemand: false, executableFormat: null, gathersFactClass: 'none', requiredMaterial: [], prerequisites: [], planTimeFeasible: true }] }],
     });
     const fires = (tb: string): boolean => validatePlan(build(tb), STRATEGY).failures.includes('priority_timeband_not_week_band');
     expect(fires('weeks 1-2')).toBe(false);          // English
@@ -165,11 +165,11 @@ describe('Slice 5 — Plan (strategy→execution) corrections', () => {
       contextVersionRefs: [], monthDirection: 'Turn proof of client outcomes into booked intro calls with fractional CFOs.', currentFocusPriorityId: 'p0', producedAt: 't', contentHash: 'h', notNow: [],
       priorities: [
         { priorityId: 'p0', title: 'Set up the intro-call booking path for CFOs', intent: 'conversion_path', why: 'the receiving side of the fractional-CFO outreach', betRef: 'convert via a short intro call', goalRef: 'win more consulting clients', timeBand: 'weeks 1-2', feasibility: 'feasible', materialGap: null, observableSignal: null, order: 0,
-          actions: [{ actionId: 'p0-a0', priorityId: 'p0', what: 'Decide who answers when a CFO books an intro call', why: 'the landing must handle the arrival', doneDefinition: 'owner named', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, requiredMaterial: [], prerequisites: [], planTimeFeasible: true }] },
+          actions: [{ actionId: 'p0-a0', priorityId: 'p0', what: 'Decide who answers when a CFO books an intro call', why: 'the landing must handle the arrival', doneDefinition: 'owner named', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, executableFormat: null, gathersFactClass: 'none', requiredMaterial: [], prerequisites: [], planTimeFeasible: true }] },
         { priorityId: 'p1', title: 'Reach fractional CFOs with the proof', intent: 'acquisition', why: 'brings the CFOs to the intro-call path', betRef: 'lead with proof of outcomes', goalRef: 'win more consulting clients', timeBand: 'weeks 2-3', feasibility: 'feasible', materialGap: null, observableSignal: null, order: 1,
           actions: [
-            { actionId: 'p1-a0', priorityId: 'p1', what: 'Build the list of fractional CFOs to reach', why: 'internal prep', doneDefinition: 'list built', effortHint: 'a_session', leadsToCreate: false, generatesDemand: prepGeneratesDemand, requiredMaterial: [], prerequisites: [], planTimeFeasible: true },
-            { actionId: 'p1-a1', priorityId: 'p1', what: 'Reach out to the fractional CFOs with the proof and booking link', why: 'invites them in', doneDefinition: 'sent', effortHint: 'quick', leadsToCreate: false, generatesDemand: outreachGeneratesDemand, requiredMaterial: [], prerequisites: demandPrereqs, planTimeFeasible: true },
+            { actionId: 'p1-a0', priorityId: 'p1', what: 'Build the list of fractional CFOs to reach', why: 'internal prep', doneDefinition: 'list built', effortHint: 'a_session', leadsToCreate: false, generatesDemand: prepGeneratesDemand, executableFormat: null, gathersFactClass: 'none', requiredMaterial: [], prerequisites: [], planTimeFeasible: true },
+            { actionId: 'p1-a1', priorityId: 'p1', what: 'Reach out to the fractional CFOs with the proof and booking link', why: 'invites them in', doneDefinition: 'sent', effortHint: 'quick', leadsToCreate: false, generatesDemand: outreachGeneratesDemand, executableFormat: null, gathersFactClass: 'none', requiredMaterial: [], prerequisites: demandPrereqs, planTimeFeasible: true },
           ] },
       ],
     });
@@ -189,9 +189,9 @@ describe('Slice 5 — Plan (strategy→execution) corrections', () => {
   it('CFX. a demand action whose landing lives in another priority survives composition and passes the gate', async () => {
     const draft = validDraft({ priorities: [
       { title: 'Set up the intro-call booking path for CFOs', intent: 'conversion_path', why: 'the receiving side of outreach', betRef: 'convert via a short intro call', goalRef: 'win more consulting clients', timeBand: 'weeks 1-2', feasibility: 'feasible', materialGap: null, observableSignal: null, order: 0,
-        actions: [{ key: 'l1', what: 'Decide who answers when a CFO books an intro call and stand up the booking link', why: 'the arrival must be handled', doneDefinition: 'owner named + link live', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true }] },
+        actions: [{ key: 'l1', what: 'Decide who answers when a CFO books an intro call and stand up the booking link', why: 'the arrival must be handled', doneDefinition: 'owner named + link live', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, executableFormat: null, gathersFactClass: 'none', requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true }] },
       { title: 'Reach fractional CFOs with the proof', intent: 'acquisition', why: 'brings the CFOs to the booking path', betRef: 'lead with proof of outcomes', goalRef: 'win more consulting clients', timeBand: 'weeks 2-3', feasibility: 'feasible', materialGap: null, observableSignal: null, order: 1,
-        actions: [{ key: 'o1', what: 'Reach out to fractional CFOs with the proof and the booking link', why: 'invites them in', doneDefinition: 'sent', effortHint: 'quick', leadsToCreate: false, generatesDemand: true, requiredMaterial: [], prerequisiteKeys: ['l1'], planTimeFeasible: true }] },
+        actions: [{ key: 'o1', what: 'Reach out to fractional CFOs with the proof and the booking link', why: 'invites them in', doneDefinition: 'sent', effortHint: 'quick', leadsToCreate: false, generatesDemand: true, executableFormat: null, gathersFactClass: 'none', requiredMaterial: [], prerequisiteKeys: ['l1'], planTimeFeasible: true }] },
     ], currentFocusIndex: 0 });
     const { service } = svc(modelReturning(draft));
     const plan = (await service.generateProposedPlan('B'))!;
@@ -208,9 +208,9 @@ describe('Slice 5 — Plan (strategy→execution) corrections', () => {
   // ── TB2. Blocked moves are surfaced in today.blocked even while another move is ready (Part 2) ──
   it('TB2. a prerequisite-blocked move stays visible in today.blocked while other moves are ready', async () => {
     const draft = validDraft({ priorities: [{ ...validDraft().priorities[0]!, actions: [
-      { key: 'a1', what: 'Audit the current proof assets', why: 'ready prep that executes the bet', doneDefinition: 'audited', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true },
-      { key: 'a2', what: 'Publish the proof landing page', why: 'the landing that executes the bet', doneDefinition: 'live', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true },
-      { key: 'a3', what: 'Reach the CFOs with the proof', why: 'after the landing is live', doneDefinition: 'sent', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, requiredMaterial: [], prerequisiteKeys: ['a2'], planTimeFeasible: true },
+      { key: 'a1', what: 'Audit the current proof assets', why: 'ready prep that executes the bet', doneDefinition: 'audited', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, executableFormat: null, gathersFactClass: 'none', requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true },
+      { key: 'a2', what: 'Publish the proof landing page', why: 'the landing that executes the bet', doneDefinition: 'live', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, executableFormat: null, gathersFactClass: 'none', requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true },
+      { key: 'a3', what: 'Reach the CFOs with the proof', why: 'after the landing is live', doneDefinition: 'sent', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, executableFormat: null, gathersFactClass: 'none', requiredMaterial: [], prerequisiteKeys: ['a2'], planTimeFeasible: true },
     ] }] });
     const { service } = svc(modelReturning(draft));
     const plan = (await service.generateProposedPlan('B'))!;
@@ -270,7 +270,7 @@ describe('Slice 5 — Plan (strategy→execution) corrections', () => {
   // ── Readiness material availability is a MEANING match, not string equality (live-corpus fix) ──
   it('L. a paraphrased required material still counts as available (not falsely blocked)', async () => {
     const d = validDraft({ priorities: [{ ...validDraft().priorities[0]!, actions: [
-      { key: 'm1', what: 'Draft the proof piece', why: 'proof executes the bet', doneDefinition: 'drafted', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, requiredMaterial: ['recent client outcome writeup'], prerequisiteKeys: [], planTimeFeasible: true },
+      { key: 'm1', what: 'Draft the proof piece', why: 'proof executes the bet', doneDefinition: 'drafted', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, executableFormat: 'carousel', gathersFactClass: 'none', requiredMaterial: ['recent client outcome writeup'], prerequisiteKeys: [], planTimeFeasible: true },
     ] }] });
     // strategy licenses "a recent client outcome writeup"; the action asks for "recent client outcome writeup"
     const { service } = svc(modelReturning(d));
@@ -349,7 +349,7 @@ describe('Slice 5 — blocked-move resolution semantics (P0)', () => {
   // A plan with a single blocked action requiring an unlicensed material, and a resource-union harness that
   // mirrors composition-root: a recorded `resource` folds into the strategy's licensedMaterial.
   const materialDraft = (required: string): PlanDraft => validDraft({ priorities: [{ ...validDraft().priorities[0]!, actions: [
-    { key: 'm1', what: 'Publish the proof piece using the brand assets', why: 'proof executes the bet', doneDefinition: 'published', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, requiredMaterial: [required], prerequisiteKeys: [], planTimeFeasible: true },
+    { key: 'm1', what: 'Publish the proof piece using the brand assets', why: 'proof executes the bet', doneDefinition: 'published', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, executableFormat: 'carousel', gathersFactClass: 'none', requiredMaterial: [required], prerequisiteKeys: [], planTimeFeasible: true },
   ] }], currentFocusIndex: 0 });
 
   function harness(draft: PlanDraft) {
@@ -398,8 +398,8 @@ describe('Slice 5 — blocked-move resolution semantics (P0)', () => {
   it('D. founder_decision → decision fact + DONE completes the decision action and unblocks dependents', async () => {
     // an action that needs a decision (not plan-time feasible, no material) blocks a dependent
     const draft = validDraft({ priorities: [{ ...validDraft().priorities[0]!, actions: [
-      { key: 'dec', what: 'Decide which single audience to lead with', why: 'the plan can’t proceed until you choose', doneDefinition: 'chosen', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: false },
-      { key: 'nxt', what: 'Write the proof piece for the chosen audience', why: 'depends on the choice', doneDefinition: 'drafted', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, requiredMaterial: [], prerequisiteKeys: ['dec'], planTimeFeasible: true },
+      { key: 'dec', what: 'Decide which single audience to lead with', why: 'the plan can’t proceed until you choose', doneDefinition: 'chosen', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, executableFormat: null, gathersFactClass: 'none', requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: false },
+      { key: 'nxt', what: 'Write the proof piece for the chosen audience', why: 'depends on the choice', doneDefinition: 'drafted', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, executableFormat: 'carousel', gathersFactClass: 'none', requiredMaterial: [], prerequisiteKeys: ['dec'], planTimeFeasible: true },
     ] }] });
     const { service, recorded } = harness(draft);
     const plan = (await service.generateProposedPlan('B'))!;
@@ -417,8 +417,8 @@ describe('Slice 5 — blocked-move resolution semantics (P0)', () => {
   it('E. prerequisite_unfinished carries the PREREQUISITE ref; "already done" applies to A, never the blocked child', async () => {
     // B (blocked child) depends on A; A is not plan-time feasible so it needs a decision and B waits on it.
     const draft = validDraft({ priorities: [{ ...validDraft().priorities[0]!, actions: [
-      { key: 'A', what: 'Confirm the case study is cleared to publish', why: 'gate', doneDefinition: 'cleared', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true },
-      { key: 'Bc', what: 'Publish the cleared case study', why: 'after clearance', doneDefinition: 'published', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, requiredMaterial: [], prerequisiteKeys: ['A'], planTimeFeasible: true },
+      { key: 'A', what: 'Confirm the case study is cleared to publish', why: 'gate', doneDefinition: 'cleared', effortHint: 'quick', leadsToCreate: false, generatesDemand: false, executableFormat: null, gathersFactClass: 'none', requiredMaterial: [], prerequisiteKeys: [], planTimeFeasible: true },
+      { key: 'Bc', what: 'Publish the cleared case study', why: 'after clearance', doneDefinition: 'published', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, executableFormat: 'carousel', gathersFactClass: 'none', requiredMaterial: [], prerequisiteKeys: ['A'], planTimeFeasible: true },
     ] }] });
     const { service } = harness(draft);
     const plan = (await service.generateProposedPlan('B'))!;
@@ -514,7 +514,7 @@ describe('Slice 5 — founder_state kind boundary (only resource feeds available
   // End-to-end through PlanService, mirroring the FIXED composition-root fold (licensedMaterial via founderMaterialStatements).
   it('E2E — recording a CONSTRAINT that echoes the required material does NOT unblock the action; only a RESOURCE does', async () => {
     const materialDraft = validDraft({ priorities: [{ ...validDraft().priorities[0]!, actions: [
-      { key: 'm1', what: 'Publish the proof using the color pages', why: 'proof executes the bet', doneDefinition: 'published', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, requiredMaterial: ['East Fork color pages'], prerequisiteKeys: [], planTimeFeasible: true },
+      { key: 'm1', what: 'Publish the proof using the color pages', why: 'proof executes the bet', doneDefinition: 'published', effortHint: 'a_session', leadsToCreate: true, generatesDemand: false, executableFormat: 'carousel', gathersFactClass: 'none', requiredMaterial: ['East Fork color pages'], prerequisiteKeys: [], planTimeFeasible: true },
     ] }], currentFocusIndex: 0 });
     const repo = inMemoryRepo();
     const states: { kind: string; statement: string }[] = [];
@@ -694,5 +694,85 @@ describe('Slice 5 — cycle boundary + progress-aware next cycle (month two)', (
     expect(captured.priorCycle.completed).toContain(a0.what);        // knows what was done
     expect(captured.priorCycle.outcomeReport).toBe('Doi medici au zis că trimit pacienți.'); // and the founder's words
     expect(captured.priorCycle.monthDirection).toBe(p.monthDirection);
+  });
+});
+
+describe('C1 — executableFormat / gathersFactClass pass through compose (BUS-7)', () => {
+  it('carries the draft values into the immutable PlanVersion actions', async () => {
+    const d = validDraft();
+    const draft: PlanDraft = { ...d, priorities: d.priorities.map((p, pi) => ({ ...p, actions: p.actions.map((a) => (pi === 0 ? { ...a, executableFormat: 'landing' as const, gathersFactClass: 'service' as const } : a)) })) };
+    const { service } = svc(modelReturning(draft));
+    const plan = (await service.generateProposedPlan('B'))!;
+    expect(plan.priorities[0]!.actions[0]!.executableFormat).toBe('landing');
+    expect(plan.priorities[0]!.actions[0]!.gathersFactClass).toBe('service');
+    expect(plan.priorities[1]!.actions[0]!.executableFormat).toBeNull();
+    expect(plan.priorities[1]!.actions[0]!.gathersFactClass).toBe('none');
+  });
+});
+
+describe('C3 — capability tags gate (BUS-9): held info, required tag, create ⇔ format', () => {
+  const withActions = (actions: Record<string, unknown>[]): PlanDraft => {
+    const d = validDraft();
+    return { ...d, priorities: [{ ...d.priorities[0]!, actions: actions.map((a, i) => ({ ...d.priorities[0]!.actions[0]!, key: `k${i}`, leadsToCreate: false, executableFormat: null, gathersFactClass: 'none', ...a })) as any }] };
+  };
+  const held = new Set(['service', 'people'] as const);
+  const kinds = (fs: string[]) => fs.map((f) => f.split(/[:\s]/)[0]);
+
+  it('fails founder work that gathers a class BB holds, and passes it when the class is not held', () => {
+    const d = withActions([{ what: 'List every service you offer on one page', gathersFactClass: 'service' }]);
+    expect(validateCapabilityTags(d, held)).toEqual([expect.stringMatching(/^assigns_held_info:service: /)]);
+    expect(validateCapabilityTags(d, new Set())).toEqual([]);
+  });
+
+  it('lets a BB-written move use a held class (that is the point of holding it)', () => {
+    const d = withActions([{ what: 'BB writes the landing page', gathersFactClass: 'service', executableFormat: 'landing', leadsToCreate: true }]);
+    expect(validateCapabilityTags(d, held)).toEqual([]);
+  });
+
+  it('fails a missing or unknown gathersFactClass instead of defaulting it', () => {
+    expect(kinds(validateCapabilityTags(withActions([{ gathersFactClass: undefined }]), held))).toEqual(['missing_gathers_tag']);
+    expect(kinds(validateCapabilityTags(withActions([{ gathersFactClass: 'price' }]), held))).toEqual(['missing_gathers_tag']);
+  });
+
+  it('FAILS CLOSED on leadsToCreate without a format, and flags a format without leadsToCreate', () => {
+    expect(kinds(validateCapabilityTags(withActions([{ leadsToCreate: true, executableFormat: null }]), held))).toEqual(['create_without_format']);
+    expect(kinds(validateCapabilityTags(withActions([{ leadsToCreate: false, executableFormat: 'carousel' }]), held))).toEqual(['format_without_create']);
+  });
+
+  it('service: an assigns-held-info draft is repaired, and the planner is told what BB can do and holds', async () => {
+    const bad = withActions([{ what: 'List every service you offer for the new page', gathersFactClass: 'service' }]);
+    const calls: any[] = [];
+    const model: IPlanModelPort = { draftPlan: async (input) => { calls.push(input); return calls.length === 1 ? bad : validDraft(); } };
+    const repo = inMemoryRepo();
+    const service = new PlanService({ plan: repo.repo, model, currentStrategy: async () => STRATEGY, clock: () => '2026-01-01T00:00:00.000Z',
+      heldFacts: async () => ({ classes: [{ atomClass: 'service', count: 11, examples: ['Kinetoterapie'] }], facets: [] }) });
+    const plan = await service.generateProposedPlan('B');
+    expect(plan).not.toBeNull();
+    expect(calls).toHaveLength(2);
+    expect(calls[0].executableFormats).toEqual(['landing', 'carousel']);
+    expect(calls[0].heldFacts.classes[0].atomClass).toBe('service');
+    expect(calls[1].repairReasons.some((r: string) => r.startsWith('assigns_held_info:service'))).toBe(true);
+  });
+
+  it('service: a draft that keeps promising creation with no format fails closed (no plan)', async () => {
+    const bad = withActions([{ leadsToCreate: true, executableFormat: null }]);
+    const { service, repo } = svc(modelReturning(bad));
+    expect(await service.generateProposedPlan('B')).toBeNull();
+    expect(repo.versions).toHaveLength(0);
+    expect(repo.traces.at(-1)?.attempts.every((a: any) => a.deterministicFailures.some((f: string) => f.startsWith('create_without_format')))).toBe(true);
+  });
+});
+
+describe('C4 — heldFactsFromAtoms (BUS-10): what BB holds, summarised for the planner', () => {
+  it('groups licensed atoms by class with counts and at most three examples, omitting empty classes', () => {
+    const atoms = [
+      { atomClass: 'service' as const, value: 'Kinetoterapie' }, { atomClass: 'service' as const, value: 'Masaj' },
+      { atomClass: 'service' as const, value: 'Clase & Personal Training' }, { atomClass: 'service' as const, value: 'Gimnastică Prenatală &\nRecuperare Postpartum' },
+      { atomClass: 'location' as const, value: 'Body Move Studio Decebal' },
+    ];
+    const h = heldFactsFromAtoms(atoms);
+    expect(h.classes.map((c) => [c.atomClass, c.count])).toEqual([['service', 4], ['location', 1]]);
+    expect(h.classes[0]!.examples).toEqual(['Kinetoterapie', 'Masaj', 'Clase & Personal Training']);
+    expect(heldFactsFromAtoms([]).classes).toEqual([]);
   });
 });

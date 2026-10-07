@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { ServerDeps } from '../server';
 import { recordFounderEvent } from '../telemetry/founder-events';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
+import { contentLanguageFor } from './content-language';
 
 /**
  * M2 — Business Understanding corrections (/v1, JWT via the global preHandler).
@@ -52,7 +53,7 @@ export function registerBusinessUnderstandingRoutes(server: FastifyInstance, dep
     if (!SUBJECTS.has(subject)) throw new ValidationError('INVALID_SUBJECT', 'Unknown claim subject.');
     if (!statement) throw new ValidationError('STATEMENT_REQUIRED', 'A correction is required.');
     if (statement.length > 2000) throw new ValidationError('STATEMENT_TOO_LONG', 'Correction is too long.');
-    const language = business.defaultConversationLanguage ?? 'en';
+    const language = await contentLanguageFor(deps.contentLanguageStore, business.id, business.defaultConversationLanguage);
     const correction = await deps.businessCorrectionService.record(business.id, founderId, subject, statement, language);
     recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'correction_submitted', surface: 'business', metadata: { subject } });
     await reply.status(201).send({ correction });

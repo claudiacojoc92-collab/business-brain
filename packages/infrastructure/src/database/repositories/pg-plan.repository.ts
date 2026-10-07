@@ -8,12 +8,18 @@ import type {
 const iso = (v: any): string => (v instanceof Date ? v.toISOString() : String(v));
 const parse = <T>(v: any, fb: T): T => { if (v == null) return fb; return typeof v === 'string' ? JSON.parse(v) : v; };
 
+// Plans stored before C1 (2026-10-07) carry neither executableFormat nor gathersFactClass. Read them as
+// founder work that gathers nothing (null / 'none'); the stored row and its content_hash stay untouched.
+const withActionDefaults = (ps: Priority[]): Priority[] => ps.map((p) => ({
+  ...p, actions: (p.actions ?? []).map((a) => ({ ...a, executableFormat: a.executableFormat ?? null, gathersFactClass: a.gathersFactClass ?? 'none' })),
+}));
+
 function toPlan(r: any): PlanVersion {
   return {
     planVersionId: r.plan_version_id, businessId: r.business_id, strategyVersionId: r.strategy_version_id,
     resourceEnvelope: parse<ResourceEnvelope>(r.resource_envelope, {} as ResourceEnvelope),
     contextVersionRefs: parse<string[]>(r.context_version_refs, []), monthDirection: r.month_direction,
-    priorities: parse<Priority[]>(r.priorities, []), currentFocusPriorityId: r.current_focus_priority_id,
+    priorities: withActionDefaults(parse<Priority[]>(r.priorities, [])), currentFocusPriorityId: r.current_focus_priority_id,
     notNow: parse<NotNowItem[]>(r.not_now, []), producedAt: iso(r.produced_at), contentHash: r.content_hash,
   };
 }

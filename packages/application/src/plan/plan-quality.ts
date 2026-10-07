@@ -5,7 +5,8 @@
  * provenance-governed numbers/dates (authorized, not lexically banned), no manufactured urgency / no
  * unsupported outcome promise, and no fabricated Not-now. It does NOT read or write Current Strategy.
  */
-import type { PlanVersion, PlanStrategyView, AuthorizedNumber, LicensedNumericFact } from './contracts';
+import type { PlanVersion, PlanStrategyView, AuthorizedNumber, LicensedNumericFact, PlanDraft, HeldFactsSummary } from './contracts';
+import { ATOM_CLASSES, type AtomClass } from '../atoms/contracts';
 
 export interface PlanValidation { readonly valid: boolean; readonly failures: readonly string[] }
 
@@ -198,4 +199,49 @@ export function isTransplantable(plan: PlanVersion, strategy: PlanStrategyView, 
   const stripped = plan.priorities.flatMap((p) => [strip(p.title), strip(p.why), ...p.actions.map((a) => strip(`${a.what} ${a.why}`))]).join(' ');
   const strategyTokens = tokenSet([strategy.coreBet, strategy.goal, strategy.audience, ...strategy.decisions]);
   return !words(stripped).some((w) => strategyTokens.has(w)); // no strategy-specific token survives ⇒ transplantable ⇒ generic
+}
+
+/**
+ * CAPABILITY TAGS GATE (C3, BUS-9) — runs on the raw DRAFT, before compose, so a missing tag cannot hide behind a
+ * default. Deterministic verdict over model-supplied tags (the claim-safety pattern: the gate decides, the model
+ * supplies the signal). Every failure goes back through the existing repair loop.
+ *   - missing_gathers_tag: gathersFactClass is REQUIRED on every action. An omitted optional field fails
+ *     silently and ships looking clean; a missing required one fails here.
+ *   - assigns_held_info:<class>: founder work (executableFormat null) that asks the founder to gather a fact class
+ *     BB already holds. BB-performed moves may USE held facts; that is the point of holding them.
+ *   - create_without_format: leadsToCreate with no executableFormat promises creation with no surface behind it
+ *     (a dead "Make it" / "See what BB wrote"). FAILS CLOSED: rejected, never defaulted to a format.
+ *   - format_without_create: BB writes it but the founder gets no way to open it.
+ */
+export function validateCapabilityTags(draft: PlanDraft, heldClasses: ReadonlySet<AtomClass>): string[] {
+  const f: string[] = [];
+  for (const p of draft.priorities) {
+    for (const a of p.actions) {
+      const what = `"${a.what.slice(0, 70)}"`;
+      const tag = a.gathersFactClass;
+      if (tag === undefined || !GATHER_TAGS.has(tag)) {
+        f.push(`missing_gathers_tag: the action ${what} has no gathersFactClass — set it to the fact class it asks the founder to gather (service, location, contact_booking, people, policy) or "none"`);
+      } else if (tag !== 'none' && a.executableFormat == null && heldClasses.has(tag)) {
+        f.push(`assigns_held_info:${tag}: the action ${what} asks the founder to gather ${tag} facts, which BB already holds — replace it with the step that USES them`);
+      }
+      if (a.leadsToCreate && a.executableFormat == null) {
+        f.push(`create_without_format: the action ${what} has leadsToCreate=true but no executableFormat — set the format BB writes (landing or carousel), or make it founder work with leadsToCreate=false`);
+      }
+      if (!a.leadsToCreate && a.executableFormat != null) {
+        f.push(`format_without_create: the action ${what} has executableFormat=${a.executableFormat} but leadsToCreate=false — BB-written actions must have leadsToCreate=true`);
+      }
+    }
+  }
+  return f;
+}
+const GATHER_TAGS = new Set<string>([...ATOM_CLASSES, 'none']);
+
+/** What BB HOLDS, for the planner + capability gate (C4): licensed atoms grouped by class, with counts and up to
+ *  three examples each. A summary, never the raw facts. Classes with no atoms are omitted. */
+export function heldFactsFromAtoms(atoms: readonly { readonly atomClass: AtomClass; readonly value: string }[], facets: readonly string[] = []): HeldFactsSummary {
+  const classes = ATOM_CLASSES.map((atomClass) => {
+    const values = atoms.filter((a) => a.atomClass === atomClass).map((a) => a.value.replace(/\s+/g, ' ').trim());
+    return { atomClass, count: values.length, examples: values.slice(0, 3) };
+  }).filter((c) => c.count > 0);
+  return { classes, facets: [...facets] };
 }

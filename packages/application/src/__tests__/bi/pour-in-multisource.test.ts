@@ -131,3 +131,42 @@ describe('Day One multi-source pour-in — ingest per source, synthesize ONCE ov
     expect(captured()).toBeNull();
   });
 });
+
+describe('content language is decided ONCE, at first understanding, from the founder\'s material (rule 2026-10-07)', () => {
+  const langStore = (stored: string | null = null) => {
+    let v = stored;
+    return { get: async () => v as any, setIfUnset: async (_b: string, l: string) => { if (!v) v = l; }, set: async (_b: string, l: string) => { v = l; }, firstUnderstandingLanguage: async () => null, value: () => v };
+  };
+
+  it('first understanding: writes in the MATERIAL language (not the account locale) and stores it', async () => {
+    const { service, captured } = harness(groundedSynth);
+    const s = langStore();
+    (service as any).deps.contentLanguage = s;
+    await service.ingestWebsiteForPourIn({ businessId: 'B', founderId: 'f1', url: 'www.bodymovestudio.ro' }); // page lang 'en'
+    await service.bridgePourIn({ ...P, interfaceLanguage: 'ro' });
+    expect(captured()!.interfaceLanguage).toBe('en');
+    expect(s.value()).toBe('en');
+  });
+
+  it('a business whose language is already decided keeps it, whatever the material or account say', async () => {
+    const { service, captured } = harness(groundedSynth);
+    const s = langStore('it');
+    (service as any).deps.contentLanguage = s;
+    await service.ingestWebsiteForPourIn({ businessId: 'B', founderId: 'f1', url: 'www.bodymovestudio.ro' });
+    await service.bridgePourIn({ ...P, interfaceLanguage: 'ro' });
+    expect(captured()!.interfaceLanguage).toBe('it');
+    expect(s.value()).toBe('it');
+  });
+});
+
+describe('content language from TYPED material (live finding 2026-10-07: text pour-in carries no lang)', () => {
+  it('a Romanian description decides and stores Romanian, even when the account locale is English', async () => {
+    const { service, captured } = harness(groundedSynth);
+    let v: string | null = null;
+    (service as any).deps.contentLanguage = { get: async () => v, setIfUnset: async (_b: string, l: string) => { if (!v) v = l; }, set: async () => undefined, firstUnderstandingLanguage: async () => null };
+    await service.ingestTextForPourIn({ businessId: 'B', founderId: 'f1', source: 'founder_supplied', provenance: 'declared', items: [{ ref: 'Your description', url: 'founder://text', text: 'Body Move Studio este un studio de mișcare și recuperare din Cluj, cu două locații. Oferim kinetoterapie și recuperare postpartum pentru clienții noștri.', pageType: 'founder_supplied' }] });
+    await service.bridgePourIn({ ...P, interfaceLanguage: 'en' });
+    expect(captured()!.interfaceLanguage).toBe('ro');
+    expect(v).toBe('ro');
+  });
+});

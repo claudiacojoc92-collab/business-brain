@@ -61,15 +61,18 @@ export class AnthropicAtomModel implements IAtomExtractionModel {
 
   async extract(input: AtomExtractionInput): Promise<AtomModelOutput> {
     if (!this.apiKey || input.units.length === 0) return { atoms: [] };
-    try {
-      const client = createAnthropicClient(this.apiKey);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const resp: any = await client.messages.create({
-        model: this.modelId, max_tokens: 2000, temperature: 0, system: RULES,
-        messages: [{ role: 'user', content: units(input) }],
-      });
-      const block = Array.isArray(resp?.content) ? resp.content.find((c: { type?: string }) => c?.type === 'text') : null;
-      return coerce(extractJson((block as { text?: string } | null)?.text ?? ''));
-    } catch { return { atoms: [] }; } // fail safe: propose nothing rather than risk a malformed/invented atom
+    // A broken response THROWS (never a silent "no atoms"): AtomExtractionService logs `atoms_extract_threw` and
+    // keeps the last good set. Found live 2026-10-07 (C4): a 38-atom site overflowed the old 2000-token budget,
+    // the JSON was cut off, parsing failed, and the old catch returned [] — so the planner was told BB held
+    // nothing, intermittently. Still fail-safe: nothing malformed or invented is ever licensed.
+    const client = createAnthropicClient(this.apiKey);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const resp: any = await client.messages.create({
+      model: this.modelId, max_tokens: 8000, temperature: 0, system: RULES,
+      messages: [{ role: 'user', content: units(input) }],
+    });
+    if (resp?.stop_reason === 'max_tokens') throw new Error('ATOMS_TRUNCATED');
+    const block = Array.isArray(resp?.content) ? resp.content.find((c: { type?: string }) => c?.type === 'text') : null;
+    return coerce(extractJson((block as { text?: string } | null)?.text ?? ''));
   }
 }

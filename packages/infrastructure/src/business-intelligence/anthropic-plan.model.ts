@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createHash } from 'node:crypto';
 import { createAnthropicClient } from '../llm/anthropic-client';
+import { EXECUTABLE_FORMATS, ATOM_CLASSES } from '@bb/application';
 import type {
-  IPlanModelPort, PlanDraft, PlanStrategyView, ResourceEnvelope,
+  IPlanModelPort, PlanDraft, DraftPlanInput, ExecutableFormat, GathersFactClass, HeldFactsSummary,
   PriorityIntent, NotNowReasonKind, StrategyDigest, GenericityVerdict,
 } from '@bb/application';
 
@@ -17,6 +18,8 @@ import type {
 const INTENTS: PriorityIntent[] = ['offer_clarification', 'positioning_expression', 'conversion_path', 'acquisition', 'retention', 'messaging_test', 'distribution', 'content', 'sales_support', 'other'];
 const REASON_KINDS: NotNowReasonKind[] = ['strategic_tradeoff', 'resource_constraint', 'prerequisite', 'material_gap', 'founder_boundary'];
 const EFFORTS = new Set(['quick', 'a_session', 'larger']);
+const FORMATS = new Set<string>(EXECUTABLE_FORMATS);
+const GATHERS = new Set<string>([...ATOM_CLASSES, 'none']);
 
 function extractJson(text: string): unknown {
   const s = text.indexOf('{'); const e = text.lastIndexOf('}');
@@ -49,7 +52,8 @@ export const PLAN_SYSTEM = [
   'Each priority has 1+ ACTIONS. An action has: key (unique within the plan, e.g. "a1"); what (a concrete',
   '  next step); why (why THIS action, traces to the priority); doneDefinition (what "done" concretely looks',
   '  like); effortHint ("quick" | "a_session" | "larger" | null — null unless honestly knowable);',
-  '  leadsToCreate (true ONLY if the action produces an external audience-facing message/asset);',
+  '  executableFormat (one of the formats listed under WHAT BB CAN DO, or null — see WHO DOES THE WORK below);',
+  '  leadsToCreate (true EXACTLY when executableFormat is non-null: an audience-facing asset BB writes);',
   '  generatesDemand (true ONLY when the action makes someone ARRIVE or invites inbound contact — reaching out to',
   '    people who can send you customers, launching, publishing something that invites a reply, driving traffic.',
   '    FALSE for internal preparation: writing a document, building a list, practising, auditing, and — importantly —',
@@ -57,9 +61,27 @@ export const PLAN_SYSTEM = [
   '    "build the doctor list", "decide who answers the phone", "test the booking path" = false);',
   '  requiredMaterial (business/offer/proof material the action needs — [] if none); prerequisiteKeys (keys',
   '  of actions that must be DONE first — [] unless a real ordering dependency exists); planTimeFeasible',
-  '  (false only if it cannot be started now, e.g. it needs a founder decision or missing material).',
+  '  (false only if it cannot be started now, e.g. it needs a founder decision or missing material);',
+  '  gathersFactClass (REQUIRED on every action, never omitted: the kind of business fact the action asks the',
+  '    FOUNDER to collect, look up, list, audit or write down — "service" (what they offer), "location" (where),',
+  '    "contact_booking" (phone, email, booking method), "people" (the business\'s OWN team: who works there, their',
+  '    roles), "policy" (how the service works: group size, cancellation, arrival, membership terms) — or "none" if',
+  '    it gathers none of these. These classes describe the founder\'s OWN business. Building a list of OUTSIDE',
+  '    people (doctors, partners, referrers, prospects, clients to contact) is "none", never "people". Gathering means',
+  '    COLLECTING facts that already exist; DECIDING or SETTING UP something new (who answers the phone, a reply to',
+  '    use, a new rule or routine) is "none" even when it involves the team or the way the service works).',
   '',
   'HARD RULES:',
+  '  - WHO DOES THE WORK. The input lists WHAT BB CAN DO: the only formats BB writes itself. When an action IS one',
+  '    of those assets (the page a person lands on → "landing"; a carousel post → "carousel"), set executableFormat',
+  '    to that format and leadsToCreate=true. BB writes it and the founder reviews it, so do NOT phrase it as the',
+  '    founder writing it. Everything else is founder work: executableFormat=null and leadsToCreate=false (calling',
+  '    or meeting people, visiting partners, deciding, setting up booking or phone handling, testing a path,',
+  '    publishing, and any asset type NOT in the list, e.g. an email or a reel). Never invent a format.',
+  '  - NEVER ASK FOR WHAT BB ALREADY HOLDS. The input lists WHAT BB ALREADY HOLDS about this business (fact',
+  '    classes, counts, examples). Never assign the founder to collect, catalogue, audit, list or write down a',
+  '    fact class BB already holds. Plan the step that USES it instead (not "list your services" but the move',
+  '    the services make possible). gathersFactClass must be honest: if an action does gather a class, name it.',
   '  - Every priority and action must trace to the strategy. Nothing generic that a marketer recommends to',
   '    everyone. THE TEST: strip the business name and all proper nouns — could these exact actions be handed',
   '    unchanged to a different founder (a bookkeeper, a bakery, a SaaS)? If yes, they are too generic. REWRITE',
@@ -98,12 +120,34 @@ export const PLAN_SYSTEM = [
   '{"monthDirection":"...","currentFocusIndex":0,"priorities":[{"title":"...","intent":"...","why":"...",',
   '"betRef":"...","goalRef":"...","timeBand":"weeks 1-2","feasibility":"feasible","materialGap":null,',
   '"observableSignal":{"description":"...","source":"..."}|null,"order":0,"actions":[{"key":"a1","what":"...",',
-  '"why":"...","doneDefinition":"...","effortHint":"a_session"|null,"leadsToCreate":false,"generatesDemand":false,',
-  '"requiredMaterial":[],"prerequisiteKeys":[],"planTimeFeasible":true}]}],',
+  '"why":"...","doneDefinition":"...","effortHint":"a_session"|null,"executableFormat":null,"leadsToCreate":false,',
+  '"generatesDemand":false,"requiredMaterial":[],"prerequisiteKeys":[],"planTimeFeasible":true,"gathersFactClass":"none"}]}],',
   '"notNow":[{"item":"...","reason":"...","reasonKind":"strategic_tradeoff"}]}',
 ].join('\n');
 
-function buildUser(strategy: PlanStrategyView, envelope: ResourceEnvelope, businessName: string, repairReasons?: string[], priorDraft?: PlanDraft, priorCycle?: import('@bb/application').PriorCycle): string {
+const FORMAT_LABEL: Record<ExecutableFormat, string> = {
+  landing: 'landing — the page a person arrives on (BB writes the copy; the founder reviews and publishes it)',
+  carousel: 'carousel — an Instagram carousel post (BB writes and renders the slides; the founder reviews and posts it)',
+};
+
+/** WHAT BB CAN DO + WHAT BB ALREADY HOLDS: the planner's view of BB's capabilities and holdings (C2). BB's formats
+ *  are a product constant, so an absent list means all of them; absent holdings mean none catalogued. */
+export function capabilityLines(formats: readonly ExecutableFormat[] | undefined, held: HeldFactsSummary | undefined): string[] {
+  const fs = (formats ?? EXECUTABLE_FORMATS).filter((f) => FORMATS.has(f));
+  const classes = (held?.classes ?? []).filter((c) => c.count > 0);
+  return [
+    '', 'WHAT BB CAN DO (the ONLY formats BB writes itself; everything else is founder work):',
+    ...(fs.length ? fs.map((f) => `- ${FORMAT_LABEL[f]}`) : ['- (nothing: every action is founder work)']),
+    '', 'WHAT BB ALREADY HOLDS about this business (never assign the founder to gather these again):',
+    ...(classes.length
+      ? classes.map((c) => `- ${c.atomClass}: ${c.count}${c.examples.length ? ` (e.g. ${c.examples.slice(0, 3).map((e) => `"${e}"`).join(', ')})` : ''}`)
+      : ['- (no catalogued facts yet)']),
+    ...(held?.facets.length ? [`Understanding BB holds: ${held.facets.join('; ')}`] : []),
+  ];
+}
+
+function buildUser(input: DraftPlanInput): string {
+  const { strategy, envelope, businessName, repairReasons, priorDraft, priorCycle } = input;
   const nums = strategy.authorizedNumbers.length
     ? strategy.authorizedNumbers.map((n) => `- "${n.value}" (${n.kind}; belongs to: ${n.appliesTo}; from: ${n.sourceRef})`).join('\n')
     : '(none — do NOT introduce any numeric target or deadline)';
@@ -125,6 +169,7 @@ function buildUser(strategy: PlanStrategyView, envelope: ResourceEnvelope, busin
     `Constraints: ${envelope.constraints.length ? envelope.constraints.join('; ') : '(none stated)'}`,
     `Will NOT do (hard boundaries): ${envelope.notWilling.length ? envelope.notWilling.join('; ') : '(none stated)'}`,
     `Resources/team: ${envelope.resources.length ? envelope.resources.join('; ') : '(solo/unknown)'}`,
+    ...capabilityLines(input.executableFormats, input.heldFacts),
   ];
   if (priorCycle) {
     const list = (xs: string[]): string[] => (xs.length ? xs.map((x) => `- ${x}`) : ['- (none)']);
@@ -164,8 +209,8 @@ export class AnthropicPlanModel implements IPlanModelPort {
     return extractJson((block as { text?: string } | null)?.text ?? '');
   }
 
-  async draftPlan(input: { strategy: PlanStrategyView; envelope: ResourceEnvelope; businessName: string; repairReasons?: string[]; priorDraft?: PlanDraft; priorCycle?: import('@bb/application').PriorCycle }): Promise<PlanDraft> {
-    const user = buildUser(input.strategy, input.envelope, input.businessName, input.repairReasons, input.priorDraft, input.priorCycle);
+  async draftPlan(input: DraftPlanInput): Promise<PlanDraft> {
+    const user = buildUser(input);
     // A governed plan draft (multiple priorities × actions, each with what/why/doneDefinition) routinely exceeds
     // 3000 output tokens; truncation there produced invalid JSON → a draft "throw" → fail-closed with no gate
     // finding (the reliability root cause). Match the strategy generator's budget so the draft completes; every
@@ -191,6 +236,11 @@ export class AnthropicPlanModel implements IPlanModelPort {
         key: str(a?.key) || `p${pi}a${ai}`, what: str(a?.what), why: str(a?.why), doneDefinition: str(a?.doneDefinition),
         effortHint: EFFORTS.has(a?.effortHint) ? a.effortHint : null,
         leadsToCreate: Boolean(a?.leadsToCreate), generatesDemand: Boolean(a?.generatesDemand),
+        // An unknown format is coerced to null (founder work); with leadsToCreate=true that then FAILS the gate
+        // (create_without_format). A missing/unknown gathersFactClass stays ABSENT so validateCapabilityTags
+        // fails it (missing_gathers_tag); it is never defaulted to 'none'.
+        executableFormat: (FORMATS.has(a?.executableFormat) ? a.executableFormat : null) as ExecutableFormat | null,
+        ...(GATHERS.has(a?.gathersFactClass) ? { gathersFactClass: a.gathersFactClass as GathersFactClass } : {}),
         requiredMaterial: strArr(a?.requiredMaterial),
         prerequisiteKeys: strArr(a?.prerequisiteKeys), planTimeFeasible: a?.planTimeFeasible !== false,
       })),

@@ -5,7 +5,8 @@ import { classifyLayers } from '../voice/proposition-classes';
 import { classifyVoiceSample, type VoiceSampleContext } from '../voice/validation';
 import { detectRegulatedClaims, isGuardLanguageEnabled } from './medical-guard';
 import { specFromLandingSnapshot, landingDraftToSampleContent, landingSectionToSampleContent } from './landing-safety';
-import { checkPeopleFidelity } from './people-fidelity';
+import { checkPeopleFidelity, countNamedPeople } from './people-fidelity';
+import { detectUngroundedFraming } from './grounding';
 import { measureDivergence, summarizeDivergence } from './divergence';
 import type {
   ILandingModelPort, IMoveDraftRepository, LandingAuthorizationSnapshot, LandingDraft,
@@ -23,7 +24,7 @@ const MAX_REPAIRS = 2;
 // value flows into every voice-gate call for a web page, so the channel reads 'landing' — not a borrowed label.
 const GATE_CHANNEL = 'landing' as const;
 
-type GateLayer = 'medical' | 'kernel' | 'backstop' | 'people_fidelity' | 'judge';
+type GateLayer = 'medical' | 'kernel' | 'backstop' | 'grounding' | 'people_fidelity' | 'judge';
 interface GateFailure { readonly section: string; readonly layer: string; readonly rule: string }
 interface GateResult { readonly failingLayer: GateLayer | null; readonly failures: GateFailure[]; readonly layersRun: GateLayer[] }
 
@@ -103,16 +104,33 @@ export class MoveDraftService {
     }
     if (t2.length) return { failingLayer: t2.some((f) => f.layer === 'kernel') ? 'kernel' : 'backstop', failures: t2, layersRun };
 
+    // Tier 2b — GROUNDING (deterministic): the page states what the business IS, not the strategy's audience or
+    // referral route as fact ("dedicat femeilor", "la recomandarea medicului"), unless a licensed fact says it.
+    layersRun.push('grounding');
+    const licensedFacts = [ctx.factualFacts ?? '']; // licensed propositions + proof only (this.factual)
+    const gr = sections.flatMap((s) => detectUngroundedFraming(s.text, licensedFacts).map((f): GateFailure => ({
+      section: s.role, layer: 'grounding',
+      rule: f.kind === 'referral'
+        ? `"${f.clause}" claims a medical referral/recommendation the business's facts do not state — address the reader's need instead`
+        : `"${f.clause}" claims the business is dedicated to a group its facts do not name — describe what the business offers instead`,
+    })));
+    if (gr.length) return { failingLayer: 'grounding', failures: gr, layersRun };
+
     // Tier 3 — PEOPLE FIDELITY (deterministic): no licensed person's name may be corrupted (diacritic-folded
     // boundary). A wrong surname on a public staff page is a concrete harm, so this BLOCKS (after the repair
     // loop), never silently drops the person.
     if (peopleValues.length) {
       layersRun.push('people_fidelity');
       const draftText = draft.sections.map((s) => `${s.heading ?? ''} ${s.body}`).join(' ') + ' ' + draft.cta;
-      const pf = checkPeopleFidelity(draftText, peopleValues).map((f): GateFailure => ({
+      // A FOCUSED team section names only the people whose role fits the page, so an omitted person is fine; a
+      // named one must be exact, and at least one real person must be named (never "our team of specialists").
+      const pf = checkPeopleFidelity(draftText, peopleValues, 'named').map((f): GateFailure => ({
         section: 'proof', layer: 'people_fidelity',
-        rule: `name "${f.expected}" is wrong or missing${f.foundVariant ? ` (draft wrote "${f.foundVariant}")` : ''} — write it exactly as licensed`,
+        rule: `name "${f.expected}" is wrong${f.foundVariant ? ` (draft wrote "${f.foundVariant}")` : ''} — write it exactly as licensed`,
       }));
+      if (countNamedPeople(draftText, peopleValues) === 0) {
+        pf.push({ section: 'proof', layer: 'people_fidelity', rule: 'no licensed person is named — name the people whose role fits this page, exactly as licensed' });
+      }
       if (pf.length) return { failingLayer: 'people_fidelity', failures: pf, layersRun };
     }
 

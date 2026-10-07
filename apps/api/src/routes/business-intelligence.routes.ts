@@ -4,6 +4,7 @@ import type { ServerDeps } from '../server';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
 import { recordFounderEvent } from '../telemetry/founder-events';
 import { detectType, assertWithinBounds, MAX_BYTES } from '../connectors/upload/detect';
+import { contentLanguageFor } from './content-language';
 import { extractPdf, extractDocx, extractText } from '../connectors/upload/extract';
 
 interface AuthedUser {
@@ -50,7 +51,7 @@ export function registerBusinessIntelligenceRoutes(server: FastifyInstance, deps
       founderId,
       businessName: business.name,
       url,
-      interfaceLanguage: account?.interfaceLocale ?? 'en',
+      interfaceLanguage: await contentLanguageFor(deps.contentLanguageStore, business.id, account?.interfaceLocale),
     });
     await reply.status(200).send(result);
   });
@@ -69,7 +70,7 @@ export function registerBusinessIntelligenceRoutes(server: FastifyInstance, deps
       founderId,
       businessName: business.name,
       material,
-      interfaceLanguage: account?.interfaceLocale ?? 'en',
+      interfaceLanguage: await contentLanguageFor(deps.contentLanguageStore, business.id, account?.interfaceLocale),
     });
     recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'source_material_submitted', surface: 'onboarding', metadata: { origin: (body.origin ?? 'chooser').slice(0, 32), chars: material.length } });
     await reply.status(200).send(result);
@@ -94,7 +95,7 @@ export function registerBusinessIntelligenceRoutes(server: FastifyInstance, deps
       if (material.trim().length < 20) throw new ValidationError('MATERIAL_EMPTY', 'I couldn’t read enough text from that file.');
       const account = await deps.founderAccountService.getById(founderId);
       const result = await deps.learnBusinessService.learnFromMaterial({
-        businessId: business.id, founderId, businessName: business.name, material, interfaceLanguage: account?.interfaceLocale ?? 'en',
+        businessId: business.id, founderId, businessName: business.name, material, interfaceLanguage: await contentLanguageFor(deps.contentLanguageStore, business.id, account?.interfaceLocale),
       });
       recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'source_material_submitted', surface: 'onboarding', metadata: { origin: 'file', filetype: type, chars: material.length } });
       await reply.status(200).send(result);

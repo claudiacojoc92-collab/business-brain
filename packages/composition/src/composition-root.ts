@@ -38,6 +38,7 @@ import {
   PgStrategyPointerRepository,
   PgVoiceRepository,
   PgPlanRepository,
+  PgContentLanguageStore,
   PgCarouselRepository,
   PgPhotoLedRepository,
   PgReelRepository,
@@ -114,7 +115,7 @@ import {
   ImpactService,
   MirrorService,
   ArcService,
-  founderMaterialStatements,
+  founderMaterialStatements, heldFactsFromAtoms, resolveContentLanguage,
   CarouselService,
   resolveBrandContext,
   PhotoLedService,
@@ -122,6 +123,7 @@ import {
   type IDiscoveredProfileRepository,
   type IUnderstandingSnapshotRepository,
   type IAhaRepository,
+  type IContentLanguageStore,
 } from '@bb/application';
 import { WebsiteIngestionAdapter } from '@bb/infrastructure';
 import { SocialDiscoveryAdapter } from '@bb/infrastructure';
@@ -150,6 +152,7 @@ export interface CompositionRoot {
   businessService: BusinessService;
   founderAccountService: FounderAccountService;
   learnBusinessService: LearnBusinessService;
+  contentLanguageStore: IContentLanguageStore;
   discoveredProfileRepo: IDiscoveredProfileRepository;
   understandingRepo: IUnderstandingSnapshotRepository;
   ahaRepo: IAhaRepository;
@@ -323,7 +326,11 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
   const discoveredProfileRepo = new PgDiscoveredProfileRepository(db);
   const understandingRepo = new PgUnderstandingSnapshotRepository(db);
   const ahaRepo = new PgAhaRepository(db);
+  // The business's CONTENT language (decided once per business; the UI is always English). Every model call
+  // resolves its language through resolveContentLanguage(contentLanguageStore, …), never the UI locale.
+  const contentLanguageStore = new PgContentLanguageStore(db);
   const learnBusinessService = new LearnBusinessService({
+    contentLanguage: contentLanguageStore,
     evidenceRepo: new PgEvidenceRepository(db),
     ingestion: new WebsiteIngestionAdapter(db),
     discovery: new SocialDiscoveryAdapter(),
@@ -437,6 +444,10 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
   const planService = new PlanService({
     plan: planRepo,
     model: new AnthropicPlanModel(anthropicKey),
+    // C4: what BB already HOLDS (the same licensed atoms carousel + landing use), so the planner never assigns the
+    // founder to gather it and the capability gate can reject a plan that does. Resolved at generation time;
+    // atomExtractionService is constructed further down this root, before any request can reach this closure.
+    heldFacts: async (bid) => heldFactsFromAtoms(await atomExtractionService.facts(bid)),
     currentStrategy: async (bid) => {
       const cur = await strategyService.getCurrent(bid);
       if (!cur) return null;
@@ -592,7 +603,8 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
       const mediaPool = await carouselRepo.listMedia(bid);
       const brand = resolveBrandContext(bid, await carouselRepo.getBrand(bid), mediaPool);
       return {
-        strategyVersionId: cur.record.id, language: 'en', goal: c.goal, coreBet: c.coreBet.priority,
+        // The business's CONTENT language (was hard-coded 'en', so every carousel/reel was written in English).
+        strategyVersionId: cur.record.id, language: await resolveContentLanguage(contentLanguageStore, bid, null), goal: c.goal, coreBet: c.coreBet.priority,
         audience: c.audiencePrimaryForGoal, ctaDirection: br.ctaDirection,
         licensedPropositions, proofFacts, proofKinds, ownedStances: founderProps, sourceRefs: mediaPool,
         brand, voiceLines, speakingRole: 'the founder',
@@ -744,7 +756,7 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
       const atoms = (await atomExtractionService.facts(businessId)).map((a) => ({ value: a.value, atomClass: a.atomClass, sourceUrl: a.sourceUrl }));
       const snap = await understandingRepo.latest(businessId);
       landingCtx = {
-        strategyVersionId: ctx.strategyVersionId, language: snap?.sourceLanguage ?? 'ro',
+        strategyVersionId: ctx.strategyVersionId, language: await resolveContentLanguage(contentLanguageStore, businessId, snap?.sourceLanguage ?? null),
         goal: ctx.goal, audience: ctx.audience, ctaDirection: ctx.ctaDirection,
         atoms, synthesizedFacts: allowedBusinessFacts(snap?.understanding ?? null),
         founderOwned: ctx.ownedStances, proofFacts: ctx.proofFacts, voiceLines: ctx.voiceLines,
@@ -770,7 +782,7 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
   return {
     commandBus, queryBus, jwtService, passwordService, internalBriefRepo,
     businessService, founderAccountService,
-    learnBusinessService, discoveredProfileRepo, understandingRepo, ahaRepo,
+    learnBusinessService, discoveredProfileRepo, understandingRepo, ahaRepo, contentLanguageStore,
     conversationService, businessCorrectionService, aha2Service, strategyService, impactService, mirrorService, arcService, voiceService, planService, carouselService,
     photoLedService, photoLedRepo,
     reelService, reelObjectStore, reelRepo,

@@ -1,0 +1,765 @@
+key,ui_now_en,previous_ro,previous_it,has_en
+action.broke,"Something went wrong on our side. Trying again won't fix this one — write to us at contact@getbusinessbrain.com.","S-a stricat ceva la noi — nu ajută dacă încerci din nou. Scrie-ne la contact@getbusinessbrain.com.","Qualcosa è andato storto dalla nostra parte. Riprovare non risolverà — scrivici a contact@getbusinessbrain.com.",yes
+action.busy,"BB is busy right now. Wait a moment, then try again.","BB e ocupat acum. Încearcă din nou peste un minut.","BB è occupato in questo momento. Aspetta un attimo e riprova.",yes
+action.failed,"That didn't work. Check what you entered and try a different way.","N-a mers. Verifică ce ai introdus și încearcă altfel.","Non ha funzionato. Controlla cosa hai inserito e prova in modo diverso.",yes
+action.forbidden,"You don't have access to do that.","Nu ai acces să faci asta.","Non hai accesso per farlo.",yes
+action.rejected,"I can't do that with what's here right now — it wouldn't pass the safety check. Add or adjust the material, then try.","Nu pot face asta cu ce există acum — n-ar trece verificarea de siguranță. Adaugă sau ajustează materialul, apoi încearcă.","Non posso farlo con ciò che c'è ora — non supererebbe il controllo di sicurezza. Aggiungi o modifica il materiale, poi riprova.",yes
+action.stale,"This changed since you opened it. Refresh to see the current version, then try again.","S-a schimbat de când ai deschis. Reîncarcă pentru versiunea curentă, apoi încearcă din nou.","È cambiato da quando l'hai aperto. Ricarica per la versione attuale, poi riprova.",yes
+add.another,"Add something else","Adaugă altceva","Aggiungi altro",yes
+add.changed.ph,"What’s actually true now?","Ce e de fapt adevărat acum?","Cosa è davvero vero adesso?",yes
+add.close,"Done","Gata","Fatto",yes
+add.done.changed,"Got it — I’m holding that as true. It overrides what I read on that point.","Am înțeles — o țin ca adevăr. Are prioritate față de ce am citit pe acel punct.","Fatto — lo tengo come vero. Ha la priorità su ciò che avevo letto su quel punto.",yes
+add.done.link,"I read that and folded it into what I understand about the business.","Am citit-o și am integrat-o în ce știu despre afacere.","L’ho letta e l’ho integrata in ciò che capisco dell’attività.",yes
+add.done.material,"Got it — I’ve taken in what you gave me and updated what I understand about the business.","Am înțeles — am preluat ce mi-ai dat și am actualizat ce știu despre afacere.","Fatto — ho preso ciò che mi hai dato e ho aggiornato ciò che capisco dell’attività.",yes
+add.err.file,"I couldn’t read that file — try a .txt or paste the text.","N-am putut citi fișierul — încearcă .txt sau lipește textul.","Non sono riuscito a leggere il file — prova un .txt o incolla il testo.",yes
+add.err.generic,"That didn’t go through. Try again.","Nu a mers. Încearcă din nou.","Non è andata a buon fine. Riprova.",yes
+add.err.short,"Give me a little more to work with.","Dă-mi un pic mai mult cu ce să lucrez.","Dammi un po’ più di materiale.",yes
+add.err.url,"Add a link first.","Adaugă întâi un link.","Aggiungi prima un link.",yes
+add.intent.changed,"Something changed","S-a schimbat ceva","È cambiato qualcosa",yes
+add.intent.changed.d,"Correct what I believe — an offer, positioning, or who it’s for.","Corectează ce cred eu — oferta, poziționarea sau pentru cine e.","Correggi ciò che credo — l’offerta, il posizionamento o a chi è rivolto.",yes
+add.intent.link,"Add a link","Adaugă un link","Aggiungi un link",yes
+add.intent.link.d,"A page I should read for myself.","O pagină pe care ar trebui să o citesc.","Una pagina che dovrei leggere.",yes
+add.intent.material,"I have something to add","Am ceva de adăugat","Ho qualcosa da aggiungere",yes
+add.intent.material.d,"Paste text or upload a file — a brochure, offer copy, captions, notes.","Lipește text sau încarcă un fișier — o broșură, text despre ofertă, descrieri, notițe.","Incolla testo o carica un file — una brochure, testi dell’offerta, didascalie, note.",yes
+add.lead,"Tell me what changed, add something for me to read, or point me at a link. I’ll fold it into what I already know — no starting over.","Spune-mi ce s-a schimbat, adaugă ceva de citit sau dă-mi un link. Le integrez în ce știu deja — fără să o iau de la capăt.","Dimmi cosa è cambiato, aggiungi qualcosa da leggere o dammi un link. Lo integro in ciò che già so — senza ricominciare.",yes
+add.link.ph,"yourbusiness.com/new-page","afacereata.ro/pagina-noua","latuaattivita.it/nuova-pagina",yes
+add.material.attached,"Attached: {name}","Atașat: {name}","Allegato: {name}",yes
+add.material.file,"or upload a PDF, Word, or .txt file","sau încarcă un PDF, Word sau .txt","o carica un PDF, Word o .txt",yes
+add.material.ph,"Paste anything that represents the business — I’ll treat it as material you gave me, not something I verified.","Lipește orice reprezintă afacerea — o tratez ca material de la tine, nu ca ceva verificat.","Incolla qualsiasi cosa rappresenti l’attività — la tratto come materiale tuo, non come qualcosa che ho verificato.",yes
+add.material.remove,"remove","elimină","rimuovi",yes
+add.nobiz,"Open a business first, then I can add this to it.","Deschide întâi o afacere, apoi pot adăuga asta la ea.","Apri prima un’attività, poi posso aggiungere questo.",yes
+add.submit,"Add it","Adaug-o","Aggiungi",yes
+add.title,"Add context","Adaugă context","Aggiungi contesto",yes
+add.updated,"What I updated","Ce am actualizat","Cosa ho aggiornato",yes
+add.working,"Working…","Se lucrează…","Sto lavorando…",yes
+aha.continue,"Continue","Continuă","Continua",yes
+aha.discovered.no,"Not mine","Nu e al meu","Non è mio",yes
+aha.discovered.q,"I found this {platform}. Is it yours?","Am găsit acest {platform}. Este al tău?","Ho trovato questo {platform}. È tuo?",yes
+aha.discovered.yes,"Yes","Da","Sì",yes
+aha.heading,"Here’s what I understood about {business}.","Iată ce am înțeles despre {business}.","Ecco cosa ho capito di {business}.",yes
+aha.insufficient.body,"The site didn’t give me enough to say something specific. We can add another source later.","Site-ul nu mi-a oferit destule ca să spun ceva specific. Putem adăuga altă sursă mai târziu.","Il sito non mi ha dato abbastanza per dire qualcosa di specifico. Possiamo aggiungere un’altra fonte più avanti.",yes
+aha.insufficient.title,"I couldn’t find enough yet.","Încă nu am găsit destule.","Non ho ancora trovato abbastanza.",yes
+aha.source,"From","Din","Da",yes
+aha.why,"Why I’m saying this","De ce spun asta","Perché lo dico",yes
+aha2.from.business,"Your site shows","Site-ul tău arată","Il tuo sito mostra",yes
+aha2.from.founder,"You told me","Mi-ai spus","Mi hai detto",yes
+aha2.from.observed,"I’ve noticed","Am observat","Ho notato",yes
+aha2.heading,"Here’s how your business and what you want connect.","Iată cum se leagă afacerea ta de ceea ce îți dorești.","Ecco come la tua attività e ciò che vuoi si collegano.",yes
+aha2.insufficient.body,"Tell me a little more about what you want, and I can connect it to the business.","Spune-mi mai multe despre ce îți dorești și pot să le leg de afacere.","Dimmi di più su ciò che vuoi e potrò collegarlo all’attività.",yes
+aha2.insufficient.title,"I don’t have enough to connect it yet.","Încă nu am destule ca să le leg.","Non ho ancora abbastanza per collegarli.",yes
+aha2.why,"Why I’m saying this","De ce spun asta","Perché lo dico",yes
+app.error.body,"A part of the app hit an unexpected snag. Nothing you've decided is lost — try again, or return home.","O parte din aplicație a întâmpinat o problemă neașteptată. Nimic din ce ai decis nu s-a pierdut — încearcă din nou sau revino acasă.","Una parte dell'app ha avuto un problema imprevisto. Nulla di ciò che hai deciso è andato perso — riprova o torna alla home.",yes
+app.error.home,"Return home","Înapoi acasă","Torna alla home",yes
+app.error.title,"Something interrupted this view","Ceva a întrerupt această vizualizare","Qualcosa ha interrotto questa schermata",yes
+arc.back,"Back","Înapoi","Indietro",yes
+arc.container.done,"Done","Gata","Fatto",yes
+arc.container.eyebrow,"What I know","Ce știu despre tine","Cosa so",yes
+arc.container.lbl.audience,"Audience","Public","Pubblico",yes
+arc.container.lbl.offer,"Offer","Ofertă","Offerta",yes
+arc.container.lbl.positioning,"Positioning","Poziționare","Posizionamento",yes
+arc.container.lbl.unknown,"Still unknown","Încă necunoscut","Ancora sconosciuto",yes
+arc.container.notnow,"Not now","Nu acum","Non ora",yes
+arc.container.offer,"One more thing. You can always see what I know about your business — what I've observed, what you've told me, what I still don't know. Want to look?","Încă un lucru. Poți vedea oricând ce știu despre afacerea ta — ce am observat, ce mi-ai spus, ce încă nu știu. Vrei să vezi?","Un’ultima cosa. Puoi sempre vedere cosa so della tua attività — cosa ho osservato, cosa mi hai detto, cosa ancora non so. Vuoi guardare?",yes
+arc.container.show,"Show me","Arată-mi","Mostrami",yes
+arc.container.title,"What I know about {name}","Ce știu despre {name}","Cosa so di {name}",yes
+arc.continue,"Continue","Continuă","Continua",yes
+arc.conversation.history,"Earlier in our conversation","Mai devreme în conversație","Prima nella conversazione",yes
+arc.conversation.ph,"Your answer…","Răspunsul tău…","La tua risposta…",yes
+arc.conversation.preparing,"Pulling together what I already know about your business…","Adun ce știu deja despre afacerea ta…","Sto raccogliendo ciò che so già sulla tua attività…",yes
+arc.correct.changes,"What changes:","Ce se schimbă:","Cosa cambia:",yes
+arc.correct.holds,"What holds:","Ce rămâne:","Cosa resta:",yes
+arc.coverage.acquisition_today,"Where leads come from","De unde vin clienții","Da dove arrivano i clienti",yes
+arc.coverage.aria,"What I’ve mapped so far","Ce am mapat până acum","Cosa ho mappato finora",yes
+arc.coverage.goal,"Goal","Obiectiv","Obiettivo",yes
+arc.coverage.horizon,"Timeline","Orizont","Orizzonte",yes
+arc.coverage.whats_working,"What’s working","Ce funcționează","Cosa funziona",yes
+arc.email.body,"Email","Email","Email",yes
+arc.email.card,"The email","Emailul","L’email",yes
+arc.email.copied,"Copied to your clipboard.","Copiat în clipboard.","Copiato negli appunti.",yes
+arc.email.export,"This is good — export","E bun — exportă","Va bene — esporta",yes
+arc.email.eyebrow,"Your first move","Primul pas","Il primo passo",yes
+arc.email.intro,"Here's a first draft, grounded in your strategy and voice. Edit anything, then export.","Iată o primă schiță, ancorată în strategia și vocea ta. Editează orice, apoi exportă.","Ecco una prima bozza, ancorata alla tua strategia e alla tua voce. Modifica ciò che vuoi, poi esporta.",yes
+arc.email.revise,"Revise it","Revizuiește","Rivedila",yes
+arc.email.subject,"Subject","Subiect","Oggetto",yes
+arc.error.generation,"I couldn’t put that together just now. Let’s try again.","Nu am reușit să pregătesc asta acum. Hai să încercăm din nou.","Non sono riuscito a metterlo insieme adesso. Riproviamo.",yes
+arc.error.needunderstanding,"I don’t have enough of your business yet to build a strategy. Add your website or describe your business, and I’ll take it from there.","Încă nu am suficiente informații despre afacerea ta ca să construiesc o strategie. Adaugă site-ul sau descrie afacerea, și continui de acolo.","Non ho ancora abbastanza informazioni sulla tua attività per costruire una strategia. Aggiungi il sito o descrivi l’attività e proseguo da lì.",yes
+arc.error.pourinEmpty,"I couldn’t find any readable text in what you added. Check the sources, or add another, then try again.","Nu am găsit text pe care să-l pot citi în ce ai adăugat. Verifică sursele sau adaugă alta, apoi încearcă din nou.","Non ho trovato testo leggibile in ciò che hai aggiunto. Controlla le fonti, o aggiungine un’altra, poi riprova.",yes
+arc.error.pourinFailed,"I couldn’t finish reading your sources just now. Please try again.","Nu am reușit să termin de citit sursele acum. Te rog încearcă din nou.","Non sono riuscito a finire di leggere le tue fonti adesso. Riprova.",yes
+arc.error.retry,"Try again","Încearcă din nou","Riprova",yes
+arc.error.strategyinsufficient,"I have your business and your goal, but I couldn’t land a confident bet yet. Here’s what’s still thin:","Am afacerea și obiectivul tău, dar încă nu am putut formula un pariu clar. Iată ce mai lipsește:","Ho la tua attività e il tuo obiettivo, ma non sono ancora riuscito a definire una scommessa chiara. Ecco cosa manca ancora:",yes
+arc.error.strategyinsufficientNoDetail,"I have your business and your goal, but I couldn’t land a confident bet yet. Tell me a bit more about your business and I’ll try again.","Am afacerea și obiectivul tău, dar încă nu am putut formula un pariu clar. Spune-mi mai multe despre afacerea ta și încerc din nou.","Ho la tua attività e il tuo obiettivo, ma non sono ancora riuscito a definire una scommessa chiara. Raccontami di più sulla tua attività e riprovo.",yes
+arc.error.tellmemore,"Tell me more","Spune-mi mai multe","Raccontami di più",yes
+arc.goal.askcold,"In a sentence: what are you aiming for over the next few months?","Într-o frază: ce urmărești în următoarele luni?","In una frase: qual è il tuo obiettivo per i prossimi mesi?",yes
+arc.goal.confirm,"Yes — that’s my goal","Da — ăsta e obiectivul meu","Sì — è questo il mio obiettivo",yes
+arc.goal.fieldlabel,"Your goal","Obiectivul tău","Il tuo obiettivo",yes
+arc.goal.heading,"Before I build your strategy, I need to know what you’re aiming for.","Înainte să-ți construiesc strategia, trebuie să știu ce urmărești.","Prima di costruire la tua strategia, devo sapere qual è il tuo obiettivo.",yes
+arc.goal.notit,"It’s something else","E altceva","È qualcos’altro",yes
+arc.goal.placeholder,"e.g. Land 3 retainer clients by spring, over one-off projects","ex. Activarea B2B medical în următoarele luni, în locul creșterii clienților direcți","es. Attivare il canale B2B nei prossimi mesi, invece di crescere i clienti diretti",yes
+arc.goal.reflect,"From what you told me, this sounds like your priority — confirm it, or edit it:","Din ce mi-ai spus, asta pare să fie prioritatea ta — confirm-o sau modific-o:","Da quello che mi hai detto, questa sembra la tua priorità — confermala o modificala:",yes
+arc.history,"History","Istoric","Cronologia",yes
+arc.mirror.eyebrow,"Something worth discussing","Ceva ce merită discutat","Qualcosa di cui vale la pena parlare",yes
+arc.mirror.intro,"I want to show you something.","Vreau să-ți arăt ceva.","Voglio mostrarti una cosa.",yes
+arc.mirror.isaw,"I saw","Am văzut","Ho visto",yes
+arc.mirror.none,"Your words and what I saw line up. Nothing's pulling against itself.","Cuvintele tale și ce am văzut se potrivesc. Nimic nu se contrazice.","Le tue parole e ciò che ho visto coincidono. Nulla si contraddice.",yes
+arc.mirror.ph,"Tell me which is true…","Spune-mi care e adevărat…","Dimmi qual è vera…",yes
+arc.mirror.skip,"They both hold — continue","Ambele sunt valabile — continuă","Valgono entrambe — continua",yes
+arc.mirror.tension,"The tension","Tensiunea","La tensione",yes
+arc.mirror.which,"Which one is the truth?","Care e adevărul?","Qual è la verità?",yes
+arc.mirror.yousaid,"You said","Ai spus","Hai detto",yes
+arc.moment.container,"What I know","Ce știu","Cosa so",yes
+arc.moment.conversation,"Our conversation","Conversația noastră","La nostra conversazione",yes
+arc.moment.email,"Your first move","Primul pas","Il primo passo",yes
+arc.moment.mirror,"A point to clarify","Un punct de clarificat","Un punto da chiarire",yes
+arc.moment.strategy,"What to do","Ce ai de făcut","Cosa fare",yes
+arc.moment.understanding,"What I understood","Ce am înțeles","Cosa ho capito",yes
+arc.moment.week_day,"This week","Săptămâna asta","Questa settimana",yes
+arc.noted,"Got it — I’ve noted that.","Am notat — mulțumesc.","Ricevuto — l’ho annotato.",yes
+arc.opener.eyebrow,"Before we talk","Înainte să vorbim","Prima di parlare",yes
+arc.opener.invitation,"This is what I see. What should I know?","Asta e ce văd. Ce ar trebui să știu?","Questo è ciò che vedo. Cosa dovrei sapere?",yes
+arc.opener.notsure,"What I’m not sure of","Ce nu știu sigur","Di cosa non sono sicuro",yes
+arc.opener.stands,"What stands out","Ce iese în evidență","Cosa spicca",yes
+arc.prov.declared,"you told me","mi-ai spus","mi hai detto",yes
+arc.prov.inferred,"inferred","dedus","dedotto",yes
+arc.prov.observed,"observed","observat","osservato",yes
+arc.prov.unknown,"unknown","necunoscut","sconosciuto",yes
+arc.question.label,"Question for you","O întrebare pentru tine","Una domanda per te",yes
+arc.readonly,"You’re viewing an earlier moment — read-only.","Vezi un moment anterior — doar citire.","Stai rivedendo un momento precedente — sola lettura.",yes
+arc.send,"Send","Trimite","Invia",yes
+arc.senderror,"That didn’t go through. Please try again.","Nu s-a trimis. Încearcă din nou.","Non è stato inviato. Riprova.",yes
+arc.showwhy,"Show me why","Arată-mi de ce","Mostrami perché",yes
+arc.skip,"Skip this question","Sari peste întrebare","Salta la domanda",yes
+arc.skip.msg,"Let’s skip that one.","Hai să sărim peste asta.","Saltiamo questa.",yes
+arc.src.fileNoText,"That file had no readable text.","Fișierul nu avea text lizibil.","Il file non aveva testo leggibile.",yes
+arc.src.fileNone,"No file came through — please try again.","Niciun fișier nu a ajuns — încearcă din nou.","Nessun file è arrivato — riprova.",yes
+arc.src.filePdfImage,"This looks like a scanned PDF (no text layer) — I can only read text-based PDFs. Export a text PDF, or paste the text with ""Paste a link"" or in the conversation.","Pare un PDF scanat (fără strat de text) — pot citi doar PDF-uri cu text. Exportă un PDF text sau lipește textul cu „Lipește un link” sau în conversație.","Sembra un PDF scansionato (senza livello di testo) — posso leggere solo PDF con testo. Esporta un PDF di testo o incolla il testo con «Incolla un link» o nella conversazione.",yes
+arc.src.fileTooLarge,"That file is too large — the maximum is 15 MB.","Fișierul e prea mare — maximul e 15 MB.","Il file è troppo grande — il massimo è 15 MB.",yes
+arc.src.fileUnreadable,"I couldn't read that file — it may be corrupted or password-protected.","N-am putut citi fișierul — poate e corupt sau protejat cu parolă.","Non sono riuscito a leggere il file — potrebbe essere corrotto o protetto da password.",yes
+arc.src.fileUnsupported,"That file type isn't supported — upload a PDF, Word (.docx), or text file.","Tipul de fișier nu e acceptat — încarcă un PDF, Word (.docx) sau text.","Tipo di file non supportato — carica un PDF, Word (.docx) o testo.",yes
+arc.src.igNoCaptions,"I connected but found no post captions to read.","M-am conectat, dar n-am găsit descrieri de postări de citit.","Mi sono collegato ma non ho trovato didascalie da leggere.",yes
+arc.src.igNotConfigured,"Instagram isn't set up yet.","Instagram nu e încă configurat.","Instagram non è ancora configurato.",yes
+arc.src.igNotConnected,"Connect your Instagram first.","Conectează-ți mai întâi Instagramul.","Collega prima il tuo Instagram.",yes
+arc.src.igReadFailed,"I couldn't read your Instagram just now.","N-am putut citi Instagramul acum.","Non sono riuscito a leggere il tuo Instagram ora.",yes
+arc.strategy.adopt,"Yes, I like it","Da, îmi place","Sì, mi piace",yes
+arc.strategy.bet,"The bet: {bet} — over {over}.","Pariul: {bet} — în locul {over}.","La scommessa: {bet} — invece di {over}.",yes
+arc.strategy.challenge,"Send","Trimite","Invia",yes
+arc.strategy.changed,"I reworked this because you told me: “{because}”. Here’s where it lands now.","Am refăcut asta pentru că mi-ai spus: „{because}”. Iată unde ajunge acum.","Ho rivisto questo perché mi hai detto: “{because}”. Ecco dove si colloca ora.",yes
+arc.strategy.details,"Show details","Arată detalii","Mostra dettagli",yes
+arc.strategy.detailshide,"Hide details","Ascunde detaliile","Nascondi dettagli",yes
+arc.strategy.discuss,"Let's talk about this","Vreau să discut","Voglio parlarne",yes
+arc.strategy.eyebrow,"Here’s what I think you should do","Iată ce cred că ar trebui să faci","Ecco cosa penso dovresti fare",yes
+arc.strategy.horizon,"The horizon: {horizon}.","Orizontul: {horizon}.","L’orizzonte: {horizon}.",yes
+arc.strategy.intro,"Okay. Here's what I think you should do.","Bine. Iată ce cred că ar trebui să faci.","Ok. Ecco cosa penso dovresti fare.",yes
+arc.strategy.notnow,"What we leave for later","Ce lăsăm pentru mai târziu","Cosa lasciamo per dopo",yes
+arc.strategy.over,"over {over}","în locul {over}","invece di {over}",yes
+arc.strategy.ph,"Tell me what you’re thinking…","Spune-mi ce ai în minte…","Dimmi cosa pensi…",yes
+arc.strategy.reconsider,"What would change my mind","Ce m-ar face să mă răzgândesc","Cosa mi farebbe cambiare idea",yes
+arc.strategy.tradeoffs,"Why this, and not something else","De ce asta și nu altceva","Perché questo e non altro",yes
+arc.thread.bb,"Business Brain","Business Brain","Business Brain",yes
+arc.thread.you,"You","Tu","Tu",yes
+arc.tocurrent,"Back to where you were","Înapoi unde erai","Torna a dov’eri",yes
+arc.understanding.confident,"What I'm confident about — from your sources","De ce sunt sigur — din sursele tale","Di cosa sono sicuro — dalle tue fonti",yes
+arc.understanding.confirm,"Let's start","Hai să începem","Iniziamo",yes
+arc.understanding.eyebrow,"What I understood","Ce am înțeles","Cosa ho capito",yes
+arc.understanding.inferring,"What I'm inferring — I could be wrong","Ce deduc — s-ar putea să greșesc","Cosa deduco — potrei sbagliarmi",yes
+arc.understanding.ph,"Anything I got wrong?","E ceva ce am înțeles greșit?","C'è qualcosa che ho frainteso?",yes
+arc.understanding.read,"What I read","Ce am citit","Cosa ho letto",yes
+arc.understanding.servesLead,"For {who}.","Pentru {who}.","Per {who}.",yes
+arc.understanding.standsout,"What stands out","Ce iese în evidență","Cosa spicca",yes
+arc.understanding.stoodout,"What stood out","Ce mi-a sărit în ochi","Cosa mi ha colpito",yes
+arc.understanding.tensions,"What doesn’t line up","Ce nu se potrivește","Cosa non torna",yes
+arc.understanding.title,"Here's what I actually read about {name} — not just what the site says.","Iată ce am citit de fapt despre {name} — nu doar ce spune site-ul.","Ecco cosa ho letto davvero di {name} — non solo quello che dice il sito.",yes
+arc.understanding.unanswered,"What your sources can’t tell me — I’d need you to say","Ce nu îmi spun sursele — ar trebui să-mi spui tu","Cosa le tue fonti non dicono — dovresti dirmelo tu",yes
+arc.understanding.unsure,"What I'm not sure about yet","De ce nu sunt încă sigur","Di cosa non sono ancora sicuro",yes
+arc.understanding.why,"Why I’m saying this","De ce spun asta","Perché lo dico",yes
+arc.understanding.willask,"What I’ll ask you about","Despre ce te întreb","Di cosa ti chiederò",yes
+arc.understanding.willask.lead,"These are what I couldn’t get from the site — I’ll ask you about them next.","Astea sunt lucrurile pe care nu le-am putut afla de pe site — te întreb despre ele în continuare.","Queste sono le cose che non ho potuto ricavare dal sito — te le chiederò subito dopo.",yes
+arc.week.draft,"Draft it for me","Schițează pentru mine","Abbozzala per me",yes
+arc.week.eyebrow,"This week","Săptămâna asta","Questa settimana",yes
+arc.week.intro,"Good. We're doing this. Here's the week, and today.","Bun. Facem asta. Iată săptămâna și ziua de azi.","Bene. Lo facciamo. Ecco la settimana e oggi.",yes
+arc.week.today,"Today","Azi","Oggi",yes
+arc.week.week,"This week","Săptămâna asta","Questa settimana",yes
+arc.week.writefirst,"I'll write it first","Scriu eu întâi","La scrivo prima io",yes
+arc.working,"Working on it…","Lucrez la asta…","Ci sto lavorando…",yes
+arc.working.email,"Drafting your email…","Îți scriu emailul…","Sto scrivendo la tua email…",yes
+arc.working.mirror,"Looking over what you told me…","Mă uit peste ce mi-ai spus…","Sto rivedendo ciò che mi hai detto…",yes
+arc.working.plan,"Shaping the plan…","Construiesc planul…","Sto costruendo il piano…",yes
+arc.working.reading,"Reading your business…","Îți citesc afacerea…","Sto leggendo la tua attività…",yes
+arc.working.still,"Still working — this one takes a moment…","Încă lucrez — asta durează un moment…","Ci sto ancora lavorando — richiede un momento…",yes
+arc.working.strategy,"Working out the bet…","Conturez pariul…","Definisco la scommessa…",yes
+arc.working.thinking,"Thinking…","Mă gândesc…","Sto pensando…",yes
+auth.email,"Email","Email","Email",yes
+auth.err.emailExists,"An account with this email already exists. Sign in instead.","Există deja un cont cu acest email. Autentifică-te în schimb.","Esiste già un account con questa email. Accedi invece.",yes
+auth.err.emailInvalid,"Enter a valid email address.","Introdu o adresă de email validă.","Inserisci un indirizzo email valido.",yes
+auth.err.nameRequired,"Enter your name.","Introdu-ți numele.","Inserisci il tuo nome.",yes
+auth.error.generic,"Something went wrong. Please try again.","Ceva n-a mers. Încearcă din nou.","Qualcosa è andato storto. Riprova.",yes
+auth.error.google,"Google sign-in didn't complete.","Autentificarea cu Google nu s-a finalizat.","L'accesso con Google non è andato a buon fine.",yes
+auth.error.invalid,"That email and password don't match.","Emailul și parola nu se potrivesc.","Email e password non corrispondono.",yes
+auth.google.cta,"Continue with Google","Continuă cu Google","Continua con Google",yes
+auth.headline,"Your marketing decisions, carried forward.","Deciziile tale de marketing, duse mai departe.","Le tue decisioni di marketing, portate avanti.",yes
+auth.name,"Your name","Numele tău","Il tuo nome",yes
+auth.or,"or","sau","oppure",yes
+auth.password,"Password","Parolă","Password",yes
+auth.password.hint,"At least 8 characters","Cel puțin 8 caractere","Almeno 8 caratteri",yes
+auth.register.cta,"Create account","Creează cont","Crea account",yes
+auth.signin.cta,"Sign in","Autentificare","Accedi",yes
+auth.sub,"Sign in to pick up where the business left off.","Autentifică-te ca să continui de unde a rămas afacerea.","Accedi per riprendere da dove eravamo rimasti.",yes
+auth.tab.register,"Create account","Creează cont","Crea account",yes
+auth.tab.signin,"Sign in","Autentificare","Accedi",yes
+baseline.acquisition,"How you reach customers","Cum ajungi la clienți","Come raggiungi i clienti",yes
+baseline.audience,"Who it’s for","Pentru cine e","A chi è rivolto",yes
+baseline.confirm,"This is right — build my strategy","E corect — construiește strategia","È giusto — costruisci la strategia",yes
+baseline.correct,"Something’s off — add or correct","Ceva nu e bine — adaugă sau corectează","Qualcosa non va — aggiungi o correggi",yes
+baseline.observed,"What I saw","Ce am văzut","Cosa ho visto",yes
+baseline.offer,"What you offer","Ce oferi","Cosa offri",yes
+baseline.standsout,"What stands out","Ce iese în evidență","Cosa spicca",yes
+baseline.sub,"Some of this I saw for myself; some you told me. Correct anything that’s off before we set direction.","O parte am văzut singur; o parte mi-ai spus tu. Corectează orice nu e în regulă înainte să stabilim direcția.","Una parte l’ho vista io; una parte me l’hai detta tu. Correggi ciò che non torna prima di definire la direzione.",yes
+baseline.title,"Here’s where I think the business is today.","Iată unde cred că e afacerea azi.","Ecco dove penso sia l’attività oggi.",yes
+baseline.told,"What you told me","Ce mi-ai spus","Cosa mi hai detto",yes
+baseline.unsure,"What I’m still unsure about","Ce încă nu-mi e clar","Cosa non mi è ancora chiaro",yes
+baseline.youtold,"In your words","În cuvintele tale","Nelle tue parole",yes
+biz.contradictions,"Something doesn't fully line up","Ceva nu se potrivește pe deplin","Qualcosa non torna del tutto",yes
+biz.err.nameRequired,"Enter a name for your business.","Introdu un nume pentru afacerea ta.","Inserisci un nome per la tua attività.",yes
+biz.err.nameTooLong,"Keep the name to 200 characters or fewer.","Păstrează numele la cel mult 200 de caractere.","Mantieni il nome entro 200 caratteri.",yes
+biz.eyebrow,"What I currently understand","Ce înțeleg momentan","Ciò che comprendo ora",yes
+biz.state.k,"Current state","Starea actuală","Stato attuale",yes
+biz.state.review,"Review or update where the business stands","Revizuiește sau actualizează unde se află afacerea","Rivedi o aggiorna dove si trova l’attività",yes
+biz.state.updated,"Last reviewed {when}","Revizuit ultima dată {when}","Ultima revisione {when}",yes
+biz.tell,"Tell me directly","Spune-mi direct","Dimmi direttamente",yes
+biz.unknowns,"What I can't establish yet","Ce nu pot stabili încă","Cosa non riesco ancora a stabilire",yes
+brand.name,"Business Brain","Business Brain","Business Brain",yes
+carousel.addbusiness,"Add something true about your business","Adaugă ceva adevărat despre afacerea ta","Aggiungi qualcosa di vero sulla tua attività",yes
+carousel.addmore,"Add more source material","Adaugă mai mult material-sursă","Aggiungi altro materiale di origine",yes
+carousel.angle,"Try a different angle","Încearcă un alt unghi","Prova un altro taglio",yes
+carousel.angle.insufficient,"A different angle isn’t supported by the material yet.","Un alt unghi nu este susținut încă de material.","Un altro taglio non è ancora supportato dal materiale.",yes
+carousel.angle.same,"This is the strongest angle for what you can show right now.","Acesta este cel mai puternic unghi pentru ce poți arăta acum.","Questo è il taglio più forte per ciò che puoi mostrare ora.",yes
+carousel.apply,"Apply change","Aplică modificarea","Applica la modifica",yes
+carousel.back,"Back to today","Înapoi la azi","Torna a oggi",yes
+carousel.body,"Body","Text","Testo",yes
+carousel.cancel,"Cancel","Anulează","Annulla",yes
+carousel.change,"Change this slide","Schimbă acest slide","Modifica questa slide",yes
+carousel.composing.body,"Turning your strategy and proof into slides you can post.","Transform strategia și dovada în slide-uri pe care le poți publica.","Trasformo la tua strategia e le prove in slide che puoi pubblicare.",yes
+carousel.composing.title,"Making your carousel…","Îți creez caruselul…","Sto creando il tuo carosello…",yes
+carousel.evidence.add,"Add this & try again","Adaugă și încearcă din nou","Aggiungi e riprova",yes
+carousel.evidence.adding,"Adding…","Se adaugă…","Aggiunta…",yes
+carousel.evidence.ph,"Add it here — a sentence or two in your own words is plenty.","Scrie aici — una-două fraze în cuvintele tale sunt suficiente.","Scrivilo qui — una o due frasi con parole tue bastano.",yes
+carousel.export,"Download slides","Descarcă slide-urile","Scarica le slide",yes
+carousel.headline,"Headline","Titlu","Titolo",yes
+carousel.insufficient.body,"I’d rather wait than post something I can’t stand behind. Tell me more about the business or add a source, then try again.","Prefer să aștept decât să public ceva ce nu pot susține. Poți adăuga mai mult material-sursă sau poți încerca din nou.","Preferisco aspettare piuttosto che pubblicare qualcosa che non posso sostenere. Puoi aggiungere altro materiale di origine, oppure riprovare.",yes
+carousel.insufficient.title,"I couldn’t make an honest carousel yet.","Încă nu am putut crea un carusel onest.","Non ho ancora potuto creare un carosello onesto.",yes
+carousel.media.add,"Add photos or brand assets","Adaugă poze sau materiale de brand","Aggiungi foto o asset di brand",yes
+carousel.media.body,"Add photos, product shots, or brand assets and I’ll design with them — or continue with a typography-led design.","Adaugă poze, capturi de produs sau materiale de brand și le folosesc în design — sau continuă cu un design bazat pe tipografie.","Aggiungi foto, immagini di prodotto o asset di brand e le uso nel design — oppure continua con un design tipografico.",yes
+carousel.media.selected,"{n} selected","{n} selectate","{n} selezionate",yes
+carousel.media.skip,"Continue without photos","Continuă fără poze","Continua senza foto",yes
+carousel.media.title,"Want me to use your own visuals?","Vrei să folosesc imaginile tale?","Vuoi che usi le tue immagini?",yes
+carousel.media.use,"Use these & continue","Folosește-le și continuă","Usale e continua",yes
+carousel.needsEvidence.body,"To make this carousel honestly, I need at least one of these — a single fact is enough:","Ca să fac acest carusel corect, îmi trebuie măcar unul dintre acestea — un singur fapt e de ajuns:","Per fare questo carosello in modo onesto, mi serve almeno uno di questi — basta un solo dato:",yes
+carousel.needsEvidence.title,"I need a little more to build this.","Îmi trebuie puțin mai mult ca să construiesc asta.","Mi serve ancora qualcosa per crearlo.",yes
+carousel.nostrategy.body,"A carousel is built from your current strategy. Build the strategy first, then come back.","Un carusel se construiește din strategia ta curentă. Construiește întâi strategia, apoi revino.","Un carosello si costruisce dalla tua strategia attuale. Costruisci prima la strategia, poi torna qui.",yes
+carousel.nostrategy.title,"Set your strategy first.","Stabilește mai întâi strategia.","Prima definisci la strategia.",yes
+carousel.ready.sub,"Review the {n} slides below. Change any one, or download them when you’re ready to publish.","Verifică cele {n} slide-uri de mai jos. Schimbă oricare, sau descarcă-le când ești gata de publicare.","Rivedi le {n} slide qui sotto. Cambiane una qualsiasi, o scaricale quando sei pronto a pubblicare.",yes
+carousel.ready.title,"Here’s your carousel.","Iată caruselul tău.","Ecco il tuo carosello.",yes
+carousel.redesign,"Keep the copy, change the design","Păstrează textul, schimbă designul","Mantieni il testo, cambia il design",yes
+carousel.rejected.title,"That change didn’t fit","Modificarea nu a încăput","Quella modifica non entrava",yes
+carousel.retry,"Try again","Încearcă din nou","Riprova",yes
+carousel.tech.body,"That was a technical hiccup, not a problem with your business. Give it another go.","A fost o problemă tehnică, nu una legată de afacerea ta. Mai încearcă o dată.","È stato un intoppo tecnico, non un problema con la tua attività. Riprova.",yes
+carousel.tech.title,"Something went wrong on my end.","Ceva n-a mers la mine.","Qualcosa è andato storto da parte mia.",yes
+carousel.unavailable.body,"This step makes image carousels. “{format}” isn’t supported yet.","Acest pas creează carusele de imagini. „{format}” nu e acceptat încă.","Questo passo crea caroselli di immagini. «{format}» non è ancora supportato.",yes
+carousel.unavailable.title,"That format isn’t ready yet.","Formatul acela nu e gata încă.","Quel formato non è ancora pronto.",yes
+chooser.instagram,"No website? If you use Instagram, you can start with that too.","Nu ai site? Dacă folosești Instagram, poți începe și cu asta.","Niente sito? Se usi Instagram, puoi iniziare anche da lì.",yes
+chooser.material,"Tell me about it","Spune-mi tu despre ea","Raccontamela tu",yes
+chooser.sub,"The more I can see for myself, the better I’ll be. Start wherever is easiest.","Cu cât văd mai mult direct, cu atât sunt mai bun. Începe de unde e cel mai ușor.","Più riesco a vedere da solo, meglio è. Inizia da dove è più facile.",yes
+chooser.title,"Let me get to know your business.","Hai să-ți cunosc afacerea.","Fammi conoscere la tua attività.",yes
+chooser.website,"My website","Site-ul meu","Il mio sito",yes
+common.actionFailed,"That didn't go through. Try again in a moment.","Nu s-a trimis. Încearcă din nou într-o clipă.","Non è andata a buon fine. Riprova tra un momento.",yes
+common.loading,"Loading…","Se încarcă…","Caricamento…",yes
+common.retry,"Try again","Încearcă din nou","Riprova",yes
+conv.back,"Back","Înapoi","Indietro",yes
+conv.model.notmine,"Not what I meant","Nu asta am vrut să spun","Non intendevo questo",yes
+conv.model.observed,"I’ve noticed","Am observat","Ho notato",yes
+conv.model.remove,"Remove","Elimină","Rimuovi",yes
+conv.model.stated,"You told me","Mi-ai spus","Mi hai detto",yes
+conv.model.title,"What I’m working from","Ce am înțeles despre tine","Cosa ho capito di te",yes
+conv.placeholder,"Type your reply…","Scrie răspunsul tău…","Scrivi la tua risposta…",yes
+conv.ready.cta,"See how it connects","Arată-mi cum se leagă","Mostrami come si collega",yes
+conv.ready.title,"I think I’ve got it.","Cred că am înțeles.","Credo di aver capito.",yes
+conv.send,"Send","Trimite","Invia",yes
+create.concepts.body,"I can propose content concepts built from your held strategy — you react, I learn how you sound, and when one feels right we make it.","Pot propune concepte de conținut construite din strategia ta — tu reacționezi, eu învăț cum suni, iar când unul se simte bine îl creăm.","Posso proporre concept di contenuto costruiti dalla tua strategia — tu reagisci, io imparo come suoni, e quando uno ti convince lo creiamo.",yes
+create.concepts.cta,"See content concepts","Vezi conceptele de conținut","Vedi i concept di contenuto",yes
+create.concepts.title,"Let’s turn your strategy into content.","Hai să transformăm strategia în conținut.","Trasformiamo la strategia in contenuti.",yes
+create.index.carousel.note,"Carousels are proposed from Today, based on your current plan.","Caruselele sunt propuse din Azi, pe baza planului tău curent.","I caroselli vengono proposti da Oggi, in base al tuo piano attuale.",yes
+create.index.open,"Open","Deschide","Apri",yes
+create.index.photos,"From your photos","Din pozele tale","Dalle tue foto",yes
+create.index.reel.clips,"Reel — use my clips","Reel — folosește clipurile mele","Reel — usa i miei clip",yes
+create.index.reel.shoot,"Reel — tell me what to film","Reel — spune-mi ce să filmez","Reel — dimmi cosa filmare",yes
+create.index.sub,"This is where your strategy becomes the work. Choose how to make it.","Aici strategia devine muncă. Alege cum o realizezi.","Qui la strategia diventa lavoro. Scegli come realizzarla.",yes
+create.index.title,"Create","Creează","Crea",yes
+create.lead.title,"Your current move can become something you can publish.","Mișcarea ta actuală poate deveni ceva ce poți publica.","La tua mossa attuale può diventare qualcosa da pubblicare.",yes
+create.none.body,"Business Brain makes an asset when your current plan reaches a move worth turning into one — it won't invent one to fill the space. Your next move is on Today.","Business Brain creează un material atunci când planul tău actual ajunge la o mișcare care merită transformată într-unul — nu inventează unul doar ca să umple spațiul. Următoarea ta mișcare e în Azi.","Business Brain crea un contenuto quando il tuo piano attuale arriva a una mossa che vale la pena trasformare in uno — non ne inventa uno solo per riempire lo spazio. La tua prossima mossa è in Oggi.",yes
+create.none.seetoday,"Go to Today →","Vezi Azi →","Vai a Oggi →",yes
+create.none.title,"Nothing to create just yet.","Încă nu e nimic de creat.","Non c'è ancora nulla da creare.",yes
+create.notnow.body,"Your held strategy isn’t calling for content at the moment — so I won’t make one just to fill the space. This is deliberate, not a gap.","Strategia ta actuală nu cere conținut în acest moment — așa că nu creez unul doar ca să umplu spațiul. E deliberat, nu o lipsă.","La tua strategia attuale non richiede contenuti in questo momento — quindi non ne creo uno solo per riempire lo spazio. È deliberato, non una lacuna.",yes
+create.notnow.role,"On content, your strategy holds: “{role}”","Despre conținut, strategia ta susține: „{role}”","Sui contenuti, la tua strategia sostiene: «{role}»",yes
+create.notnow.title,"Content isn’t the move right now.","Conținutul nu e mișcarea acum.","Il contenuto non è la mossa adesso.",yes
+create.notnow.toStrategy,"See why in the strategy","Vezi de ce în strategie","Vedi perché nella strategia",yes
+create.notnow.toToday,"See today’s move","Vezi mișcarea de azi","Vedi la mossa di oggi",yes
+create.ways.photos,"Photos","Fotografii","Foto",yes
+create.ways.reel,"Reel","Reel","Reel",yes
+create.ways.reelShoot,"Reel — tell me what to film","Reel — spune-mi ce să filmez","Reel — dimmi cosa filmare",yes
+create.ways.title,"Other ways to create","Alte moduri de a crea","Altri modi per creare",yes
+entry.cta,"Start with your business","Începe cu afacerea ta","Inizia dalla tua attività",yes
+entry.sub,"Business Brain helps you choose the bet, see the trade-offs, and turn that decision into what matters next.","Business Brain te ajută să alegi pariul, să vezi compromisurile și să transformi decizia în ceea ce contează acum.","Business Brain ti aiuta a scegliere la scommessa, vedere i compromessi e trasformare quella decisione in ciò che conta adesso.",yes
+entry.tagline,"Marketing starts with a decision.","Marketingul începe cu o decizie.","Il marketing inizia con una decisione.",yes
+home.act.draft,"Draft it","Schițează-l","Abbozzala",yes
+home.act.resolve,"Resolve it","Rezolvă","Risolvi",yes
+home.act.seeStrategy,"See the strategy","Vezi strategia","Vedi la strategia",yes
+home.act.shape,"Shape the week","Conturează săptămâna","Dai forma alla settimana",yes
+home.act.talk,"Talk first","Vorbim întâi","Parliamo prima",yes
+home.act.why,"Show me why","Arată-mi de ce","Mostrami perché",yes
+home.act.work,"Work on this with BB","Lucrează cu BB","Lavora con BB",yes
+home.add.another,"Add another business","Adaugă alt business","Aggiungi un'altra attività",yes
+home.business.name,"Which business are we working on?","Cu ce business lucrăm?","Su quale attività lavoriamo?",yes
+home.close.answer,"Tell me how it went","Spune-mi cum a fost","Dimmi come è andata",yes
+home.close.ask,"What happened? What worked, what didn’t?","Ce s-a întâmplat? Ce a mers, ce nu?","Cosa è successo? Cosa ha funzionato, cosa no?",yes
+home.close.bet,"You bet on {bet} about a month ago.","Acum vreo lună ai pariat pe {bet}.","Circa un mese fa hai scommesso su {bet}.",yes
+home.close.did0,"A month has passed on this plan.","A trecut o lună de la planul ăsta.","È passato un mese su questo piano.",yes
+home.close.did1,"You saw through {a}.","Ai dus la capăt {a}.","Hai portato a termine {a}.",yes
+home.close.did2,"You saw through {a} and {b}.","Ai dus la capăt {a} și {b}.","Hai portato a termine {a} e {b}.",yes
+home.close.next,"See this month’s plan","Vezi planul lunii","Vedi il piano del mese",yes
+home.context,"where this stands","unde suntem acum","a che punto siamo",yes
+home.create.cta,"Continue","Continuă","Continua",yes
+home.ctx.day,"Day {day} of the {bet} bet","Ziua {day} a pariului {bet}","Giorno {day} della scommessa {bet}",yes
+home.donow,"Do this now","Fă asta acum","Fai questo ora",yes
+home.empty.added,"added ✓","adăugat ✓","aggiunto ✓",yes
+home.empty.adding,"Reading…","Citesc…","Sto leggendo…",yes
+home.empty.bridge,"I’m reading what you gave me. While I read, tell me a few words about your business — what it is, and who it’s for.","Citesc ce mi-ai dat. Cât timp citesc, spune-mi câteva cuvinte despre afacerea ta — ce este și pentru cine.","Sto leggendo ciò che mi hai dato. Mentre leggo, dimmi in poche parole della tua attività — cos’è e per chi.",yes
+home.empty.ctx,"A new business","O afacere nouă","Una nuova attività",yes
+home.empty.describe,"Describe it in words","Descrie în cuvinte","Descrivila a parole",yes
+home.empty.describe.hint,"no website or file needed — just tell me what your business is","fără site sau fișier — spune-mi pur și simplu ce e afacerea ta","senza sito o file — dimmi semplicemente cos’è la tua attività",yes
+home.empty.describe.ph,"What do you do, who for, and what makes it different? A few sentences is plenty.","Ce faci, pentru cine și ce te face diferit? Câteva fraze sunt suficiente.","Cosa fai, per chi e cosa ti rende diverso? Bastano poche frasi.",yes
+home.empty.doc,"Upload a document","Încarcă un document","Carica un documento",yes
+home.empty.doc.hint,"offer, brochure, PDF","ofertă, broșură, PDF","offerta, brochure, PDF",yes
+home.empty.done,"Start reading my business →","Începe să-mi citești business-ul →","Inizia a leggere la mia attività →",yes
+home.empty.filefail,"I couldn’t read that file. Try a PDF, Word, or text file.","N-am putut citi fișierul. Încearcă un PDF, Word sau text.","Non sono riuscito a leggere quel file. Prova un PDF, Word o testo.",yes
+home.empty.google,"Add Google Business","Adaugă Google Business","Aggiungi Google Business",yes
+home.empty.ig,"Add Instagram","Adaugă Instagram","Aggiungi Instagram",yes
+home.empty.ig.add,"Add my Instagram","Adaugă Instagram-ul meu","Aggiungi il mio Instagram",yes
+home.empty.ig.connect,"Connect Instagram","Conectează Instagram","Collega Instagram",yes
+home.empty.ig.connected,"connected","conectat","collegato",yes
+home.empty.igfail,"I couldn’t read your Instagram just now. Try again in a moment.","N-am putut citi Instagram-ul acum. Încearcă din nou într-o clipă.","Non sono riuscito a leggere il tuo Instagram ora. Riprova tra un momento.",yes
+home.empty.lead,"I’m going to learn your business before I tell you what to do.","Îți voi învăța afacerea înainte să-ți spun ce să faci.","Imparerò la tua attività prima di dirti cosa fare.",yes
+home.empty.link,"Paste a link","Lipește un link","Incolla un link",yes
+home.empty.link.hint,"a competitor, a testimonial, any page","un concurent, o recenzie, orice pagină","un concorrente, una recensione, qualsiasi pagina",yes
+home.empty.link.ph,"https://…","https://…","https://…",yes
+home.empty.readfail,"I reached your site but couldn’t read enough to work from. Try another page, or tell me in a few words below.","Am ajuns la site, dar n-am putut citi suficient. Încearcă altă pagină sau spune-mi în câteva cuvinte mai jos.","Ho raggiunto il sito ma non ho letto abbastanza. Prova un’altra pagina, o dimmelo in poche parole qui sotto.",yes
+home.empty.reading,"reading…","citesc…","sto leggendo…",yes
+home.empty.ready.many,"You’ve added {n} sources — ready for me to read them?","Ai adăugat {n} surse — sunt gata să le citesc?","Hai aggiunto {n} fonti — sono pronto a leggerle?",yes
+home.empty.ready.one,"You’ve added 1 source — ready for me to read it?","Ai adăugat 1 sursă — sunt gata să o citesc?","Hai aggiunto 1 fonte — sono pronto a leggerla?",yes
+home.empty.soon,"Next","Urmează","Prossimo",yes
+home.empty.sub,"Add what you have — anything helps.","Adaugă ce ai — orice ajută.","Aggiungi ciò che hai — tutto aiuta.",yes
+home.empty.type.docx,"Document","Document","Documento",yes
+home.empty.type.instagram,"Instagram","Instagram","Instagram",yes
+home.empty.type.link,"Link","Link","Link",yes
+home.empty.type.pdf,"PDF","PDF","PDF",yes
+home.empty.type.text,"Text","Text","Testo",yes
+home.empty.type.website,"Website","Site","Sito",yes
+home.empty.unreachable,"I couldn’t reach that site. Check the address, or tell me in a few words below.","N-am putut ajunge la site. Verifică adresa sau spune-mi în câteva cuvinte mai jos.","Non sono riuscito a raggiungere il sito. Controlla l’indirizzo, o dimmelo in poche parole qui sotto.",yes
+home.empty.upload,"Upload a file","Încarcă un fișier","Carica un file",yes
+home.empty.upload.hint,"one or several — PDF, Word, or text (brochure, offer, case study)","unul sau mai multe — PDF, Word sau text (broșură, ofertă)","uno o più — PDF, Word o testo (brochure, offerta)",yes
+home.empty.website,"Add your website","Adaugă site-ul tău","Aggiungi il tuo sito",yes
+home.empty.website.add,"Add","Adaugă","Aggiungi",yes
+home.empty.website.ph,"yourbusiness.com","afacereata.ro","latuaattivita.it",yes
+home.empty.wiring,"I’m wiring this one up — add your website for now.","Îl pregătesc — folosește site-ul deocamdată.","Lo sto preparando — usa il sito per ora.",yes
+home.empty.words,"No business yet? Tell me what you’re building in a few words.","Nu ai încă o afacere? Spune-mi în câteva cuvinte ce construiești.","Non hai ancora un’attività? Dimmi in poche parole cosa stai costruendo.",yes
+home.fail,"I couldn’t load your business just now.","Nu am putut încărca afacerea acum.","Non sono riuscito a caricare la tua attività ora.",yes
+home.failctx,"Business Brain","Business Brain","Business Brain",yes
+home.greeting,"Hi {name}.","Bună, {name}.","Ciao {name}.",yes
+home.here,"Here's what matters right now.","Iată ce contează acum.","Ecco cosa conta adesso.",yes
+home.input.ph,"Say anything — what changed, what you decided, what you’re not sure about.","Spune orice — ce s-a schimbat, ce ai decis, de ce nu ești sigur.","Dì qualsiasi cosa — cosa è cambiato, cosa hai deciso, di cosa non sei sicuro.",yes
+home.input.send,"Send","Trimite","Invia",yes
+home.line.ask,"What do you want to do?","Ce vrei să faci?","Cosa vuoi fare?",yes
+home.line.bet,"You’re betting on {bet}.","Pariezi pe {bet}.","Stai puntando su {bet}.",yes
+home.line.blocked,"First, something needs you: {blocked}","Întâi, ceva are nevoie de tine: {blocked}","Prima, qualcosa ha bisogno di te: {blocked}",yes
+home.line.canDraft,"I can draft it, or we talk priorities first.","Îl pot schița, sau vorbim întâi despre priorități.","Posso abbozzarla, o parliamo prima delle priorità.",yes
+home.line.canPropose,"I can propose it — you decide.","Îl pot propune — tu decizi.","Posso proporla — decidi tu.",yes
+home.line.canWork,"I can work it through with you.","Îl putem lucra împreună.","Possiamo lavorarci insieme.",yes
+home.line.changed.impact,"Since we last spoke: {reason}","De când am vorbit ultima dată: {reason}","Da quando ci siamo parlati: {reason}",yes
+home.line.changed.strategy,"Since we last spoke: you adopted strategy v{v}.","De când am vorbit ultima dată: ai adoptat strategia v{v}.","Da quando ci siamo parlati: hai adottato la strategia v{v}.",yes
+home.line.needBet,"The next move is the one strategic bet worth making.","Următorul pas e singurul pariu strategic care merită făcut.","La prossima mossa è l’unica scommessa strategica che vale la pena fare.",yes
+home.line.read,"I’ve read your business.","Ți-am citit afacerea.","Ho letto la tua attività.",yes
+home.line.shapeWeek,"Your bet is set — let’s shape this week’s moves.","Pariul e stabilit — hai să conturăm mișcările săptămânii.","La scommessa è fissata — diamo forma alle mosse di questa settimana.",yes
+home.line.today,"Today: {move}","Azi: {move}","Oggi: {move}",yes
+home.open,"Open","Deschide","Apri",yes
+home.seeplan,"See today's plan","Vezi planul de azi","Vedi il piano di oggi",yes
+home.tension,"Worth your attention","Merită atenția ta","Merita la tua attenzione",yes
+home.tobusinesses,"Go to my businesses","Mergi la afacerile mele","Vai alle mie attività",yes
+home.understand,"Before we work on the marketing, let me understand your business.","Înainte să lucrăm la marketing, hai să îți înțeleg business-ul.","Prima di lavorare sul marketing, fammi capire la tua attività.",yes
+home.your.title,"Your businesses","Business-urile tale","Le tue attività",yes
+impact.strategy.holds,"Your core bet is unchanged.","Pariul tău principal rămâne neschimbat.","La tua scommessa principale non cambia.",yes
+impact.strategy.reconsider,"Something you flagged as a reason to rethink has happened: {condition}. I’ve drafted a revised strategy for you to look at.","S-a întâmplat ceva ce ai semnalat ca motiv de regândire: {condition}. Am pregătit o strategie revizuită la care să te uiți.","È successo qualcosa che avevi indicato come motivo per ripensarci: {condition}. Ho preparato una strategia rivista da valutare.",yes
+impact.strategy.revise,"What you told me changes something your strategy was counting on, so it’s worth revising. I’ve drafted a revised version for you to look at.","Ce mi-ai spus schimbă ceva pe care strategia ta se baza, așa că merită revizuită. Am pregătit o versiune revizuită la care să te uiți.","Quello che mi hai detto cambia qualcosa su cui la tua strategia contava, quindi vale la pena rivederla. Ho preparato una versione rivista da valutare.",yes
+impact.today.executionShift,"How you work shifts — the bet doesn’t.","Se schimbă cum lucrezi, nu pariul.","Cambia come lavori, non la scommessa.",yes
+impact.today.strategyMoving,"Your strategy is shifting.","Strategia ta se schimbă.","La tua strategia sta cambiando.",yes
+impact.today.unchanged,"Today is unchanged. The strategy holds.","Azi rămâne neschimbat. Strategia rămâne valabilă.","Oggi non cambia. La strategia regge.",yes
+landing.accept,"Accept this page","Acceptă pagina","Accetta la pagina",yes
+landing.accepted,"Accepted — this is your page.","Acceptată — aceasta este pagina ta.","Accettata — questa è la tua pagina.",yes
+landing.blocked.noSafeCopy.body,"We couldn’t produce safe copy for this page. The move keeps its plain instruction for now.","Nu am putut genera copie sigură pentru această pagină. Mișcarea rămâne cu instrucțiunea ei simplă.","Non siamo riusciti a produrre testo sicuro per questa pagina. La mossa mantiene la sua istruzione semplice per ora.",yes
+landing.blocked.noSafeCopy.title,"No page yet","Încă nu există o pagină","Ancora nessuna pagina",yes
+landing.blocked.noStrategy.action,"Adopt a strategy","Adoptă o strategie","Adotta una strategia",yes
+landing.blocked.noStrategy.body,"A landing page is built around the strategy you adopt. There isn’t an adopted strategy yet — so there’s nothing to write a page for.","Pagina de prezentare se construiește în jurul strategiei pe care o adopți. Încă nu există o strategie adoptată — deci nu avem pe ce să scriem o pagină.","La pagina di presentazione si costruisce attorno alla strategia che adotti. Non c’è ancora una strategia adottata — quindi non c’è nulla su cui scrivere una pagina.",yes
+landing.blocked.noStrategy.title,"No page yet","Încă nu există o pagină","Ancora nessuna pagina",yes
+landing.cancel,"Cancel","Renunță","Annulla",yes
+landing.edit,"Edit","Editează","Modifica",yes
+landing.error,"Something went wrong loading your page.","A apărut o problemă la încărcarea paginii.","Si è verificato un problema nel caricare la pagina.",yes
+landing.generating,"BB is writing your page…","BB îți scrie pagina…","BB sta scrivendo la tua pagina…",yes
+landing.generatingHint,"This usually takes a couple of minutes — you can stay on this screen.","De obicei durează câteva minute — poți rămâne pe acest ecran.","Di solito richiede un paio di minuti — puoi restare su questa schermata.",yes
+landing.loading,"Loading your page…","Se încarcă pagina ta…","Caricamento della tua pagina…",yes
+landing.pending,"Your page is being written — check back in a moment.","Pagina ta se pregătește — revino în scurt timp.","La tua pagina è in preparazione — torna tra poco.",yes
+landing.prov.founder,"Your text — you wrote this. No source claimed.","Textul tău — tu l-ai scris. Nicio sursă revendicată.","Il tuo testo — lo hai scritto tu. Nessuna fonte dichiarata.",yes
+landing.prov.from,"from","din","da",yes
+landing.prov.synthesized,"BB's reading of your business — not a sourced quote.","Interpretarea BB a afacerii tale — nu un citat cu sursă.","La lettura di BB della tua attività — non una citazione con fonte.",yes
+landing.prov.toggle,"Where this comes from","De unde provine","Da dove viene",yes
+landing.retry,"Try again","Încearcă din nou","Riprova",yes
+landing.rewrite,"Rewrite","Rescrie","Riscrivi",yes
+landing.rewriting,"Rewriting…","Se rescrie…","Riscrittura…",yes
+landing.save,"Save","Salvează","Salva",yes
+lang.label,"Language","Limbă","Lingua",yes
+learn.empty.body,"There wasn’t enough readable text yet. We can add another source later.","Nu era destul text de citit încă. Putem adăuga altă sursă mai târziu.","Non c’era abbastanza testo da leggere. Possiamo aggiungere un’altra fonte più avanti.",yes
+learn.empty.title,"I reached the site but couldn’t read much.","Am ajuns la site, dar nu am putut citi mare lucru.","Ho raggiunto il sito ma non ho potuto leggere granché.",yes
+learn.fail.retry,"Try another address","Încearcă altă adresă","Prova un altro indirizzo",yes
+learn.fail.title,"I couldn’t read that site.","Nu am putut citi acel site.","Non sono riuscito a leggere quel sito.",yes
+load.error.body,"This looks like a connection hiccup, not lost work — your business, strategy and decisions are safe. Try again.","Pare o problemă de conexiune, nu date pierdute — afacerea, strategia și deciziile tale sunt în siguranță. Încearcă din nou.","Sembra un problema di connessione, non un lavoro perso — la tua attività, la strategia e le decisioni sono al sicuro. Riprova.",yes
+load.error.title,"I couldn't load this just now","Nu am putut încărca acum","Non sono riuscito a caricare ora",yes
+material.cta,"Get to know my business","Cunoaște-mi afacerea","Conosci la mia attività",yes
+material.note,"This is what you told me — I’ll treat it as your own words, not something I checked, and you can correct it later.","Asta e ce mi-ai spus tu — o tratez ca fiind cuvintele tale, nu ceva verificat de mine, și poți corecta mai târziu.","Questo è ciò che mi hai detto tu — lo tratto come parole tue, non come qualcosa che ho verificato, e potrai correggerlo dopo.",yes
+material.placeholder,"What you do, who it’s for, what you offer, and anything you’d want a new customer to know…","Ce faci, pentru cine, ce oferi și orice ai vrea să știe un client nou…","Cosa fai, per chi, cosa offri e tutto ciò che un nuovo cliente dovrebbe sapere…",yes
+material.sub,"Paste anything that represents it — a description, your offer, service details, marketing text.","Lipește orice o reprezintă — o descriere, oferta, detalii despre servicii, text de marketing.","Incolla qualsiasi cosa la rappresenti — una descrizione, la tua offerta, dettagli sui servizi, testi di marketing.",yes
+material.sub.instagram,"Paste anything that represents it — your Instagram bio, a few captions, how you describe what you offer.","Lipește orice o reprezintă — bio-ul de Instagram, câteva descrieri de postări, cum îți prezinți oferta.","Incolla qualsiasi cosa la rappresenti — la bio di Instagram, qualche didascalia, come descrivi la tua offerta.",yes
+material.title,"Tell me about your business.","Spune-mi despre afacerea ta.","Raccontami della tua attività.",yes
+mirror.confirm,"This is where I am — build my strategy","Aici mă aflu — construiește strategia","È qui che sono — costruisci la strategia",yes
+mirror.contrast.k,"Where these don’t line up","Unde nu se potrivesc","Dove non coincidono",yes
+mirror.contrast.needself,"Tell me how you think about the business and I’ll show you where it lines up — or doesn’t.","Spune-mi cum gândești despre afacere și îți arăt unde se potrivește — sau nu.","Dimmi come la pensi sull’attività e ti mostro dove coincide — o no.",yes
+mirror.contrast.none,"These line up. Nothing is pulling against itself right now.","Se potrivesc. Nimic nu se contrazice acum.","Coincidono. Nulla si contraddice in questo momento.",yes
+mirror.correct.open,"That’s not right","Nu e corect","Non è giusto",yes
+mirror.correct.ph,"Tell me what’s actually true…","Spune-mi ce e de fapt adevărat…","Dimmi cosa è vero davvero…",yes
+mirror.correct.save,"Save what’s true","Salvează ce e adevărat","Salva ciò che è vero",yes
+mirror.err,"I couldn’t load this just now.","Nu am putut încărca asta acum.","Non sono riuscito a caricare questo ora.",yes
+mirror.lane.business,"What you told me about the business","Ce mi-ai spus despre afacere","Ciò che mi hai detto sull’attività",yes
+mirror.lane.empty,"Nothing here yet.","Încă nimic aici.","Ancora niente qui.",yes
+mirror.lane.observed,"What I saw","Ce am văzut","Ciò che ho visto",yes
+mirror.lane.self,"What you told me about yourself","Ce mi-ai spus despre tine","Ciò che mi hai detto su di te",yes
+mirror.lbl.acquisition,"How people reach you","Cum ajung oamenii la tine","Come le persone ti raggiungono",yes
+mirror.lbl.audience,"Who you address","Pe cine te adresezi","A chi ti rivolgi",yes
+mirror.lbl.inYourWords,"In your words","În cuvintele tale","Con parole tue",yes
+mirror.lbl.kind.business_correction,"A correction you gave","O corectură pe care ai dat-o","Una correzione che hai dato",yes
+mirror.lbl.kind.challenge_permission,"A test you'd allow","Un test pe care l-ai permite","Un test che permetteresti",yes
+mirror.lbl.kind.constraint,"A constraint you named","O constrângere pe care ai numit-o","Un vincolo che hai indicato",yes
+mirror.lbl.kind.decision,"A decision you made","O decizie pe care ai luat-o","Una decisione che hai preso",yes
+mirror.lbl.kind.default,"You told me","Mi-ai spus","Mi hai detto",yes
+mirror.lbl.kind.goal,"Your goal","Obiectivul tău","Il tuo obiettivo",yes
+mirror.lbl.kind.horizon,"Your horizon","Orizontul tău","Il tuo orizzonte",yes
+mirror.lbl.kind.intention,"Something you intend","Ceva ce intenționezi","Qualcosa che intendi fare",yes
+mirror.lbl.kind.preference,"A preference","O preferință","Una preferenza",yes
+mirror.lbl.kind.resource,"A resource you have","O resursă pe care o ai","Una risorsa che hai",yes
+mirror.lbl.messaging,"What your messaging repeats","Ce repetă mesajele tale","Cosa ripetono i tuoi messaggi",yes
+mirror.lbl.offer,"Your offer","Oferta ta","La tua offerta",yes
+mirror.lbl.positioning,"Your positioning","Poziționarea ta","Il tuo posizionamento",yes
+mirror.lbl.unknown,"I couldn't establish","N-am putut stabili","Non sono riuscito a stabilire",yes
+mirror.prov.inferred,"inferred","dedus","dedotto",yes
+mirror.prov.unknown,"couldn’t establish","nu am putut stabili","non ho potuto stabilire",yes
+mirror.self.empty,"You haven’t told me how you think about this yet — I’ll ask.","Încă nu mi-ai spus cum gândești despre asta — te voi întreba.","Non mi hai ancora detto come la pensi — te lo chiederò.",yes
+mirror.sub,"Your own words and what I saw, side by side. Correct anything that’s off.","Cuvintele tale și ce am văzut, unul lângă altul. Corectează orice nu e bine.","Le tue parole e ciò che ho visto, affiancate. Correggi ciò che non va.",yes
+mirror.tag.business,"You told me","Mi-ai spus","Mi hai detto",yes
+mirror.tag.observed,"I saw","Am văzut","Ho visto",yes
+mirror.tag.self,"About yourself","Despre tine","Su di te",yes
+mirror.tag.strategy,"Your strategy","Strategia ta","La tua strategia",yes
+mirror.title,"What you told me, and what I saw.","Ce mi-ai spus și ce am văzut.","Ciò che mi hai detto e ciò che ho visto.",yes
+nav.addctx,"Add context","Adaugă context","Aggiungi contesto",yes
+nav.business,"Business","Afacere","Attività",yes
+nav.create,"Create","Creează","Crea",yes
+nav.home,"Home","Acasă","Home",yes
+nav.strategy,"Strategy","Strategie","Strategia",yes
+nav.talk,"Talk to BB","Vorbește cu BB","Parla con BB",yes
+nav.today,"Today","Astăzi","Oggi",yes
+photo.add,"Choose photos","Alege poze","Scegli le foto",yes
+photo.addmore,"Add more photos","Adaugă mai multe poze","Aggiungi altre foto",yes
+photo.analyze,"Find my angle","Găsește-mi unghiul","Trova il mio taglio",yes
+photo.another,"Show me another angle","Arată-mi alt unghi","Mostrami un altro taglio",yes
+photo.blocked.body,"They don’t support a specific angle for your strategy yet. Add a few more and I’ll take another look.","Nu susțin încă un unghi specific pentru strategia ta. Mai adaugă câteva și mă uit din nou.","Non supportano ancora un taglio specifico per la tua strategia. Aggiungine qualcuna e guardo di nuovo.",yes
+photo.blocked.title,"These photos aren’t enough yet.","Aceste poze nu sunt încă suficiente.","Queste foto non bastano ancora.",yes
+photo.body,"Show me the photos you already have and I’ll find the strongest carousel you can make from them.","Arată-mi pozele pe care le ai deja și găsesc cel mai puternic carusel pe care îl poți face din ele.","Mostrami le foto che hai già e troverò il carosello più forte che puoi realizzare con esse.",yes
+photo.create,"Create this carousel","Creează acest carusel","Crea questo carosello",yes
+photo.found.title,"I found a strong angle.","Am găsit un unghi puternic.","Ho trovato un taglio forte.",yes
+photo.gap,"One more photo would help: {what}.","O poză în plus ar ajuta: {what}.","Una foto in più aiuterebbe: {what}.",yes
+photo.selected,"{n} selected","{n} selectate","{n} selezionate",yes
+photo.title,"Create from your photos","Creează din pozele tale","Crea dalle tue foto",yes
+photo.using,"Using {n} of your {total} photos.","Folosesc {n} din cele {total} poze.","Uso {n} delle tue {total} foto.",yes
+photo.working.body,"Reading what’s here and connecting it to your strategy.","Citesc ce e aici și leg de strategia ta.","Leggo cosa c’è e lo collego alla tua strategia.",yes
+photo.working.title,"Looking at your photos…","Mă uit la pozele tale…","Sto guardando le tue foto…",yes
+plan.accept,"Use this plan","Folosește acest plan","Usa questo piano",yes
+plan.accepted,"This is your active plan.","Acesta e planul tău activ.","Questo è il tuo piano attivo.",yes
+plan.back,"Back","Înapoi","Indietro",yes
+plan.blocker,"Blocked","Blocat","Bloccato",yes
+plan.continue,"Turn this into a month","Transformă asta într-o lună","Trasformalo in un mese",yes
+plan.create.note,"The writing step arrives in the next stage.","Pasul de scriere vine în etapa următoare.","Il passo di scrittura arriva nella fase successiva.",yes
+plan.create.ready,"Ready for Create","Gata pentru Creație","Pronto per Crea",yes
+plan.direction,"The month, in one line","Luna, într-o singură frază","Il mese, in una frase",yes
+plan.focus,"Start here","Începe aici","Parti da qui",yes
+plan.generate,"Build my 30-day plan","Construiește planul pe 30 de zile","Costruisci il piano a 30 giorni",yes
+plan.generating,"Working it out…","Îl pun la punct…","Ci sto lavorando…",yes
+plan.insufficient.body,"I’d rather wait than fill a month with generic tasks. Try again, or refine your strategy.","Prefer să aștept decât să umplu o lună cu sarcini generice. Încearcă din nou sau rafinează strategia.","Preferisco aspettare piuttosto che riempire un mese di compiti generici. Riprova o affina la strategia.",yes
+plan.insufficient.title,"I couldn’t build an honest plan yet.","Încă nu am putut construi un plan onest.","Non ho ancora potuto costruire un piano onesto.",yes
+plan.nostrategy.body,"I turn your current strategy into a month. Build the strategy first, then come back.","Transform strategia curentă într-o lună. Construiește întâi strategia, apoi revino.","Trasformo la tua strategia attuale in un mese. Costruisci prima la strategia, poi torna qui.",yes
+plan.nostrategy.title,"Let’s set your strategy first.","Hai să stabilim mai întâi strategia.","Prima definiamo la tua strategia.",yes
+plan.notnow,"Not this month","Nu luna aceasta","Non questo mese",yes
+plan.regenerate,"Rebuild the plan","Reconstruiește planul","Ricostruisci il piano",yes
+plan.signal,"Watch for","Urmărește","Da osservare",yes
+plan.stale.body,"This plan was built on an earlier strategy. Rebuild it when you’re ready.","Planul a fost construit pe o strategie anterioară. Reconstruiește-l când ești pregătit.","Questo piano è stato costruito su una strategia precedente. Ricostruiscilo quando sei pronto.",yes
+plan.stale.title,"Your strategy has changed","Strategia ta s-a schimbat","La tua strategia è cambiata",yes
+plan.steps,"Steps","Pași","Passi",yes
+plan.title.active,"This is the month we’re running.","Aceasta e luna pe care o urmăm.","Questo è il mese che stiamo seguendo.",yes
+plan.title.proposed,"Here’s your first month.","Iată prima ta lună.","Ecco il tuo primo mese.",yes
+plan.today.allclear,"Nothing queued right now — come back when you have a working session.","Nimic în coadă acum — revino când ai o sesiune de lucru.","Niente in coda ora — torna quando hai una sessione di lavoro.",yes
+plan.today.blocked.need,"To move, you need","Ca să avansezi, ai nevoie de","Per procedere ti serve",yes
+plan.today.blocked.title,"Nothing’s ready to do yet.","Încă nu e nimic gata de făcut.","Non c’è ancora nulla di pronto da fare.",yes
+plan.today.create,"Create","Creează","Crea",yes
+plan.today.defer,"Not today","Nu azi","Non oggi",yes
+plan.today.done,"What done looks like","Cum arată „gata”","Com’è fatto “fatto”",yes
+plan.today.effort,"Effort","Efort","Sforzo",yes
+plan.today.empty,"Adopt a plan to see today’s work.","Adoptă un plan ca să vezi ce e de făcut azi.","Adotta un piano per vedere il lavoro di oggi.",yes
+plan.today.link,"Today","Azi","Oggi",yes
+plan.today.markdone,"Done","Gata","Fatto",yes
+plan.today.skip,"Skip","Sari peste","Salta",yes
+plan.today.sub,"Your next useful working session.","Următoarea ta sesiune utilă de lucru.","La tua prossima sessione utile di lavoro.",yes
+plan.today.title,"Today","Azi","Oggi",yes
+plan.today.why,"Why this now","De ce asta acum","Perché questo ora",yes
+plan.viewplan,"See the full plan","Vezi tot planul","Vedi tutto il piano",yes
+reach.answer,"Answer","Răspunde","Rispondi",yes
+reach.countLabel,"{n} new","{n} noi","{n} nuovi",yes
+reach.countPh,"New people this week (optional)","Oameni noi săptămâna aceasta (opțional)","Persone nuove questa settimana (facoltativo)",yes
+reach.delete,"Delete","Șterge","Elimina",yes
+reach.deleteConfirm,"Delete this entry?","Ștergi această intrare?","Eliminare questa voce?",yes
+reach.deleteYes,"Delete","Șterge","Elimina",yes
+reach.edit,"Edit","Editează","Modifica",yes
+reach.empty,"You haven't told me anything yet. When someone new comes in, ask how they heard about you — then note it here.","Nu mi-ai spus încă nimic. Când vine cineva nou, întreabă cum a auzit de tine — apoi notează aici.","Non mi hai ancora detto nulla. Quando arriva qualcuno di nuovo, chiedi come ha saputo di te — poi annotalo qui.",yes
+reach.k,"This week","Săptămâna aceasta","Questa settimana",yes
+reach.lead,"Your own notes on how new people found you. Your report, your data — correct or delete anything.","Notițele tale despre cum te-au găsit oamenii noi. Raportul tău, datele tale — corectează sau șterge orice.","I tuoi appunti su come ti hanno trovato le persone nuove. Il tuo resoconto, i tuoi dati — correggi o elimina qualsiasi cosa.",yes
+reach.q,"How many new people came this week — and how did they hear about you?","Câți oameni noi au venit săptămâna aceasta — și cum au auzit de tine?","Quante persone nuove sono venute questa settimana — e come hanno saputo di te?",yes
+reach.save,"Save","Salvează","Salva",yes
+reach.saveEdit,"Save changes","Salvează modificările","Salva le modifiche",yes
+reach.script,"Hi! Quick question — how did you hear about us?","Bună! O întrebare scurtă — cum ai auzit de noi?","Ciao! Una domanda veloce — come hai saputo di noi?",yes
+reach.see,"See what you've told me","Vezi ce mi-ai spus","Guarda cosa mi hai detto",yes
+reach.skip,"Not this week","Nu săptămâna aceasta","Non questa settimana",yes
+reach.teachHow,"Ask every new person this week — put the question where you'll see it when someone walks in, or tell whoever greets them. Next week, come back and tell me what they said.","Întreabă fiecare persoană nouă săptămâna aceasta — pune întrebarea la vedere, s-o vezi când intră cineva, sau spune-i celui care întâmpină oamenii. Săptămâna viitoare, revino și spune-mi ce au zis.","Chiedi a ogni persona nuova questa settimana — metti la domanda bene in vista, così la vedrai quando entra qualcuno, o dillo a chi accoglie le persone. La prossima settimana, torna e dimmi cosa hanno detto.",yes
+reach.teachWhy,"At your size there's no analytics that can tell you this. The only way to know what's actually bringing people in is to ask them — one question, at the door.","La dimensiunea ta nu există analytics care să îți spună asta. Singurul mod de a ști ce aduce de fapt oamenii este să îi întrebi — o întrebare, la ușă.","Alle tue dimensioni non esiste un analytics che possa dirtelo. L’unico modo per sapere cosa porta davvero le persone è chiederlo — una domanda, alla porta.",yes
+reach.textPh,"What did they say? e.g. 2 from Instagram, 1 a friend sent, 1 walked past","Ce au spus? ex. 2 de pe Instagram, 1 trimis de un prieten, 1 a trecut pe lângă","Cosa hanno detto? es. 2 da Instagram, 1 mandato da un amico, 1 passava di lì",yes
+reach.title,"What you've told me","Ce mi-ai spus","Cosa mi hai detto",yes
+reach.toToday,"Back to Today","Înapoi la Azi","Torna a Oggi",yes
+reach.weekOf,"Week of {d}","Săptămâna din {d}","Settimana del {d}",yes
+reading.sub,"I’m still reading your business — this can take a minute or two. You can leave this open.","Încă îți citesc afacerea — poate dura un minut sau două. Poți lăsa fereastra deschisă.","Sto ancora leggendo la tua attività — può volerci un minuto o due. Puoi lasciare aperta la finestra.",yes
+reading.title,"Reading {business}…","Citesc {business}…","Sto leggendo {business}…",yes
+recover.empty.body,"There wasn’t enough readable text on the page for me to understand the business.","Nu era destul text pe pagină ca să înțeleg afacerea.","Non c’era abbastanza testo leggibile nella pagina per capire l’attività.",yes
+recover.empty.title,"I found the site, but I don’t know enough yet.","Am găsit site-ul, dar încă nu știu destule.","Ho trovato il sito, ma non so ancora abbastanza.",yes
+recover.fail.body,"I couldn’t read the site this time.","N-am putut citi site-ul de data asta.","Questa volta non sono riuscito a leggere il sito.",yes
+recover.gaps,"Help me fill in the gaps — tell me about the business in your own words.","Ajută-mă să completez golurile — spune-mi despre afacere cu cuvintele tale.","Aiutami a riempire i vuoti — raccontami dell’attività con parole tue.",yes
+recover.insufficient.body,"I read the site, but it didn’t give me enough to say something specific.","Am citit site-ul, dar nu mi-a dat destul ca să spun ceva specific.","Ho letto il sito, ma non mi ha dato abbastanza per dire qualcosa di specifico.",yes
+recover.insufficient.title,"I have a first look, but not enough stands out yet.","Am o primă privire, dar încă nu iese nimic în evidență.","Ho un primo sguardo, ma non emerge ancora granché.",yes
+recover.retry,"Try another address","Încearcă altă adresă","Prova un altro indirizzo",yes
+recover.supply,"Tell me about it","Spune-mi tu despre ea","Raccontamela tu",yes
+refresh.current,"Where the business stands","Unde se află afacerea","Dove si trova l’attività",yes
+refresh.showHistory,"Show earlier conversation","Arată conversația anterioară","Mostra la conversazione precedente",yes
+shell.account,"Account","Cont","Account",yes
+shell.signout,"Sign out","Deconectare","Esci",yes
+shell.switch,"Switch business","Schimbă afacerea","Cambia attività",yes
+since.holds,"still holds","rămâne valabilă","regge ancora",yes
+since.k,"Since you were last here","De când ai fost ultima dată aici","Da quando eri qui l’ultima volta",yes
+since.quiet,"Nothing moved.","Nimic nu s-a mișcat.","Nulla si è mosso.",yes
+since.revised,"revised","revizuită","rivista",yes
+since.strategy,"Strategy:","Strategia:","Strategia:",yes
+since.today,"Today:","Azi:","Oggi:",yes
+start.back,"All businesses","Toate business-urile","Tutte le attività",yes
+start.cta,"Continue","Continuă","Continua",yes
+start.greeting,"Hi {name}.","Bună, {name}.","Ciao {name}.",yes
+start.understand,"Let me understand {business} before we work on the marketing.","Hai să înțeleg {business} înainte să lucrăm la marketing.","Fammi capire {business} prima di lavorare sul marketing.",yes
+strat2.adopt,"Adopt this","Adopt asta","Adotta questa",yes
+strat2.betK,"The bet","Pariul","La scommessa",yes
+strat2.calibrate,"Turn this into content","Transformă în conținut","Trasformala in contenuti",yes
+strat2.cancel,"Cancel","Anulează","Annulla",yes
+strat2.challenge,"This doesn't fit","Nu se potrivește","Non torna",yes
+strat2.challengePlace,"Tell BB what you disagree with…","Spune-i lui BB cu ce nu ești de acord…","Di’ a BB con cosa non sei d’accordo…",yes
+strat2.challengeQ,"What doesn't fit?","Ce nu se potrivește?","Cosa non torna?",yes
+strat2.choosing,"Choosing","Alegem","Scegliamo",yes
+strat2.forming,"BB is forming a recommendation…","BB formulează o recomandare…","BB sta formulando una raccomandazione…",yes
+strat2.from,"From what I understand about","Din ce înțeleg despre","Da ciò che comprendo su",yes
+strat2.goalPlace,"e.g. grow paid signups from small teams switching off scattered tools…","ex. creșterea abonaților plătitori din echipe mici…","es. crescere gli abbonati paganti da piccoli team…",yes
+strat2.goalQ,"What are you aiming for?","Ce urmărești?","Qual è il tuo obiettivo?",yes
+strat2.goalSave,"Give BB the goal","Dă-i lui BB obiectivul","Dai a BB l’obiettivo",yes
+strat2.holding,"Adopted · holding","Adoptată · în vigoare","Adottata · in vigore",yes
+strat2.insuff,"I can't commit to a bet yet — tell me what you're aiming for and I'll make the call.","Încă nu pot fixa un pariu — spune-mi ce urmărești și iau decizia.","Non posso ancora fissare una scommessa — dimmi il tuo obiettivo e decido.",yes
+strat2.less,"Show fewer","Arată mai puține","Mostra meno",yes
+strat2.more,"Show {n} more","Arată încă {n}","Mostra altri {n}",yes
+strat2.notnow,"Deliberately not now","Deliberat, nu acum","Deliberatamente non ora",yes
+strat2.over,"over","în locul","invece di",yes
+strat2.proposed,"Proposed · not yet adopted","Propusă · neadoptată încă","Proposta · non ancora adottata",yes
+strat2.recommend,"Based on what I know, here's the call I'd make.","Pe baza a ce știu, iată decizia pe care aș lua-o.","In base a ciò che so, ecco la scelta che farei.",yes
+strat2.reconsider,"What would change my mind","Ce m-ar face să reconsider","Cosa mi farebbe cambiare idea",yes
+strat2.retry,"Try again","Încearcă din nou","Riprova",yes
+strat2.send,"Send to BB","Trimite lui BB","Invia a BB",yes
+strat2.today,"Today’s moves","Mișcările de azi","Le mosse di oggi",yes
+strat2.voice,"Your voice — how BB writes for you","Vocea ta — cum scrie BB pentru tine","La tua voce — come BB scrive per te",yes
+strat2.why,"Why this over the alternative","De ce asta, nu alternativa","Perché questa e non quella alternativa",yes
+strat2.whyMore,"More on why","Mai mult despre de ce","Altro sul perché",yes
+strategy.achieve,"What we’re trying to achieve","Ce încercăm să obținem","Cosa vogliamo ottenere",yes
+strategy.adopt,"This direction fits","Direcția asta se potrivește","Questa direzione va bene",yes
+strategy.assumes,"Assuming","Presupunând","Assumendo",yes
+strategy.assumptions,"What this assumes","Ce presupune asta","Cosa presuppone",yes
+strategy.back,"Back","Înapoi","Indietro",yes
+strategy.bet,"The core bet","Pariul principal","La scommessa centrale",yes
+strategy.content,"What content is doing","Ce rol are conținutul","Cosa fa il contenuto",yes
+strategy.continue,"Now let’s make a call","Acum să luăm o decizie","Ora prendiamo una decisione",yes
+strategy.correct,"This conflicts with how I want to build","Asta intră în conflict cu felul în care vreau să construiesc","Questo è in conflitto con come voglio costruire",yes
+strategy.correct.cancel,"Cancel","Anulează","Annulla",yes
+strategy.correct.constraint,"It’s a constraint","E o constrângere","È un vincolo",yes
+strategy.correct.fact,"That fact isn’t true anymore","Faptul ăsta nu mai e adevărat","Questo fatto non è più vero",yes
+strategy.correct.placeholder,"Tell me what should change…","Spune-mi ce ar trebui schimbat…","Dimmi cosa dovrebbe cambiare…",yes
+strategy.current.sub,"Your current strategy. I’ll turn this into your first month next.","Strategia ta curentă. Urmează să o transform în prima ta lună.","La tua strategia attuale. Poi la trasformerò nel tuo primo mese.",yes
+strategy.current.title,"This is what we’re building around.","În jurul acestui lucru construim.","È questo che stiamo costruendo.",yes
+strategy.deprioritized,"Deprioritized","Depriorizat","Depriorizzato",yes
+strategy.insufficient.body,"I need a bit more about the business and what you want before I commit to a real strategy.","Am nevoie de mai multe despre afacere și despre ce îți dorești înainte să propun o strategie reală.","Mi serve qualcosa in più sull’attività e su ciò che vuoi prima di proporre una strategia reale.",yes
+strategy.insufficient.title,"I’m not ready to call a direction yet.","Încă nu sunt gata să aleg o direcție.","Non sono ancora pronto a scegliere una direzione.",yes
+strategy.next,"Next step for people","Următorul pas pentru oameni","Prossimo passo per le persone",yes
+strategy.notnow,"What we’re not doing now","Ce nu facem acum","Cosa non facciamo ora",yes
+strategy.postadopt,"Got it. Next, I’ll turn this into your first month.","Am înțeles. Urmează să transform asta în prima ta lună.","Capito. Poi trasformerò questo nel tuo primo mese.",yes
+strategy.prioritizing,"What we’re prioritizing","Ce prioritizăm","Cosa stiamo dando priorità",yes
+strategy.proposal.title,"Here’s the direction I’d take.","Iată direcția pe care aș alege-o.","Ecco la direzione che prenderei.",yes
+strategy.reconsider,"What would make me reconsider","Ce m-ar face să reconsider","Cosa mi farebbe riconsiderare",yes
+strategy.retry,"Try again","Încearcă din nou","Riprova",yes
+strategy.why,"Why this direction","De ce această direcție","Perché questa direzione",yes
+talk.bb,"BB","BB","BB",yes
+talk.close,"Close","Închide","Chiudi",yes
+talk.error,"I couldn't open our conversation just now. Try again in a moment.","Nu am putut deschide conversația acum. Încearcă din nou într-o clipă.","Non sono riuscito ad aprire la conversazione ora. Riprova tra un momento.",yes
+talk.opener.business,"Want to question anything I understood about the business?","Vrei să pui la îndoială ceva din ce am înțeles despre afacere?","Vuoi mettere in discussione qualcosa che ho capito dell'attività?",yes
+talk.opener.create,"Want to talk through the thinking behind this asset?","Vrei să discutăm gândirea din spatele acestui material?","Vuoi ragionare sul pensiero dietro questo contenuto?",yes
+talk.opener.home,"What do you want to think through?","Ce vrei să gândim împreună?","Cosa vuoi ragionare insieme?",yes
+talk.opener.other,"What do you want to think through?","Ce vrei să gândim împreună?","Cosa vuoi ragionare insieme?",yes
+talk.opener.strategy,"Want to challenge the bet, or the parts we chose not to do?","Vrei să contești pariul, sau ce am ales să nu facem?","Vuoi contestare la scommessa, o ciò che abbiamo scelto di non fare?",yes
+talk.opener.today,"Want to talk through why I picked this move?","Vrei să discutăm de ce am ales această mișcare?","Vuoi ragionare sul perché ho scelto questa mossa?",yes
+talk.placeholder,"Ask, challenge, or think out loud…","Întreabă, contrazice sau gândește cu voce tare…","Chiedi, contesta o ragiona ad alta voce…",yes
+talk.send,"Send","Trimite","Invia",yes
+talk.thinking,"Thinking…","Mă gândesc…","Sto pensando…",yes
+talk.you,"You","Tu","Tu",yes
+today2.allclear,"Nothing needs you right now — you're clear.","Nimic nu-ți cere atenția acum — ești liber.","Nulla richiede la tua attenzione ora — sei a posto.",yes
+today2.because,"Because we're holding","Pentru că ținem","Perché stiamo puntando su",yes
+today2.becomes,"And this becomes an asset you can publish.","Și asta devine un material pe care îl poți publica.","E questo diventa un contenuto che puoi pubblicare.",yes
+today2.becomesLanding,"BB writes this page for you. You read it, adjust it and publish it.","BB scrie pagina pentru tine. Tu o citești, o ajustezi și o publici.","BB scrive la pagina per te. Tu la leggi, la sistemi e la pubblichi.",yes
+today2.blk.cancel,"Cancel","Anulează","Annulla",yes
+today2.blk.cant,"I can’t get this","Nu pot obține asta","Non posso ottenerlo",yes
+today2.blk.constraintK,"This move is waiting","Această mișcare așteaptă","Questa mossa è in attesa",yes
+today2.blk.constraintLead,"While this holds:","Cât timp e valabil:","Finché vale questo:",yes
+today2.blk.corrAud,"Who it’s for","Pentru cine e","A chi è rivolto",yes
+today2.blk.corrLead,"What’s actually true?","Ce e de fapt adevărat?","Cosa è davvero vero?",yes
+today2.blk.corrOffer,"What you offer","Ce oferi","Cosa offri",yes
+today2.blk.corrPlaceholder,"Tell me what’s actually true…","Spune-mi ce e de fapt adevărat…","Dimmi cosa è davvero vero…",yes
+today2.blk.corrPos,"How you’re positioned","Cum ești poziționat","Come sei posizionato",yes
+today2.blk.corrSubmit,"Save what’s true","Salvează ce e adevărat","Salva ciò che è vero",yes
+today2.blk.decisionK,"This needs a decision from you","Asta cere o decizie din partea ta","Questo richiede una tua decisione",yes
+today2.blk.decisionPlaceholder,"What have you decided?","Ce ai decis?","Cosa hai deciso?",yes
+today2.blk.decisionSubmit,"That’s my decision","Asta e decizia mea","Questa è la mia decisione",yes
+today2.blk.have,"I have this","Am asta","Ce l’ho",yes
+today2.blk.matK,"First, this needs something","Întâi, asta are nevoie de ceva","Prima, serve qualcosa",yes
+today2.blk.matLead,"To do this, you need:","Ca să faci asta, ai nevoie de:","Per farlo, ti serve:",yes
+today2.blk.notright,"Actually, that’s not right","De fapt, asta nu e corect","In realtà, non è corretto",yes
+today2.blk.prereqCant,"I can’t do that yet","Încă nu pot face asta","Non posso ancora farlo",yes
+today2.blk.prereqDone,"I’ve already finished that","Deja am terminat asta","L’ho già fatto",yes
+today2.blk.prereqK,"First, this needs finishing","Întâi, asta trebuie finalizat","Prima, questo va completato",yes
+today2.blk.prereqLead,"Before this move, you need to finish:","Înainte de mișcarea asta, trebuie să termini:","Prima di questa mossa, devi finire:",yes
+today2.blk.setAside,"Set it aside & reshape","Lasă deoparte & recontureaz-o","Mettila da parte & rimodella",yes
+today2.blk.talk,"Talk this through","Discută despre asta","Parliamone",yes
+today2.blk.whyPlaceholder,"Optional: what’s in the way? (helps me reshape)","Opțional: ce te împiedică? (mă ajută să reconturez)","Facoltativo: cosa lo impedisce? (mi aiuta a rimodellare)",yes
+today2.blocked.constraint,"{what} — on hold: {constraint}","{what} — în așteptare: {constraint}","{what} — in sospeso: {constraint}",yes
+today2.blocked.decision,"{what} — waiting on a decision from you","{what} — aștept o decizie de la tine","{what} — in attesa di una tua decisione",yes
+today2.blocked.material,"{what} — waiting on material: {material}","{what} — aștept materialul: {material}","{what} — in attesa del materiale: {material}",yes
+today2.blocked.prereq,"{what} — waiting on: {prereq}","{what} — aștept: {prereq}","{what} — in attesa di: {prereq}",yes
+today2.blocked.stale,"{what} — re-shape the plan first","{what} — refă întâi planul","{what} — prima rifai il piano",yes
+today2.blocked.title,"Waiting on you to unblock","Așteaptă să le deblochezi","In attesa che tu le sblocchi",yes
+today2.blockedK,"First, this needs resolving","Întâi, asta trebuie rezolvat","Prima, questo va risolto",yes
+today2.changedStrategy,"Changed because: strategy v{v} adopted.","S-a schimbat pentru că: strategia v{v} a fost adoptată.","Cambiato perché: strategia v{v} adottata.",yes
+today2.constraintK,"Operating constraints I’m respecting","Constrângeri de care țin cont","Vincoli operativi che rispetto",yes
+today2.done,"You'll know it's done when","Vei ști că e gata când","Saprai che è fatto quando",yes
+today2.donow,"Do this now","Fă asta acum","Fai questo ora",yes
+today2.help,"Help me with this","Ajută-mă cu asta","Aiutami con questo",yes
+today2.hideOthers,"Hide other moves","Ascunde celelalte mișcări","Nascondi le altre mosse",yes
+today2.insufficient,"I don't have enough to give you a useful move yet.","Încă nu am destule ca să-ți dau o mișcare utilă.","Non ho ancora abbastanza per darti una mossa utile.",yes
+today2.makeit,"Make it","Creează","Crea",yes
+today2.markdone,"Done","Gata","Fatto",yes
+today2.need,"I need","Am nevoie de","Mi serve",yes
+today2.needPlan,"I have the strategy. I still need to shape the next moves.","Am strategia. Mai trebuie să conturez următoarele mișcări.","Ho la strategia. Devo ancora definire le prossime mosse.",yes
+today2.needStrategy,"We need a direction before I can tell you what matters now.","Avem nevoie de o direcție înainte să-ți spun ce contează acum.","Serve una direzione prima che possa dirti cosa conta adesso.",yes
+today2.nottoday,"Not today","Nu azi","Non oggi",yes
+today2.others,"Other moves I'm holding ({n})","Alte mișcări pe care le țin ({n})","Altre mosse che tengo ({n})",yes
+today2.report,"Report what happened →","Spune ce s-a întâmplat →","Racconta cosa è successo →",yes
+today2.reportK,"What happened?","Ce s-a întâmplat?","Cosa è successo?",yes
+today2.reportPh,"Tell me the outcome in your own words — e.g. what you did and how it went.","Spune-mi rezultatul în cuvintele tale — ce ai făcut și cum a mers.","Dimmi il risultato con parole tue — cosa hai fatto e com’è andata.",yes
+today2.reportSubmit,"Tell me","Spune-mi","Dimmi",yes
+today2.reshape,"Reshape from the current strategy","Reconturează din strategia curentă","Ridefinisci dalla strategia attuale",yes
+today2.seePlan,"See the full 30-day plan","Vezi tot planul pe 30 de zile","Vedi tutto il piano a 30 giorni",yes
+today2.seewrote,"See what BB wrote","Vezi ce a scris BB","Guarda cosa ha scritto BB",yes
+today2.shape,"Shape today's move","Conturează mișcarea de azi","Definisci la mossa di oggi",yes
+today2.shaping,"I'm shaping the next move from the strategy…","Conturez următoarea mișcare din strategie…","Sto definendo la prossima mossa dalla strategia…",yes
+today2.stale,"The strategy changed, so I won't pretend the old plan is still current.","Strategia s-a schimbat, așa că nu pretind că vechiul plan mai e valabil.","La strategia è cambiata, quindi non fingo che il vecchio piano sia ancora valido.",yes
+today2.toStrategy,"Set the strategy","Stabilește strategia","Imposta la strategia",yes
+today2.today,"Today","Astăzi","Oggi",yes
+today2.updatedBecause,"Today updated because: {reason}","Azi s-a actualizat pentru că: {reason}","Oggi aggiornato perché: {reason}",yes
+today2.why,"Why now","De ce acum","Perché ora",yes
+today2.working,"Working…","Se lucrează…","Sto lavorando…",yes
+today2.workwith,"Work on this with BB","Lucrează la asta cu BB","Lavoraci con BB",yes
+upload.photoLabel,"Photo {n}","Poza {n}","Foto {n}",yes
+upload.photoLabelNamed,"Photo {n} — {name}","Poza {n} — {name}","Foto {n} — {name}",yes
+upload.reject.heic,"This photo is in HEIC, the format iPhone uses — we don't accept it yet. Send it as a JPG or PNG.","Poza e în format HEIC, folosit de iPhone — încă nu îl acceptăm. Trimite-o ca JPG sau PNG.","Questa foto è in HEIC, il formato usato da iPhone — non lo accettiamo ancora. Inviala come JPG o PNG.",yes
+upload.reject.large,"That image is too large — 10 MB maximum. Try a smaller one.","Imaginea e prea mare — maximum 10 MB. Încearcă una mai mică.","L'immagine è troppo grande — massimo 10 MB. Provane una più piccola.",yes
+upload.reject.type,"That file isn't an image we can read. We accept JPG, PNG and WebP.","Fișierul nu e o imagine pe care o putem citi. Acceptăm JPG, PNG și WebP.","Il file non è un'immagine che possiamo leggere. Accettiamo JPG, PNG e WebP.",yes
+upload.reject.unreadable,"That image couldn't be read — it may be corrupt. Try another photo.","Imaginea nu a putut fi citită — s-ar putea să fie coruptă. Încearcă altă poză.","Non è stato possibile leggere l'immagine — potrebbe essere danneggiata. Prova un'altra foto.",yes
+verdict.adopt,"Adopt the revised strategy","Adoptă strategia revizuită","Adotta la strategia rivista",yes
+verdict.adopted,"Adopted. Your strategy is updated.","Adoptată. Strategia ta este actualizată.","Adottata. La tua strategia è aggiornata.",yes
+verdict.assumptions,"What this does to my assumptions","Ce înseamnă pentru presupunerile mele","Cosa comporta per le mie ipotesi",yes
+verdict.badge.RECONSIDER,"Reconsider","Reconsideră","Riconsidera",yes
+verdict.badge.REVISE,"Revise","Revizuiește","Rivedi",yes
+verdict.badge.STILL_HOLDS,"Still holds","Rămâne valabilă","Regge ancora",yes
+verdict.badge.TUNE,"Tune","Ajustează","Regola",yes
+verdict.because,"Changed because: {reason}","S-a schimbat pentru că: {reason}","Cambiato perché: {reason}",yes
+verdict.cancel,"Cancel","Anulează","Annulla",yes
+verdict.challenge,"Challenge this","Contestă asta","Contesta questo",yes
+verdict.challengePlaceholder,"This is my call. What should I know?","Asta e ce cred. Ce ar trebui să știu?","Questo è ciò che penso. Cosa dovrei sapere?",yes
+verdict.challengeSubmit,"Send","Trimite","Invia",yes
+verdict.challenged,"I’ve taken that in and re-thought it.","Am ținut cont și am regândit.","Ne ho tenuto conto e ho ripensato.",yes
+verdict.changed,"What changed","Ce s-a schimbat","Cosa è cambiato",yes
+verdict.didnt,"What didn’t change","Ce nu s-a schimbat","Cosa non è cambiato",yes
+verdict.dir.stronger,"stronger","mai puternică","più forte",yes
+verdict.dir.unchanged,"unchanged","neschimbată","invariata",yes
+verdict.dir.weaker,"weaker","mai slabă","più debole",yes
+verdict.dismiss,"Got it","Am înțeles","Ho capito",yes
+verdict.holds,"Today is unchanged. The strategy holds.","Azi rămâne neschimbat. Strategia rămâne valabilă.","Oggi non cambia. La strategia regge.",yes
+verdict.newStrategy,"I’ve drafted a revised strategy — version {v}.","Am pregătit o strategie revizuită — versiunea {v}.","Ho preparato una strategia rivista — versione {v}.",yes
+verdict.strategy,"What this means for the strategy","Ce înseamnă pentru strategie","Cosa significa per la strategia",yes
+verdict.toStrategy,"See the strategy","Vezi strategia","Vedi la strategia",yes
+verdict.toToday,"See today","Vezi azi","Vedi oggi",yes
+verdict.today,"What this means for today","Ce înseamnă pentru azi","Cosa significa per oggi",yes
+voice.back,"Back","Înapoi","Indietro",yes
+voice.channel.caption,"Caption","Descriere","Didascalia",yes
+voice.channel.carousel,"Carousel","Carusel","Carosello",yes
+voice.channel.reel,"Reel","Reel","Reel",yes
+voice.continue,"Now let’s make it sound like you","Acum să sune ca tine","Ora facciamolo suonare come te",yes
+voice.createthis,"Create this","Creează asta","Crea questo",yes
+voice.learned,"What I’ve learned about your voice","Ce am învățat despre vocea ta","Cosa ho imparato sulla tua voce",yes
+voice.lede,"We’re holding your strategy. Here are a couple of content concepts built from it — tell me what sounds like you and what doesn’t, and when one feels right we’ll make it.","Ținem strategia ta. Iată câteva concepte de conținut construite din ea — spune-mi ce sună ca tine și ce nu, iar când unul se simte bine îl creăm.","Teniamo la tua strategia. Ecco un paio di concept di contenuto costruiti da essa — dimmi cosa suona come te e cosa no, e quando uno ti convince lo creiamo.",yes
+voice.react.placeholder,"Tell me what you think — “too salesy”, “I’d never say that”, “this sounds like me”…","Spune-mi ce crezi — „prea comercial”, „n-aș spune niciodată asta”, „sună a mine”…","Dimmi cosa ne pensi — “troppo commerciale”, “non lo direi mai”, “suona come me”…",yes
+voice.react.send,"Send","Trimite","Invia",yes
+voice.rewrite,"Rewrite it myself","Rescriu eu","Lo riscrivo io",yes
+voice.rewrite.cancel,"Cancel","Anulează","Annulla",yes
+voice.rewrite.save,"Use my version","Folosește versiunea mea","Usa la mia versione",yes
+voice.title,"Let’s make the marketing sound like you.","Să facem marketingul să sune ca tine.","Facciamo in modo che il marketing suoni come te.",yes
+voice.uncalibrated,"We haven’t tuned this language’s voice together yet.","Încă nu am reglat împreună vocea pentru această limbă.","Non abbiamo ancora calibrato insieme la voce per questa lingua.",yes
+website.cta,"Continue","Continuă","Continua",yes
+website.nowebsite,"No website yet?","Nu ai încă site?","Non hai ancora un sito?",yes
+website.placeholder,"yourbusiness.com","business-ultau.ro","latuaattivita.it",yes
+website.q,"What's the website?","Care este site-ul?","Qual è il sito web?",yes
+website.title,"Let me find {business}.","Lasă-mă să găsesc {business}.","Fammi trovare {business}.",yes

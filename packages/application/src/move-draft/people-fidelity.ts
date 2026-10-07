@@ -30,13 +30,16 @@ function foldTokens(s: string): string[] {
  * swap ("Bogdan Laza … Florin Borsan") would slip through. A real name is written as one adjacent unit; a
  * normalized surname ("Lazăr") or a borrowed one ("Carmen Mureșan") breaks the adjacency. Empty ⇒ all faithful.
  */
-export function checkPeopleFidelity(draftText: string, peopleValues: readonly string[]): PeopleFidelityFinding[] {
+export function checkPeopleFidelity(draftText: string, peopleValues: readonly string[], mode: 'all' | 'named' = 'all'): PeopleFidelityFinding[] {
   const dt = foldTokens(draftText);
   const findings: PeopleFidelityFinding[] = [];
   for (const value of peopleValues) {
     const folded = foldTokens(value).slice(0, 2);     // first + last
     const original = value.split(/\s+/).slice(0, folded.length).join(' ');
     if (folded.length === 0) continue;
+    // 'named' (a FOCUSED team section): a person the page leaves out is fine; one it mentions must be exact. A
+    // person counts as mentioned when their first-name token appears, so a corrupted or borrowed surname is still caught.
+    if (mode === 'named' && !dt.includes(folded[0] as string)) continue;
     if (folded.length === 1) {                        // single-token name
       if (!dt.includes(folded[0] as string)) findings.push({ expected: original, foundVariant: null });
       continue;
@@ -52,4 +55,9 @@ export function checkPeopleFidelity(draftText: string, peopleValues: readonly st
     }
   }
   return findings;
+}
+
+/** How many licensed people the draft names correctly (first + last adjacent, diacritic-folded). */
+export function countNamedPeople(draftText: string, peopleValues: readonly string[]): number {
+  return peopleValues.filter((v) => checkPeopleFidelity(draftText, [v]).length === 0).length;
 }

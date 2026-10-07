@@ -54,7 +54,7 @@ export function registerMoveDraftRoutes(server: FastifyInstance, deps: ServerDep
     const md = await s.repo.latestForAction(business.id, actionId);
     if (md?.draft && md.status !== 'blocked') return reply.send(projectDraft(md));
     if (md && (md.status === 'blocked' || !md.draft)) {
-      return reply.send({ status: 'blocked', reason: 'no_safe_copy', message: 'Nu am putut genera copie sigură pentru această pagină. Mișcarea rămâne cu instrucțiunea ei simplă.' });
+      return reply.send({ status: 'blocked', reason: 'no_safe_copy', message: 'BB could not produce safe copy for this page. The move keeps its plain instruction.' });
     }
     // No draft yet — say WHY, plainly, and what unblocks it (never a silent empty state).
     const current = await deps.strategyService.getCurrent(business.id);
@@ -72,12 +72,12 @@ export function registerMoveDraftRoutes(server: FastifyInstance, deps: ServerDep
       }
       const made = produced.moveDraft;
       if (made?.draft && made.status !== 'blocked') return reply.send(projectDraft(made));
-      return reply.send({ status: 'blocked', reason: 'no_safe_copy', message: 'Nu am putut genera copie sigură pentru această pagină. Mișcarea rămâne cu instrucțiunea ei simplă.' });
+      return reply.send({ status: 'blocked', reason: 'no_safe_copy', message: 'BB could not produce safe copy for this page. The move keeps its plain instruction.' });
     }
     // INTENDED DESIGN (unused until a real workers service drains bb-move-draft — see known-issues.md): enqueue
     // production (deterministic jobId dedupes repeated loads) and tell the founder it's coming. Kept on purpose.
     await deps.moveDraftQueue?.enqueueMoveDraft({ jobType: 'MOVE_DRAFT', businessId: business.id, actionId, planVersionId, jobId: `move-draft:${business.id}:${actionId}`, correlationId: `move-draft:${business.id}:${actionId}`, traceId: `move-draft:${business.id}:${actionId}`, founderId: null, enqueuedAt: new Date().toISOString() });
-    return reply.send({ status: 'pending', message: 'Se pregătește pagina ta — revino în scurt timp.' });
+    return reply.send({ status: 'pending', message: 'Your page is being prepared. Check back shortly.' });
   });
 
   // POST accept — the founder accepts the current draft (append-only 'accepted' version).

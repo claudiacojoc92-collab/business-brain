@@ -34,7 +34,7 @@ export type LandingMoveResult =
 /** The legible reason a surface can show instead of an empty state — a silent empty state is the failure mode
  *  we have been hunting all day. */
 export const NO_ADOPTED_STRATEGY_MESSAGE =
-  'Nu există încă o strategie adoptată. Pagina de prezentare se construiește în jurul direcției pe care o adopți — până atunci, nu avem pe ce să scriem o pagină.';
+  'There is no adopted strategy yet. The page is built around the direction you adopt; until then there is nothing to write it on.';
 
 export function assembleLandingMove(ctx: LandingContextView | null, ids: LandingMoveIds, now: () => string, genId: () => string): LandingMoveResult {
   // ADOPTION GATE — fail closed, legibly. Never draft without an adopted strategy.
@@ -46,7 +46,8 @@ export function assembleLandingMove(ctx: LandingContextView | null, ids: Landing
     ...ctx.founderOwned.map((t, i): LandingProposition => ({ ref: `F${i + 1}`, text: t, source: 'founder_owned' })),
   ];
   // STRATEGY CONDITIONING — the job is the adopted strategy's direction, not a generic studio landing.
-  const communicationJob = `Pagina de prezentare care servește strategia adoptată — obiectiv: ${ctx.goal}; pentru: ${ctx.audience}. Exprimă această direcție folosind doar faptele licențiate.`;
+  // An instruction to the model (not founder-facing): neutral English; the generator writes in snapshot.language.
+  const communicationJob = `A landing page that serves the adopted strategy. Goal: ${ctx.goal}. Target reader: ${ctx.audience}. Express this direction using only the licensed facts.`;
   const voiceLines = [...ctx.voiceLines];
   const snapshot: LandingAuthorizationSnapshot = {
     snapshotId: genId(), businessId: ids.businessId, actionId: ids.actionId, createHandoffId: null,

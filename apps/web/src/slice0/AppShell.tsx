@@ -1,7 +1,6 @@
 import React from 'react';
 import { Link, useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
-import { LOCALES, type Locale } from '../i18n/messages';
 import { useSession } from './session';
 import { useTalk } from './TalkDrawer';
 import { useAddContext } from './AddContextDrawer';
@@ -16,24 +15,6 @@ function TalkButton({ label }: { label: string }) {
 function AddContextButton({ label }: { label: string }) {
   const { open } = useAddContext();
   return <button type="button" className="s0-addctx" onClick={open}>{label}</button>;
-}
-
-export function LanguageSwitcher() {
-  const { locale, setLocale, t } = useLocale();
-  return (
-    <select
-      className="s0-lang"
-      aria-label={t('lang.label')}
-      value={locale}
-      onChange={(e) => setLocale(e.target.value as Locale)}
-    >
-      {LOCALES.map((l) => (
-        <option key={l.code} value={l.code}>
-          {l.label}
-        </option>
-      ))}
-    </select>
-  );
 }
 
 function Wordmark({ to }: { to: string }) {
@@ -94,7 +75,6 @@ export function AppShell({
             <details className="s0-acct">
               <summary>{t('shell.account')}</summary>
               <div className="s0-acct-menu">
-                <LanguageSwitcher />
                 <button type="button" className="s0-linkbtn" onClick={logout}>{t('shell.signout')}</button>
               </div>
             </details>
@@ -135,7 +115,6 @@ export function AppShell({
               <summary>{t('shell.account')}</summary>
               <div className="s0-acct-menu">
                 <button type="button" className="s0-linkbtn s0-acct-add" onClick={openAdd}>{t('nav.addctx')}</button>
-                <LanguageSwitcher />
                 <button type="button" className="s0-linkbtn" onClick={logout}>
                   {t('shell.signout')}
                 </button>
@@ -167,7 +146,6 @@ export function AppShell({
       <header className="s0-header">
         <Wordmark to="/" />
         <div className="s0-header-right">
-          <LanguageSwitcher />
           {showSignOut && (
             <button type="button" className="s0-linkbtn" onClick={logout}>
               {t('shell.signout')}

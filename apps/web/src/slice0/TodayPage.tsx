@@ -5,6 +5,7 @@ import { AppShell } from './AppShell';
 import { useTalk } from './TalkDrawer';
 import { isNotFound, LoadError, actionErrorKey } from './errors';
 import { VerdictSurface } from './VerdictSurface';
+import { createDestination } from './create-route';
 import {
   getBusiness, getToday, getPlanState, proposePlan, adoptPlan, getCurrentStrategy,
   applyActionOutcome, createFromAction, resolveActionState, submitCorrection, evaluateImpact,
@@ -103,7 +104,7 @@ export function TodayPage() {
   async function makeIt(actionId: string) {
     if (!id) return;
     setBusy(actionId); setActionError(null);
-    try { const r = await createFromAction(id, actionId); navigate(`/b/${id}/create/${r.createHandoffId}`); }
+    try { const r = await createFromAction(id, actionId); navigate(createDestination(id, actionId, r)); }
     catch (e) { setActionError(t(actionErrorKey(e))); }
     finally { setBusy(null); }
   }
@@ -282,14 +283,14 @@ export function TodayPage() {
               <p className="s0-today2-done">{t('today2.done')} {move.doneLooksLike}</p>
             ) : null}
 
-            {move.canCreate ? <p className="s0-today2-becomes">{t('today2.becomes')}</p> : null}
+            {move.canCreate ? <p className="s0-today2-becomes">{t(move.executableFormat === 'landing' ? 'today2.becomesLanding' : 'today2.becomes')}</p> : null}
 
             <div className="s0-today2-foot">
               <div className="s0-today2-actions">
                 {/* Capability-aware priority: when BB can help execute (content→Create, otherwise reason it
                     through in Talk), the primary action is to WORK ON IT, not "mark done". */}
                 {move.canCreate ? (
-                  <button type="button" className="s0-btn" disabled={busy === move.actionId} onClick={() => makeIt(move.actionId)}>{busy === move.actionId ? t('today2.working') : `${t('today2.makeit')} →`}</button>
+                  <button type="button" className="s0-btn" disabled={busy === move.actionId} onClick={() => makeIt(move.actionId)}>{busy === move.actionId ? t('today2.working') : `${t(move.executableFormat ? 'today2.seewrote' : 'today2.makeit')} →`}</button>
                 ) : (
                   <button type="button" className="s0-btn" disabled={busy === move.actionId} onClick={() => talk.open()}>{`${t('today2.workwith')} →`}</button>
                 )}

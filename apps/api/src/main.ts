@@ -19,7 +19,7 @@ async function main(): Promise<void> {
 
   const {
     commandBus, queryBus, jwtService, passwordService, businessService, founderAccountService,
-    learnBusinessService, discoveredProfileRepo, understandingRepo, ahaRepo,
+    learnBusinessService, discoveredProfileRepo, understandingRepo, ahaRepo, contentLanguageStore,
     conversationService, businessCorrectionService, aha2Service, strategyService, impactService, mirrorService, arcService, voiceService, planService, carouselService,
     photoLedService, photoLedRepo, reelService, reelObjectStore, reelRepo, reelShootService, reelShootRepo,
     moveDraftService, moveDraftRepo, produceLandingMove,
@@ -30,7 +30,7 @@ async function main(): Promise<void> {
     db, redis, logger,
     commandBus, queryBus, jwtService, passwordService,
     businessService, founderAccountService,
-    learnBusinessService, discoveredProfileRepo, understandingRepo, ahaRepo,
+    learnBusinessService, discoveredProfileRepo, understandingRepo, ahaRepo, contentLanguageStore,
     conversationService, businessCorrectionService, aha2Service, strategyService, impactService, mirrorService, arcService, voiceService, planService, carouselService,
     photoLedService, photoLedRepo, reelService, reelObjectStore, reelRepo, reelQueue, reelShootService, reelShootRepo,
     moveDraftService, moveDraftRepo, produceLandingMove, moveDraftQueue: reelQueue,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
-import { translate, isLocale, type Locale } from '../i18n/messages';
+import { translate, isLocale } from '../i18n/messages';
 import { isNotFound } from './errors';
 import { parseOpenerTurn, type ArcOpener } from './parse-briefing';
 import {
@@ -246,11 +246,10 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
   const [stratDetails, setStratDetails] = useState(false); // strategy: the minor cards (not-now / reconsider) — collapsed by default so a tired founder reads the bet + 2 reasons + acts, details on demand
   const started = useRef(false);
 
-  // Arc CHROME (labels, buttons, the question tag, provenance, error copy) follows the CONTENT language — the
-  // language BB read the business in — so it never mismatches the content. `t` here resolves keys in that
-  // language (falls back to the UI locale before any understanding exists). Date formatting stays on the UI locale.
-  const contentLocale: Locale = view && isLocale(view.contentLanguage) ? (view.contentLanguage as Locale) : (isLocale(locale) ? locale : 'en');
-  const t: T = useCallback((key: string, vars?: Record<string, string>) => translate(contentLocale, key, vars), [contentLocale]);
+  // Arc CHROME (labels, buttons, the question tag, provenance, error copy) is UI, so it is ENGLISH like the rest of
+  // the product (operator rule 2026-10-07). What BB writes (the understanding, questions, strategy, email) arrives
+  // from the server already in the business's content language and is rendered as-is.
+  const t: T = useCallback((key: string, vars?: Record<string, string>) => translate(isLocale(locale) ? locale : 'en', key, vars), [locale]);
 
   // Track the arc-content moments (understanding onward) in history so the founder can go back read-only. pour_in
   // and reading-style transients are not tracked (nothing to re-read there). Same moment = refresh in place.

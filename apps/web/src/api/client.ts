@@ -588,6 +588,8 @@ export interface PlanActiveResp { active: PlanView | null; proposal: PlanView | 
 export type PlanProposeResp = PlanView | { state: 'insufficient' | 'no_strategy' };
 export interface TodayAction {
   actionId: string; what: string; whyNow: string; doneLooksLike: string; effort: string | null; canCreate: boolean;
+  /** The format BB writes this move in; null/absent = a plan from before formats existed (routes to the carousel). */
+  executableFormat?: 'landing' | 'carousel' | null;
 }
 export type BlockerKind = 'missing_material' | 'founder_decision' | 'prerequisite_unfinished' | 'strategy_stale' | 'operating_constraint';
 export interface TodayBlocked {
@@ -693,7 +695,7 @@ export function correctReachReport(businessId: string, id: string, patch: { text
 export function deleteReachReport(businessId: string, id: string): Promise<{ ok: true }> {
   return request(`${RCH(businessId)}/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
-export function createFromAction(businessId: string, actionId: string): Promise<{ state: 'ready_for_create'; objective: string; note: string; createHandoffId: string }> {
+export function createFromAction(businessId: string, actionId: string): Promise<{ state: 'ready_for_create'; surface?: 'landing' | 'carousel'; objective: string; note: string; createHandoffId: string }> {
   return request(`${PL(businessId)}/action/${encodeURIComponent(actionId)}/create`, { method: 'POST', body: '{}' });
 }
 /** Mint a strategy-traced CreateHandoff from an APPROVED content concept (e.g. a voice-calibrated concept)

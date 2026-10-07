@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { generateId } from '@bb/shared';
+import { detectMaterialLanguage, detectTextLanguage, toLocale, type IContentLanguageStore } from '../business/content-language';
 import {
   type IEvidenceRepository,
   type RawCaptureRepository,
@@ -40,6 +41,8 @@ import { assertWellFormed, validateAha, type ValidatedFinding } from './validati
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
 
 export interface LearnBusinessDeps {
+  /** The business's content language (decided once, at first understanding, from the founder's own material). */
+  contentLanguage?: IContentLanguageStore;
   evidenceRepo: IEvidenceRepository;
   ingestion: IWebsiteIngestionPort;
   discovery: ISocialDiscoveryPort;
@@ -296,8 +299,15 @@ export class LearnBusinessService {
     interfaceLanguage: string,
     profileVersion: string,
   ): Promise<{ understandingId: string; aha: { status: 'produced' | 'insufficient'; findings: ValidatedFinding[] } }> {
-    const out = await this.deps.model.synthesize({ businessName, observations, interfaceLanguage });
+    // CONTENT LANGUAGE, decided once per business (operator rule 2026-10-07): the stored one if already set;
+    // otherwise the language of the founder's own material (website, PDFs, pasted text), stored now and fixed from
+    // then on. The account locale (`interfaceLanguage`) is only the fallback when the material shows no language.
+    const language = await this.decideContentLanguage(businessId, observations, interfaceLanguage);
+    const out = await this.deps.model.synthesize({ businessName, observations, interfaceLanguage: language });
     assertWellFormed(out); // fail closed on malformed synthesis
+    // Still undecided (no detectable material language)? The model's detected source language decides it, once.
+    const detected = toLocale(out.sourceLanguage);
+    if (detected && this.deps.contentLanguage) await this.deps.contentLanguage.setIfUnset(businessId, detected).catch(() => undefined);
 
     const modelId = out.modelId ?? 'anthropic';
     const contentHash = sha256(JSON.stringify(observations.map((o) => ({ ref: o.ref, url: o.url, text: o.text }))));
@@ -318,14 +328,26 @@ export class LearnBusinessService {
       id: generateId(),
       businessId,
       understandingSnapshotId: snap.id,
-      language: interfaceLanguage,
-      contentHash: sha256(contentHash + '|' + interfaceLanguage + '|' + JSON.stringify(validated.findings)),
+      language,
+      contentHash: sha256(contentHash + '|' + language + '|' + JSON.stringify(validated.findings)),
       status: validated.status,
       findings: validated.findings,
       modelId,
     });
 
     return { understandingId: snap.id, aha: { status: ahaRec.status, findings: ahaRec.findings } };
+  }
+
+  private async decideContentLanguage(businessId: string, observations: PageObservation[], fallback: string): Promise<string> {
+    const store = this.deps.contentLanguage;
+    if (!store) return fallback;
+    const stored = await store.get(businessId).catch(() => null);
+    if (stored) return stored;
+    // Website pages carry a detected `lang`; typed/pasted/uploaded text does not, so read the material's own text.
+    const material = detectMaterialLanguage(observations.map((o) => o.lang))
+      ?? detectTextLanguage(observations.map((o) => o.text).join('\n').slice(0, 6000));
+    if (material) { await store.setIfUnset(businessId, material).catch(() => undefined); return material; }
+    return fallback;
   }
 }
 

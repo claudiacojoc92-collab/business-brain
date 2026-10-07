@@ -11,3 +11,4 @@ export {
   type RegisterAccountInput,
   type GoogleAccountInput,
 } from './founder-account.service';
+export * from './content-language';

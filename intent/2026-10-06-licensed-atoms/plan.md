@@ -394,3 +394,37 @@ founder action unblocks the whole move. NOT a re-strategizing effort.
     and the gravest claim must not depend on a model's mood or a demo retry.
   - Still pending: land A+B, then atom commits 4 (service+tests) / 5 (adapter) / 6 (V083 migration), and the
     fixture derivation from the BB exports (public page text ONLY).
+- 2026-10-07: **BUS-16 live end-to-end acceptance** (`tools/acceptance/bodymove-landing.mjs`, uncommitted; output
+  `acceptance-live-2026-10-07.md`). Public page text only (home + despre fixtures) → real AnthropicAtomModel → 23
+  verbatim-anchored atoms (4 service, 2 location names, 1 booking, 3 policy, 13 people) → assembleLandingMove (v17
+  goal/audience/CTA, the one non-public input) → MoveDraftService with the real landing model + judge → **drafted,
+  all layers passed (kernel, backstop, people_fidelity, judge), 0 repairs**, ~80s. N=1. Fact-check against the
+  fixtures found what the gate did NOT catch: (1) "un studio dedicat femeilor" is false (the site has children's
+  and adult ballet programmes; the word "femei" is not on the site); (2) "la recomandarea medicului" / "lucrăm pe
+  baza recomandării medicale" are the STRATEGY's audience voiced as site fact (the site only says "inform the
+  instructor if you have a medical condition"); (3) the team section lists all 13 people incl. children's dance
+  and adult ballet on a postpartum/injury page; (4) no street address/phone/email (known ingestion gap); (5) names
+  gained diacritics the site does not use (Timiș, Borșan, Mureșan, Lupaș). (1)–(2) are the blocker for showing it.
+- 2026-10-07: **BUS-16 fixes (operator option a), uncommitted.** Generator (`anthropic-landing.model.ts`): the
+  strategy audience is now a separate TARGET READER block ("whom you address; NOT a fact about the business"), with
+  a rule that the page describes what the business IS; no "dedicated/only for <group>", no referral route even as a
+  condition on the reader, no identity condition; services/people are names, not descriptions; `proof` names the
+  people whose role fits the page's focus, spelled exactly as given (no diacritics added). Safety: new deterministic
+  `grounding` layer (`move-draft/grounding.ts`, RO/EN/IT): REFERRAL (incl. "dacă medicul tău ți-a recomandat") and
+  EXCLUSIVITY/gender-condition claims block unless a licensed fact contains them; people-fidelity runs in `named`
+  mode (omitting a person is fine, a named one must be exact, ≥1 must be named). Harness: the site's own positioning
+  passed as `synthesizedFacts` (4 sentences, asserted verbatim in the public text), standing in for the
+  understanding synthesis production supplies. Iterations: fix-v1 2/3 drafted (conditional doctor + "dacă ești
+  femeie" slipped through; 1 judge block on service descriptions); fix-v2 0/3 (regex bug + "acestor" false positive
+  + judge rejected need-framing with no positioning facts); **fix-v3 3/3 drafted (repairs 1/1/2)**: 0 occurrences of
+  femei/medic/doctor/trimis/accident; "dedicat" only as the site's "dedicat sănătății"; no children's-dance or
+  ballet trainer in any run; names as on the site; CTA "evaluare" is on the site ("Evaluare și recomandări
+  personalizate"). Outputs: `acceptance-live-2026-10-07-fixed-run{1,2,3}.md`. Still missing: address/phone/email
+  (ingestion gap, not crawled). Gate: tests 1859 pass / 4 skip; changed files eslint 0.
+- 2026-10-07: **Atom model truncation fixed (found in landing-move C4), uncommitted.** `AnthropicAtomModel` ran
+  with `max_tokens: 2000`; a 38-atom site overflowed it, the JSON was cut off, and the catch returned `{atoms: []}`
+  — indistinguishable from "this business has no facts". Locally 3 of 4 extractions on unchanged SF Custom pages
+  returned 0, and a concurrent 0-run overwrote a good 38-atom set (`replaceForBusiness` with []). Now: 8000 tokens;
+  `stop_reason === 'max_tokens'` or unparseable output THROWS, so the service logs `atoms_extract_threw` and keeps
+  the last good set. Live after the fix: 43/43 licensed, persisted. Tests: `atom-model-truncation.c4.test.ts` (4).
+  Prod Body Move (2 pages, ~23 atoms) was below the overflow point, which is why it never showed there.

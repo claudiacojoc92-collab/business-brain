@@ -407,6 +407,67 @@ mapping are new each time.
   (2) **synthesized** → "BB's reading, not a sourced quote" (no source claimed);
   (3) **founder-edited** → "your text" (no gate ran, no source claimed). Rewrite re-gates and returns the section
   to generated provenance. Never discover the hand-edit bypass by surprise — it is written here on purpose.
+- 2026-10-07: **C1 built (BUS-7), uncommitted.** `ExecutableFormat = 'landing' | 'carousel'` + `EXECUTABLE_FORMATS`
+  (plan/contracts, independent of Slice 4 `SampleChannel`); `GathersFactClass = AtomClass | 'none'`;
+  `HeldFactsSummary`; `Action.executableFormat` + REQUIRED `Action.gathersFactClass`; `DraftPlanInput` (named
+  port input) with optional `executableFormats` / `heldFacts` (C4 supplies them). Plan model normalize defaults
+  the fields (null / 'none') and coerces anything outside the closed lists; compose passes them through; the pg
+  repo reads pre-C1 plans with the same defaults (stored row + content_hash untouched). Prompt unchanged ⇒ no
+  behaviour change. **C3 must remove the 'none' default in normalize**, or a missing tag can never fail
+  validation. **C5/C6 note:** legacy and C1-era plans have `leadsToCreate: true` with `executableFormat: null`;
+  the surface must keep routing those to the carousel (today's behaviour), not drop their "Make it".
+  Also fixed a stale test from 2a18b6a (queue count 9→10, `MOVE_DRAFT`). Gate: type-check 0 · tests
+  1849 pass / 4 skip · C1 files eslint 0 (repo-wide `npm run lint` has 136 pre-existing errors in 29 files
+  outside C1).
+- 2026-10-07: **C2 built (BUS-8), uncommitted.** `PLAN_SYSTEM` asks for `executableFormat` + REQUIRED
+  `gathersFactClass` and adds two hard rules: WHO DOES THE WORK (only listed formats are BB's; `leadsToCreate`
+  ⇔ format non-null; email/reel/publishing/testing stay founder work) and NEVER ASK FOR WHAT BB ALREADY HOLDS.
+  `buildUser` now takes `DraftPlanInput` and appends `capabilityLines()` (WHAT BB CAN DO, defaulting to all of
+  `EXECUTABLE_FORMATS` because it is a product constant; WHAT BB ALREADY HOLDS, classes + counts + ≤3 examples).
+  `draftContractHash` changes for new plans (expected, append-only). **Live check** (real model, throwaway api
+  container, Body Move v17 strategy, held counts from this plan + example values from the public-site fragments):
+  run 1, 3×with holdings / 2×without, 36 actions: page = `landing` and carousel = `carousel` in every run,
+  "BB scrie…" phrasing, `leadsToCreate`⇔format mismatches 0; without holdings the planner assigned
+  contact_booking/service/policy gathering, with holdings it did not. **Defect found:** "build the list of
+  doctors" tagged `people` (BB holds 13 team members) → C3 would have rejected legitimate outreach. Fixed: `people`
+  = the business's OWN team; outside contacts are `none`. Run 2 (3×with / 1×without, 28 actions): gathers of held
+  classes 0/19 with holdings; doctor lists all `none`; mismatches 0. Gate: type-check 0 · tests 1854 pass /
+  4 skip · changed files eslint 0.
+- 2026-10-07: **C3 built (BUS-9), uncommitted.** `validateCapabilityTags(draft, heldClasses)` in plan-quality runs
+  on the RAW draft (before compose, so no default can hide a missing tag): `missing_gathers_tag`,
+  `assigns_held_info:<class>` (founder work only; BB-written moves may use held facts), `create_without_format`
+  (FAILS CLOSED, never defaulted to a format), `format_without_create`. All feed the existing repair loop.
+  `PlanDraft` makes `gathersFactClass` optional (the model may omit it); the adapter no longer defaults it to
+  'none' (C1's carry-forward closed). `PlanDeps.heldFacts?` is fetched once per generation and passed to both the
+  planner (`heldFacts` + `executableFormats`) and the gate; C4 wires it in composition. Fixture "Make it" actions
+  now carry `executableFormat: 'carousel'` (what they route to today). +6 tests. **Live** (real PlanService loop,
+  real model, Body Move holdings): round 1, 3/3 accepted (attempts 1/3/1) but run 2 exposed a false positive —
+  "decide who on the team answers a referred patient" tagged `people` and "agree a standard reply with
+  reception" tagged `policy`, both rejected as held info, dropping the receiving side. Fixed in the prompt:
+  gathering = COLLECTING existing facts; deciding/setting up something new is `none`. Round 2: **3/3 accepted on
+  the first attempt**, every BB move `landing`/`carousel` with Make it, every founder action `gathers none`, and
+  "who answers" survives in 2/3 plans. Gate: type-check 0 · tests 1866 pass / 4 skip · changed files eslint 0.
+  **Report point (per this plan): C3 done, surface (C5/C6) not yet touched.**
+- 2026-10-07: **C4–C6 built + live-verified locally (BUS-10/11/12), uncommitted.** C4: `heldFactsFromAtoms()`
+  (plan-quality) + composition wires `PlanService.heldFacts` to `atomExtractionService.facts()` (the same atoms
+  carousel + landing use). C5: `emitCreateHandoff` sets `requestedAssetFormat` from the action's format (null for
+  pre-C1 plans); the create route returns `surface: 'landing' | 'carousel'` + `actionId`; web
+  `createDestination()` routes landing → `/b/:id/landing/:actionId`, everything else → `/b/:id/create/:handoff`
+  (Today + Create index). Carousel's own resolveFormat rejects a non-carousel handoff, so a landing handoff can
+  never render as a carousel. C6: Today projection exposes `executableFormat`; a BB move's button reads "See what
+  BB wrote" / "Vezi ce a scris BB" / "Guarda cosa ha scritto BB" with a landing-specific line; pre-C1 moves keep
+  "Make it". **Live finding fixed during C4:** the atom model's `max_tokens: 2000` truncated a 38-atom site's JSON
+  and its catch returned [] silently, so the planner was intermittently told BB held nothing (3 of 4 local
+  extractions returned 0) and a concurrent 0-run WIPED a good 38-atom set. Now 8000 tokens and a truncated or
+  malformed response THROWS (service logs `atoms_extract_threw`, keeps the last good set). **Live walk (local
+  stack, SF Custom Chiropractic, real models, browser):** propose (new planner; atoms 43 licensed after the fix)
+  → adopt → Today shows founder decisions with "Lucrează la asta cu BB" and the landing move waiting on them →
+  marked them done in the browser → Today showed "BB scrie pagina pentru tine…" + **"Vezi ce a scris BB →"** →
+  click → `/b/…/landing/<actionId>` → "BB îți scrie pagina…" → drafted (all layers, 0 repairs) and rendered with
+  per-section Edit / Rewrite / Where-it-came-from. Not walkable locally: a pre-C1 plan with a ready Make-it move
+  (none in the local DB) → covered by the API route test (stored action without a format → carousel) and the Today
+  unit test. Body Move itself has no local data; its walk is the prod verification after deploy. Gate: type-check 0
+  · `npm test` 1878 pass / 4 skip · web type-check 0 · web lint 0 · backend changed files eslint 0.
 
 ## Security incident — 2026-10-06: prod DB connection string exposed in a session transcript
 

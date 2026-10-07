@@ -6,6 +6,7 @@ import { fetchDocument, extractReadableText } from '@bb/infrastructure';
 import { recordFounderEvent, readArcFlags, readArcSources, readArcEmail, recordArcCorrectionReflection, readArcCorrectionReflection, recordArcMirror, readArcMirror, type FounderEventType } from '../telemetry/founder-events';
 import { detectType, assertWithinBounds, MAX_BYTES } from '../connectors/upload/detect';
 import { extractPdf, extractDocx, extractText } from '../connectors/upload/extract';
+import { contentLanguageFor, noteFounderText } from './content-language';
 import { getInstagramConnector } from '../connectors/instagram/instagram-connector.instance';
 
 interface AuthedUser { sub: string; role: string }
@@ -28,7 +29,7 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
     const business = await deps.businessService.getBusiness(id, founderId);
     if (!business) throw new NotFoundError('BUSINESS_NOT_FOUND', 'Business not found.');
     const account = await deps.founderAccountService.getById(founderId);
-    return { founderId, business, language: account?.interfaceLocale ?? 'en' };
+    return { founderId, business, language: await contentLanguageFor(deps.contentLanguageStore, business.id, account?.interfaceLocale) };
   }
 
   async function viewFor(businessId: string, businessName: string, language: string, founderId: string) {
@@ -251,10 +252,11 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
 
   // ── Moment 3: the conversation (reuses the conversation engine; advances to mirror when ready) ──
   server.post('/v1/businesses/:id/arc/conversation', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { founderId, business, language } = await requireBusiness(request);
+    const { founderId, business, language: current } = await requireBusiness(request);
     const body = (request.body ?? {}) as { message?: string; skip?: boolean };
     const message = (body.message ?? '').trim();
     if (!body.skip && !message) throw new ValidationError('MESSAGE_REQUIRED', 'A message is required.');
+    const language = message ? await noteFounderText(deps.contentLanguageStore, business.id, message, current) : current;
     await deps.conversationService.startOrResume(business.id, founderId, business.name, language);
     // FIX 3 / Addition 1 — one-tap skip: decline the current question's need FIRST (deterministic, so the depth cap
     // never re-forces it), then let the interview move on. The founder's (localized) message carries the skip.

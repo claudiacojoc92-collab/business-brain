@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { ServerDeps } from '../server';
 import { recordFounderEvent, readReturnSummary, readTodayNote, readLatestOutcomeText, readWeeklyReachPrompt } from '../telemetry/founder-events';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
+import { contentLanguageFor } from './content-language';
 import type { PlanVersion, Priority, Action, ActionOutcome } from '@bb/application';
 
 interface AuthedUser { sub: string; role: string }
@@ -80,6 +81,8 @@ function projectToday(
       doneLooksLike: a.doneDefinition,
       effort: a.effortHint ? EFFORT_LABEL[a.effortHint] ?? null : null,
       canCreate: a.leadsToCreate,
+      // C6: which surface BB writes this move in (null = a plan from before C1, which routes to the carousel).
+      executableFormat: a.executableFormat ?? null,
     })),
     blocked,
     // Part 2 — all blocked moves made visible (the sequencing), each as structured data for the web to localize.
@@ -201,7 +204,7 @@ export function registerPlanRoutes(server: FastifyInstance, deps: ServerDeps): v
     const active = await deps.planService.getActivePlan(business.id);
     if (!active) throw new NotFoundError('NO_ACTIVE_PLAN', 'No active plan.');
     if (!findAction(active.plan, actionId)) throw new NotFoundError('ACTION_NOT_FOUND', 'Action not found in the active plan.');
-    const language = business.defaultConversationLanguage ?? 'en';
+    const language = await contentLanguageFor(deps.contentLanguageStore, business.id, business.defaultConversationLanguage);
     await deps.planService.recordActionResolution(business.id, founderId, actionId, kind, statement, language);
     const eventType = kind === 'resource' ? 'blocker_material_confirmed' : kind === 'constraint' ? 'blocker_constraint_recorded' : 'blocker_decision_made';
     recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType, surface: 'today', metadata: { actionId, kind } });
@@ -218,7 +221,10 @@ export function registerPlanRoutes(server: FastifyInstance, deps: ServerDeps): v
     // Founder-facing: the honest continuation state + the opaque, business-scoped handoff token the Create
     // surface navigates to (Slice 6 loads the CreateHandoff by this id). Internal provenance fields
     // (planVersionId / strategyVersionId / traces) stay hidden — only the navigation token is exposed.
-    await reply.status(200).send({ state: 'ready_for_create', createHandoffId: handoff.createHandoffId, objective: handoff.executionObjective, note: 'Ready to turn this into a carousel.' });
+    // C5: route by the action's format. landing → the landing draft for this action; anything else (carousel, or a
+    // plan from before C1 with no format) → the carousel Create surface, unchanged.
+    const surface = handoff.requestedAssetFormat === 'landing' ? 'landing' : 'carousel';
+    await reply.status(200).send({ state: 'ready_for_create', surface, actionId, createHandoffId: handoff.createHandoffId, objective: handoff.executionObjective, note: surface === 'landing' ? 'Ready to open the landing page BB wrote.' : 'Ready to turn this into a carousel.' });
   });
 
   // Create from an APPROVED concept (e.g. a voice-calibrated content concept) — mints a strategy-traced

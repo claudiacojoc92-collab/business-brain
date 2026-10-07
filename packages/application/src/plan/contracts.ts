@@ -9,6 +9,30 @@
  * lead to Create (a product-level CreateHandoff), some do not. The plan is execution, not a content calendar.
  */
 
+import type { AtomClass } from '../atoms/contracts';
+
+// ── What BB can DO — the closed vocabulary of moves BB itself performs ──
+/**
+ * A format BB executes end to end (it writes the asset; the founder reviews it). A format enters this list
+ * ONLY when it has a REACHABLE SURFACE, not when a generator exists: reel has a generator but no worker, caption
+ * has no surface, so neither is here. Putting one in lets the planner assign a move that leads nowhere.
+ * Defined HERE, independently of the frozen Slice 4 `SampleChannel` (a sibling list, never imported from it).
+ */
+export type ExecutableFormat = 'landing' | 'carousel';
+export const EXECUTABLE_FORMATS: readonly ExecutableFormat[] = ['landing', 'carousel'];
+
+/** What an action asks the FOUNDER to gather: a named atom class, or an explicit 'none'. Never omitted. */
+export type GathersFactClass = AtomClass | 'none';
+
+/**
+ * What BB already HOLDS about the business, summarised for the planner (classes + counts + a few examples,
+ * never the raw facts), so it can see it must not assign the founder to gather them again.
+ */
+export interface HeldFactsSummary {
+  readonly classes: ReadonlyArray<{ readonly atomClass: AtomClass; readonly count: number; readonly examples: readonly string[] }>;
+  readonly facets: readonly string[];   // understanding facets BB holds (founder-legible labels)
+}
+
 // ── Resource envelope (derived from Founder Intelligence; snapshot pinned to the plan) ──
 export interface ResourceEnvelope {
   readonly capacity: string;        // e.g. "about three hours a week"
@@ -39,6 +63,11 @@ export interface Action {
    *  crucially setting up/testing the landing itself. The complete-flow gate uses it: a demand-generating action
    *  must depend on the landing that handles what it brings in (see plan-quality). Model-set, like leadsToCreate. */
   readonly generatesDemand: boolean;
+  /** Non-null ⇒ BB performs this move in that format; null ⇒ founder-only work (call, visit, sign). */
+  readonly executableFormat: ExecutableFormat | null;
+  /** The atom class a founder-assigned action asks them to gather, or 'none'. Lets a deterministic gate reject
+   *  "gather what BB already holds". Model-supplied signal, deterministic verdict (C3). */
+  readonly gathersFactClass: GathersFactClass;
   readonly requiredMaterial: string[];
   readonly prerequisites: string[];           // actionIds that must be DONE first
   readonly planTimeFeasible: boolean;         // feasibility AT PLAN TIME (distinct from current readiness)
@@ -160,7 +189,9 @@ export interface PlanStrategyView {
 /** The LLM proposes this raw draft; the service validates + composes it into an immutable PlanVersion. */
 export interface PlanDraft {
   readonly monthDirection: string;
-  readonly priorities: Array<Omit<Priority, 'priorityId' | 'actions'> & { actions: Array<Omit<Action, 'actionId' | 'priorityId' | 'prerequisites'> & { key: string; prerequisiteKeys: string[] }> }>;
+  // gathersFactClass is OPTIONAL on the draft on purpose: the model may omit it, and validateCapabilityTags
+  // fails the draft when it does (never defaulted). A composed PlanVersion always carries it.
+  readonly priorities: Array<Omit<Priority, 'priorityId' | 'actions'> & { actions: Array<Omit<Action, 'actionId' | 'priorityId' | 'prerequisites' | 'gathersFactClass'> & { key: string; prerequisiteKeys: string[]; gathersFactClass?: GathersFactClass }> }>;
   readonly currentFocusIndex: number;
   readonly notNow: NotNowItem[];
 }
@@ -188,8 +219,21 @@ export interface StrategyDigest {
   readonly licensedMaterial: string[]; readonly constraints: string[]; readonly notWilling: string[];
 }
 
+/** Everything the planner is given for one draft. `executableFormats` / `heldFacts` tell it what BB can DO and
+ *  already HOLDS; optional until composition supplies them (C4). */
+export interface DraftPlanInput {
+  readonly strategy: PlanStrategyView;
+  readonly envelope: ResourceEnvelope;
+  readonly businessName: string;
+  readonly repairReasons?: string[];
+  readonly priorDraft?: PlanDraft;
+  readonly priorCycle?: PriorCycle;
+  readonly executableFormats?: readonly ExecutableFormat[];
+  readonly heldFacts?: HeldFactsSummary;
+}
+
 export interface IPlanModelPort {
-  draftPlan(input: { strategy: PlanStrategyView; envelope: ResourceEnvelope; businessName: string; repairReasons?: string[]; priorDraft?: PlanDraft; priorCycle?: PriorCycle }): Promise<PlanDraft>;
+  draftPlan(input: DraftPlanInput): Promise<PlanDraft>;
   /** Optional semantic-quality review (correction #1). A SHARED tactic passes when the strategy/context
    * causally entails it; an item FAILS only when its justification is "common best practice" and it would
    * survive unchanged with the strategy/context reasons removed. The judge never rewrites the plan — it

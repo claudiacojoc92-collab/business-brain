@@ -3,6 +3,7 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import { AppShell } from './AppShell';
 import { isNotFound, LoadError, actionErrorKey } from './errors';
+import { createDestination } from './create-route';
 import { getBusiness, getToday, getCurrentStrategy, createFromAction, type Business, type TodayAction } from '../api/client';
 
 const clip = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
@@ -51,7 +52,7 @@ export function CreateIndexPage() {
   async function makeIt() {
     if (!id || !move) return;
     setBusy(true); setActionError(null);
-    try { const r = await createFromAction(id, move.actionId); navigate(`/b/${id}/create/${r.createHandoffId}`); }
+    try { const r = await createFromAction(id, move.actionId); navigate(createDestination(id, move.actionId, r)); }
     catch (e) { setActionError(t(actionErrorKey(e))); setBusy(false); }
   }
 

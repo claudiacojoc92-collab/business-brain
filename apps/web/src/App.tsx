@@ -1,7 +1,6 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { LocaleProvider, useLocale } from './i18n/LocaleContext';
-import type { Locale } from './i18n/messages';
+import { LocaleProvider } from './i18n/LocaleContext';
 import { SessionProvider, useSession } from './slice0/session';
 import { LoadError } from './slice0/errors';
 import { ErrorBoundary } from './slice0/ErrorBoundary';
@@ -27,7 +26,6 @@ import { ReelCreatePage } from './slice0/ReelCreatePage';
 import { ShootPlanPage } from './slice0/ShootPlanPage';
 import { PrivacyPage, TermsPage, DataDeletionPage, ContactPage } from './legal/LegalPages';
 import { LandingPage } from './legal/LandingPage';
-import { setInterfaceLocale } from './api/client';
 import './slice0/slice0.css';
 
 /**
@@ -62,33 +60,11 @@ function RedirectIfAuthed({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-/** Persist the interface locale to the founder record once signed in (best-effort). */
-function syncLocale(locale: Locale): void {
-  try {
-    if (localStorage.getItem('bb_access_token')) void setInterfaceLocale(locale).catch(() => undefined);
-  } catch {
-    /* ignore */
-  }
-}
-
-/** Fix 2 — the account locale is authoritative. On session load, seed the client locale from the account
- *  unless the founder has explicitly overridden it in the UI. Lives inside both providers so it can read the
- *  loaded account and set the locale; renders nothing. */
-function LocaleSync(): null {
-  const { account } = useSession();
-  const { adoptFromAccount } = useLocale();
-  useEffect(() => {
-    if (account?.interfaceLocale) adoptFromAccount(account.interfaceLocale);
-  }, [account?.interfaceLocale, adoptFromAccount]);
-  return null;
-}
-
 export function App() {
   return (
-    <LocaleProvider onLocaleChange={syncLocale}>
+    <LocaleProvider>
       <BrowserRouter>
         <SessionProvider>
-          <LocaleSync />
           <TalkProvider>
           <AddContextProvider>
           <ErrorBoundary>

@@ -30,6 +30,7 @@ import type {
   IDiscoveredProfileRepository,
   IUnderstandingSnapshotRepository,
   IAhaRepository,
+  IContentLanguageStore,
 } from '@bb/application';
 import { registerPlugins } from './plugins';
 import { registerRoutes } from './routes';
@@ -48,6 +49,8 @@ export interface ServerDeps {
   discoveredProfileRepo: IDiscoveredProfileRepository;
   understandingRepo: IUnderstandingSnapshotRepository;
   ahaRepo: IAhaRepository;
+  /** The business's CONTENT language store (the UI is always English; models write in this). Optional for tests. */
+  contentLanguageStore?: IContentLanguageStore;
   conversationService: ConversationService;
   businessCorrectionService: BusinessCorrectionService;
   aha2Service: Aha2Service;
