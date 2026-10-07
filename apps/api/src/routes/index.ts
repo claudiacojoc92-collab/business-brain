@@ -1,67 +1,94 @@
 import type { FastifyInstance } from 'fastify';
-import { createKyselyClient } from '@bb/infrastructure';
+import type { ServerDeps } from '../server';
 import { registerHealthRoutes }        from './health.routes';
-import { registerSessionRoutes }       from './session.routes';
+import { registerAuthRoutes }          from './auth.routes';
+import { registerFounderRoutes }       from './founder.routes';
 import { registerM21DevRoutes }        from './m21-dev.routes';
 import { registerM22DevRoutes }        from './m22-dev.routes';
 import { registerGoogleDevRoutes }     from './google-dev.routes';
 import { registerDeclaredDevRoutes }   from './declared-dev.routes';
-import { registerMemoryDevRoutes }     from './memory-dev.routes';
-import { registerRecommendationDevRoutes } from './recommendation-dev.routes';
-import { registerAccountRoutes } from './account.routes';
-import { registerReadRoutes } from './read.routes';
-import { registerConnectRoutes } from './connect.routes';
-import { PgIdentityRepository } from '../session/pg-identity.repository';
-import { registerRequireFounder } from '../session/require-founder';
-import type { IEmailService } from '../session/email.service';
-
-/** Optional composition inputs. `email` is the selected magic-link adapter (main.ts picks it, fail-fast
- *  in production); when omitted, registerSessionRoutes defaults to LogEmailService — so callers that
- *  register routes directly (e.g. the prod route-registration tests) are unaffected (the C2 regression). */
-export interface RegisterRoutesOptions {
-  email?: IEmailService;
-}
+import { registerSocialSourcesRoutes } from './social-sources.routes';
+import { registerInstagramComplianceRoutes } from './instagram-compliance.routes';
+import { registerBusinessBrainRoutes } from './businessbrain.routes';
+import { registerBusinessRoutes } from './businesses.routes';
+import { registerBusinessIntelligenceRoutes } from './business-intelligence.routes';
+import { registerBusinessUnderstandingRoutes } from './business-understanding.routes';
+import { registerConversationRoutes } from './conversation.routes';
+import { registerEventsRoutes } from './events.routes';
+import { registerStrategyRoutes } from './strategy.routes';
+import { registerImpactRoutes } from './impact.routes';
+import { registerMirrorRoutes } from './mirror.routes';
+import { registerHomeRoutes } from './home.routes';
+import { registerArcRoutes } from './arc.routes';
+import { registerVoiceRoutes } from './voice.routes';
+import { registerPlanRoutes } from './plan.routes';
+import { registerReachRoutes } from './reach.routes';
+import { registerCarouselRoutes } from './carousel.routes';
+import { registerMoveDraftRoutes } from './move-draft.routes';
+import { registerPhotoLedRoutes } from './photoled.routes';
+import { registerReelRoutes } from './reel.routes';
+import { registerReelShootRoutes } from './reel-shoot.routes';
+import { registerGoogleSigninRoutes } from './google-signin.routes';
 
 /**
- * Registers all routes. Each route module is self-contained and builds its own deps.
- * The M2 auth bridge (registerAuthRoutes) was retired in S0-T2 C3; auth is now the
- * self-serve magic-link session (registerSessionRoutes). Source: Repository Structure V1 Section 02.
+ * Registers all routes. Each route module is self-contained.
+ * Source: Repository Structure V1 Section 02.
  */
 export async function registerRoutes(
   server: FastifyInstance,
-  opts: RegisterRoutesOptions = {},
+  deps:   ServerDeps,
 ): Promise<void> {
-  registerHealthRoutes(server);            // UNPREFIXED — ops/monitoring (prometheus scrapes /health/metrics)
+  registerHealthRoutes(server);
+  registerAuthRoutes(server, deps);
+  // Google ACCOUNT sign-in (pre-auth, outside /v1). Separate from the Google data connector.
+  registerGoogleSigninRoutes(server, deps);
+  await registerFounderRoutes(server, deps);
 
-  // VP-T2 — the founder-facing API lives under an explicit /api/* boundary, so the browser routes
-  // (/reads, /reads/:readId, /connect, /login, /account) are deterministically the SPA and /api/* is the
-  // API. One scope, not per-path edits; handlers are byte-identical, only their mount path moves.
-  await server.register(async (api) => {
-    registerSessionRoutes(api, opts.email); // S0-T2 — magic-link self-serve session → /api/auth/* (email adapter injected by main.ts; defaults to LogEmailService)
-    registerAccountRoutes(api);            // S0-T4 — export/delete → /api/account/*; session-scoped, ALL envs
-    registerReadRoutes(api);               // S1-T4 — Business Read generate/retrieve → /api/reads*; strict session
-    await registerConnectRoutes(api);      // S1-T5a — production connect (ingest-only) → /api/connect/*; strict session
-  }, { prefix: '/api' });
+  // Slice 0 — Business + Membership + account routes (/v1, JWT via the global preHandler).
+  registerBusinessRoutes(server, deps);
+  // Slice 1 — "BB learned my business": website understanding + Aha (/v1, JWT).
+  registerBusinessIntelligenceRoutes(server, deps);
+  // M2 — Business Understanding: founder corrections (reuses the real founder_state path; /v1, JWT).
+  registerBusinessUnderstandingRoutes(server, deps);
+  // Slice 2 — "BB understood me": founder conversation + founder model + Aha 2 (/v1, JWT).
+  registerConversationRoutes(server, deps);
+  registerEventsRoutes(server, deps); // M7 founder-test telemetry
+  // Slice 3 — "BB gave me a real strategy": Strategy Proposal → adopt → Current (/v1, JWT).
+  registerStrategyRoutes(server, deps);
+  // Living State — impact evaluator (new reality → held state → explicit verdict) (/v1, JWT).
+  registerImpactRoutes(server, deps);
+  // The Mirror — three lanes + grounded contrast (/v1, JWT).
+  registerMirrorRoutes(server, deps);
+  // The Home surface — the strategist's briefing (/v1, JWT).
+  registerHomeRoutes(server, deps);
+  // Day One — the nine-moment arc (/v1, JWT).
+  registerArcRoutes(server, deps);
+  // Slice 4 — "BB learned my voice": example-grounded voice calibration (/v1, JWT).
+  registerVoiceRoutes(server, deps);
+  registerPlanRoutes(server, deps);       // Slice 5
+  registerReachRoutes(server, deps);      // Attribution by asking (V081) — reflective-only weekly reach reports
+  registerCarouselRoutes(server, deps);   // Slice 6
+  registerMoveDraftRoutes(server, deps);  // landing move — draft / accept / rewrite-section
+  registerPhotoLedRoutes(server, deps);   // Slice 6.1 — Create from Photos
+  registerReelRoutes(server, deps);       // Slice 7 V1 — Reel Creation (real MP4)
+  registerReelShootRoutes(server, deps);  // Slice 7 V2 — Tell me what to film
 
-  // Dev-only nucleus endpoints (outside /v1). Never registered in production.
+  // Social sources — the REAL authenticated Meta/Instagram connect flows (App Review). Present in EVERY
+  // build (including production) so a reviewer reaches them through the normal product, not a dev route.
+  registerSocialSourcesRoutes(server, deps);
+
+  // Instagram compliance (Meta App Review): Deauthorize + Data-Deletion callbacks + public status page.
+  // Present in EVERY build — Meta calls these directly, unauthenticated but signed_request-verified.
+  registerInstagramComplianceRoutes(server);
+
+  // Business Brain V1 — versioned lifecycle public API (Phase 6). Present in every build.
+  registerBusinessBrainRoutes(server, deps);
+
+  // Dev-only M2.1/M2.2 streaming endpoints (no auth; outside /v1). Never in production.
   if (process.env['NODE_ENV'] !== 'production') {
-    const identity = new PgIdentityRepository(createKyselyClient(process.env['DATABASE_URL'] ?? ''));
-
-    // S0-T3 — the nucleus /dev/* group inside an encapsulated scope guarded by requireFounder:
-    // founderId is resolved ONCE at the boundary (session-first, fail-closed) and every handler reads
-    // request.founderId. A route under this scope is founder-scoped by construction.
-    await server.register(async (nucleus) => {
-      registerRequireFounder(nucleus, identity);
-      registerM21DevRoutes(nucleus);            // M2.1 website magic moment
-      await registerM22DevRoutes(nucleus);      // M2.2 upload magic moment
-      registerDeclaredDevRoutes(nucleus);       // Capability B v1 — declared intent capture
-      registerMemoryDevRoutes(nucleus);         // Business Memory v1 — the C→B response loop
-      registerRecommendationDevRoutes(nucleus); // ADR-010 — Recommendation Product Primitive
-    });
-
-    // Google authenticated Source (OAuth lifecycle): its callback resolves the founder from the signed
-    // OAuth state (not a session cookie), so it is registered OUTSIDE the requireFounder scope and wires
-    // the session itself (S0-T3 C2).
-    registerGoogleDevRoutes(server);
+    registerM21DevRoutes(server);
+    await registerM22DevRoutes(server);
+    registerGoogleDevRoutes(server); // Google authenticated Source — Phase 1 (OAuth lifecycle)
+    registerDeclaredDevRoutes(server); // Capability B v1 — declared intent capture
   }
 }

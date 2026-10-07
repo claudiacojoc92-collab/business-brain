@@ -1,0 +1,90 @@
+# Business Brain web — nginx static serving + same-origin API proxy.
+# FE uses API_BASE='/' (relative), so /v1, /auth and /api are proxied to the api service
+# (mirrors apps/web/vite.config.ts dev proxy). Everything else is the SPA.
+#
+# This is an nginx TEMPLATE: the nginx image entrypoint (20-envsubst-on-templates.sh) renders
+# ${PORT} from the environment into /etc/nginx/conf.d/default.conf at container start, so the
+# server binds Railway's injected $PORT. Only ${PORT} is substituted; nginx's own $host,
+# $remote_addr, $scheme, etc. are lowercase and are left untouched by envsubst.
+server {
+  listen ${PORT};
+  server_name _;
+  root /usr/share/nginx/html;
+  index index.html;
+
+  # --- API (same-origin) → the api service over Railway private networking ---
+  # Railway private networking is an IPv6-only Wireguard mesh that re-IPs every service on each
+  # redeploy. A LITERAL proxy_pass target (http://api.railway.internal:3000) is resolved ONCE at
+  # worker start and cached for the worker's life — so after any api deploy nginx keeps proxying to
+  # the dead old IP until web is restarted (this caused a prod outage of /auth /v1 /api incl. Meta
+  # compliance). Fix: a runtime `resolver` + a VARIABLE proxy_pass target, so nginx re-resolves the
+  # name itself (at most every 1s). No web restart is needed when the api's private IP changes.
+  #   • ${NGINX_RESOLVER} = Railway internal DNS, default "[fd12::10]" (see Dockerfile.web); it is
+  #     env-substituted at container start, so local tests can override it (e.g. 127.0.0.11).
+  #   • ipv6=on is required — Railway private hosts have AAAA records only.
+  #   • $api_upstream is an nginx runtime variable (NOT an env var) → envsubst leaves it untouched.
+  #     Its target has no URI part, so the original request URI + query string are forwarded as-is.
+  resolver ${NGINX_RESOLVER} ipv6=on valid=1s;
+  resolver_timeout 5s;
+  set $api_upstream http://api.railway.internal:3000;
+
+  # File uploads (pour-in brochures/PDFs, founder-supplied material) can be several MB. nginx's DEFAULT
+  # client_max_body_size is 1MB — so any real PDF was rejected here with a 413 (HTML, not JSON) BEFORE it
+  # ever reached the api, and the browser fell back to a generic "couldn't read that file" error. Raise it
+  # comfortably past the api's own 15MB upload cap (apps/api .../upload/detect.ts MAX_BYTES) so the api's
+  # bound is the binding one and returns a clean, specific message; anything larger still 413s here.
+  client_max_body_size 20m;
+
+  # Long-running LLM generations (learn / strategy / plan / create) legitimately take ~45s–4min.
+  # nginx's default proxy_read_timeout is 60s, so any generation crossing 60s had its upstream
+  # connection closed → the browser saw a 504 and falsely declared failure while the API kept
+  # working and persisted the result. Raise the proxy read/send timeout to 300s to match the
+  # Anthropic client timeout (the API's own max wait) and stay within Railway's ~5min edge, so a
+  # normal generation returns its real result (success OR genuine error) instead of a false 504.
+  proxy_read_timeout 300s;
+  proxy_send_timeout 300s;
+
+  location /v1/ {
+    proxy_pass $api_upstream;
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  location /auth/ {
+    proxy_pass $api_upstream;
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  # Social sources (Meta App Review): /api/sources/* — connect/read/disconnect enforce JWT INSIDE
+  # the api handlers; the OAuth callbacks under this prefix are intentionally auth-free (identity
+  # rides the OAuth `state`). nginx only forwards the full path; it neither adds nor requires auth.
+  location /api/ {
+    proxy_pass $api_upstream;
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  # --- Static build assets: Vite fingerprints every file (…-<hash>.js/.css), so the content can
+  #     never change under a given name. Cache them hard. ---
+  location /assets/ {
+    add_header Cache-Control "public, max-age=31536000, immutable" always;
+    try_files $uri =404;
+  }
+
+  # --- SPA fallback: client routes (/login, /onboarding, /dashboard, /review, /business-brain, /).
+  #     index.html MUST NOT be cached, or the browser keeps running an old bundle that references
+  #     stale (deleted) asset hashes after a deploy. no-cache forces a revalidate every load, so a
+  #     fresh deploy is picked up immediately — no hard refresh required. ---
+  location / {
+    add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+    add_header Pragma "no-cache" always;
+    try_files $uri $uri/ /index.html;
+  }
+}

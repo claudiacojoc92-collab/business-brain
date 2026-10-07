@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { createKyselyClient, PgEvidenceRepository } from '@bb/infrastructure';
 import { runWebsiteMagicMoment } from '../business-model/website-magic-moment.service';
+import { DEV_FOUNDER_ID } from '../connectors/website/dev-founder';
 
 /**
  * DEV-ONLY streaming endpoint for the M2.1 website magic moment. Registered ONLY when
@@ -24,7 +25,6 @@ export function registerM21DevRoutes(server: FastifyInstance): void {
 
   server.get('/dev/m21/connect', async (request, reply) => {
     const url = String((request.query as Record<string, unknown>)?.['url'] ?? '');
-    const founderId = request.founderId; // resolved at the boundary by requireFounder (session-scoped)
     reply.hijack();
     reply.raw.writeHead(200, {
       'content-type': 'text/event-stream',
@@ -35,10 +35,10 @@ export function registerM21DevRoutes(server: FastifyInstance): void {
     const send = (event: string, data: unknown) => reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     try {
       // Fresh read each time (append-only store; content-addressed ids dedupe re-runs).
-      await repo.deleteBySource(founderId, 'website');
-      await repo.deleteBySource(founderId, 'business-model');
+      await repo.deleteBySource(DEV_FOUNDER_ID, 'website');
+      await repo.deleteBySource(DEV_FOUNDER_ID, 'business-model');
       const result = await runWebsiteMagicMoment({
-        founderId,
+        founderId: DEV_FOUNDER_ID,
         url,
         repo,
         anthropicApiKey: apiKey,

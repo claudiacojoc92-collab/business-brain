@@ -1,0 +1,1 @@
+Inter font — SIL Open Font License 1.1 (via @expo-google-fonts/inter, pinned). Bundled for deterministic carousel rendering (Slice 6).

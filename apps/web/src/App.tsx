@@ -1,70 +1,114 @@
+import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './auth/AuthContext';
-import { LoginPage } from './pages/LoginPage';
-import { AccountPage } from './pages/AccountPage';
-import { ReadsListPage } from './pages/ReadsListPage';
-import { FirstReadPage } from './pages/FirstReadPage';
-import { ConnectPage } from './pages/ConnectPage';
-import { ConnectPreviewPage } from './connect/ConnectPreviewPage';
-import { UploadPreviewPage } from './upload/UploadPreviewPage';
-import { GooglePreviewPage } from './google/GooglePreviewPage';
-import { DeclaredPreviewPage } from './declared/DeclaredPreviewPage';
-import { CalendarPreviewPage } from './calendar/CalendarPreviewPage';
-import { MemoryPreviewPage } from './memory/MemoryPreviewPage';
-import { RecommendationPreviewPage } from './recommendation/RecommendationPreviewPage';
+import { LocaleProvider } from './i18n/LocaleContext';
+import { SessionProvider, useSession } from './slice0/session';
+import { LoadError } from './slice0/errors';
+import { ErrorBoundary } from './slice0/ErrorBoundary';
+import { LandingV0 } from './slice0/LandingV0';
+import { AuthPage } from './slice0/AuthPage';
+import { SigninCallbackPage } from './slice0/SigninCallbackPage';
+import { BusinessHomePage } from './slice0/BusinessHomePage';
+import { HomePage } from './slice0/HomePage';
+import { BusinessPage } from './slice0/BusinessPage';
+import { CreateIndexPage } from './slice0/CreateIndexPage';
+import { ConversationPage } from './slice0/ConversationPage';
+import { TalkProvider } from './slice0/TalkDrawer';
+import { AddContextProvider } from './slice0/AddContextDrawer';
+import { StrategyPage } from './slice0/StrategyPage';
+import { VoicePage } from './slice0/VoicePage';
+import { PlanPage } from './slice0/PlanPage';
+import { TodayPage } from './slice0/TodayPage';
+import { ReachReportsPage } from './slice0/ReachReportsPage';
+import { CarouselPage } from './slice0/CarouselPage';
+import { LandingMovePage } from './slice0/LandingMovePage';
+import { PhotoCreatePage } from './slice0/PhotoCreatePage';
+import { ReelCreatePage } from './slice0/ReelCreatePage';
+import { ShootPlanPage } from './slice0/ShootPlanPage';
+import { PrivacyPage, TermsPage, DataDeletionPage, ContactPage } from './legal/LegalPages';
+import { LandingPage } from './legal/LandingPage';
+import './slice0/slice0.css';
 
 /**
- * The M2 founder-facing app (dashboard / onboarding / review / history + their status guards) was
- * removed in S0-T1 (Article VI — manufactured-need machinery). Login + auth are DEFERRED (retire in
- * S0-T2 when a self-serve session lands). What remains is /login + the ADR-007 nucleus dev previews.
+ * Slice 0 production routing. The founder path is: /signin → / (businesses) → /b/:id (start).
+ * The retired weekly-cycle / diagnosis / research surfaces are intentionally NOT routed here
+ * (their files remain on disk and unit-tested in isolation); the production path never lands
+ * on a research surface, passive-card MVP, or debug harness.
  */
+
+function Loading() {
+  return <div className="s0-loading">Loading…</div>;
+}
+
+// Exported for the session test — the loadError gate is the piece that made keeping the token actually work.
+export function RequireSession({ children }: { children: React.ReactNode }) {
+  const { account, isLoading, loadError, refresh } = useSession();
+  if (isLoading) return <Loading />;
+  // A startup load that couldn't reach us (network / 5xx / failed business list) is NOT a sign-out — show a
+  // retry, keep them here. Must come BEFORE the account check, or a kept token still bounces to /signin.
+  if (loadError) return <LoadError onRetry={() => void refresh()} />;
+  if (!account) return <Navigate to="/signin" replace />;
+  return <>{children}</>;
+}
+
+function RedirectIfAuthed({ children }: { children: React.ReactNode }) {
+  const { account, isLoading, loadError, refresh } = useSession();
+  if (isLoading) return <Loading />;
+  // Same here: a transient load failure with a token present must not fall through to the sign-in page (which
+  // would invite a needless re-login over a blip) — offer a retry.
+  if (loadError) return <LoadError onRetry={() => void refresh()} />;
+  if (account) return <Navigate to="/home" replace />;
+  return <>{children}</>;
+}
+
 export function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <Routes>
-          {/* Public */}
-          <Route path="/login" element={<LoginPage />} />
+    <LocaleProvider>
+      <BrowserRouter>
+        <SessionProvider>
+          <TalkProvider>
+          <AddContextProvider>
+          <ErrorBoundary>
+          <Routes>
+            {/* Founder product entry — Business Brain owns `/` */}
+            <Route path="/" element={<LandingV0 />} />
+            <Route path="/signin" element={<RedirectIfAuthed><AuthPage /></RedirectIfAuthed>} />
+            <Route path="/signin/callback" element={<SigninCallbackPage />} />
 
-          {/* Real product: the connect surface (S1-T5b) — the authenticated landing. Magic Link → Connect
-              → Generate → Read. Session-guarded; consumes only the production connect + generate endpoints. */}
-          <Route path="/connect" element={<ConnectPage />} />
+            {/* Meta reviewer/compliance surface — dedicated route, kept for App Review; not the founder entry */}
+            <Route path="/verify" element={<LandingPage />} />
 
-          {/* Real product: account (export + delete). Redirects to /login when signed out. */}
-          <Route path="/account" element={<AccountPage />} />
+            {/* Public legal pages — no login required */}
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/privacy-policy" element={<PrivacyPage />} />
+            <Route path="/terms" element={<TermsPage />} />
+            <Route path="/data-deletion" element={<DataDeletionPage />} />
+            <Route path="/contact" element={<ContactPage />} />
 
-          {/* Real product: the Business Read surface (S1-T6). Session-guarded; pure read of persisted
-              snapshots. The list is the "return to" target; :readId renders one immutable Read. */}
-          <Route path="/reads" element={<ReadsListPage />} />
-          <Route path="/reads/:readId" element={<FirstReadPage />} />
+            <Route path="/home" element={<RequireSession><BusinessHomePage /></RequireSession>} />
+            <Route path="/b/:id/home" element={<RequireSession><HomePage /></RequireSession>} />
+            <Route path="/b/:id" element={<RequireSession><BusinessPage /></RequireSession>} />
+            <Route path="/b/:id/create" element={<RequireSession><CreateIndexPage /></RequireSession>} />
+            <Route path="/b/:id/talk" element={<RequireSession><ConversationPage /></RequireSession>} />
+            <Route path="/b/:id/reel/create" element={<RequireSession><ReelCreatePage /></RequireSession>} />
+            <Route path="/b/:id/reel/shoot" element={<RequireSession><ShootPlanPage /></RequireSession>} />
+            <Route path="/b/:id/reel/shoot/:planId" element={<RequireSession><ShootPlanPage /></RequireSession>} />
+            <Route path="/b/:id/reel/:reelId" element={<RequireSession><ReelCreatePage /></RequireSession>} />
+            <Route path="/b/:id/strategy" element={<RequireSession><StrategyPage /></RequireSession>} />
+            <Route path="/b/:id/voice" element={<RequireSession><VoicePage /></RequireSession>} />
+            <Route path="/b/:id/plan" element={<RequireSession><PlanPage /></RequireSession>} />
+            <Route path="/b/:id/today" element={<RequireSession><TodayPage /></RequireSession>} />
+            <Route path="/b/:id/reach" element={<RequireSession><ReachReportsPage /></RequireSession>} />
+            <Route path="/b/:id/create/:handoffId" element={<RequireSession><CarouselPage /></RequireSession>} />
+            <Route path="/b/:id/landing/:actionId" element={<RequireSession><LandingMovePage /></RequireSession>} />
+            <Route path="/b/:id/photos" element={<RequireSession><PhotoCreatePage /></RequireSession>} />
 
-          {/* Dev-only: ADR-007 nucleus preview surfaces (not registered in prod). */}
-          {import.meta.env.DEV && (
-            <Route path="/connect-preview" element={<ConnectPreviewPage />} />
-          )}
-          {import.meta.env.DEV && (
-            <Route path="/upload-preview" element={<UploadPreviewPage />} />
-          )}
-          {import.meta.env.DEV && (
-            <Route path="/google-preview" element={<GooglePreviewPage />} />
-          )}
-          {import.meta.env.DEV && (
-            <Route path="/declared-preview" element={<DeclaredPreviewPage />} />
-          )}
-          {import.meta.env.DEV && (
-            <Route path="/calendar-preview" element={<CalendarPreviewPage />} />
-          )}
-          {import.meta.env.DEV && (
-            <Route path="/memory-preview" element={<MemoryPreviewPage />} />
-          )}
-          {import.meta.env.DEV && (
-            <Route path="/recommendation-preview" element={<RecommendationPreviewPage />} />
-          )}
-
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </AuthProvider>
-    </BrowserRouter>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+          </ErrorBoundary>
+          </AddContextProvider>
+          </TalkProvider>
+        </SessionProvider>
+      </BrowserRouter>
+    </LocaleProvider>
   );
 }

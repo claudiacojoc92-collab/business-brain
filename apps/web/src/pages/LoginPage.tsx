@@ -1,25 +1,16 @@
 import React, { useState } from 'react';
-import { Navigate } from 'react-router-dom';
-import { requestMagicLink } from '../api/client';
+import { useNavigate } from 'react-router-dom';
+import { login as apiLogin, ApiError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import { AUTH_COPY } from '../copy/auth';
+import { LegalFooter } from '../legal/LegalPages';
 
-/**
- * Magic-link sign-in (S0-T2). Email only — no password. Submitting requests a link; the response is
- * ALWAYS a neutral "check your email" (the API never reveals whether an address exists). In dev the
- * API returns the link directly (devLink) so the flow is testable without a real mailbox — clicking it
- * hits GET /auth/verify, which sets the bb_session cookie and redirects home.
- */
 export function LoginPage() {
-  const { founderId, isLoading: authLoading } = useAuth();
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [devLink, setDevLink] = useState<string | null>(null);
-
-  // Already signed in → the connect surface is the authenticated landing (S1-T5b).
-  if (!authLoading && founderId) return <Navigate to="/connect" replace />;
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,13 +18,16 @@ export function LoginPage() {
     setIsLoading(true);
 
     try {
-      const res = await requestMagicLink(email);
-      setSent(true);
-      setDevLink(res.devLink ?? null); // dev convenience only; undefined in prod
-    } catch {
-      // Any non-2xx (incl. a 503 delivery failure) → one generic message. Never echo the server's
-      // error (no provider detail), never claim the email was sent, stay on the form to retry.
-      setError(AUTH_COPY.sendFailed);
+      const res = await apiLogin(email, password);
+      await login(res.access_token);
+      // AuthProvider will set founder; routing in App.tsx redirects appropriately
+      navigate('/', { replace: true });
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : 'Login failed. Check your credentials.',
+      );
     } finally {
       setIsLoading(false);
     }
@@ -59,89 +53,78 @@ export function LoginPage() {
         }}
       >
         <h1 style={{ fontFamily: 'var(--serif)', color: 'var(--ink)', fontSize: '1.75rem', fontWeight: 500, letterSpacing: '0.01em', marginBottom: 8 }}>
-          {AUTH_COPY.title}
+          Business Brain
         </h1>
 
-        {sent ? (
-          <>
-            <p style={{ color: 'var(--ink)', fontSize: '1rem', margin: 0 }}>
-              {AUTH_COPY.sentHeading}
-            </p>
-            <p style={{ color: 'var(--ink-3)', fontSize: '0.875rem', margin: 0 }}>
-              {AUTH_COPY.sentDetail(email)}
-            </p>
-            {devLink && (
-              <p style={{ color: 'var(--ink-3)', fontSize: '0.8125rem', margin: 0, wordBreak: 'break-all' }}>
-                {AUTH_COPY.devLinkLabel} <a href={devLink} style={{ color: 'var(--accent, #3b6)' }}>{devLink}</a>
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={() => { setSent(false); setDevLink(null); }}
-              style={{
-                background: 'transparent',
-                border: '1px solid var(--line-2)',
-                borderRadius: 10,
-                color: 'var(--ink-3)',
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                fontSize: '0.875rem',
-                padding: '10px',
-              }}
-            >
-              {AUTH_COPY.useDifferentEmail}
-            </button>
-          </>
-        ) : (
-          <>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <label htmlFor="email" style={{ color: 'var(--ink-3)', fontSize: '0.875rem' }}>{AUTH_COPY.emailLabel}</label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                style={{
-                  background: 'var(--surface)',
-                  border: '1px solid var(--line-2)',
-                  borderRadius: 10,
-                  color: 'var(--ink)',
-                  fontSize: '1rem',
-                  padding: '12px 14px',
-                  outline: 'none',
-                  fontFamily: 'inherit',
-                }}
-              />
-            </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <label htmlFor="email" style={{ color: 'var(--ink-3)', fontSize: '0.875rem' }}>Email</label>
+          <input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+            style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--line-2)',
+              borderRadius: 10,
+              color: 'var(--ink)',
+              fontSize: '1rem',
+              padding: '12px 14px',
+              outline: 'none',
+              fontFamily: 'inherit',
+            }}
+          />
+        </div>
 
-            {error && (
-              <p style={{ color: 'var(--warn-ink)', fontSize: '0.875rem', margin: 0 }}>{error}</p>
-            )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <label htmlFor="password" style={{ color: 'var(--ink-3)', fontSize: '0.875rem' }}>Password</label>
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+            style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--line-2)',
+              borderRadius: 10,
+              color: 'var(--ink)',
+              fontSize: '1rem',
+              padding: '12px 14px',
+              outline: 'none',
+              fontFamily: 'inherit',
+            }}
+          />
+        </div>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              style={{
-                background: 'var(--ink)',
-                opacity: isLoading ? 0.4 : 1,
-                border: 'none',
-                borderRadius: 10,
-                color: 'var(--paper)',
-                cursor: isLoading ? 'not-allowed' : 'pointer',
-                fontFamily: 'inherit',
-                fontWeight: 500,
-                fontSize: '0.9375rem',
-                padding: '12px',
-                transition: 'opacity 150ms, transform 140ms',
-              }}
-            >
-              {isLoading ? AUTH_COPY.submitting : AUTH_COPY.submit}
-            </button>
-          </>
+        {error && (
+          <p style={{ color: 'var(--warn-ink)', fontSize: '0.875rem', margin: 0 }}>{error}</p>
         )}
+
+        <button
+          type="submit"
+          disabled={isLoading}
+          style={{
+            background: 'var(--ink)',
+            opacity: isLoading ? 0.4 : 1,
+            border: 'none',
+            borderRadius: 10,
+            color: 'var(--paper)',
+            cursor: isLoading ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit',
+            fontWeight: 500,
+            fontSize: '0.9375rem',
+            padding: '12px',
+            transition: 'opacity 150ms, transform 140ms',
+          }}
+        >
+          {isLoading ? 'Signing in…' : 'Sign in'}
+        </button>
       </form>
+      <LegalFooter />
     </div>
   );
 }

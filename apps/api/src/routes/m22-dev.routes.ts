@@ -3,6 +3,7 @@ import multipart from '@fastify/multipart';
 import { createKyselyClient, PgEvidenceRepository } from '@bb/infrastructure';
 import { runUploadMagicMoment } from '../business-model/upload-magic-moment.service';
 import { detectType, MAX_BYTES } from '../connectors/upload/detect';
+import { DEV_FOUNDER_ID } from '../connectors/website/dev-founder';
 import { sseFrame } from './sse';
 
 /**
@@ -31,7 +32,6 @@ export async function registerM22DevRoutes(server: FastifyInstance): Promise<voi
   const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';
 
   server.post('/dev/m22/upload', async (request, reply) => {
-    const founderId = request.founderId; // resolved at the boundary by requireFounder (session-scoped)
     let filename = 'upload';
     let bytes: Buffer;
     try {
@@ -54,11 +54,11 @@ export async function registerM22DevRoutes(server: FastifyInstance): Promise<voi
     const send = (event: string, data: unknown) => reply.raw.write(sseFrame(event, data)); // escapes U+2028/U+2029 (defense-in-depth)
     try {
       // Fresh upload each time; website evidence (if any) is PRESERVED for cross-source fusion.
-      await repo.deleteBySource(founderId, 'upload');
-      await repo.deleteBySource(founderId, 'business-model');
+      await repo.deleteBySource(DEV_FOUNDER_ID, 'upload');
+      await repo.deleteBySource(DEV_FOUNDER_ID, 'business-model');
       const result = await runUploadMagicMoment({
-        founderId,
-        input: { founderId, filename, bytes },
+        founderId: DEV_FOUNDER_ID,
+        input: { founderId: DEV_FOUNDER_ID, filename, bytes },
         repo, anthropicApiKey: apiKey,
         onProgress: (e) => send('reading', e),
         onFirstReflection: (b) => send('observed', b),

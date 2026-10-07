@@ -18,7 +18,8 @@
   },
   "dependencies": {
     "@bb/shared": "*",
-    "@bb/domain": "*"
+    "@bb/domain": "*",
+    "@bb/understanding-mechanics": "*"
   },
   "devDependencies": {
     "typescript": "^5.4.0",

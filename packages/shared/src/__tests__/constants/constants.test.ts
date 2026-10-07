@@ -37,8 +37,11 @@ describe('Queue names', () => {
       expect(name).toMatch(/^bb-/);
     });
   });
-  it('there are exactly 7 queues', () => {
-    expect(Object.keys(C.QUEUES)).toHaveLength(7);
+  it('there are exactly 10 queues', () => {
+    expect(Object.keys(C.QUEUES)).toHaveLength(10);
+  });
+  it('MOVE_DRAFT queue name is correct (landing move, 2a18b6a)', () => {
+    expect(C.QUEUES.MOVE_DRAFT).toBe('bb-move-draft');
   });
   it('LLM_PIPELINE queue name is correct', () => {
     expect(C.QUEUES.LLM_PIPELINE).toBe('bb-llm-pipeline');

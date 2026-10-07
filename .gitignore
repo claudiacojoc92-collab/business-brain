@@ -25,8 +25,12 @@ logs/
 *.swp
 Thumbs.db
 
-# Claude Code local tool state (not project source)
-.claude/
+# Claude Code local tool state (not project source); team config is shared
+.claude/*
+!.claude/settings.json
+!.claude/skills/
+!.claude/agents/
+!.claude/hooks/
 
 # macOS/cloud-sync duplicate artifacts ("foo 2.ts"). Enumerated by extension (NOT a broad
 # "* 2.*") so a legitimately-named "step 2.md" is never silently swallowed.
@@ -38,3 +42,25 @@ Thumbs.db
 * 2.json
 * 2.md
 * 2.sql
+
+# Redis local dump artifact
+dump.rdb
+
+# PII / local-only (added for safety)
+database/seeds/*prod*.sql
+docker-compose.override.yml
+
+# Local git worktrees kept inside the repo
+.worktrees/
+
+# Claude Code per-user settings (explicit, so it stays ignored even if the blanket
+# `.claude/` rule above is narrowed to let a shared .claude/settings.json be tracked)
+.claude/settings.local*.json
+
+# Reel Studio (internal Hypit service): per-job projects and outputs + its ~175M install.
+# node_modules is already covered by the global rule above; listed explicitly here so the whole
+# Hypit install directory can never be accidentally committed from this non-workspace service.
+services/reel-studio/workspace/
+services/reel-studio/.tools/
+services/reel-studio/node_modules/
+tools/acceptance/out/

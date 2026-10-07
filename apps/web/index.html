@@ -3,18 +3,47 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Business Brain</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <!-- Type identity: Hanken Grotesk (body — the intended sans, previously not actually loaded) + Fraunces
+         (an editorial serif for headlines). NOTE: served from Google Fonts for now; production should self-host
+         (woff2) for perf/privacy. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,300..600&display=swap" />
+    <meta name="theme-color" content="#1b1916" />
+    <meta name="description" content="Business Brain learns your business, helps you commit to one marketing bet, and turns that decision into the next thing worth doing. No website required." />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Business Brain — decide what your marketing should do next" />
+    <meta property="og:description" content="Business Brain learns your business, helps you commit to one marketing bet, and turns that decision into the next thing worth doing. No website required." />
+    <title>Business Brain — decide what your marketing should do next</title>
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       html { font-size: 16px; }
-      /* Editorial Clarity base — warm paper, warm ink, sans chrome.
-         Literal fallbacks match --paper/--ink/--sans (tokens.css) so the first
-         paint is correct before the stylesheet loads. */
-      body { font-family: var(--sans, 'Inter', system-ui, sans-serif); background: var(--paper, #f7f4ee); color: var(--ink, #26221c); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+      /* Business Brain — Nocturne product identity is the default first paint
+         (matte warm charcoal, warm off-white, Hanken Grotesk). Legal/verify
+         surfaces paint their own scoped paper background over this. */
+      body { font-family: 'Hanken Grotesk', system-ui, -apple-system, sans-serif; background: #1b1916; color: #ece7dd; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
     </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <noscript>
+        <main style="max-width:720px;margin:0 auto;padding:40px 24px;line-height:1.6">
+          <h1>Decide what your marketing should do next. Then actually do that.</h1>
+          <p>Business Brain learns your business, helps you commit to one marketing bet, and keeps that
+            decision in front of the work — until it changes for a reason. A website is not required: if you
+            market through Instagram or can describe your business in your own words, you can still start.</p>
+          <p>It works in four steps: <strong>Business</strong> (it gets to know your business and shows what it
+            understands), <strong>Strategy</strong> (it helps you make one marketing choice and name the
+            trade-off), <strong>Today</strong> (it turns that decision into the next thing worth doing), and
+            <strong>Create</strong> (when a move is worth turning into an asset, it can make it).</p>
+          <p>What it doesn’t do yet: it doesn’t publish or schedule for you, doesn’t learn from your results
+            yet, has no trend engine, and doesn’t replace a marketing team.</p>
+          <p><a href="/signin">Start with your business</a></p>
+        </main>
+      </noscript>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

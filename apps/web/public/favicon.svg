@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Business Brain">
+  <!-- Nocturne identity: matte warm charcoal ground, warm off-white monogram,
+       one restrained clay node (clay = meaningful state/decision, never decoration). -->
+  <rect width="64" height="64" rx="15" fill="#1b1916"/>
+  <text x="30" y="45" text-anchor="middle"
+        font-family="'Hanken Grotesk', system-ui, -apple-system, Segoe UI, sans-serif"
+        font-size="42" font-weight="700" fill="#ece7dd">B</text>
+  <circle cx="48" cy="43" r="4.5" fill="#c17d4f"/>
+</svg>

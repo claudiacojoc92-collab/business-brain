@@ -11,10 +11,11 @@ module.exports = {
     sourceType: 'module',
     ecmaFeatures: { jsx: true },
   },
-  plugins: ['@typescript-eslint'],
+  plugins: ['@typescript-eslint', 'react-hooks'],
   extends: [
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',
+    'plugin:react-hooks/recommended',
   ],
   env: { browser: true, es2022: true },
   rules: {
@@ -22,6 +23,10 @@ module.exports = {
     '@typescript-eslint/explicit-module-boundary-types': 'off',
     '@typescript-eslint/no-non-null-assertion': 'off',
     'no-console': 'off',
+    // Mirror the backend convention: an underscore prefix marks a binding as deliberately unused. Adds
+    // varsIgnorePattern so the `const { x: _omit, ...rest } = obj` omit idiom is allowed (the backend only
+    // needed argsIgnorePattern; the web app has this destructure-and-drop case too).
+    '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
   },
   ignorePatterns: ['dist/', 'node_modules/', 'vite.config.ts', '*.cjs'],
 };

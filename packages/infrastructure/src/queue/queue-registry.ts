@@ -15,6 +15,29 @@ export interface LLMPipelineJobPayload extends BaseJobPayload {
   cycleNumber: number;
 }
 
+// Slice 7 — reel async execution. Business-scoped; the worker runs the heavy vision/render work.
+export interface ReelProcessJobPayload extends BaseJobPayload {
+  jobType: 'REEL_PROCESS';
+  businessId: string;
+  uploadSetId: string;
+  reelJobId: string;
+}
+export interface ReelRenderJobPayload extends BaseJobPayload {
+  jobType: 'REEL_RENDER';
+  businessId: string;
+  versionId: string;
+  reelJobId: string;
+}
+
+// Landing move — produce the draft off the request path (draft-on-surface). Deterministic jobId per
+// (business, action) dedupes repeated surface loads into one job.
+export interface MoveDraftJobPayload extends BaseJobPayload {
+  jobType: 'MOVE_DRAFT';
+  businessId: string;
+  actionId: string;
+  planVersionId: string;
+}
+
 export interface NotificationJobPayload extends BaseJobPayload {
   jobType: 'NOTIFICATION';
   notificationType: string;
@@ -56,6 +79,23 @@ export interface ContentDeliveryJobPayload extends BaseJobPayload {
  */
 export class QueueRegistry {
   constructor(private readonly queues: QueueMap) {}
+
+  async enqueueReelProcess(payload: ReelProcessJobPayload): Promise<void> {
+    const queue = this.queues[QUEUES.REEL_PROCESS];
+    if (!queue) throw new Error(`Queue ${QUEUES.REEL_PROCESS} not registered.`);
+    await queue.add(payload.jobType, payload, { jobId: payload.jobId, attempts: 2, backoff: { type: 'exponential', delay: 2000 } });
+  }
+  async enqueueReelRender(payload: ReelRenderJobPayload): Promise<void> {
+    const queue = this.queues[QUEUES.REEL_RENDER];
+    if (!queue) throw new Error(`Queue ${QUEUES.REEL_RENDER} not registered.`);
+    await queue.add(payload.jobType, payload, { jobId: payload.jobId, attempts: 2, backoff: { type: 'exponential', delay: 2000 } });
+  }
+  async enqueueMoveDraft(payload: MoveDraftJobPayload): Promise<void> {
+    const queue = this.queues[QUEUES.MOVE_DRAFT];
+    if (!queue) throw new Error(`Queue ${QUEUES.MOVE_DRAFT} not registered.`);
+    // Deterministic jobId ⇒ repeated surface loads collapse to one in-flight job.
+    await queue.add(payload.jobType, payload, { jobId: payload.jobId, attempts: 2, backoff: { type: 'exponential', delay: 2000 } });
+  }
 
   async enqueueLLMPipeline(payload: LLMPipelineJobPayload): Promise<void> {
     const queue = this.queues[QUEUES.LLM_PIPELINE];

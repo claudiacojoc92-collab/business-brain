@@ -2,10 +2,13 @@
   "files": [],
   "references": [
     { "path": "./packages/shared" },
+    { "path": "./packages/understanding-mechanics" },
     { "path": "./packages/domain" },
     { "path": "./packages/application" },
     { "path": "./packages/infrastructure" },
+    { "path": "./packages/composition" },
     { "path": "./apps/api" },
+    { "path": "./apps/workers" },
     { "path": "./apps/web" }
   ]
 }

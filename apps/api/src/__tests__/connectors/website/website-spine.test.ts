@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeUrl, isSameOrigin } from '../../../connectors/website/url';
-import { parseSitemapUrls, extractLinks, discoverKeyPages } from '../../../connectors/website/discovery';
-import { extractPage, classifyPageType, extractReadableText, extractBlocks } from '../../../connectors/website/extract';
-import { parseRobots, isAllowed } from '../../../connectors/website/fetcher';
+import { normalizeUrl, isSameOrigin } from '@bb/infrastructure';
+import { parseSitemapUrls, extractLinks, discoverKeyPages } from '@bb/infrastructure';
+import { extractPage, classifyPageType, extractReadableText, extractBlocks } from '@bb/infrastructure';
+import { parseRobots, isAllowed } from '@bb/infrastructure';
 
 describe('URL normalization', () => {
   it('adds https:// when scheme missing', () => {

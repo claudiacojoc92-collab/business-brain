@@ -1,0 +1,103 @@
+{
+  "businessRef": { "type": "business", "id": "biz_physio_movement_demo" },
+  "source": "instagram",
+  "bio": "Physiotherapy & movement clinic. We help you recover from injury and move without pain.",
+  "posts": [
+    {
+      "externalId": "p001",
+      "caption": "Tight hips after sitting all day? Here's a simple mobility drill to open them up. Save this one.",
+      "mediaType": "reel",
+      "occurredAt": "2025-01-06T09:00:00.000Z"
+    },
+    {
+      "externalId": "p002",
+      "caption": "Hamstring stretch demonstration. Hold each side for 30 seconds and breathe. Great before a walk.",
+      "mediaType": "video",
+      "occurredAt": "2025-01-09T09:00:00.000Z"
+    },
+    {
+      "externalId": "p003",
+      "caption": "Recovering from a knee injury? In physiotherapy sessions we rebuild strength step by step, safely.",
+      "mediaType": "carousel",
+      "occurredAt": "2025-01-13T09:00:00.000Z"
+    },
+    {
+      "externalId": "p004",
+      "caption": "Three shoulder mobility exercises to improve your range of motion. Learn the why behind each.",
+      "mediaType": "reel",
+      "occurredAt": "2025-01-16T09:00:00.000Z"
+    },
+    {
+      "externalId": "p005",
+      "caption": "Book a physio assessment to find the root cause of your back pain, not just the symptom.",
+      "mediaType": "image",
+      "occurredAt": "2025-01-20T09:00:00.000Z"
+    },
+    {
+      "externalId": "p006",
+      "caption": "A calm, yoga-inspired flow to wind down and gently mobilise the spine after a long day.",
+      "mediaType": "video",
+      "occurredAt": "2025-01-23T09:00:00.000Z"
+    },
+    {
+      "externalId": "p007",
+      "caption": "Rehabilitation tip: load the tissue gradually. Pain is information, not the enemy. Learn how.",
+      "mediaType": "carousel",
+      "occurredAt": "2025-01-27T09:00:00.000Z"
+    },
+    {
+      "externalId": "p008",
+      "caption": "Ankle stability drill after a sprain. Part of the rehab progression we use with clients.",
+      "mediaType": "reel",
+      "occurredAt": "2025-01-30T09:00:00.000Z"
+    },
+    {
+      "externalId": "p009",
+      "caption": "Our 8-week rehab program rebuilds strength and confidence after injury, one session at a time.",
+      "mediaType": "image",
+      "occurredAt": "2025-02-03T09:00:00.000Z"
+    },
+    {
+      "externalId": "p010",
+      "caption": "Desk-bound and stiff? This thoracic mobility stretch takes two minutes. If it helps, save it.",
+      "mediaType": "reel",
+      "occurredAt": "2025-02-06T09:00:00.000Z"
+    },
+    {
+      "externalId": "p011",
+      "caption": "Understanding your recovery: why range of motion matters more than pushing through pain.",
+      "mediaType": "carousel",
+      "occurredAt": "2025-02-10T09:00:00.000Z"
+    },
+    {
+      "externalId": "p012",
+      "caption": "Gentle mobility flow for lower back relief. Move slowly and stop before any sharp pain.",
+      "mediaType": "video",
+      "occurredAt": "2025-02-13T09:00:00.000Z"
+    },
+    {
+      "externalId": "p013",
+      "caption": "Prefer one-on-one guidance? 1:1 sessions let us tailor your rehabilitation to your body.",
+      "mediaType": "image",
+      "occurredAt": "2025-02-17T09:00:00.000Z"
+    },
+    {
+      "externalId": "p014",
+      "caption": "Post-run stretching routine to keep your legs mobile and reduce next-day stiffness.",
+      "mediaType": "reel",
+      "occurredAt": "2025-02-20T09:00:00.000Z"
+    },
+    {
+      "externalId": "p015",
+      "caption": "What happens in a physiotherapy session: assessment, hands-on work, and a movement plan you can follow.",
+      "mediaType": "carousel",
+      "occurredAt": "2025-02-24T09:00:00.000Z"
+    },
+    {
+      "externalId": "p016",
+      "caption": "Neck tension from screens? Try this mobility exercise. Small, consistent movement beats none.",
+      "mediaType": "reel",
+      "occurredAt": "2025-02-27T09:00:00.000Z"
+    }
+  ]
+}

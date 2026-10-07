@@ -13,6 +13,7 @@
   "dependencies": {
     "@bb/application": "*",
     "@bb/business-model-engine": "*",
+    "@bb/composition": "*",
     "@bb/domain": "*",
     "@bb/infrastructure": "*",
     "@bb/shared": "*",

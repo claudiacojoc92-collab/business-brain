@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Inter:wght@400;450;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap');
 /* ─────────────────────────────────────────────────────────────────────────────
    Editorial Clarity — design tokens
    Source of truth: the approved prototype apps/web/design/act-one-editorial.html
@@ -25,8 +25,10 @@
   --gold:#b07d33;         /* restrained accent — decisions/state/the one action only */
   --gold-soft:#c79a55;
   --gold-bg:rgba(176,125,51,.08);
-  --serif:'Newsreader',Georgia,serif;
-  --sans:'Inter',system-ui,sans-serif;
+  /* Single product typeface — Hanken Grotesk. Legal/verify keep the paper palette
+     but share the one family (hierarchy comes from weight/scale, not a serif). */
+  --serif:'Hanken Grotesk',system-ui,-apple-system,sans-serif;
+  --sans:'Hanken Grotesk',system-ui,-apple-system,sans-serif;
 
   /* surfaces + soft shadow (from prototype .draft) */
   --surface:#fffdf9;

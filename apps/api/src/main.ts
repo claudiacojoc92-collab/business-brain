@@ -1,8 +1,8 @@
 import { createServer } from './server';
+import { buildCompositionRoot } from '@bb/composition';
 import { createKyselyClient } from '@bb/infrastructure';
 import { createRedisClient } from '@bb/infrastructure';
-import { createLogger } from '@bb/infrastructure';
-import { selectEmailService } from './session/email.compose';
+import { createLogger, createQueues, QueueRegistry } from '@bb/infrastructure';
 
 const logger = createLogger({ service: 'bb-api' });
 
@@ -15,20 +15,30 @@ async function main(): Promise<void> {
 
   const db    = createKyselyClient(databaseUrl);
   const redis = createRedisClient(redisUrl);
+  const reelQueue = new QueueRegistry(createQueues(redis)); // Slice 7 — enqueue reel process/render jobs to BullMQ
 
-  // EMAIL-1: choose the magic-link adapter here (the composition root). In production this FAILS FAST if
-  // Resend config is missing/invalid — a silent "sends nothing" login dead-end is worse than a loud boot
-  // failure. Safe location: no test imports main.ts, so this cannot trip the prod route-registration tests.
-  const email = selectEmailService(logger);
+  const {
+    commandBus, queryBus, jwtService, passwordService, businessService, founderAccountService,
+    learnBusinessService, discoveredProfileRepo, understandingRepo, ahaRepo, contentLanguageStore,
+    conversationService, businessCorrectionService, aha2Service, strategyService, impactService, mirrorService, arcService, voiceService, planService, carouselService,
+    photoLedService, photoLedRepo, reelService, reelObjectStore, reelRepo, reelShootService, reelShootRepo,
+    moveDraftService, moveDraftRepo, produceLandingMove,
+    reachService,
+  } = buildCompositionRoot(db);
 
-  // Auth is the self-serve magic-link session; each route module builds its own deps.
-  const server = await createServer({ db, redis, logger, email });
+  const server = await createServer({
+    db, redis, logger,
+    commandBus, queryBus, jwtService, passwordService,
+    businessService, founderAccountService,
+    learnBusinessService, discoveredProfileRepo, understandingRepo, ahaRepo, contentLanguageStore,
+    conversationService, businessCorrectionService, aha2Service, strategyService, impactService, mirrorService, arcService, voiceService, planService, carouselService,
+    photoLedService, photoLedRepo, reelService, reelObjectStore, reelRepo, reelQueue, reelShootService, reelShootRepo,
+    moveDraftService, moveDraftRepo, produceLandingMove, moveDraftQueue: reelQueue,
+    reachService,
+  });
 
   const port = parseInt(process.env['PORT'] ?? '3000', 10);
-  // T5 (PROD-1): Railway's private network is IPv6-only, so a service bound to 0.0.0.0 is unreachable at
-  // <svc>.railway.internal. In production bind '::' (dual-stack — verified to also accept IPv4-mapped), so
-  // a missing HOST var can't silently make the api unreachable. Dev/local keeps 0.0.0.0 (compose unchanged).
-  const host = process.env['HOST'] ?? (process.env['NODE_ENV'] === 'production' ? '::' : '0.0.0.0');
+  const host = process.env['HOST'] ?? '0.0.0.0';
 
   await server.listen({ port, host });
   logger.info({ port, host }, 'API server started');

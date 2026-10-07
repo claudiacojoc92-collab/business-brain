@@ -1,0 +1,892 @@
+/**
+ * Slice 6 — Carousel service. CreateHandoff → governed asset-level copy → structured slides → deterministic
+ * render → structural + claim gates → bounded repair / fail-closed → immutable AssetVersion → scoped,
+ * non-destructive revision → export (PNG slides + ZIP). Governance reuses the frozen Voice proposition system;
+ * this service adds NO new claim authority. Channel/format is resolved explicitly; unsupported → unavailable.
+ */
+import { createHash } from 'node:crypto';
+import { generateId, ValidationError } from '@bb/shared';
+import type { CreateHandoff } from '../plan/contracts';
+import type { PropositionJudge } from '../voice/proposition-safety';
+import type {
+  ICarouselRepository, ICarouselModelPort, IRenderPort, IBlobStore, CarouselContextView,
+  CarouselBrief, CarouselAssetVersion, CarouselAsset, AssetAuthorizationSnapshot, RenderVersion, RevisionScope,
+  Slide, CanvasSpec, RenderedSlide, GateFinding, GateReport, Concept, VisualSystem, CarouselSafetyTrace, CarouselSafetyTraceCore, CarouselSafetyDisposition,
+  CarouselSourceRef, ReuseRight, SourceType, CarouselCopyDraft, GenerationMode, TextBlock, RepairTarget, RepairedBlock, TargetedRepairTrace, BrandContext, MediaPlanItem,
+} from './contracts';
+import { validateCarouselCopy } from './carousel-quality';
+import { validateCarouselClaimSafety } from './carousel-safety';
+import { validateClosure } from './closure';
+import { checkFeasibility, bindBeats, assessConcept, assessClosureFeasibility, assessAngle, type EvidenceRequest } from './feasibility';
+import { computeCopyBudgets } from './copy-budget';
+import { validateExtractiveBindings, validateScopePreservation } from './extractive';
+import { structuralVisualGates } from './visual-gates';
+import { composeSlides, reviseSlideCopy, attachHookMedia, attachPlannedMedia, redistributeMinimalMedia } from './compose';
+import { visualSystemFor, planLayouts, alternateVisualSystem } from './visual-system';
+import { chromeReservedBoxes, planePlacementMode, imageAspectFromPng, sliceBox } from './placement';
+
+/** The proposition-preservation judge (Layer 3), shared with Voice, plus its resolved identity. */
+export interface CarouselJudgePort {
+  check?: PropositionJudge;
+  contract?: () => { modelId: string; promptHash: string };
+}
+
+// Stage 2 D — two governed draft rolls, then the deterministic strip. Model drafting is stochastic; a third and
+// fourth roll bought little over the strip and cost latency, so the cap is 2 and the strip is the convergence tail.
+const MAX_CAROUSEL_ATTEMPTS = 2;
+// M5.7: bounded iterative repair rounds for the extractive constrained fallback (each round re-gates against
+// the frozen kernel; only a fully-clean carousel persists). Iterating strips residual unlicensed clauses the
+// single-pass repair could not — a convergence aid, never a safety relaxation.
+const MAX_CONSTRAINED_REPAIR_ROUNDS = 3;
+// Stage 2 Part 3 — the deterministic strip re-gates against the frozen N=3 judge, which can surface DIFFERENT clauses
+// on different passes; a single strip round cannot converge. Up to 3 strip→re-gate rounds (pure deletion, no model)
+// let it settle. Each round removes ≥1 located clause, so it is strictly bounded.
+const MAX_STRIP_ROUNDS = 3;
+const CANVAS: CanvasSpec = { width: 1080, height: 1350, margin: 96, minFontPx: 28 };
+const SUPPORTED_FORMAT = 'image_carousel';
+
+/** Everything the gate/persist/repair helpers need for one generation (assembled once in generate()). */
+interface GenerateShared { assetId: string; businessId: string; createHandoffId: string; brief: CarouselBrief; snapshot: AssetAuthorizationSnapshot; concept: Concept; ctx: CarouselContextView; system: VisualSystem; mediaPlan: MediaPlanItem[] | null; angleNote?: string | null }
+/** A gated (not-yet-persisted) candidate — enough to persist as-is or to plan a targeted repair. */
+interface GateOutcome { version: CarouselAssetVersion; rendered: RenderedSlide[]; visReport: GateReport; copyReport: GateReport; safetyCore: CarouselSafetyTraceCore; antiTemplateFail: string | null; blockingFindings: GateFinding[]; clean: boolean }
+const shaShort = (t: string): string => createHash('sha256').update(t, 'utf8').digest('hex').slice(0, 16);
+const normText = (t: string): string => t.toLowerCase().replace(/\s+/g, ' ').trim();
+
+// Stage 2 A — deterministic clause deletion (no model). Split a block into sentence/line segments and DROP every
+// segment that contains (or is contained by) any flagged clause, normalized. Pure deletion, never a rewrite; the
+// removed segments are recorded. A block with no sentence boundary is one segment: if it matches, the whole block
+// is emptied (caller then drops the block, and the slide if it empties). Conservative by construction — it may
+// remove an adjacent licensed clause sharing a sentence with an unlicensed one, but it can never RETAIN unlicensed
+// meaning, and the re-gate below is the final arbiter.
+function stripSegments(text: string, clauses: string[], removed: string[]): string {
+  const segments = text.split(/(?<=[.!?])\s+|\n+/).map((x) => x.trim()).filter(Boolean);
+  const kept: string[] = [];
+  for (const seg of segments) {
+    const nSeg = normText(seg);
+    const hit = clauses.some((cl) => { const nCl = normText(cl); return nCl.length > 0 && (nSeg.includes(nCl) || nCl.includes(nSeg)); });
+    if (hit) removed.push(seg); else kept.push(seg);
+  }
+  return kept.join(' ');
+}
+
+// M5.6 — strategy-drift guard for an adapted EXECUTION ANGLE. Create may change HOW we communicate but never the
+// WHAT (the strategic move). A crude but honest proxy: the adapted angle must still share vocabulary with the
+// strategic bet / founder goal / audience / original job. An angle that drifts to a different objective (e.g.
+// "build brand awareness" over a "reduce switching hesitation" bet) shares no content tokens and is rejected.
+// This is a coarse gross-drift catch only; the anti-template / genericity / anti-transplant gates downstream do
+// the fine-grained fidelity work. Lenient by design (≥1 shared token) so valid factual reframes are not blocked.
+const ANGLE_STOP = new Set(['the','and','for','with','that','this','your','you','from','into','about','their','make','more','than','what','when','where','which','have','they','them','will','content','carousel','marketing','audience','customers','business','post','posts','social','media']);
+const angleTokens = (s: string): Set<string> => new Set((s.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter((w) => !ANGLE_STOP.has(w)));
+function onStrategy(angle: string, brief: CarouselBrief): boolean {
+  const strat = new Set<string>();
+  for (const src of [brief.strategicBetTrace, brief.founderGoalTrace, brief.communicationJob, brief.audienceUseContext]) {
+    for (const w of angleTokens(src ?? '')) strat.add(w);
+  }
+  for (const w of angleTokens(angle)) if (strat.has(w)) return true;
+  return false;
+}
+
+export interface CarouselDeps {
+  readonly repo: ICarouselRepository;
+  readonly model: ICarouselModelPort;
+  readonly render: IRenderPort;
+  readonly blob: IBlobStore;
+  /** Frozen Layer-3 proposition-preservation judge (shared with Voice). Absent ⇒ deterministic-only safety. */
+  readonly judge?: CarouselJudgePort;
+  readonly handoff: (businessId: string, createHandoffId: string) => Promise<CreateHandoff | null>;
+  readonly context: (businessId: string) => Promise<CarouselContextView | null>;
+  /** Slice 6.1 (additive, opt-in): the photo-led media PLAN for this handoff, or null for the plan path. Null ⇒
+   * byte-identical frozen Slice-6 media behavior. Advisory only — the frozen rights gate still disposes. */
+  readonly mediaPlan?: (businessId: string, createHandoffId: string) => Promise<MediaPlanItem[] | null>;
+  readonly businessName: (businessId: string) => Promise<string>;
+  readonly clock?: () => string;
+  readonly log?: (e: { type: string; detail?: string }) => void;
+}
+
+const combineReports = (a: GateReport, b: GateReport): GateReport => ({ valid: a.valid && b.valid, findings: [...a.findings, ...b.findings] });
+
+export type GenerateResult =
+  | { status: 'created'; asset: CarouselAsset; version: CarouselAssetVersion; render: RenderVersion; angleNote?: string }
+  | { status: 'needs_evidence'; requests: EvidenceRequest[] }
+  | { status: 'unavailable_format'; requested: string }
+  | { status: 'no_strategy' }
+  | { status: 'insufficient' };
+
+const findingsToReasons = (fs: GateFinding[]): string[] => fs.map((f) => `${f.code}${f.slideId ? '@' + f.slideId.slice(-4) : ''}: ${f.detail}`);
+
+/** Amendment 3 — classify a blocking finding into a forbidden-class bucket for compliance instrumentation. */
+function blockClassTally(findings: GateFinding[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const f of findings) {
+    let cls: string;
+    if (f.code === 'block_unauthorized_proposition') { const m = /LAYER1\s+([a-z/ _-]+?)\s+"/i.exec(f.detail ?? ''); cls = 'layer1:' + (m && m[1] ? m[1].trim() : 'unknown'); }
+    else if (f.code === 'block_new_proposition') cls = 'new_proposition(semantic)';
+    else if (f.code === 'asset_composition_proposition') cls = 'asset_composition';
+    else if (f.code === 'text_overflow' || f.code === 'outside_safe_margins') cls = 'layout';
+    else cls = f.code;
+    out[cls] = (out[cls] ?? 0) + 1;
+  }
+  return out;
+}
+
+export class CarouselService {
+  constructor(private readonly deps: CarouselDeps) {}
+  private now(): string { return this.deps.clock ? this.deps.clock() : new Date(2026, 0, 1).toISOString(); }
+
+  /** Channel/format resolution: only the image carousel is supported this slice. Unspecified is allowed. */
+  private resolveFormat(handoff: CreateHandoff): { ok: true } | { ok: false; requested: string } {
+    const req = (handoff.requestedAssetFormat ?? '').toLowerCase().trim();
+    if (!req || req === SUPPORTED_FORMAT || /carousel/.test(req)) return { ok: true };
+    return { ok: false, requested: handoff.requestedAssetFormat ?? '' };
+  }
+
+  private buildBrief(handoff: CreateHandoff, ctx: CarouselContextView): CarouselBrief {
+    return {
+      createHandoffId: handoff.createHandoffId, planVersionId: handoff.planVersionId, strategyVersionId: ctx.strategyVersionId,
+      founderGoalTrace: handoff.founderGoalTrace, strategicBetTrace: handoff.strategicBetTrace,
+      communicationJob: handoff.communicationJob ?? handoff.executionObjective, audienceUseContext: handoff.authorizedAudienceUseContext,
+      ctaDirection: handoff.ctaDirection ?? ctx.ctaDirection, channel: handoff.channel, requestedAssetFormat: SUPPORTED_FORMAT, language: ctx.language || 'en',
+    };
+  }
+
+  private buildSnapshot(businessId: string, handoff: CreateHandoff, ctx: CarouselContextView, brief: CarouselBrief): AssetAuthorizationSnapshot {
+    const d = this.deps.model.descriptor?.();
+    const judge = this.deps.judge?.contract?.();
+    return {
+      snapshotId: generateId(), businessId, createHandoffId: handoff.createHandoffId, strategyVersionId: ctx.strategyVersionId,
+      language: brief.language, speakingRole: ctx.speakingRole, audienceUseContext: brief.audienceUseContext,
+      licensedPropositions: ctx.licensedPropositions, proofFacts: ctx.proofFacts, proofKinds: ctx.proofKinds ?? [], ctaFunction: brief.ctaDirection,
+      ownedStances: ctx.ownedStances ?? [], sourceRefs: ctx.sourceRefs,
+      modelId: d?.modelId ?? judge?.modelId ?? null, safetyContractHash: judge?.promptHash ?? d?.copyContractHash ?? null, producedAt: this.now(),
+    };
+  }
+
+  /** Run the frozen-kernel claim safety (block + full-asset) for a composed carousel. */
+  private async claimSafety(slides: Slide[], snapshot: AssetAuthorizationSnapshot, communicationJob: string): Promise<{ report: GateReport; core: CarouselSafetyTraceCore }> {
+    const { findings, trace } = await validateCarouselClaimSafety(slides, snapshot, communicationJob, this.deps.judge?.check, this.deps.judge?.contract?.() ?? null);
+    return { report: { valid: findings.length === 0, findings }, core: trace };
+  }
+
+  private async persistTrace(businessId: string, assetId: string, versionId: string | null, attempt: number, core: CarouselSafetyTraceCore, repairReasons: string[], disposition: CarouselSafetyDisposition, generationMode: GenerationMode = 'normal', fallbackBindingsHash: string | null = null, targetedRepair: TargetedRepairTrace | null = null): Promise<void> {
+    const trace: CarouselSafetyTrace = { ...core, traceId: generateId(), businessId, assetId, versionId, attempt, repairReasons, disposition, generationMode, fallbackBindingsHash, targetedRepair, producedAt: this.now() };
+    try { await this.deps.repo.saveSafetyTrace(trace); } catch (e) { this.deps.log?.({ type: 'carousel_trace_persist_failed', detail: String(e) }); }
+  }
+
+  private composeVersion(assetId: string, businessId: string, versionNumber: number, brief: CarouselBrief, concept: Concept, slides: Slide[], ctx: CarouselContextView, snapshotId: string, visualSystem: VisualSystem): CarouselAssetVersion {
+    const versionId = generateId();
+    const base = {
+      versionId, assetId, versionNumber, businessId, brief, concept, slides, visualSystem,
+      brandContextVersion: ctx.brand.brandContextVersion, languageContext: brief.language,
+      authorizationSnapshotId: snapshotId, sourceManifest: ctx.sourceRefs, producedAt: this.now(),
+    };
+    return { ...base, contentHash: createHash('sha256').update(JSON.stringify(base), 'utf8').digest('hex') };
+  }
+
+  private async renderAndGate(version: CarouselAssetVersion, advisories: GateFinding[] = []): Promise<{ rendered: RenderedSlide[]; report: ReturnType<typeof structuralVisualGates> }> {
+    const media = await this.loadMedia(version);
+    const rendered = await this.deps.render.render({ canvasSpec: CANVAS, visualSystem: version.visualSystem, slides: version.slides, media });
+    const report = structuralVisualGates(rendered, version.slides, CANVAS);
+    // HARD structural gates decide validity; visual RHYTHM advisories are attached for review, never blocking.
+    return { rendered, report: { valid: report.valid, findings: [...report.findings, ...advisories] } };
+  }
+
+  /** Load bytes for every image slot from the blob store. Only media-eligible sources have a slot (compose),
+   * so reference_only material can never reach the renderer here. */
+  private async loadMedia(version: CarouselAssetVersion): Promise<Record<string, Buffer>> {
+    const wanted = new Set<string>();
+    for (const s of version.slides) for (const m of s.mediaSlots) if (m.kind === 'image' && m.sourceRefId) wanted.add(m.sourceRefId);
+    if (!wanted.size) return {};
+    const media: Record<string, Buffer> = {};
+    for (const rid of wanted) {
+      const src = version.sourceManifest.find((x) => x.sourceRefId === rid);
+      if (!src?.mediaRef) continue;
+      const bytes = await this.deps.blob.get(src.mediaRef);
+      if (bytes) media[rid] = bytes;
+    }
+    return media;
+  }
+
+  private async persistRender(version: CarouselAssetVersion, rendered: RenderedSlide[], report: ReturnType<typeof structuralVisualGates>): Promise<RenderVersion> {
+    const slideImages = [];
+    for (const r of rendered) {
+      const key = `carousel/${version.businessId}/${version.versionId}/slide-${String(r.order + 1).padStart(2, '0')}.png`;
+      await this.deps.blob.put(key, r.png);
+      slideImages.push({ slideId: r.slideId, order: r.order, blobKey: key, widthPx: r.widthPx, heightPx: r.heightPx });
+    }
+    const rv: RenderVersion = { renderId: generateId(), versionId: version.versionId, rendererVersion: this.deps.render.rendererVersion(), canvasSpec: CANVAS, slideImages, exportZipKey: null, gateReport: { valid: report.valid, findings: report.findings }, producedAt: this.now() };
+    await this.deps.repo.saveRender(rv);
+    return rv;
+  }
+
+  /**
+   * BRAND ADAPTATION (§6–§9) — re-render an already-governed communication under a DIFFERENT BrandContext with
+   * NO copy generation. The immutable copy (slides / text blocks / meaning bindings / concept / authorization
+   * snapshot / Voice provenance) is reused verbatim from the source version; only the VisualSystem (brand tokens
+   * over the FROZEN canonical geometry) and the render change. Re-runs ONLY the deterministic STRUCTURAL render
+   * gates (contrast / overflow / glyph fit / crop) because colours/fonts/media can affect fit — never the
+   * proposition-safety kernel: claim authorization stays tied to the source's immutable snapshot. No LLM call.
+   */
+  async renderUnderBrand(businessId: string, versionId: string, brand: BrandContext): Promise<{ status: 'rendered'; version: CarouselAssetVersion; render: RenderVersion; gatesValid: boolean } | { status: 'not_found' }> {
+    const source = await this.deps.repo.getVersion(businessId, versionId);
+    if (!source) return { status: 'not_found' };
+    const system: VisualSystem = { ...visualSystemFor(brand), footer: source.visualSystem.footer };
+    const rebrandCtx = { brand, sourceRefs: source.sourceManifest } as unknown as CarouselContextView;
+    const version = this.composeVersion(source.assetId, businessId, source.versionNumber, source.brief, source.concept, source.slides, rebrandCtx, source.authorizationSnapshotId, system);
+    const { rendered, report } = await this.renderAndGate(version); // structural visual gates ONLY — no claim safety
+    await this.deps.repo.saveVersion(version);
+    const rv = await this.persistRender(version, rendered, report);
+    return { status: 'rendered', version, render: rv, gatesValid: report.valid };
+  }
+
+  /** Generate the first carousel from an eligible CreateHandoff. */
+  async generate(businessId: string, createHandoffId: string): Promise<GenerateResult> {
+    const handoff = await this.deps.handoff(businessId, createHandoffId);
+    if (!handoff) throw new ValidationError('CREATE_HANDOFF_NOT_FOUND', 'No such create handoff.');
+    const fmt = this.resolveFormat(handoff);
+    if (!fmt.ok) return { status: 'unavailable_format', requested: fmt.requested };
+    const ctx = await this.deps.context(businessId);
+    if (!ctx) return { status: 'no_strategy' };
+
+    const origBrief = this.buildBrief(handoff, ctx);
+    const snapshot = this.buildSnapshot(businessId, handoff, ctx, origBrief);
+    await this.deps.repo.saveAuthorizationSnapshot(snapshot);
+
+    let concept: Concept;
+    try { concept = await this.deps.model.chooseConcept({ brief: origBrief, snapshot }); }
+    catch { this.deps.log?.({ type: 'carousel_concept_threw' }); return { status: 'insufficient' }; }
+    if (concept.slideOutline.length < 3 || concept.slideOutline.length > 8) return { status: 'insufficient' };
+    // DECISION 2 — CLAIM-TYPE ANGLE GATE (upstream of generation). Does the authority set license the claim TYPES
+    // the intended angle needs? If not, re-angle to a licensable angle (and tell the founder why, plainly); if
+    // NOTHING substantive is licensable, return needs_evidence rather than drafting an unwritable premise.
+    const angle = assessAngle(concept, snapshot);
+    this.deps.log?.({ type: 'carousel_angle_gate', detail: JSON.stringify({ intended: angle.intendedFamily, intendedTypes: angle.intendedTypes, licensable: angle.licensable, decision: angle.decision, chosen: angle.chosenFamily, betSupported: angle.strategyBetSupported }) });
+    if (angle.decision === 'needs_evidence') { this.deps.log?.({ type: 'carousel_needs_evidence', detail: angle.requests.map((r) => r.claim).join(',') }); return { status: 'needs_evidence', requests: angle.requests }; }
+    // Re-family only on an explicit re-angle; the founder note is set whenever it exists (a re-angle, OR a writable
+    // descriptive family whose strategy bet still can't be told — both cases drop the bet from the copy brief below).
+    const angleNote: string | null = angle.founderNote;
+    if (angle.decision === 'reangled' && angle.chosenFamily) { concept = { ...concept, internalFamily: angle.chosenFamily }; }
+    // CONCEPT ↔ MATERIAL FEASIBILITY (§1) — a concept may not out-promise the authorized meaning. A decomposition
+    // family with no material to decompose is DOWNGRADED to the smallest supported family (no invented causes),
+    // so no later stage (or the anti-template judge) is told to expect a breakdown that cannot be grounded.
+    const assessed = assessConcept(concept, snapshot);
+    if (assessed.downgraded) this.deps.log?.({ type: 'carousel_concept_downgraded', detail: assessed.reason ?? '' });
+    concept = assessed.concept;
+    // MATERIAL FEASIBILITY — bind each beat to authorized meaning; contract the outline to grounded beats or
+    // reject BEFORE any copy generation (no manufacturing a carousel from thin material).
+    const feas = checkFeasibility(concept.slideOutline, snapshot);
+    if (!feas.feasible) {
+      this.deps.log?.({ type: 'carousel_infeasible', detail: feas.reasons.slice(0, 3).join(' | ') });
+      // Pre-draft gate (unchanged): instead of a dead "insufficient", name the specific missing evidence the
+      // founder can supply so the surface can ask for it. This only re-surfaces the gate's own verdict.
+      const requests: EvidenceRequest[] = feas.missing === 'cta'
+        ? [{ claim: 'descriptive', ask: 'What do you want people to do after seeing this — book, visit, message, or buy? Name the one next step.' }]
+        : [{ claim: 'descriptive', ask: 'Tell me one concrete thing about your offer — what it is, who it is for, or one result it produced.' }];
+      return { status: 'needs_evidence', requests };
+    }
+    concept = { ...concept, slideOutline: feas.outline };
+    // CLOSURE FEASIBILITY (pre-draft) — can the planned body causally EARN the authorized CTA? INFEASIBLE ⇒ fail
+    // early (no 5 stochastic drafts, no invented bridge, CTA never softened). CONTRACT ⇒ add the smallest bridge
+    // beat so the body develops the CTA action before the CTA. This is where a non-proof job that cannot close is
+    // caught upstream, instead of exhausting attempts + a doomed CTA-only repair.
+    const clo = assessClosureFeasibility(concept.slideOutline, snapshot);
+    if (clo.status === 'infeasible') {
+      this.deps.log?.({ type: 'carousel_closure_infeasible', detail: clo.reason });
+      // The body can't earn the CTA from authorized material. Ask for the bridge the founder can supply (what the
+      // next step delivers / how it works) rather than failing closed silently. CTA is never softened; gate intact.
+      return { status: 'needs_evidence', requests: [{ claim: 'descriptive', ask: 'What does someone actually get when they take that next step — a result, or how it works? One concrete line, so the carousel can earn the ask.' }] };
+    }
+    if (clo.status === 'contract') { this.deps.log?.({ type: 'carousel_closure_contracted', detail: clo.reason }); concept = { ...concept, slideOutline: clo.outline }; }
+    const businessName = await this.deps.businessName(businessId).catch(() => null);
+    const system: VisualSystem = { ...visualSystemFor(ctx.brand), footer: businessName };
+    // Slice 6.1 (additive): the photo-led media plan for this handoff, or null (plan path ⇒ frozen behavior).
+    const mediaPlan = this.deps.mediaPlan ? await this.deps.mediaPlan(businessId, createHandoffId).catch(() => null) : null;
+    if (mediaPlan?.length) this.deps.log?.({ type: 'carousel_media_plan', detail: `${mediaPlan.length} planned` });
+
+    // M5.6 — SAFE EXECUTION-ANGLE ADAPTATION (pre-copy). The concept downgrade above is the signal that the
+    // original Strategy/Today job out-promised the authorized material. Keep the strategic objective but reframe
+    // the EXECUTION ANGLE to one the material can support, BEFORE spending draft/repair attempts on an impossible
+    // premise. Strategy stays immutable (bet/goal/audience unchanged); a materially-drifting angle is rejected
+    // (fail-closed), never used; the proposition-safety gate still runs on the resulting copy unchanged.
+    let brief = origBrief;
+    // OPTION C — when the claim-type angle gate re-angled (or the material downgrade fired), the copy model must be
+    // briefed to write the CHOSEN, licensable angle — not the intended bet it cannot support. Reuse the M5.6
+    // adaptAngle precedent to rewrite the copy-facing communicationJob; the persisted brief keeps strategyVersionId
+    // (durable trace) + adaptedFrom (the original job), so the asset is still traceably derived from the strategy.
+    if ((assessed.downgraded || angle.decision === 'reangled' || !angle.strategyBetSupported) && this.deps.model.adaptAngle) {
+      try {
+        const a = await this.deps.model.adaptAngle({
+          strategicJob: origBrief.communicationJob, strategicBet: origBrief.strategicBetTrace, founderGoal: origBrief.founderGoalTrace,
+          audience: origBrief.audienceUseContext, concept, licensedPropositions: snapshot.licensedPropositions, proofFacts: snapshot.proofFacts,
+          reasons: [assessed.reason ?? '', angle.founderNote ?? '', ...((angle.decision === 'reangled' || !angle.strategyBetSupported) ? [`write ONLY a ${angle.chosenFamily ?? concept.internalFamily} angle from the authorized facts — the strategy's outcome/referral/results story is NOT licensed by the material, so make no outcome, results, or social-proof claim`] : []), ...feas.reasons],
+        });
+        const execAngle = a.executionAngle.trim();
+        if (execAngle && !onStrategy(execAngle, origBrief)) {
+          this.deps.log?.({ type: 'carousel_angle_adapt_drift', detail: execAngle.slice(0, 100) });
+          return { status: 'insufficient' };
+        }
+        if (execAngle && execAngle.toLowerCase() !== origBrief.communicationJob.toLowerCase()) {
+          brief = { ...origBrief, communicationJob: execAngle, adaptedFrom: origBrief.communicationJob, adaptationReason: a.reason };
+          this.deps.log?.({ type: 'carousel_angle_adapted', detail: `${a.reason.slice(0, 80)} → ${execAngle.slice(0, 90)}` });
+        }
+      } catch { /* adaptation unavailable → keep original (safety gate still governs) */ }
+    }
+
+    const assetId = generateId();
+    const shared: GenerateShared = { assetId, businessId, createHandoffId, brief, snapshot, concept, ctx, system, mediaPlan, angleNote };
+    // PART 1 — per-role DESIGN length budgets derived from the live canvas + type scale, passed to the copy model as
+    // hard limits so it writes copy that renders at its intended size instead of overflowing (then failing the layout
+    // gate). Computed once; identical across the capped attempts.
+    const copyBudget = computeCopyBudgets(CANVAS, system.typeScale);
+    this.deps.log?.({ type: 'carousel_copy_budget', detail: JSON.stringify(copyBudget) });
+
+    // PRIMARY PATH — the richer governed draft→safety→repair loop (bounded attempts). This is the default;
+    // the constrained fallback below is NOT reached unless every normal attempt fail-closes.
+    let priorDraft: CarouselCopyDraft | undefined; let repairReasons: string[] = [];
+    let lastCore: CarouselSafetyTraceCore | null = null;
+    // Stage 2 B — RETAIN BEST CANDIDATE: the fewest-blocked draft across the (capped) attempts is carried forward,
+    // never discarded for a worse one. It is the input the deterministic strip (Stage 2 A) operates on below.
+    let best: { attempt: number; outcome: GateOutcome } | null = null;
+    for (let attempt = 0; attempt < MAX_CAROUSEL_ATTEMPTS; attempt++) {
+      let draft: CarouselCopyDraft;
+      try { draft = await this.deps.model.draftCopy({ brief, snapshot, voiceLines: ctx.voiceLines, concept, copyBudget, ...(priorDraft ? { priorDraft } : {}), ...(repairReasons.length ? { repairReasons } : {}) }); }
+      catch (e) { this.deps.log?.({ type: 'carousel_draft_threw', detail: `attempt ${attempt}: ${String((e as Error)?.message ?? e).slice(0, 200)}` }); continue; }
+      const ev = await this.evaluateDraft(draft, shared, attempt, repairReasons, 'normal', null);
+      if (ev.ok) { this.deps.log?.({ type: attempt === 0 ? 'carousel_first_pass_ok' : 'carousel_repaired_ok' }); return ev.result; }
+      lastCore = ev.core ?? lastCore;
+      repairReasons = ev.repairReasons;
+      // strictly-fewer-blocks wins; ties keep the earlier candidate (deterministic).
+      if (!best || ev.outcome.blockingFindings.length < best.outcome.blockingFindings.length) best = { attempt, outcome: ev.outcome };
+      // Amendment 3 — per-attempt compliance instrumentation: how many clauses were blocked and which forbidden
+      // class each fell into, so the block rate can be tracked as the authority set is enriched with real proof.
+      const tally = blockClassTally(ev.findings);
+      this.deps.log?.({ type: 'carousel_block_stats', detail: JSON.stringify({ attempt, blocked: ev.findings.length, classes: tally }) });
+      this.deps.log?.({ type: 'carousel_quality_failed', detail: repairReasons.slice(0, 4).join(' | ') });
+      priorDraft = draft;
+    }
+
+    // Stage 2 A — DETERMINISTIC STRIP. No normal attempt was clean. Take the retained best (fewest-blocked) draft and
+    // delete the blocked clause/block in CODE — never a model call: a model cannot be trusted to delete without
+    // re-inventing. Drop an emptied slide, require ≥3 slides + a surviving CTA, then RE-RUN the claim + layout gates
+    // on the stripped result. Clean ⇒ persist. If the strip cannot satisfy its structural contract, it makes NO
+    // change and we fall through to the constrained fallback (which itself only fail-closes on unsafe copy).
+    if (best) {
+      this.deps.log?.({ type: 'carousel_best_retained', detail: JSON.stringify({ attempt: best.attempt, blocked: best.outcome.blockingFindings.length }) });
+      let curOutcome = best.outcome;
+      let firedAny = false; const allRemoved: string[] = [];
+      for (let round = 0; round < MAX_STRIP_ROUNDS; round++) {
+        const stripped = this.deterministicStrip(curOutcome);
+        if (!stripped) { if (round === 0) this.deps.log?.({ type: 'carousel_strip_failed', detail: 'strip cannot satisfy structural contract (asset-level / locked / cta-action / <3 slides / nothing removable)' }); break; }
+        firedAny = true; allRemoved.push(...stripped.removed);
+        const outcome = await this.gateSlides(shared, stripped.slides, [], 'deterministic_strip');
+        this.deps.log?.({ type: 'carousel_strip_fired', detail: JSON.stringify({ round, fromAttempt: best.attempt, removed: stripped.removed.slice(0, 8), droppedSlides: stripped.droppedSlides, finalSlides: stripped.slides.length, clean: outcome.clean, residual: outcome.blockingFindings.map((f) => f.code).slice(0, 8) }) });
+        if (outcome.clean) { this.deps.log?.({ type: 'carousel_strip_ok', detail: JSON.stringify({ rounds: round + 1, removed: allRemoved.length }) }); return await this.persistCreated(shared, outcome, 'deterministic_strip', MAX_CAROUSEL_ATTEMPTS, repairReasons, null, null); }
+        curOutcome = outcome; // re-plan from the freshly-gated findings on the next round (bounded)
+      }
+      if (firedAny) this.deps.log?.({ type: 'carousel_strip_failed', detail: `still not clean after ${MAX_STRIP_ROUNDS} rounds` });
+    }
+
+    // CONSTRAINED REALIZATION FALLBACK — reached ONLY because normal drafting kept introducing unlicensed
+    // meaning. Realize the already-bound meaning faithfully. If the constrained candidate fails a LOCAL gate,
+    // ONE bounded, block-scoped TARGETED REPAIR (§2–§8) may fix only the failing block(s) — everything else stays
+    // byte-identical — then re-gate ONCE. Clean ⇒ persist; otherwise fail closed. Not founder-visible.
+    if (this.deps.model.realizeConstrained) {
+      const beats = bindBeats(concept.slideOutline, snapshot);
+      const fallbackBindingsHash = createHash('sha256').update(JSON.stringify(beats), 'utf8').digest('hex');
+      this.deps.log?.({ type: 'carousel_constrained_fallback', detail: `${beats.length} beats` });
+      let constrainedCore = lastCore;
+      try {
+        const draft = await this.deps.model.realizeConstrained({ brief, snapshot, voiceLines: ctx.voiceLines, concept, beats, ctaFunction: snapshot.ctaFunction });
+        const { slides, advisories } = await this.composeAndPlan(draft, shared);
+        const outcome0 = await this.gateSlides(shared, slides, advisories, 'constrained_fallback');
+        constrainedCore = outcome0.safetyCore;
+        if (outcome0.clean) { this.deps.log?.({ type: 'carousel_constrained_ok' }); return await this.persistCreated(shared, outcome0, 'constrained_fallback', MAX_CAROUSEL_ATTEMPTS, repairReasons, fallbackBindingsHash, null); }
+
+        // ── bounded, ITERATIVE targeted repair of local failure(s). M5.7: the extractive realizer is
+        // proposition-CLOSE but can still leave a few residual unlicensed clauses (e.g. an evaluative
+        // "worth starting with"), and a single repair round cannot always strip them all. Each round re-PLANS
+        // targets from the CURRENT gate outcome and re-GATES against the SAME frozen kernel, so ONLY a fully
+        // clean carousel persists — this is more attempts at faithful extraction, never a safety relaxation.
+        if (this.deps.model.repairConstrained) {
+          let curSlides = slides; let curOutcome = outcome0;
+          const allRepairs: TargetedRepairTrace['repairs'] = [];
+          for (let round = 0; round < MAX_CONSTRAINED_REPAIR_ROUNDS; round++) {
+            const plan = await this.planTargetedRepair(shared, curSlides, curOutcome);
+            if (plan.repairable && plan.targets.length === 0) {
+              // the only "failure" was anti-template class-B (simple, faithful — not a defect); accept as-is
+              this.deps.log?.({ type: 'carousel_targeted_repair', detail: 'anti_template_B_not_a_defect' });
+              return await this.persistCreated(shared, curOutcome, 'constrained_fallback', MAX_CAROUSEL_ATTEMPTS, repairReasons, fallbackBindingsHash, { triggered: allRepairs.length > 0, repairs: allRepairs, result: 'persisted' });
+            }
+            if (!plan.repairable) {
+              // Non-LOCAL residual failure (structural / binding / scope / full-asset / unsupported concept).
+              // If we already ATTEMPTED a repair this run, the honest label is fail_closed (we repaired, it is
+              // still unsafe); not_repairable is reserved for the round-0 case where no repair was ever found.
+              const attempted = allRepairs.length > 0;
+              await this.persistTrace(businessId, assetId, null, MAX_CAROUSEL_ATTEMPTS, curOutcome.safetyCore, [...repairReasons, ...findingsToReasons(curOutcome.blockingFindings)], 'fail_closed', 'constrained_fallback', fallbackBindingsHash, { triggered: attempted, repairs: allRepairs, result: attempted ? 'fail_closed' : 'not_repairable' });
+              this.deps.log?.({ type: 'carousel_fail_closed', detail: attempted ? 'unrepairable_after_repair' : 'not_repairable' });
+              return { status: 'insufficient' };
+            }
+            this.deps.log?.({ type: 'carousel_targeted_repair', detail: `r${round}: ` + plan.targets.map((t) => `${t.gateClass}@${t.blockId}`).join(',') });
+            const repaired = await this.deps.model.repairConstrained({ targets: plan.targets, snapshot, concept, brief, voiceLines: ctx.voiceLines, ctaFunction: snapshot.ctaFunction }).catch(() => [] as RepairedBlock[]);
+            const prevSlides = curSlides;
+            curSlides = this.applyRepairs(curSlides, repaired);
+            for (const t of plan.targets) {
+              const before = prevSlides.find((s) => s.slideId === t.slideId)?.textBlocks.find((b) => b.blockId === t.blockId)?.text ?? '';
+              const after = curSlides.find((s) => s.slideId === t.slideId)?.textBlocks.find((b) => b.blockId === t.blockId)?.text ?? '';
+              allRepairs.push({ gateClass: t.gateClass, slideId: t.slideId, blockId: t.blockId, beforeHash: shaShort(before), afterHash: shaShort(after), meaningUnitRefs: t.meaningUnitRefs });
+            }
+            curOutcome = await this.gateSlides(shared, curSlides, advisories, 'constrained_fallback');
+            constrainedCore = curOutcome.safetyCore;
+            if (curOutcome.clean) { this.deps.log?.({ type: 'carousel_targeted_repair_ok' }); return await this.persistCreated(shared, curOutcome, 'constrained_fallback', MAX_CAROUSEL_ATTEMPTS, repairReasons, fallbackBindingsHash, { triggered: true, repairs: allRepairs, result: 'persisted' }); }
+            // still unclean → re-plan against curOutcome on the next round (bounded)
+          }
+          // exhausted the bounded repair rounds still unclean → honest fail closed
+          this.deps.log?.({ type: 'carousel_targeted_repair_failed', detail: curOutcome.blockingFindings.slice(0, 3).map((f) => f.code).join(',') });
+          await this.persistTrace(businessId, assetId, null, MAX_CAROUSEL_ATTEMPTS, constrainedCore, [...repairReasons, ...findingsToReasons(curOutcome.blockingFindings)], 'fail_closed', 'constrained_fallback', fallbackBindingsHash, { triggered: true, repairs: allRepairs, result: 'fail_closed' });
+          this.deps.log?.({ type: 'carousel_fail_closed' });
+          return { status: 'insufficient' };
+        }
+
+        await this.persistTrace(businessId, assetId, null, MAX_CAROUSEL_ATTEMPTS, outcome0.safetyCore, repairReasons, 'fail_closed', 'constrained_fallback', fallbackBindingsHash, null);
+        this.deps.log?.({ type: 'carousel_fail_closed' });
+        return { status: 'insufficient' };
+      } catch { this.deps.log?.({ type: 'carousel_constrained_threw' }); }
+      if (constrainedCore) await this.persistTrace(businessId, assetId, null, MAX_CAROUSEL_ATTEMPTS, constrainedCore, repairReasons, 'fail_closed', 'constrained_fallback', fallbackBindingsHash, null);
+      this.deps.log?.({ type: 'carousel_fail_closed' });
+      return { status: 'insufficient' };
+    }
+
+    // FAIL CLOSED — no unsafe/unrenderable carousel reaches preview persistence. Record the governing trace.
+    if (lastCore) await this.persistTrace(businessId, assetId, null, MAX_CAROUSEL_ATTEMPTS - 1, lastCore, repairReasons, 'fail_closed');
+    this.deps.log?.({ type: 'carousel_fail_closed' });
+    return { status: 'insufficient' };
+  }
+
+  /** attachHookMedia + composeSlides + (6.1) minimal-density redistribution + planLayouts (compose ONCE; targeted
+   * repair edits these slides in place). */
+  private async composeAndPlan(draft: CarouselCopyDraft, shared: GenerateShared): Promise<{ slides: Slide[]; advisories: GateFinding[] }> {
+    const slides0 = composeSlides(draft, shared.concept, shared.snapshot);
+    // Slice 6.1 seam: honor the photo-led media plan when present; else the untouched frozen attachHookMedia.
+    const composed = shared.mediaPlan && shared.mediaPlan.length ? attachPlannedMedia(slides0, shared.snapshot, shared.mediaPlan) : attachHookMedia(slides0, shared.snapshot);
+    // Slice 6.1 legibility repair (photo path ONLY): a photo slide whose faces/subject forbid a full-density
+    // plane switches to MINIMAL density and its body is redistributed to an adjacent slide (below, through the
+    // frozen safety path). Decided from GEOMETRY (lum-independent) so it never diverges from the renderer's plane
+    // choice. No media plan (plan path) ⇒ this is skipped entirely ⇒ byte-identical frozen behavior.
+    let adapted = composed;
+    if (shared.mediaPlan && shared.mediaPlan.length) {
+      const minimal = await this.minimalDensitySlides(composed, shared.system, shared.snapshot);
+      if (minimal.size) { this.deps.log?.({ type: 'carousel_minimal_density', detail: `${minimal.size} slide(s) → photo-led minimal mode` }); adapted = redistributeMinimalMedia(composed, minimal); }
+    }
+    const planned = planLayouts(adapted, shared.concept, shared.system);
+    return { slides: planned.slides, advisories: planned.advisories };
+  }
+
+  /** Photo slides that can only carry a MINIMAL (reduced-density) plane — computed from the LITERAL subject/face
+   * geometry + the frozen chrome zones, mapped image→canvas with the real image aspect (same helpers the renderer
+   * uses). Geometry-only ⇒ the renderer independently reaches the same mode; 'exclude' is left to the renderer's
+   * graphic fallback (the body already renders on the graphic slide, so no redistribution is needed). */
+  private async minimalDensitySlides(slides: Slide[], system: VisualSystem, snapshot: AssetAuthorizationSnapshot): Promise<Set<string>> {
+    const ids = new Set<string>();
+    const chrome = chromeReservedBoxes({ pageIndex: system.pageIndex, footer: Boolean(system.footer), logo: Boolean(system.logoRef), total: slides.length });
+    for (const s of slides) {
+      const slot = s.mediaSlots.find((m) => m.kind === 'image' && m.sourceRefId && m.placement && (m.placement.focalSubjectBox || (m.placement.faceBoxes && m.placement.faceBoxes.length)));
+      if (!slot) continue;
+      const ref = snapshot.sourceRefs.find((x) => x.sourceRefId === slot.sourceRefId);
+      if (!ref?.mediaRef) continue;
+      const bytes = await this.deps.blob.get(ref.mediaRef).catch(() => null);
+      if (!bytes) continue;
+      const ar = imageAspectFromPng(bytes);
+      const focal = slot.placement!.focalSubjectBox ? sliceBox(slot.placement!.focalSubjectBox, ar) : null;
+      const faces = (slot.placement!.faceBoxes ?? []).map((f) => sliceBox(f, ar));
+      if (planePlacementMode(focal, faces, chrome) === 'minimal') ids.add(s.slideId);
+    }
+    return ids;
+  }
+
+  /** Run the full gate stack on a composed slide set WITHOUT persisting (so a candidate can be repaired first). */
+  private async gateSlides(shared: GenerateShared, slides: Slide[], advisories: GateFinding[], generationMode: GenerationMode): Promise<GateOutcome> {
+    const { assetId, businessId, brief, snapshot, concept, ctx, system } = shared;
+    const version = this.composeVersion(assetId, businessId, 1, brief, concept, slides, ctx, snapshot.snapshotId, system);
+    const structuralReport = validateCarouselCopy({ slides, snapshot, brief, conceptOutlineLength: concept.slideOutline.length });
+    const extractiveFindings = generationMode === 'constrained_fallback'
+      ? [...validateExtractiveBindings(slides, snapshot, concept.slideOutline), ...validateScopePreservation(slides, snapshot, bindBeats(concept.slideOutline, snapshot))]
+      : [];
+    const safety = await this.claimSafety(slides, snapshot, brief.communicationJob);
+    const closureFindings = await validateClosure(slides, snapshot, this.deps.model.reviewClosure?.bind(this.deps.model));
+    const copyReport = combineReports(combineReports(combineReports(structuralReport, safety.report), { valid: closureFindings.length === 0, findings: closureFindings }), { valid: extractiveFindings.length === 0, findings: extractiveFindings });
+    const { rendered, report: visReport } = await this.renderAndGate(version, advisories);
+    let antiTemplateFail: string | null = null;
+    if (copyReport.valid && visReport.valid && this.deps.model.reviewAntiTemplate) {
+      try { const v = await this.deps.model.reviewAntiTemplate({ assetView: this.assetView(version), brief, mode: generationMode }); if (v.generic) antiTemplateFail = `anti_template: ${v.reason}`; } catch { /* judge unavailable */ }
+    }
+    const blockingFindings = [...copyReport.findings, ...visReport.findings.filter((f) => f.severity !== 'advisory')];
+    return { version, rendered, visReport, copyReport, safetyCore: safety.core, antiTemplateFail, blockingFindings, clean: copyReport.valid && visReport.valid && !antiTemplateFail };
+  }
+
+  /** Persist a clean gated candidate (version + render + immutable trace). */
+  private async persistCreated(shared: GenerateShared, outcome: GateOutcome, generationMode: GenerationMode, attempt: number, priorRepairReasons: string[], fallbackBindingsHash: string | null, targetedRepair: TargetedRepairTrace | null): Promise<GenerateResult> {
+    const { assetId, businessId, createHandoffId, brief } = shared;
+    const asset: CarouselAsset = { assetId, businessId, createHandoffId, planVersionId: brief.planVersionId, strategyVersionId: brief.strategyVersionId, currentVersionId: outcome.version.versionId, createdAt: this.now() };
+    await this.deps.repo.saveVersion(outcome.version);
+    await this.deps.repo.saveAsset(asset);
+    const rv = await this.persistRender(outcome.version, outcome.rendered, outcome.visReport);
+    const disposition: CarouselSafetyDisposition = generationMode === 'constrained_fallback' || generationMode === 'deterministic_strip' || attempt > 0 ? 'repaired_persisted' : 'persisted';
+    await this.persistTrace(businessId, assetId, outcome.version.versionId, attempt, outcome.safetyCore, priorRepairReasons, disposition, generationMode, fallbackBindingsHash, targetedRepair);
+    return { status: 'created', asset, version: outcome.version, render: rv, ...(shared.angleNote ? { angleNote: shared.angleNote } : {}) };
+  }
+
+  /** Compose → gate → persist a single draft (normal loop + first constrained pass share this path). */
+  private async evaluateDraft(
+    draft: CarouselCopyDraft, shared: GenerateShared,
+    attempt: number, priorRepairReasons: string[], generationMode: GenerationMode, fallbackBindingsHash: string | null,
+  ): Promise<{ ok: true; result: GenerateResult } | { ok: false; repairReasons: string[]; core: CarouselSafetyTraceCore | null; findings: GateFinding[]; outcome: GateOutcome }> {
+    const { slides, advisories } = await this.composeAndPlan(draft, shared);
+    const outcome = await this.gateSlides(shared, slides, advisories, generationMode);
+    if (outcome.clean) return { ok: true, result: await this.persistCreated(shared, outcome, generationMode, attempt, priorRepairReasons, fallbackBindingsHash, null) };
+    const repairReasons = [...findingsToReasons(outcome.copyReport.findings), ...findingsToReasons(outcome.visReport.findings.filter((f) => f.severity !== 'advisory')), ...(outcome.antiTemplateFail ? [outcome.antiTemplateFail] : [])];
+    return { ok: false, repairReasons, core: outcome.safetyCore, findings: outcome.blockingFindings, outcome };
+  }
+
+  /**
+   * Stage 2 A — DETERMINISTIC STRIP (CODE ONLY, never a model call). Given the retained best (fewest-blocked)
+   * candidate, delete every blocked clause/block located by the frozen claim gate's own findings, then enforce the
+   * structural contract. Returns the stripped slides (to be RE-GATED by the caller before persisting), or null when
+   * the strip cannot honestly satisfy the contract — in which case NO change is made and no asset is patched.
+   *
+   * Contract:
+   *  • asset-level implication (fullAssetFindings / asset_composition_proposition) is NOT one removable clause ⇒ null.
+   *  • a locked slide/block that carries a flagged clause cannot be edited ⇒ null.
+   *  • a block emptied by the strip is dropped; a slide left with no substantive text is dropped.
+   *  • the deck must still hold ≥3 slides and a surviving CTA slide (its causal earning is re-verified by the gate).
+   *  • at least one clause must actually have been removed (otherwise the strip made no progress) ⇒ null.
+   */
+  private deterministicStrip(best: GateOutcome): { slides: Slide[]; removed: string[]; droppedSlides: number } | null {
+    // Whole-asset implication can't be resolved by deleting a single clause — honest fail (fall through).
+    if (best.safetyCore.fullAssetFindings.length) return null;
+    if (best.blockingFindings.some((f) => f.code === 'asset_composition_proposition')) return null;
+
+    // The exact clauses the frozen kernel blocked (Layer 1 deterministic + Layer 3 semantic), grouped by slide.
+    const bySlide = new Map<string, string[]>();
+    for (const f of [...best.safetyCore.layer1Findings, ...best.safetyCore.semanticBlockFindings]) {
+      const clause = (f.clause ?? '').trim();
+      if (!f.slideId || !clause) continue;
+      const arr = bySlide.get(f.slideId) ?? []; arr.push(clause); bySlide.set(f.slideId, arr);
+    }
+    if (bySlide.size === 0) return null; // nothing claim-related to strip (e.g. pure layout) — the strip can't help
+
+    const removed: string[] = [];
+    const newSlides: Slide[] = [];
+    let droppedSlides = 0;
+    for (const s of best.version.slides) {
+      const clauses = bySlide.get(s.slideId);
+      if (!clauses || !clauses.length) { newSlides.push(s); continue; }
+      if (s.lockedFields.includes('slide')) return null; // locked slide carries an unlicensed clause — can't strip
+      const keptBlocks: TextBlock[] = [];
+      for (const b of s.textBlocks) {
+        const blockLocked = b.locked || s.lockedFields.includes(`block:${b.blockId}`);
+        // PART 2 — the CTA ACTION is structural, not a claim: the strip may never remove it. If the ONLY unlicensable
+        // clause IS the CTA action, there is nothing safe to delete → fail honestly (return null) rather than gut the
+        // close. (A locked block is likewise never edited.)
+        const isCtaAction = b.role === 'cta' || Boolean(b.authorizedFrom.ctaFunction);
+        if (blockLocked || isCtaAction) {
+          if (clauses.some((cl) => normText(b.text).includes(normText(cl)))) return null;
+          keptBlocks.push(b); continue;
+        }
+        const stripped = stripSegments(b.text, clauses, removed);
+        if (stripped.trim().length > 0) keptBlocks.push({ ...b, text: stripped });
+        // else: block emptied by the strip → dropped
+      }
+      if (!keptBlocks.some((b) => b.text.trim().length > 0)) { droppedSlides += 1; continue; } // slide emptied → drop
+      newSlides.push({ ...s, textBlocks: keptBlocks });
+    }
+
+    if (removed.length === 0) return null;              // nothing actually removed → no progress
+    if (newSlides.length < 3) return null;              // deck must hold ≥3 slides
+    if (!newSlides.some((s) => s.semanticRole === 'cta')) return null; // closure needs a surviving CTA slide
+    return { slides: newSlides, removed, droppedSlides };
+  }
+
+  /** Meaning-unit refs a block is bound to (the immutable bindings a repair MUST preserve). */
+  private meaningRefsOf(block: TextBlock): string[] {
+    return [...(block.authorizedFrom.propositionRef ? [block.authorizedFrom.propositionRef] : []), ...(block.authorizedFrom.sourceRefId ? [block.authorizedFrom.sourceRefId] : []), ...(block.authorizedFrom.ctaFunction ? ['CTA'] : [])];
+  }
+
+  /**
+   * §2–§8 — locate the block-scoped targets of the constrained candidate's LOCAL failures. Repairable ONLY when
+   * EVERY blocking failure maps to a safety / overflow / closure / anti-template-filler block target (a locked
+   * block, a full-asset implication, an unsupported concept, or any structural/binding/scope failure ⇒ not
+   * locally repairable ⇒ honest fail closed). Anti-template is CLASSIFIED first (§7): A ⇒ not repairable;
+   * B ⇒ no defect (no target); C ⇒ target the one offending block.
+   */
+  private async planTargetedRepair(shared: GenerateShared, slides: Slide[], outcome: GateOutcome): Promise<{ repairable: boolean; targets: RepairTarget[] }> {
+    const targets: RepairTarget[] = [];
+    let repairable = true;
+    const bySlide = (id: string | null) => (id ? slides.find((s) => s.slideId === id) : undefined);
+    const substantiveBlock = (s: Slide) => s.textBlocks.find((b) => b.role === 'body') ?? s.textBlocks.find((b) => b.role === 'headline');
+    const push = (slide: Slide, block: TextBlock | undefined, gateClass: RepairTarget['gateClass'], detail: string) => {
+      if (!block || block.locked || slide.lockedFields.includes('slide') || slide.lockedFields.includes(`block:${block.blockId}`)) { repairable = false; return; }
+      if (!targets.some((t) => t.blockId === block.blockId)) targets.push({ slideId: slide.slideId, blockId: block.blockId, blockRole: block.role, gateClass, detail, meaningUnitRefs: this.meaningRefsOf(block), currentText: block.text });
+    };
+
+    // SAFETY (block-level, located by the offending clause). Full-asset implication is NOT block-repairable.
+    for (const f of [...outcome.safetyCore.layer1Findings, ...outcome.safetyCore.semanticBlockFindings]) {
+      const slide = bySlide(f.slideId); if (!slide) { repairable = false; continue; }
+      const block = slide.textBlocks.find((b) => normText(b.text).includes(normText(f.clause)) && f.clause.trim().length > 0) ?? substantiveBlock(slide);
+      push(slide, block, 'safety', `unlicensed clause: "${f.clause.slice(0, 70)}"`);
+    }
+    if (outcome.safetyCore.fullAssetFindings.length) repairable = false;
+
+    // OVERFLOW + CLOSURE from coded findings; ANY other blocking code ⇒ not locally repairable.
+    for (const f of outcome.blockingFindings) {
+      if (f.code === 'block_new_proposition' || f.code === 'block_unauthorized_proposition') continue; // handled via safetyCore
+      if (f.code === 'asset_composition_proposition') { repairable = false; continue; }
+      if (f.code === 'cta_no_action' || f.code === 'cta_redundant' || f.code === 'cta_not_closed') {
+        const slide = bySlide(f.slideId) ?? slides.find((s) => s.semanticRole === 'cta');
+        if (!slide) { repairable = false; continue; }
+        push(slide, slide.textBlocks.find((b) => b.role === 'cta'), 'closure', f.detail);
+        continue;
+      }
+      if (f.code === 'text_overflow' || f.code === 'below_min_font' || f.code === 'outside_safe_margins') {
+        const slide = bySlide(f.slideId); if (!slide) { repairable = false; continue; }
+        push(slide, substantiveBlock(slide), 'overflow', f.detail);
+        continue;
+      }
+      // scope/polarity/modality preservation (§5) — a per-block meaning defect the safety-class rewrite fixes
+      if (f.code === 'scope_broadened' || f.code === 'modality_shift' || f.code === 'cost_claim' || f.code === 'reader_outcome') {
+        const slide = bySlide(f.slideId); if (!slide) { repairable = false; continue; }
+        push(slide, substantiveBlock(slide), 'safety', f.detail);
+        continue;
+      }
+      repairable = false; // structural / binding / full-asset / anything else — not a local prose repair
+    }
+
+    // ANTI-TEMPLATE (§7) — classify BEFORE any prose rewrite (only reached when it is the sole failure).
+    if (outcome.antiTemplateFail) {
+      let cls = null as null | { klass: string; blockRef: string | null; reason: string };
+      if (this.deps.model.classifyAntiTemplate) { try { cls = await this.deps.model.classifyAntiTemplate({ assetView: this.assetView(outcome.version), brief: shared.brief }); } catch { /* classifier unavailable */ } }
+      if (!cls || cls.klass === 'A_unsupported_concept') repairable = false;
+      else if (cls.klass === 'B_simple_not_defect') { /* not a defect — no target, does not block repairability */ }
+      else { const c = cls; const slide = c.blockRef ? slides.find((s) => s.semanticRole === c.blockRef || s.slideId === c.blockRef) : undefined; push(slide ?? slides[0]!, slide ? substantiveBlock(slide) : undefined, 'anti_template_filler', c.reason); }
+    }
+
+    return { repairable, targets };
+  }
+
+  /** Apply targeted repairs: replace ONLY the target blocks' text (blockId/role/authorizedFrom/locks preserved),
+   * leaving every unaffected block byte-identical. A locked block is never mutated. */
+  private applyRepairs(slides: Slide[], repaired: RepairedBlock[]): Slide[] {
+    const next = new Map(repaired.map((r) => [`${r.slideId}::${r.blockId}`, (r.newText ?? '').trim()]));
+    return slides.map((s) => ({ ...s, textBlocks: s.textBlocks.map((b) => {
+      const nt = next.get(`${s.slideId}::${b.blockId}`);
+      return nt && !b.locked && !s.lockedFields.includes('slide') && !s.lockedFields.includes(`block:${b.blockId}`) ? { ...b, text: nt } : b;
+    }) }));
+  }
+
+  private assetView(v: CarouselAssetVersion): unknown {
+    return { concept: v.concept.communicationLogic, slides: v.slides.map((s) => ({ role: s.semanticRole, text: s.textBlocks.map((b) => b.text).join(' ') })) };
+  }
+
+  async getAssetByHandoff(businessId: string, createHandoffId: string): Promise<CarouselAsset | null> {
+    return this.deps.repo.getAssetByHandoff(businessId, createHandoffId);
+  }
+
+  /** Founder media upload → eligible source pool (BB later chooses whether/how to use it). Bytes → blob. */
+  async addMedia(businessId: string, input: { bytes: Buffer; filename?: string; reuseRight?: ReuseRight; sourceType?: SourceType }): Promise<CarouselSourceRef> {
+    const sourceRefId = generateId();
+    const mediaRef = `carousel/media/${businessId}/${sourceRefId}.png`;
+    await this.deps.blob.put(mediaRef, input.bytes);
+    const ref: CarouselSourceRef = { sourceRefId, sourceType: input.sourceType ?? 'uploaded_image', provenance: input.filename ? `founder upload: ${input.filename}` : 'founder upload', reuseRight: input.reuseRight ?? 'founder_uploaded', mediaRef };
+    await this.deps.repo.saveMedia(businessId, { ...ref, ...(input.filename ? { filename: input.filename } : {}) });
+    return ref;
+  }
+  async listMedia(businessId: string): Promise<CarouselSourceRef[]> { return this.deps.repo.listMedia(businessId); }
+  async setBrand(businessId: string, brand: import('./contracts').BrandConstraints & { source: string }): Promise<void> { return this.deps.repo.saveBrand(businessId, brand); }
+  async getBrand(businessId: string): Promise<import('./contracts').BrandConstraints | null> { return this.deps.repo.getBrand(businessId); }
+
+  async getAsset(businessId: string, assetId: string): Promise<{ asset: CarouselAsset; version: CarouselAssetVersion; render: RenderVersion | null } | null> {
+    const asset = await this.deps.repo.getAsset(businessId, assetId);
+    if (!asset) return null;
+    const version = await this.deps.repo.getVersion(businessId, asset.currentVersionId);
+    if (!version) return null;
+    const render = await this.deps.repo.getRender(version.versionId);
+    return { asset, version, render };
+  }
+
+  /**
+   * Scoped, non-destructive revision → new immutable AssetVersion. copy_only/slide/cta preserve concept, slide
+   * set/order, media, visual system, layout, untouched sources and ALL locks. If revised copy cannot fit,
+   * the structural gates fail the render and the revision is rejected honestly — never a silent shrink/
+   * template-switch/unlock/re-pick.
+   */
+  async revise(businessId: string, assetId: string, scope: RevisionScope, newTextByRole: Partial<Record<'headline' | 'body' | 'kicker' | 'cta', string>>): Promise<{ status: 'revised'; version: CarouselAssetVersion; render: RenderVersion } | { status: 'revision_rejected'; findings: GateFinding[] }> {
+    const asset = await this.deps.repo.getAsset(businessId, assetId);
+    if (!asset) throw new ValidationError('CAROUSEL_NOT_FOUND', 'No such carousel.');
+    const cur = await this.deps.repo.getVersion(businessId, asset.currentVersionId);
+    if (!cur) throw new ValidationError('CAROUSEL_VERSION_MISSING', 'Current version missing.');
+    const ctx = await this.deps.context(businessId);
+    // §3 AUTHORITY: revision revalidates against the IMMUTABLE persisted snapshot, never live strategy.
+    const snapshot = (await this.deps.repo.getAuthorizationSnapshot(businessId, cur.authorizationSnapshotId)) ?? await this.snapshotOrThrow(businessId, cur);
+    const nextVersionNumber = cur.versionNumber + 1;
+
+    // VISUAL-ONLY ("keep the copy, change the design"): copy/sources/authorization untouched; only the
+    // visual system + composition change. Other scopes keep the existing coherent visual system + layout so a
+    // scoped copy edit never perturbs unrelated slides.
+    let slides: Slide[]; let system: VisualSystem; let advisories: GateFinding[] = [];
+    if (scope.kind === 'visual_only') {
+      system = alternateVisualSystem(cur.visualSystem);
+      const planned = planLayouts(cur.slides, cur.concept, system);
+      slides = planned.slides; advisories = planned.advisories;
+    } else {
+      system = cur.visualSystem;
+      slides = cur.slides.map((s) => {
+        if (scope.kind === 'slide' && scope.slideId && s.slideId !== scope.slideId) return s;
+        if (scope.kind === 'cta') return reviseSlideCopy(s, { cta: newTextByRole.cta ?? s.textBlocks.find((b) => b.role === 'cta')?.text });
+        return reviseSlideCopy(s, newTextByRole);
+      });
+    }
+    const next = this.composeVersion(assetId, businessId, nextVersionNumber, cur.brief, cur.concept, slides, ctx ?? this.ctxFromVersion(cur), cur.authorizationSnapshotId, system);
+    const structuralReport = validateCarouselCopy({ slides, snapshot, brief: cur.brief, conceptOutlineLength: cur.concept.slideOutline.length });
+    const safety = await this.claimSafety(slides, snapshot, cur.brief.communicationJob);
+    const closureFindings = await validateClosure(slides, snapshot, this.deps.model.reviewClosure?.bind(this.deps.model));
+    const copyReport = combineReports(combineReports(structuralReport, safety.report), { valid: closureFindings.length === 0, findings: closureFindings });
+    const { rendered, report: visReport } = await this.renderAndGate(next, advisories);
+    if (!copyReport.valid || !visReport.valid) {
+      await this.persistTrace(businessId, assetId, null, nextVersionNumber, safety.core, [...findingsToReasons(copyReport.findings), ...findingsToReasons(visReport.findings)], 'fail_closed');
+      return { status: 'revision_rejected', findings: [...copyReport.findings, ...visReport.findings] };
+    }
+
+    await this.deps.repo.saveVersion(next);
+    await this.deps.repo.setCurrentVersion(assetId, next.versionId);
+    await this.deps.repo.recordRevision({ assetId, fromVersionId: cur.versionId, toVersionId: next.versionId, scope, at: this.now() });
+    const rv = await this.persistRender(next, rendered, visReport);
+    await this.persistTrace(businessId, assetId, next.versionId, nextVersionNumber, safety.core, [], 'repaired_persisted');
+    return { status: 'revised', version: next, render: rv };
+  }
+
+  /**
+   * "Try a different angle" — a CONCEPT-LEVEL revision. Picks a genuinely different communication logic
+   * (not a paraphrase of the same outline), regenerates governed copy, reruns FULL claim safety, re-renders,
+   * and mints AssetVersion N+1 with lineage. Never overwrites version N. Compatible explicit locks (a
+   * whole-slide or block lock on a role the new concept still uses) are carried forward.
+   */
+  async tryDifferentAngle(businessId: string, assetId: string): Promise<{ status: 'revised'; version: CarouselAssetVersion; render: RenderVersion } | { status: 'insufficient' } | { status: 'not_different' }> {
+    const asset = await this.deps.repo.getAsset(businessId, assetId);
+    if (!asset) throw new ValidationError('CAROUSEL_NOT_FOUND', 'No such carousel.');
+    const cur = await this.deps.repo.getVersion(businessId, asset.currentVersionId);
+    if (!cur) throw new ValidationError('CAROUSEL_VERSION_MISSING', 'Current version missing.');
+    const snapshot = (await this.deps.repo.getAuthorizationSnapshot(businessId, cur.authorizationSnapshotId)) ?? await this.snapshotOrThrow(businessId, cur);
+    const ctx = (await this.deps.context(businessId)) ?? this.ctxFromVersion(cur);
+    const avoid = [`different_angle: choose a materially DIFFERENT communication logic than "${cur.concept.communicationLogic}" (avoid family ${cur.concept.internalFamily}); do not paraphrase the same slide outline (${cur.concept.slideOutline.join('/')}).`];
+
+    let concept: Concept;
+    try { concept = await this.deps.model.chooseConcept({ brief: cur.brief, snapshot, repairReasons: avoid }); }
+    catch { this.deps.log?.({ type: 'carousel_angle_concept_threw' }); return { status: 'insufficient' }; }
+    if (concept.slideOutline.length < 3 || concept.slideOutline.length > 8) return { status: 'insufficient' };
+    if (concept.internalFamily === cur.concept.internalFamily && concept.slideOutline.join('/') === cur.concept.slideOutline.join('/')) return { status: 'not_different' };
+    const feas = checkFeasibility(concept.slideOutline, snapshot);
+    if (!feas.feasible) return { status: 'insufficient' };
+    concept = { ...concept, slideOutline: feas.outline };
+    const system = cur.visualSystem;
+    const copyBudget = computeCopyBudgets(CANVAS, system.typeScale);
+
+    const nextVersionNumber = cur.versionNumber + 1;
+    let priorDraft; let repairReasons: string[] = []; let lastCore: CarouselSafetyTraceCore | null = null;
+    for (let attempt = 0; attempt < MAX_CAROUSEL_ATTEMPTS; attempt++) {
+      let draft;
+      try { draft = await this.deps.model.draftCopy({ brief: cur.brief, snapshot, voiceLines: ctx.voiceLines, concept, copyBudget, ...(priorDraft ? { priorDraft } : {}), ...(repairReasons.length ? { repairReasons } : {}) }); }
+      catch { this.deps.log?.({ type: 'carousel_angle_draft_threw' }); continue; }
+
+      const composed = attachHookMedia(this.carryCompatibleLocks(composeSlides(draft, concept, snapshot), cur.slides), snapshot);
+      const planned = planLayouts(composed, concept, system);
+      const slides = planned.slides;
+      const version = this.composeVersion(assetId, businessId, nextVersionNumber, cur.brief, concept, slides, ctx, snapshot.snapshotId, system);
+      const structuralReport = validateCarouselCopy({ slides, snapshot, brief: cur.brief, conceptOutlineLength: concept.slideOutline.length });
+      const safety = await this.claimSafety(slides, snapshot, cur.brief.communicationJob);
+      lastCore = safety.core;
+      const closureFindings = await validateClosure(slides, snapshot, this.deps.model.reviewClosure?.bind(this.deps.model));
+      const copyReport = combineReports(combineReports(structuralReport, safety.report), { valid: closureFindings.length === 0, findings: closureFindings });
+      const { rendered, report: visReport } = await this.renderAndGate(version, planned.advisories);
+      let antiTemplateFail: string | null = null;
+      if (copyReport.valid && visReport.valid && this.deps.model.reviewAntiTemplate) {
+        try { const v = await this.deps.model.reviewAntiTemplate({ assetView: this.assetView(version), brief: cur.brief }); if (v.generic) antiTemplateFail = `anti_template: ${v.reason}`; } catch { /* judge unavailable */ }
+      }
+      if (copyReport.valid && visReport.valid && !antiTemplateFail) {
+        await this.deps.repo.saveVersion(version);
+        await this.deps.repo.setCurrentVersion(assetId, version.versionId);
+        await this.deps.repo.recordRevision({ assetId, fromVersionId: cur.versionId, toVersionId: version.versionId, scope: { kind: 'concept', request: 'try a different angle' }, at: this.now() });
+        const rv = await this.persistRender(version, rendered, visReport);
+        await this.persistTrace(businessId, assetId, version.versionId, attempt, safety.core, repairReasons, 'repaired_persisted');
+        this.deps.log?.({ type: 'carousel_angle_ok' });
+        return { status: 'revised', version, render: rv };
+      }
+      repairReasons = [...findingsToReasons(copyReport.findings), ...findingsToReasons(visReport.findings), ...(antiTemplateFail ? [antiTemplateFail] : [])];
+      priorDraft = draft;
+    }
+    if (lastCore) await this.persistTrace(businessId, assetId, null, MAX_CAROUSEL_ATTEMPTS - 1, lastCore, repairReasons, 'fail_closed');
+    this.deps.log?.({ type: 'carousel_angle_fail_closed' });
+    return { status: 'insufficient' };
+  }
+
+  /** Carry compatible explicit locks (whole-slide / block) onto a new concept's slides by semantic role. */
+  private carryCompatibleLocks(newSlides: Slide[], oldSlides: Slide[]): Slide[] {
+    const lockedOld = oldSlides.filter((s) => s.lockedFields.includes('slide') || s.textBlocks.some((b) => b.locked));
+    if (!lockedOld.length) return newSlides;
+    return newSlides.map((ns) => {
+      const match = lockedOld.find((os) => os.semanticRole === ns.semanticRole);
+      if (!match) return ns;
+      const wholeSlideLocked = match.lockedFields.includes('slide');
+      const textBlocks = ns.textBlocks.map((nb) => {
+        const ob = match.textBlocks.find((b) => b.role === nb.role && (b.locked || wholeSlideLocked));
+        return ob ? { ...nb, text: ob.text, locked: true } : nb;
+      });
+      const lockedFields = wholeSlideLocked ? [...new Set([...ns.lockedFields, 'slide'])] : ns.lockedFields;
+      return { ...ns, textBlocks, lockedFields };
+    });
+  }
+
+  private async snapshotOrThrow(businessId: string, v: CarouselAssetVersion): Promise<AssetAuthorizationSnapshot> {
+    // Fallback only: the immutable snapshot is the authority; reconstruct minimal from version context.
+    const ctx = await this.deps.context(businessId);
+    return {
+      snapshotId: v.authorizationSnapshotId, businessId, createHandoffId: v.brief.createHandoffId, strategyVersionId: v.brief.strategyVersionId,
+      language: v.languageContext, speakingRole: ctx?.speakingRole ?? '', audienceUseContext: v.brief.audienceUseContext,
+      licensedPropositions: ctx?.licensedPropositions ?? [], proofFacts: ctx?.proofFacts ?? [], ctaFunction: v.brief.ctaDirection,
+      ownedStances: [], sourceRefs: v.sourceManifest, modelId: null, safetyContractHash: null, producedAt: v.producedAt,
+    };
+  }
+  private ctxFromVersion(v: CarouselAssetVersion): CarouselContextView {
+    return { strategyVersionId: v.brief.strategyVersionId, language: v.languageContext, goal: v.brief.founderGoalTrace, coreBet: v.brief.strategicBetTrace, audience: v.brief.audienceUseContext, ctaDirection: v.brief.ctaDirection, licensedPropositions: [], proofFacts: [], sourceRefs: v.sourceManifest, brand: { brandContextVersion: v.brandContextVersion, mode: v.visualSystem.mode === 'brand' ? 'known' : 'restrained_default' }, voiceLines: [], speakingRole: '' };
+  }
+
+  /** Serve a single rendered slide PNG (by version + order) from the blob store. */
+  async slidePng(businessId: string, versionId: string, order: number): Promise<Buffer | null> {
+    const v = await this.deps.repo.getVersion(businessId, versionId);
+    if (!v) return null;
+    const rv = await this.deps.repo.getRender(versionId);
+    const si = rv?.slideImages.find((x) => x.order === order);
+    return si ? this.deps.blob.get(si.blobKey) : null;
+  }
+
+  /** Ensure the export ZIP exists and return its bytes (or null if the render is not ready). */
+  async exportBytes(businessId: string, versionId: string): Promise<Buffer | null> {
+    const res = await this.export(businessId, versionId);
+    if (!('zipKey' in res)) return null;
+    return this.deps.blob.get(res.zipKey);
+  }
+
+  /** Build the exportable ZIP of ordered PNG slides. Only after render gates pass. */
+  async export(businessId: string, versionId: string): Promise<{ zipKey: string; slideCount: number } | { status: 'not_ready' }> {
+    const version = await this.deps.repo.getVersion(businessId, versionId);
+    if (!version) throw new ValidationError('CAROUSEL_VERSION_MISSING', 'No such version.');
+    const rv = await this.deps.repo.getRender(versionId);
+    if (!rv || !rv.gateReport.valid) return { status: 'not_ready' };
+    const files: Array<{ name: string; bytes: Buffer }> = [];
+    for (const si of [...rv.slideImages].sort((a, b) => a.order - b.order)) {
+      const bytes = await this.deps.blob.get(si.blobKey);
+      if (!bytes) return { status: 'not_ready' };
+      files.push({ name: `slide-${String(si.order + 1).padStart(2, '0')}.png`, bytes });
+    }
+    const zipKey = `carousel/${businessId}/${versionId}/carousel.zip`;
+    await this.deps.blob.putZip(zipKey, files);
+    return { zipKey, slideCount: files.length };
+  }
+}

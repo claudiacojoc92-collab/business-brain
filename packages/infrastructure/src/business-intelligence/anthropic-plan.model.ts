@@ -1,0 +1,307 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { createHash } from 'node:crypto';
+import { createAnthropicClient } from '../llm/anthropic-client';
+import { EXECUTABLE_FORMATS, ATOM_CLASSES } from '@bb/application';
+import type {
+  IPlanModelPort, PlanDraft, DraftPlanInput, ExecutableFormat, GathersFactClass, HeldFactsSummary,
+  PriorityIntent, NotNowReasonKind, StrategyDigest, GenericityVerdict,
+} from '@bb/application';
+
+/**
+ * Slice 5 Plan adapter. Turns a Current Strategy + resource envelope into a PROPOSED 30-day EXECUTION plan
+ * (PlanDraft only). This is strategy → execution, NOT a content calendar: it may propose offer/positioning/
+ * conversion/acquisition/retention/messaging-test/distribution/content/sales-support work, and must not
+ * bias toward content. Numbers/deadlines are allowed ONLY when the strategy authorized them (scoped). The
+ * service (PlanService) runs the bounded repair loop + fail-closed gate; this adapter never mutates strategy,
+ * emits no numeric confidence, and returns strict JSON (no prose parsing).
+ */
+const INTENTS: PriorityIntent[] = ['offer_clarification', 'positioning_expression', 'conversion_path', 'acquisition', 'retention', 'messaging_test', 'distribution', 'content', 'sales_support', 'other'];
+const REASON_KINDS: NotNowReasonKind[] = ['strategic_tradeoff', 'resource_constraint', 'prerequisite', 'material_gap', 'founder_boundary'];
+const EFFORTS = new Set(['quick', 'a_session', 'larger']);
+const FORMATS = new Set<string>(EXECUTABLE_FORMATS);
+const GATHERS = new Set<string>([...ATOM_CLASSES, 'none']);
+
+function extractJson(text: string): unknown {
+  const s = text.indexOf('{'); const e = text.lastIndexOf('}');
+  if (s === -1 || e === -1 || e <= s) throw new Error('PLAN_MALFORMED: no JSON');
+  return JSON.parse(text.slice(s, e + 1));
+}
+
+const str = (v: unknown): string => String(v ?? '').trim();
+const strArr = (v: unknown): string[] => (Array.isArray(v) ? v.map(str).filter(Boolean) : []);
+
+/** The plan-authoring contract. Terse imperative constraints — the plan the model may and may not write. */
+export const PLAN_SYSTEM = [
+  'You convert a CONFIRMED business STRATEGY into a concrete 30-DAY EXECUTION PLAN for a resource-constrained',
+  'founder. This is STRATEGY BECOMING EXECUTION, not a content calendar and not a marketing checklist.',
+  '',
+  'A plan has 1–4 PRIORITIES — only as many as the strategy genuinely warrants. NEVER pad to reach a number.',
+  'In founder-facing planning language call them PRIORITIES, ACTIONS, and STEPS. Do NOT label a priority or',
+  'action a "move" — that word is reserved for another part of the product. (Ordinary verb use is fine.)',
+  'A priority is a distinct execution thrust that directly executes the strategy. Its intent is ONE of:',
+  '  offer_clarification, positioning_expression, conversion_path, acquisition, retention, messaging_test,',
+  '  distribution, content, sales_support, other. Do NOT bias toward content — content is only ONE option and',
+  '  is chosen only when the strategy calls for it.',
+  'Each priority has: title; intent; why (founder-legible, traces to the bet/decision); betRef (the exact',
+  '  strategic bet/decision it executes, quoted from the strategy); goalRef (the founder goal it serves,',
+  '  quoted from the strategy); timeBand (a rough week band, written IN THE PLAN\'S LANGUAGE — English',
+  '    "weeks 1-2", Romanian "săptămânile 1-2", Italian "settimane 1-2" — NEVER a fake calendar date);',
+  '  feasibility ("feasible" or "blocked_missing_material"); materialGap (what is missing, or null);',
+  '  observableSignal ({description, source} or null — a signal worth watching; include a NUMBER only if the',
+  '  strategy authorized it, and set source to its provenance).',
+  'Each priority has 1+ ACTIONS. An action has: key (unique within the plan, e.g. "a1"); what (a concrete',
+  '  next step); why (why THIS action, traces to the priority); doneDefinition (what "done" concretely looks',
+  '  like); effortHint ("quick" | "a_session" | "larger" | null — null unless honestly knowable);',
+  '  executableFormat (one of the formats listed under WHAT BB CAN DO, or null — see WHO DOES THE WORK below);',
+  '  leadsToCreate (true EXACTLY when executableFormat is non-null: an audience-facing asset BB writes);',
+  '  generatesDemand (true ONLY when the action makes someone ARRIVE or invites inbound contact — reaching out to',
+  '    people who can send you customers, launching, publishing something that invites a reply, driving traffic.',
+  '    FALSE for internal preparation: writing a document, building a list, practising, auditing, and — importantly —',
+  '    SETTING UP OR TESTING THE LANDING itself. "Contact the doctors" = true; "write the clinical doc",',
+  '    "build the doctor list", "decide who answers the phone", "test the booking path" = false);',
+  '  requiredMaterial (business/offer/proof material the action needs — [] if none); prerequisiteKeys (keys',
+  '  of actions that must be DONE first — [] unless a real ordering dependency exists); planTimeFeasible',
+  '  (false only if it cannot be started now, e.g. it needs a founder decision or missing material);',
+  '  gathersFactClass (REQUIRED on every action, never omitted: the kind of business fact the action asks the',
+  '    FOUNDER to collect, look up, list, audit or write down — "service" (what they offer), "location" (where),',
+  '    "contact_booking" (phone, email, booking method), "people" (the business\'s OWN team: who works there, their',
+  '    roles), "policy" (how the service works: group size, cancellation, arrival, membership terms) — or "none" if',
+  '    it gathers none of these. These classes describe the founder\'s OWN business. Building a list of OUTSIDE',
+  '    people (doctors, partners, referrers, prospects, clients to contact) is "none", never "people". Gathering means',
+  '    COLLECTING facts that already exist; DECIDING or SETTING UP something new (who answers the phone, a reply to',
+  '    use, a new rule or routine) is "none" even when it involves the team or the way the service works).',
+  '',
+  'HARD RULES:',
+  '  - WHO DOES THE WORK. The input lists WHAT BB CAN DO: the only formats BB writes itself. When an action IS one',
+  '    of those assets (the page a person lands on → "landing"; a carousel post → "carousel"), set executableFormat',
+  '    to that format and leadsToCreate=true. BB writes it and the founder reviews it, so do NOT phrase it as the',
+  '    founder writing it. Everything else is founder work: executableFormat=null and leadsToCreate=false (calling',
+  '    or meeting people, visiting partners, deciding, setting up booking or phone handling, testing a path,',
+  '    publishing, and any asset type NOT in the list, e.g. an email or a reel). Never invent a format.',
+  '  - NEVER ASK FOR WHAT BB ALREADY HOLDS. The input lists WHAT BB ALREADY HOLDS about this business (fact',
+  '    classes, counts, examples). Never assign the founder to collect, catalogue, audit, list or write down a',
+  '    fact class BB already holds. Plan the step that USES it instead (not "list your services" but the move',
+  '    the services make possible). gathersFactClass must be honest: if an action does gather a class, name it.',
+  '  - Every priority and action must trace to the strategy. Nothing generic that a marketer recommends to',
+  '    everyone. THE TEST: strip the business name and all proper nouns — could these exact actions be handed',
+  '    unchanged to a different founder (a bookkeeper, a bakery, a SaaS)? If yes, they are too generic. REWRITE',
+  '    each action so it names the SPECIFIC artifact, the SPECIFIC audience moment, or the SPECIFIC mechanism',
+  '    unique to THIS business (e.g. not "post a case study on LinkedIn and email your list" but what the case',
+  '    study proves, to whom, and why it moves THIS strategy). Do NOT achieve this by stuffing in strategy',
+  '    keywords — specificity comes from the concrete move, not repeated vocabulary.',
+  '  - Ordinary execution counts are fine (2 emails, 1 post/week, a 30-day horizon). But do NOT invent an',
+  '    OUTCOME target/threshold/deadline (leads, clients, users, %, revenue, "by <date>") unless it appears in',
+  '    AUTHORIZED NUMBERS, in the same scope. A DOCUMENTED PROOF NUMBER (from a case study/licensed material)',
+  '    may be cited ONLY faithfully and documentarily ("the case study documents a 30% burn reduction") — never',
+  '    turned into a forward promise ("improve your burn by 30%", "target 30% conversion").',
+  '  - COMPLETE THE FLOW, never half a channel. Any action with generatesDemand=true must list in its',
+  '    prerequisiteKeys the action(s) that HANDLE what it brings in — the landing/handling that receives the',
+  '    person who arrives. Never invite anyone before the thing that receives them exists. Example (a referral',
+  '    play): "reach out to the doctors" (generatesDemand) must depend on the actions that build the receiving',
+  '    side — deciding who answers when a patient calls, and the path the arriving patient walks. If the plan',
+  '    generates demand, it MUST also build the receiving side and SEQUENCE the invite after it. A landing/',
+  '    handling action lives in a conversion_path, retention, or sales_support priority.',
+  '  - NEVER write internal action keys (e.g. "a1", "b2") into any founder-facing text. Keys belong only in',
+  '    prerequisiteKeys. Refer to prior steps in words ("after the proof piece is drafted"), never by key.',
+  '  - No manufactured urgency ("act fast", "limited time"). No outcome/result promises ("guaranteed to',
+  '    double leads", "proven to convert"). No invented commercial claims.',
+  '  - Respect the resource envelope: capacity, channels, constraints, and explicit boundaries (notWilling).',
+  '  - currentFocusIndex points to the single most leverage-worthy priority to start with.',
+  '  - notNow is FIRST-CLASS but may be EMPTY. Only include a not-now item that is a REAL, deliberate',
+  '    deferral, each with a typed reason: strategic_tradeoff | resource_constraint | prerequisite |',
+  '    material_gap | founder_boundary. NEVER fabricate deferrals to look thorough.',
+  '  - Founder-legible language throughout. No internal jargon, no ref tokens, no confidence scores.',
+  '  - LANGUAGE: write ALL founder-facing text (the month direction, priorities, actions, reasons) in the SAME',
+  '    language as the STRATEGY inputs below (the goal, core bet, and decisions). If they are in Romanian, write',
+  '    in Romanian; Italian → Italian; English → English. Write the ENTIRE plan — every field and sentence — in',
+  '    that ONE language; NEVER mix languages within the output. NEVER translate to English by default.',
+  '',
+  'Return ONLY JSON in this exact shape:',
+  '{"monthDirection":"...","currentFocusIndex":0,"priorities":[{"title":"...","intent":"...","why":"...",',
+  '"betRef":"...","goalRef":"...","timeBand":"weeks 1-2","feasibility":"feasible","materialGap":null,',
+  '"observableSignal":{"description":"...","source":"..."}|null,"order":0,"actions":[{"key":"a1","what":"...",',
+  '"why":"...","doneDefinition":"...","effortHint":"a_session"|null,"executableFormat":null,"leadsToCreate":false,',
+  '"generatesDemand":false,"requiredMaterial":[],"prerequisiteKeys":[],"planTimeFeasible":true,"gathersFactClass":"none"}]}],',
+  '"notNow":[{"item":"...","reason":"...","reasonKind":"strategic_tradeoff"}]}',
+].join('\n');
+
+const FORMAT_LABEL: Record<ExecutableFormat, string> = {
+  landing: 'landing — the page a person arrives on (BB writes the copy; the founder reviews and publishes it)',
+  carousel: 'carousel — an Instagram carousel post (BB writes and renders the slides; the founder reviews and posts it)',
+};
+
+/** WHAT BB CAN DO + WHAT BB ALREADY HOLDS: the planner's view of BB's capabilities and holdings (C2). BB's formats
+ *  are a product constant, so an absent list means all of them; absent holdings mean none catalogued. */
+export function capabilityLines(formats: readonly ExecutableFormat[] | undefined, held: HeldFactsSummary | undefined): string[] {
+  const fs = (formats ?? EXECUTABLE_FORMATS).filter((f) => FORMATS.has(f));
+  const classes = (held?.classes ?? []).filter((c) => c.count > 0);
+  return [
+    '', 'WHAT BB CAN DO (the ONLY formats BB writes itself; everything else is founder work):',
+    ...(fs.length ? fs.map((f) => `- ${FORMAT_LABEL[f]}`) : ['- (nothing: every action is founder work)']),
+    '', 'WHAT BB ALREADY HOLDS about this business (never assign the founder to gather these again):',
+    ...(classes.length
+      ? classes.map((c) => `- ${c.atomClass}: ${c.count}${c.examples.length ? ` (e.g. ${c.examples.slice(0, 3).map((e) => `"${e}"`).join(', ')})` : ''}`)
+      : ['- (no catalogued facts yet)']),
+    ...(held?.facets.length ? [`Understanding BB holds: ${held.facets.join('; ')}`] : []),
+  ];
+}
+
+function buildUser(input: DraftPlanInput): string {
+  const { strategy, envelope, businessName, repairReasons, priorDraft, priorCycle } = input;
+  const nums = strategy.authorizedNumbers.length
+    ? strategy.authorizedNumbers.map((n) => `- "${n.value}" (${n.kind}; belongs to: ${n.appliesTo}; from: ${n.sourceRef})`).join('\n')
+    : '(none — do NOT introduce any numeric target or deadline)';
+  const lines = [
+    `BUSINESS: ${businessName}`,
+    '', 'CURRENT STRATEGY',
+    `Goal: ${strategy.goal}`,
+    `Core bet: ${strategy.coreBet}`,
+    `Decisions the plan may execute:`, ...(strategy.decisions.length ? strategy.decisions.map((d) => `- ${d}`) : ['- (none stated)']),
+    `Authorized audience / use-context: ${strategy.audience}`,
+    `CTA direction: ${strategy.ctaDirection || '(none)'}`,
+    '', 'AVAILABLE MATERIAL (what execution can draw on):', ...(strategy.licensedMaterial.length ? strategy.licensedMaterial.map((m) => `- ${m}`) : ['- (none catalogued)']),
+    '', 'AUTHORIZED NUMBERS / DEADLINES (the ONLY outcome targets/deadlines you may use, and only in their scope):', nums,
+    '', 'DOCUMENTED PROOF NUMBERS (from licensed material — cite faithfully as documented results, NEVER as a forward promise):',
+    strategy.licensedNumericFacts?.length ? strategy.licensedNumericFacts.map((fct) => `- "${fct.value}" ${fct.meaning} (${fct.semanticScope}; from ${fct.sourceType})`).join('\n') : '(none)',
+    '', 'RESOURCE ENVELOPE',
+    `Capacity: ${envelope.capacity}`,
+    `Channels the founder will actually use: ${envelope.channels.length ? envelope.channels.join(', ') : '(unspecified)'}`,
+    `Constraints: ${envelope.constraints.length ? envelope.constraints.join('; ') : '(none stated)'}`,
+    `Will NOT do (hard boundaries): ${envelope.notWilling.length ? envelope.notWilling.join('; ') : '(none stated)'}`,
+    `Resources/team: ${envelope.resources.length ? envelope.resources.join('; ') : '(solo/unknown)'}`,
+    ...capabilityLines(input.executableFormats, input.heldFacts),
+  ];
+  if (priorCycle) {
+    const list = (xs: string[]): string[] => (xs.length ? xs.map((x) => `- ${x}`) : ['- (none)']);
+    lines.push(
+      '', 'THIS IS THE NEXT CYCLE — ADVANCE, DO NOT REPEAT.',
+      'The founder already ran a full cycle on this same bet. Build the NEXT month FROM WHERE THEY FINISHED. Every',
+      'priority and action must be a genuine NEXT step — a follow-up, the next audience, a deepening, or a',
+      'deliberately not-now item that is now the right move. NEVER restate or rephrase something already done.',
+      `Last month's direction was: ${priorCycle.monthDirection}`,
+      'DONE last cycle (do NOT plan these again — take the step that comes AFTER each):', ...list(priorCycle.completed),
+      'DEFERRED last cycle (pick up with a reason, or drop):', ...list(priorCycle.deferred),
+      'DELIBERATELY NOT-NOW last cycle (promote one INTO this cycle if the finished work made it the right next move):', ...list(priorCycle.notNow),
+      `What the founder reported about how it went: "${priorCycle.outcomeReport}"`,
+      'The monthDirection MUST open by referencing the progress (e.g. "Luna trecută ai livrat X; luna aceasta duci mai',
+      'departe cu Y"). If a priority could have appeared unchanged in last month\'s plan, it is a repeat — replace it',
+      'with the real next step.',
+    );
+  }
+  if (repairReasons?.length) {
+    lines.push('', 'YOUR PREVIOUS DRAFT FAILED THE QUALITY GATE. Fix exactly these problems and return the COMPLETE corrected plan:', ...repairReasons.map((r) => `- ${r}`));
+    if (priorDraft) lines.push('', 'PREVIOUS DRAFT (JSON):', JSON.stringify(priorDraft));
+  }
+  return lines.join('\n');
+}
+
+export class AnthropicPlanModel implements IPlanModelPort {
+  private readonly modelId: string;
+  constructor(private readonly apiKey: string, modelId?: string) {
+    this.modelId = modelId ?? process.env['LLM_STRONG_MODEL'] ?? 'claude-sonnet-4-6';
+  }
+
+  private async call(system: string, user: string, maxTokens: number, temperature = 0): Promise<unknown> {
+    const client = createAnthropicClient(this.apiKey);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const resp: any = await client.messages.create({ model: this.modelId, max_tokens: maxTokens, temperature, system, messages: [{ role: 'user', content: user }] });
+    const block = Array.isArray(resp?.content) ? resp.content.find((c: { type?: string }) => c?.type === 'text') : null;
+    return extractJson((block as { text?: string } | null)?.text ?? '');
+  }
+
+  async draftPlan(input: DraftPlanInput): Promise<PlanDraft> {
+    const user = buildUser(input);
+    // A governed plan draft (multiple priorities × actions, each with what/why/doneDefinition) routinely exceeds
+    // 3000 output tokens; truncation there produced invalid JSON → a draft "throw" → fail-closed with no gate
+    // finding (the reliability root cause). Match the strategy generator's budget so the draft completes; every
+    // deterministic gate + the genericity judge still run on the full draft, so governance is unchanged.
+    const raw = (await this.call(PLAN_SYSTEM, user, 8000)) as Record<string, unknown>;
+    return this.normalize(raw);
+  }
+
+  /** Defensive normalization → strict PlanDraft (coerce enums, drop malformed items; never throw on shape). */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private normalize(raw: any): PlanDraft {
+    const priorities = (Array.isArray(raw?.priorities) ? raw.priorities : []).map((p: any, pi: number) => ({
+      title: str(p?.title), intent: (INTENTS.includes(p?.intent) ? p.intent : 'other') as PriorityIntent,
+      why: str(p?.why), betRef: str(p?.betRef), goalRef: str(p?.goalRef),
+      timeBand: str(p?.timeBand) || 'weeks 1-4',
+      feasibility: (p?.feasibility === 'blocked_missing_material' ? 'blocked_missing_material' : 'feasible') as 'feasible' | 'blocked_missing_material',
+      materialGap: p?.materialGap == null ? null : str(p.materialGap) || null,
+      observableSignal: p?.observableSignal && str(p.observableSignal?.description)
+        ? { description: str(p.observableSignal.description), source: p.observableSignal?.source == null ? null : str(p.observableSignal.source) || null }
+        : null,
+      order: Number.isInteger(p?.order) ? p.order : pi,
+      actions: (Array.isArray(p?.actions) ? p.actions : []).map((a: any, ai: number) => ({
+        key: str(a?.key) || `p${pi}a${ai}`, what: str(a?.what), why: str(a?.why), doneDefinition: str(a?.doneDefinition),
+        effortHint: EFFORTS.has(a?.effortHint) ? a.effortHint : null,
+        leadsToCreate: Boolean(a?.leadsToCreate), generatesDemand: Boolean(a?.generatesDemand),
+        // An unknown format is coerced to null (founder work); with leadsToCreate=true that then FAILS the gate
+        // (create_without_format). A missing/unknown gathersFactClass stays ABSENT so validateCapabilityTags
+        // fails it (missing_gathers_tag); it is never defaulted to 'none'.
+        executableFormat: (FORMATS.has(a?.executableFormat) ? a.executableFormat : null) as ExecutableFormat | null,
+        ...(GATHERS.has(a?.gathersFactClass) ? { gathersFactClass: a.gathersFactClass as GathersFactClass } : {}),
+        requiredMaterial: strArr(a?.requiredMaterial),
+        prerequisiteKeys: strArr(a?.prerequisiteKeys), planTimeFeasible: a?.planTimeFeasible !== false,
+      })),
+    }));
+    const notNow = (Array.isArray(raw?.notNow) ? raw.notNow : [])
+      .map((n: any) => ({ item: str(n?.item), reason: str(n?.reason), reasonKind: (REASON_KINDS.includes(n?.reasonKind) ? n.reasonKind : 'strategic_tradeoff') as NotNowReasonKind }))
+      .filter((n: { item: string; reason: string }) => n.item && n.reason);
+    const focus = Number.isInteger(raw?.currentFocusIndex) ? Math.max(0, Math.min(raw.currentFocusIndex, Math.max(0, priorities.length - 1))) : 0;
+    return { monthDirection: str(raw?.monthDirection), priorities, currentFocusIndex: focus, notNow };
+  }
+
+  /**
+   * Correction #1 (revised) — SEMANTIC genericity review by CAUSAL DERIVATION, not "could another business do
+   * this". A shared tactic PASSES when the strategy/context causally entails it; an item FAILS only when its
+   * real justification is "common best practice" AND it would survive unchanged with the strategy/context
+   * reasons removed (nouns decorative). Never rewrites the plan — returns bounded structured failures.
+   */
+  async reviewGenericity(input: { plan: unknown; strategyDigest: StrategyDigest; businessName: string }): Promise<GenericityVerdict> {
+    const d = input.strategyDigest;
+    const user = [
+      `BUSINESS: ${input.businessName}`,
+      '', 'CURRENT STRATEGY (the causal source the plan must derive from):',
+      `Goal: ${d.goal}`, `Core bet: ${d.coreBet}`,
+      `Decisions: ${d.decisions.join(' | ') || '(none)'}`,
+      `Audience: ${d.audience}`,
+      `Available material: ${d.licensedMaterial.join(' | ') || '(none)'}`,
+      `Constraints: ${d.constraints.join(' | ') || '(none)'}`,
+      `Will NOT do: ${d.notWilling.join(' | ') || '(none)'}`,
+      '', 'PLAN (JSON):', JSON.stringify(input.plan),
+    ].join('\n');
+    const r = (await this.call(GENERICITY_SYSTEM, user, 700)) as { generic?: unknown; failures?: unknown };
+    const failures = (Array.isArray(r?.failures) ? r.failures : []).map((f: any) => ({ ref: str(f?.ref), reason: str(f?.reason), missingDerivation: str(f?.missingDerivation) })).filter((f: { ref: string }) => f.ref);
+    return { generic: Boolean(r?.generic) && failures.length > 0, failures };
+  }
+
+  /** Provenance descriptor for the audit trace — resolved model id + system-prompt hashes (no prompt text). */
+  descriptor(): { modelId: string; draftContractHash: string; genericityContractHash: string } {
+    const h = (s: string): string => createHash('sha256').update(s, 'utf8').digest('hex').slice(0, 16);
+    return { modelId: this.modelId, draftContractHash: h(PLAN_SYSTEM), genericityContractHash: h(GENERICITY_SYSTEM) };
+  }
+}
+
+/** Causal-derivation genericity review. Shared tactics are fine; decorative-noun genericity is not. */
+const GENERICITY_SYSTEM = [
+  'You review whether a 30-day execution plan is CAUSALLY DERIVED from THIS business\'s strategy and context,',
+  'or is a generic best-practice module wearing this business\'s nouns. A SHARED tactic (emailing a waitlist,',
+  'publishing a case study, running a nurture sequence) is completely FINE when the strategy/context',
+  'specifically calls for it — do NOT require novelty, and do NOT fail a plan merely because another business',
+  'could use the same mechanic.',
+  '',
+  'For each priority and action, apply the CAUSAL DERIVATION test:',
+  '  1. Which strategy decision/bet requires or supports it?',
+  '  2. Which business-specific fact / material / constraint makes it appropriate here?',
+  '  3. If those inputs were removed, would this action still be proposed?',
+  'FAIL an item ONLY when its real justification is "this is a common marketing best practice" AND it would',
+  'survive unchanged after removing the strategy/context reasons (the business nouns are just decoration).',
+  'PASS an item when a common tactic is specifically SELECTED because the strategy/context materially calls',
+  'for it.',
+  '',
+  'Return ONLY JSON: {"generic":true|false,"failures":[{"ref":"the priority or action title","reason":"why',
+  'its justification is only generic best-practice","missingDerivation":"which strategy/context causal link',
+  'is absent"}]}. Set generic=true if and only if failures is non-empty. Return an empty failures array when',
+  'every priority and action is causally derived.',
+].join('\n');

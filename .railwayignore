@@ -1,0 +1,39 @@
+# What `railway up` must NOT upload. `railway up` tarballs the WORKING TREE, so this is the guard that keeps
+# non-product files (especially the 175M+ internal Hypit/reel-studio install) out of the deploy payload.
+# The deployed Railway services are api, web and workers — none build from services/ — so excluding it is safe.
+# (The Docker BUILD context is further narrowed by .dockerignore; this file narrows the UPLOAD itself.)
+
+# ── Internal-only Hypit / reel-studio service (NOT part of any deployed image) ──
+services/reel-studio/
+
+# ── Dependencies & build output — the image installs/builds its own (correct-arch) ──
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+*.tsbuildinfo
+**/*.tsbuildinfo
+coverage/
+**/coverage/
+
+# ── Secrets, env, local runtime artifacts (Railway injects env vars) ──
+.env
+.env.*
+*.pem
+dump.rdb
+docker-compose.override.yml
+.DS_Store
+*.log
+
+# ── VCS, agent state, work records — never product ──
+.git/
+.claude/
+intent/
+
+# ── Unwired / local-only files kept in the tree but never deployed (mirror of .dockerignore) ──
+apps/api/src/routes/meta-dev.routes.ts
+apps/web/bb-review.html
+apps/web/src/businessbrain/review-entry.tsx
+tools/bb-review-server.ts
+tools/diag/
+tools/m15-validation/

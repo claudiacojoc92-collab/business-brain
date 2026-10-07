@@ -2,20 +2,81 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import type { KyselyDB } from '@bb/infrastructure';
 import type { RedisClient } from '@bb/infrastructure';
 import type { Logger } from '@bb/infrastructure';
+import type { CommandBus, QueryBus, JwtService, PasswordService, PgPhotoLedRepository, QueueRegistry } from '@bb/infrastructure';
+import type {
+  BusinessService,
+  FounderAccountService,
+  LearnBusinessService,
+  ConversationService,
+  BusinessCorrectionService,
+  Aha2Service,
+  StrategyService,
+  ImpactService,
+  MirrorService,
+  ArcService,
+  VoiceService,
+  PlanService,
+  CarouselService,
+  PhotoLedService,
+  ReelService,
+  ReelShootService,
+  MoveDraftService,
+  ReachService,
+  IObjectStore,
+  IReelRepository,
+  IReelShootRepository,
+  IMoveDraftRepository,
+  MoveDraft,
+  IDiscoveredProfileRepository,
+  IUnderstandingSnapshotRepository,
+  IAhaRepository,
+  IContentLanguageStore,
+} from '@bb/application';
 import { registerPlugins } from './plugins';
 import { registerRoutes } from './routes';
-import type { IEmailService } from './session/email.service';
 
-/**
- * The API's runtime dependencies. The M2 auth bridge (CQRS buses + Jwt/Password services) was retired
- * in S0-T2 C3 — auth is now the self-serve magic-link SESSION (session.routes builds its own deps).
- * `email` is the magic-link adapter chosen at composition (main.ts); omitting it defaults to LogEmailService.
- */
 export interface ServerDeps {
-  db:     KyselyDB;
-  redis:  RedisClient;
-  logger: Logger;
-  email?: IEmailService;
+  db:              KyselyDB;
+  redis:           RedisClient;
+  logger:          Logger;
+  commandBus:      CommandBus;
+  queryBus:        QueryBus;
+  jwtService:      JwtService;
+  passwordService: PasswordService;
+  businessService: BusinessService;
+  founderAccountService: FounderAccountService;
+  learnBusinessService: LearnBusinessService;
+  discoveredProfileRepo: IDiscoveredProfileRepository;
+  understandingRepo: IUnderstandingSnapshotRepository;
+  ahaRepo: IAhaRepository;
+  /** The business's CONTENT language store (the UI is always English; models write in this). Optional for tests. */
+  contentLanguageStore?: IContentLanguageStore;
+  conversationService: ConversationService;
+  businessCorrectionService: BusinessCorrectionService;
+  aha2Service: Aha2Service;
+  strategyService: StrategyService;
+  impactService: ImpactService;
+  mirrorService: MirrorService;
+  arcService: ArcService;
+  voiceService: VoiceService;
+  planService: PlanService;
+  carouselService: CarouselService;
+  photoLedService: PhotoLedService;
+  photoLedRepo: PgPhotoLedRepository;
+  reelService?: ReelService;
+  reelObjectStore?: IObjectStore;
+  reelRepo?: IReelRepository;
+  reelQueue?: QueueRegistry;
+  reelShootService?: ReelShootService;
+  reelShootRepo?: IReelShootRepository;
+  moveDraftService?: MoveDraftService;
+  moveDraftRepo?: IMoveDraftRepository;
+  moveDraftQueue?: QueueRegistry;
+  produceLandingMove?: (businessId: string, actionId: string, planVersionId: string) => Promise<
+    | { status: 'blocked'; reason: 'no_adopted_strategy'; message: string }
+    | { status: 'produced'; moveDraft: MoveDraft }
+  >;
+  reachService: ReachService;
 }
 
 /**
@@ -30,7 +91,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
 
   await registerPlugins(server, deps);
-  await registerRoutes(server, { email: deps.email });
+  await registerRoutes(server, deps);
 
   // Graceful shutdown
   const shutdown = async (): Promise<void> => {

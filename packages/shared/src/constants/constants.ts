@@ -52,6 +52,9 @@ export const QUEUES = {
   NOTIFICATIONS:    'bb-notifications',
   PROJECTIONS:      'bb-projections',
   DEAD_LETTER:      'bb-dead-letter',
+  REEL_PROCESS:     'bb-reel-process',
+  REEL_RENDER:      'bb-reel-render',
+  MOVE_DRAFT:       'bb-move-draft',
 } as const;
 
 export type QueueName = typeof QUEUES[keyof typeof QUEUES];

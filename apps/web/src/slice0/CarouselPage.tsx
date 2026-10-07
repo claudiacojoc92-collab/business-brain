@@ -1,0 +1,283 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { useLocale } from '../i18n/LocaleContext';
+import { AppShell } from './AppShell';
+import { isNotFound, LoadError, actionErrorKey, uploadRejectCode, uploadRejectKey } from './errors';
+import { useAddContext } from './AddContextDrawer';
+import {
+  getBusiness, generateCarousel, reviseCarousel, tryDifferentAngle, uploadCarouselMedia, fileToDataUrl,
+  carouselSlideObjectUrl, downloadCarouselZip, learnFromMaterial,
+  type Business, type CarouselView, type CarouselSlideView,
+} from '../api/client';
+
+type T = (k: string, v?: Record<string, string>) => string;
+
+export function CarouselPage() {
+  const { id, handoffId } = useParams<{ id: string; handoffId: string }>();
+  const { t } = useLocale();
+  const navigate = useNavigate();
+
+  const [business, setBusiness] = useState<Business | null | undefined>(undefined);
+  const [view, setView] = useState<CarouselView | null>(null);
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState<{ headline: string; body: string }>({ headline: '', body: '' });
+  const [rejected, setRejected] = useState<string[] | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [phase, setPhase] = useState<'gate' | 'working'>('gate');
+  const [techError, setTechError] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
+  const [skippedUploads, setSkippedUploads] = useState<{ code: string; name: string; index: number }[]>([]); // per-file upload rejections, surfaced not swallowed
+  const [loadErr, setLoadErr] = useState(false);   // B3 — transient load failure, distinct from a true 404
+  const [actionError, setActionError] = useState<string | null>(null); // B1 — a primary action that failed
+  const [evidence, setEvidence] = useState('');    // fix 11 — the founder supplies the missing evidence inline
+  const addCtx = useAddContext();                  // Task 1 — the existing business-truth input (text), reused here
+  const regenAfterCtx = useRef(false);
+  const started = useRef(false);
+
+  // Task 1b — when the founder adds business truth via the Add Context drawer (opened from the post-draft
+  // insufficient screen), re-run generation so the carousel reflects the new material. This is an honest re-run
+  // (the inputs changed), not the deterministic Retry we removed.
+  useEffect(() => {
+    if (!addCtx.isOpen && regenAfterCtx.current) { regenAfterCtx.current = false; void retry(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addCtx.isOpen]);
+
+  async function loadImages(v: CarouselView) {
+    if (v.state !== 'ready') return;
+    const next: Record<string, string> = {};
+    for (const s of v.slides) if (s.imageUrl) { try { next[s.slideId] = await carouselSlideObjectUrl(s.imageUrl); } catch { /* skip */ } }
+    setUrls((prev) => { Object.values(prev).forEach((u) => URL.revokeObjectURL(u)); return next; });
+  }
+
+  const load = useCallback(async () => {
+    if (!id) return;
+    setLoadErr(false);
+    try { setBusiness(await getBusiness(id)); }
+    catch (e) { if (isNotFound(e)) setBusiness(null); else setLoadErr(true); }
+  }, [id]);
+
+  useEffect(() => {
+    if (!id || started.current) return;
+    started.current = true;
+    void load();
+  }, [id, load]);
+
+  // Optional media moment (§12): upload any selected visuals, then generate. "Continue without photos" skips upload.
+  async function proceed() {
+    if (!id || !handoffId) return;
+    setPhase('working');
+    setTechError(false);
+    try {
+      // Per-file: good files go through, bad ones are SKIPPED (a carousel takes files one at a time) — but the
+      // founder is told WHICH were skipped and why, instead of them silently vanishing. Transient/network errors
+      // aren't counted here; they surface through the technical-failure path below.
+      const picked = files.slice(0, 6);
+      const skipped: { code: string; name: string; index: number }[] = [];
+      for (let i = 0; i < picked.length; i++) {
+        const f = picked[i]!;
+        try { const d = await fileToDataUrl(f); await uploadCarouselMedia(id, d, f.name); }
+        catch (e) { const code = uploadRejectCode(e); if (code) skipped.push({ code, name: f.name, index: i + 1 }); }
+      }
+      setSkippedUploads(skipped);
+      const v = await generateCarousel(id, handoffId);
+      setView(v); await loadImages(v);
+    } catch {
+      // M7 failure-state distinction: a THROWN request is a TECHNICAL failure (recover by retrying) — distinct from
+      // a returned state:'insufficient', which is a MATERIAL gap (BB needs more business truth). Never a raw crash.
+      setTechError(true);
+    }
+  }
+
+  // Fail-closed recovery: re-run generation (no re-upload); the founder never sees why it failed, only that it did.
+  async function retry() {
+    if (!id || !handoffId) return;
+    setView(null); setTechError(false); setPhase('working');
+    try { const v = await generateCarousel(id, handoffId); setView(v); await loadImages(v); }
+    catch { setTechError(true); }
+  }
+  // "Add more source material" returns to the media moment so the founder can supply visuals/assets, then regenerate.
+  function addMoreSource() { setView(null); setFiles([]); setPhase('gate'); }
+  // Task 1b — the post-draft failure is about business truth, not photos. Open the real business-truth input
+  // (the Add Context drawer); the effect above re-runs generation once it closes.
+  function addBusinessTruth() { regenAfterCtx.current = true; addCtx.open(); }
+
+  // fix 11 — the founder supplies the specific missing evidence as DECLARED business truth (through the SAME
+  // synthesis the rest of the product uses), then we re-run generation. The claim-safety kernel is untouched:
+  // the supplied fact becomes authorized material, and the generated copy is still checked against every gate.
+  async function supplyEvidence() {
+    if (!id || !handoffId || !evidence.trim() || busy) return;
+    setBusy(true); setActionError(null);
+    try {
+      await learnFromMaterial(id, evidence.trim(), 'carousel_evidence');
+      setEvidence('');
+      setView(null); setPhase('working');
+      const v = await generateCarousel(id, handoffId);
+      setView(v); await loadImages(v);
+    } catch (e) { setActionError(t(actionErrorKey(e))); }
+    finally { setBusy(false); }
+  }
+
+  async function applyRevision(slideId: string) {
+    if (!id || view?.state !== 'ready') return;
+    setBusy(true); setRejected(null); setActionError(null);
+    try {
+      const v = await reviseCarousel(id, view.assetId, { scope: 'slide', slideId, headline: draft.headline, body: draft.body || undefined, request: 'edit' });
+      if (v.state === 'revision_rejected') { setRejected(v.reasons); }
+      else { setView(v); setEditing(null); await loadImages(v); }
+    } catch (e) { setActionError(t(actionErrorKey(e))); } finally { setBusy(false); }
+  }
+
+  async function angle() {
+    if (!id || view?.state !== 'ready') return;
+    setBusy(true); setRejected(null); setNotice(null); setActionError(null);
+    try {
+      const v = await tryDifferentAngle(id, view.assetId);
+      if (v.state === 'not_different') setNotice(t('carousel.angle.same'));
+      else if (v.state === 'insufficient') setNotice(t('carousel.angle.insufficient'));
+      else { setView(v); setEditing(null); await loadImages(v); }
+    } catch (e) { setActionError(t(actionErrorKey(e))); } finally { setBusy(false); }
+  }
+
+  if (loadErr) return <LoadError onRetry={() => { if (id) void load(); }} />;
+  if (business === null) return <Navigate to="/" replace />;
+  if (business === undefined) return <AppShell showSignOut><div className="s0-loading">{t('common.loading')}</div></AppShell>;
+
+  // §12 optional media moment — shown once before generating; never a brand wall.
+  if (phase === 'gate') {
+    return (
+      <AppShell showSignOut>
+        <div className="s0-panel s0-panel-wide">
+          <button type="button" className="s0-linkbtn" onClick={() => navigate(`/b/${id}/today`)} style={{ marginBottom: 18 }}>← {t('carousel.back')}</button>
+          <h1 className="s0-h1">{t('carousel.media.title')}</h1>
+          <p className="s0-lede">{t('carousel.media.body')}</p>
+          <label className="s0-linkbtn s0-car-upload">
+            {t('carousel.media.add')}
+            <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={(e) => setFiles(Array.from(e.target.files ?? []))} />
+          </label>
+          {files.length > 0 && <p className="s0-plan-band">{t('carousel.media.selected', { n: String(files.length) })}</p>}
+          <div className="s0-strat-actions">
+            <button type="button" className="s0-plan-primary" style={{ maxWidth: 320 }} onClick={proceed}>{files.length ? t('carousel.media.use') : t('carousel.media.skip')}</button>
+            {files.length > 0 && <button type="button" className="s0-linkbtn" onClick={() => { setFiles([]); proceed(); }}>{t('carousel.media.skip')}</button>}
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+  // M7 — TECHNICAL failure (a thrown request), distinct from a material insufficiency. Honest, recoverable.
+  if (techError) {
+    return (
+      <AppShell showSignOut>
+        <div className="s0-panel s0-panel-wide">
+          <button type="button" className="s0-linkbtn" onClick={() => navigate(`/b/${id}/today`)} style={{ marginBottom: 18 }}>← {t('carousel.back')}</button>
+          <h1 className="s0-h1">{t('carousel.tech.title')}</h1>
+          <p className="s0-lede">{t('carousel.tech.body')}</p>
+          <div className="s0-strat-actions"><button type="button" className="s0-plan-primary" style={{ maxWidth: 320 }} onClick={retry}>{t('carousel.retry')}</button></div>
+        </div>
+      </AppShell>
+    );
+  }
+  if (!view) {
+    return <AppShell showSignOut><div className="s0-panel s0-panel-wide"><h1 className="s0-h1">{t('carousel.composing.title')}</h1><p className="s0-lede">{t('carousel.composing.body')}</p></div></AppShell>;
+  }
+
+  return (
+    <AppShell showSignOut>
+      {actionError && <div className="s0-error" role="alert">{actionError}</div>}
+      <div className="s0-panel s0-panel-wide">
+        <button type="button" className="s0-linkbtn" onClick={() => navigate(`/b/${id}/today`)} style={{ marginBottom: 18 }}>← {t('carousel.back')}</button>
+
+        {/* Per-file upload rejections — the good files went through; these were skipped. Label above, reason below. */}
+        {skippedUploads.length > 0 && (
+          <div className="s0-car-skipped" role="status">
+            {skippedUploads.map((s) => (
+              <div key={s.index} className="s0-car-skipped-item">
+                <div className="s0-plan-band">{s.name ? t('upload.photoLabelNamed', { n: String(s.index), name: s.name }) : t('upload.photoLabel', { n: String(s.index) })}</div>
+                <p className="s0-lede">{t(uploadRejectKey(s.code))}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {view?.state === 'unavailable_format' && (<><h1 className="s0-h1">{t('carousel.unavailable.title')}</h1><p className="s0-lede">{t('carousel.unavailable.body', { format: view.requested })}</p></>)}
+        {view?.state === 'no_strategy' && (<><h1 className="s0-h1">{t('carousel.nostrategy.title')}</h1><p className="s0-lede">{t('carousel.nostrategy.body')}</p></>)}
+        {view?.state === 'insufficient' && (
+          <>
+            <h1 className="s0-h1">{t('carousel.insufficient.title')}</h1>
+            <p className="s0-lede">{t('carousel.insufficient.body')}</p>
+            {/* Task 1 — the honest message stays; the actions no longer lie. No deterministic Retry (it re-runs the
+                same exhaustion), and "add source" now takes BUSINESS TRUTH (text), not a photo picker. */}
+            <div className="s0-strat-actions">
+              <button type="button" className="s0-plan-primary" style={{ maxWidth: 360 }} onClick={addBusinessTruth}>{t('carousel.addbusiness')}</button>
+            </div>
+          </>
+        )}
+
+        {view?.state === 'needs_evidence' && (
+          <>
+            <h1 className="s0-h1">{t('carousel.needsEvidence.title')}</h1>
+            <p className="s0-lede">{t('carousel.needsEvidence.body')}</p>
+            <ul className="s0-strat-list">{view.requests.map((r, i) => <li key={i}>{r.ask}</li>)}</ul>
+            {/* fix 11 — turn the ask into an answer: supply the missing evidence inline, then re-run. The claim-safety
+                gates are unchanged — this gives BB what clears the bar; it never lowers it. */}
+            <textarea className="s0-pourin-desc" value={evidence} rows={3} placeholder={t('carousel.evidence.ph')} aria-label={t('carousel.evidence.ph')} onChange={(e) => setEvidence(e.target.value)} />
+            <div className="s0-strat-actions">
+              <button type="button" className="s0-plan-primary" style={{ maxWidth: 320 }} disabled={busy || !evidence.trim()} onClick={supplyEvidence}>{busy ? t('carousel.evidence.adding') : t('carousel.evidence.add')}</button>
+              <button type="button" className="s0-linkbtn" onClick={addMoreSource}>{t('carousel.addmore')}</button>
+            </div>
+          </>
+        )}
+
+        {view?.state === 'ready' && (
+          <>
+            <h1 className="s0-h1">{t('carousel.ready.title')}</h1>
+            <p className="s0-lede">{t('carousel.ready.sub', { n: String(view.slides.length) })}</p>
+            {view.angleNote && <div className="s0-plan-stale" role="note">{view.angleNote}</div>}
+            {rejected && <div className="s0-plan-stale"><strong>{t('carousel.rejected.title')}</strong><ul className="s0-strat-list">{rejected.map((r, i) => <li key={i}>{r}</li>)}</ul></div>}
+            {notice && <div className="s0-plan-stale">{notice}</div>}
+
+            <div className="s0-car-strip">
+              {view.slides.map((s) => (
+                <SlideCard key={s.slideId} s={s} url={urls[s.slideId]} t={t} busy={busy}
+                  editing={editing === s.slideId}
+                  onEdit={() => { setEditing(s.slideId); setDraft({ headline: s.headline, body: s.body }); setRejected(null); }}
+                  onCancel={() => setEditing(null)}
+                  draft={draft} setDraft={setDraft} onApply={() => applyRevision(s.slideId)} />
+              ))}
+            </div>
+
+            <div className="s0-strat-actions">
+              {view.exportUrl && <button type="button" className="s0-plan-primary" style={{ maxWidth: 320 }} onClick={() => view.exportUrl && downloadCarouselZip(view.exportUrl)}>{t('carousel.export')}</button>}
+              <button type="button" className="s0-linkbtn" disabled={busy} onClick={angle}>{t('carousel.angle')}</button>
+            </div>
+          </>
+        )}
+      </div>
+    </AppShell>
+  );
+}
+
+function SlideCard(props: {
+  s: CarouselSlideView; url: string | undefined; t: T; busy: boolean; editing: boolean;
+  onEdit: () => void; onCancel: () => void; draft: { headline: string; body: string }; setDraft: (d: { headline: string; body: string }) => void; onApply: () => void;
+}) {
+  const { s, url, t, busy, editing, onEdit, onCancel, draft, setDraft, onApply } = props;
+  return (
+    <div className="s0-car-slide">
+      <div className="s0-car-frame">{url ? <img src={url} alt={`Slide ${s.order + 1}`} className="s0-car-img" /> : <div className="s0-car-ph" />}</div>
+      {!editing ? (
+        s.canRevise && <button type="button" className="s0-linkbtn" onClick={onEdit}>{t('carousel.change')}</button>
+      ) : (
+        <div className="s0-car-edit">
+          <input className="s0-input" value={draft.headline} onChange={(e) => setDraft({ ...draft, headline: e.target.value })} aria-label={t('carousel.headline')} placeholder={t('carousel.headline')} />
+          {s.body !== '' && <textarea className="s0-car-body" value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })} aria-label={t('carousel.body')} placeholder={t('carousel.body')} />}
+          <div className="s0-car-edit-actions">
+            <button type="button" className="s0-plan-primary s0-btn-inline" disabled={busy} onClick={onApply}>{busy ? '…' : t('carousel.apply')}</button>
+            <button type="button" className="s0-linkbtn" onClick={onCancel}>{t('carousel.cancel')}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

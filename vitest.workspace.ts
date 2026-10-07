@@ -20,5 +20,21 @@ export default defineWorkspace([
       ],
     },
   },
+  {
+    // Business Brain V1 Postgres integration project. Env-gated: it contributes ZERO
+    // files unless BB_IT_DATABASE_URL is set, so the default `vitest run` fast glob is
+    // untouched. Run it directly with: `npm run test:integration:businessbrain`
+    // (which sets --project businessbrain-integration).
+    test: {
+      name: 'businessbrain-integration',
+      environment: 'node',
+      include: process.env.BB_IT_DATABASE_URL
+        ? [
+            'packages/infrastructure/src/__tests__/database/repositories/pg-businessbrain.integration.spec.ts',
+            'apps/api/src/__tests__/__integration__/businessbrain-api.integration.spec.ts',
+          ]
+        : [],
+    },
+  },
   './apps/web/vite.config.ts',
 ]);

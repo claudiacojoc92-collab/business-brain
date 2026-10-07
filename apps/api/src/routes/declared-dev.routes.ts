@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { createKyselyClient, PgEvidenceRepository } from '@bb/infrastructure';
 import { runDeclaredMagicMoment } from '../business-model/declared-magic-moment.service';
 import { DECLARED_FIELDS, type DeclaredAnswer } from '../business-model/declared';
+import { DEV_FOUNDER_ID } from '../connectors/website/dev-founder';
 import { sseFrame } from './sse';
 
 /**
@@ -25,7 +26,6 @@ export function registerDeclaredDevRoutes(server: FastifyInstance): void {
   });
 
   server.post('/dev/declared/answer', async (request, reply) => {
-    const founderId = request.founderId; // resolved at the boundary by requireFounder (session-scoped)
     const body = (request.body ?? {}) as { answers?: unknown };
     const answers: DeclaredAnswer[] = Array.isArray(body.answers)
       ? body.answers.map((a) => {
@@ -40,10 +40,10 @@ export function registerDeclaredDevRoutes(server: FastifyInstance): void {
     });
     const send = (event: string, data: unknown) => reply.raw.write(sseFrame(event, data));
     try {
-      await repo.deleteBySource(founderId, 'founder');         // fresh declared (re-answer replaces)
-      await repo.deleteBySource(founderId, 'business-model');  // recompute reruns; observed evidence preserved
+      await repo.deleteBySource(DEV_FOUNDER_ID, 'founder');         // fresh declared (re-answer replaces)
+      await repo.deleteBySource(DEV_FOUNDER_ID, 'business-model');  // recompute reruns; observed evidence preserved
       const result = await runDeclaredMagicMoment({
-        founderId, answers, repo, anthropicApiKey: apiKey,
+        founderId: DEV_FOUNDER_ID, answers, repo, anthropicApiKey: apiKey,
         onProgress: (e) => send('reading', e),
         onFirstReflection: (b) => send('observed', b),
         onInferredLines: (l) => send('inferred', l),
