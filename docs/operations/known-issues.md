@@ -289,3 +289,15 @@ later if the file gets long.
   3. Once a worker drains `bb-move-draft`, flip `move-draft.routes` back to the enqueue path (the code is
      already there) and restore the async "writing your page" surface.
   4. Re-verify reel/reel-shoot end-to-end in prod for the first time, deliberately, with eyes.
+
+## Today surface mixes English chrome with Romanian content (i18n defect, still live)
+
+- **Found:** flagged Monday (2026-10-05), **still live on 2026-10-07** after today's deploy.
+- **What:** on a Romanian business (Body Move), the Today surface renders English **chrome** around Romanian
+  **content** — e.g. "You're betting on *<Romanian bet>*", "Today:", "I can work it through with you",
+  "What do you want to do?" are English, while the strategy bet and the generated action text are Romanian.
+- **Impact:** a Romanian founder sees a half-translated screen on the product's most-used surface. Cosmetic,
+  not a data defect, but it undercuts the "this was built for me" feel exactly where it matters most.
+- **Fix (not done):** route the Today chrome strings through `apps/web/src/i18n/messages.ts` (the TodayPage
+  still has hardcoded English literals) with `en`/`ro`/`it` entries; canonical state stays language-independent,
+  only the presentation localizes. Audit TodayPage for every hardcoded string, not just the ones listed.
