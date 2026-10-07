@@ -41,10 +41,30 @@ describe('move-draft routes — legible states, accept, rewrite', () => {
     expect(b.message.length).toBeGreaterThan(0);
   });
 
-  it('GET with no draft but a strategy adopted → pending', async () => {
+  it('GET, strategy adopted, no draft, NO produceLandingMove dep → falls back to the (unused) enqueue path → pending', async () => {
     const { server } = buildServer({ strategyService: { getCurrent: async () => ({ record: {}, adoptedAt: 'x' }) } });
     const res = await server.inject({ method: 'GET', url: '/v1/businesses/b1/moves/a1/landing-draft' });
     expect(res.json().status).toBe('pending');
+  });
+
+  it('BRIDGE: GET, strategy adopted, no draft, produceLandingMove present → produces INLINE, returns drafted + provenance', async () => {
+    const produceLandingMove = vi.fn(async () => ({ status: 'produced' as const, moveDraft: mdDrafted('drafted', 1) }));
+    const { server } = buildServer({ strategyService: { getCurrent: async () => ({ record: {}, adoptedAt: 'x' }) }, produceLandingMove });
+    const res = await server.inject({ method: 'GET', url: '/v1/businesses/b1/moves/a1/landing-draft' });
+    const b = res.json();
+    expect(b.status).toBe('drafted');
+    expect(produceLandingMove).toHaveBeenCalledWith('b1', 'a1', '');
+    expect(b.sections.find((s: any) => s.role === 'proof').facts[0].source).toBe('anchored');
+  });
+
+  it('BRIDGE: inline produce comes back blocked (no adopted strategy) → legible blocked + unblock', async () => {
+    const produceLandingMove = vi.fn(async () => ({ status: 'blocked' as const, reason: 'no_adopted_strategy' as const, message: 'no strategy' }));
+    const { server } = buildServer({ strategyService: { getCurrent: async () => ({ record: {}, adoptedAt: 'x' }) }, produceLandingMove });
+    const res = await server.inject({ method: 'GET', url: '/v1/businesses/b1/moves/a1/landing-draft' });
+    const b = res.json();
+    expect(b.status).toBe('blocked');
+    expect(b.reason).toBe('no_adopted_strategy');
+    expect(b.unblock).toBe('adopt_strategy');
   });
 
   it('GET returns the drafted sections + cta, hiding internal ids/snapshot/trace', async () => {

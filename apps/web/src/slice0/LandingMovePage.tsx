@@ -79,7 +79,9 @@ export function LandingMovePage(): JSX.Element {
   };
 
   if (error) return <main className="s0-main"><p className="s0-lede">{error}</p><button className="s0-btn" onClick={() => void load()}>{t('landing.retry')}</button></main>;
-  if (!view) return <main className="s0-main"><p className="s0-lede">{t('landing.loading')}</p></main>;
+  // The first load runs the synchronous inline generation (no workers service yet — see the bridge note in
+  // the api route). That can take a couple of minutes, so this is an HONEST wait, never a bare spinner.
+  if (!view) return <main className="s0-main"><p className="s0-lede">{t('landing.generating')}</p><p className="s0-landing-wait">{t('landing.generatingHint')}</p></main>;
 
   // Blocked / pending — plain language, the reason, and the action that unblocks it. Never a blank screen.
   if (view.status === 'blocked') {

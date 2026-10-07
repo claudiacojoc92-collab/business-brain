@@ -24,6 +24,8 @@ type Dict = Record<string, string>;
 
 const en: Dict = {
   'landing.loading': 'Loading your page…',
+  'landing.generating': 'BB is writing your page…',
+  'landing.generatingHint': 'This usually takes a couple of minutes — you can stay on this screen.',
   'landing.error': 'Something went wrong loading your page.',
   'landing.retry': 'Try again',
   'landing.accept': 'Accept this page',
@@ -823,6 +825,8 @@ const en: Dict = {
 
 const ro: Dict = {
   'landing.loading': 'Se încarcă pagina ta…',
+  'landing.generating': 'BB îți scrie pagina…',
+  'landing.generatingHint': 'De obicei durează câteva minute — poți rămâne pe acest ecran.',
   'landing.error': 'A apărut o problemă la încărcarea paginii.',
   'landing.retry': 'Încearcă din nou',
   'landing.accept': 'Acceptă pagina',
@@ -1610,6 +1614,8 @@ const ro: Dict = {
 
 const it: Dict = {
   'landing.loading': 'Caricamento della tua pagina…',
+  'landing.generating': 'BB sta scrivendo la tua pagina…',
+  'landing.generatingHint': 'Di solito richiede un paio di minuti — puoi restare su questa schermata.',
   'landing.error': 'Si è verificato un problema nel caricare la pagina.',
   'landing.retry': 'Riprova',
   'landing.accept': 'Accetta la pagina',

@@ -407,3 +407,92 @@ mapping are new each time.
   (2) **synthesized** → "BB's reading, not a sourced quote" (no source claimed);
   (3) **founder-edited** → "your text" (no gate ran, no source claimed). Rewrite re-gates and returns the section
   to generated provenance. Never discover the hand-edit bypass by surprise — it is written here on purpose.
+
+## Security incident — 2026-10-06: prod DB connection string exposed in a session transcript
+
+**What happened.** While confirming the live Flyway schema before deploy, a schema read was attempted as
+`railway ssh --service api -- sh -c 'psql "$DATABASE_URL" -tAc "…"'`. `psql` was NOT on that non-login
+shell's PATH, and the shell's "command not found" error **echoed the entire expanded `$DATABASE_URL`,
+including the password**, into stdout — which the session captured. The DB user, host, port and password
+for the `postgres-wbae` Postgres were surfaced in the transcript/logs.
+
+**Scope (triaged without reprinting any value).** The leaked host is a **`*.railway.internal`** address —
+reachable only from inside the Railway project, not from the internet. Whether the Postgres service also has
+a **public TCP proxy** (`*.rlwy.net` / `DATABASE_PUBLIC_URL`) was NOT confirmed (reading it is behind the
+`approve prod` gate; dashboard: Postgres → Settings → Networking → TCP Proxy). If no public proxy, the
+exposure is internal-only and rotation is a planned chore; if a proxy exists, rotate same-day. Repo-wide
+credential scan run the same day: **no real hardcoded credentials committed** (all URL-embedded creds target
+localhost/docker-service dev defaults; the only matches are i18n labels, an HTML autocomplete attr, and a
+preflight that reads a key from `.env`).
+
+**The rule this produces (do this, not that).**
+- **Never put a secret-bearing connection string on a command line — local OR remote.** A missing binary,
+  a typo, or a non-zero exit makes the shell echo its argv (incl. the full URL) in the error. `psql "$URL"`
+  is the trap.
+- **Remote DB reads go through the `node` + `process.env` probe** that connects via
+  `process.env.DATABASE_URL` and prints **only the query result**, with a FIXED error string
+  (`CONNECT_FAILED`) in `catch` — never `e.message`, never the URL. The secret is referenced by name, never
+  interpolated into a command or printed.
+- If `psql` is unavoidable, pass connection **components** via `PGHOST`/`PGUSER`/`PGPASSWORD`/`PGDATABASE`
+  env (libpq reads them) and invoke bare `psql` — never the full URL as an argv token.
+- This is the same family as the standing rule "never print or interpolate secret values": extend it to
+  "never let a tool print them for you" — assume any command that can fail will put its argv in an error.
+
+### Runbook — rotate a Railway Postgres password (DO NOT EXECUTE without `approve prod` + `approve prod-write` + `approve deploy`)
+
+Railway has **no rotate-password button**, and setting `POSTGRES_PASSWORD` does nothing to an
+already-initialized database. The real rotation is a **dual-role SQL procedure** (a volume-backed service
+cannot run two deployments at once, so the DB itself must not be restarted mid-rotation):
+
+1. **Connect interactively** — `railway connect Postgres` (opens psql against the DB with NO connection
+   string on any command line; nothing to leak). Do the SQL here.
+2. **Create the new role** with a fresh strong password:
+   `CREATE ROLE bb_app_v2 LOGIN PASSWORD '<new-strong-secret>';`
+3. **Grant it everything the old role has** (role membership is simplest and complete):
+   `GRANT <oldrole> TO bb_app_v2;`  (plus, if the app role is not the owner, the usual
+   `GRANT USAGE/ALL ON SCHEMA/TABLES/SEQUENCES …` + `ALTER DEFAULT PRIVILEGES`).
+4. **Point the services at the new role WITHOUT restarting the database** — on the Postgres service, update
+   its credential vars with deploys suppressed:
+   `railway variables --service Postgres --set PGUSER=bb_app_v2 --set PGPASSWORD=<new> --skip-deploys`
+   (and any `DATABASE_URL` it composes from them). `--skip-deploys` is load-bearing: a volume-backed
+   Postgres can't run two deployments at once.
+5. **Redeploy only the CONSUMERS** (they pick up the new creds; the DB stays up):
+   `railway redeploy --service api --yes` and `--service workers`. Verify both boot and connect.
+6. **Retire the old role** once nothing uses it:
+   `REASSIGN OWNED BY <oldrole> TO bb_app_v2;` → `DROP OWNED BY <oldrole>;` → `DROP ROLE <oldrole>;`.
+
+Every step 4–6 command is gated (`deploy` / `prod` / `prod-write`) and must be individually approved. Record
+the new secret only in the Railway service vars — never in the repo, a file, or chat.
+
+**Live schema confirmed 2026-10-06 (safe node+process.env probe, versions-only):** `Postgres-WbaE` is at
+**V081** (V066→V081 all applied, success). So the earlier "V080/V081 may also be missing" inference was WRONG
+— they are present. **The deploy's migrate step applies exactly V082 (`move_draft`) + V083 (`business_atom`),
+nothing else.** Q2 (is a public TCP proxy enabled on `Postgres-WbaE`?) remains unconfirmed — `railway variables`
+is categorically blocked by the `railway-variables-read` hook even with `approve prod`; confirm via the
+dashboard (Postgres-WbaE → Settings → Networking → TCP Proxy) before deciding rotation urgency.
+
+## Deploy 2026-10-07 — the inline BRIDGE (declared, not the design)
+
+**Discovery mid-deploy:** there is no `workers` service in production, so `bb-move-draft` had no consumer and
+the move-draft job would sit `pending` forever (full write-up + the proper fix sized in
+docs/operations/known-issues.md). Rather than stand up a workers service on deploy morning (it would drain
+EVERY queue, incl. never-run reel/reel-shoot and their possible stale Redis backlog, all at once on real
+data), the move draft is produced **inline in the api route**, exactly as carousel already is in this same
+prod.
+
+**The bridge, precisely:**
+- On `GET …/landing-draft`, when a strategy is adopted and no draft exists yet, the route calls
+  `deps.produceLandingMove(...)` **synchronously** and returns the finished (drafted / no_safe_copy) result.
+  First view generates + persists; later views read the stored draft (fast).
+- **The enqueue path is kept, unused,** directly below the inline block with a comment that it is the intended
+  design once a workers service exists. Not deleted — the next person must see where this is going.
+- **The wait is honest, not a spinner.** While the synchronous GET is in flight, web shows
+  `landing.generating` — "BB is writing your page — this usually takes a couple of minutes" (EN/RO/IT) — not a
+  bare spinner, because a multi-minute spinner is precisely the broken-page experience this screen exists to
+  end.
+
+**This is a stopgap. The real design:** the draft should ALREADY exist when Today opens — generated when the
+understanding or the strategy changes (an event-driven produce), stored, and simply read on open. Generating
+on first view is the bridge; it trades a one-time multi-minute first-view wait for not needing a worker yet.
+Rejected (explicitly): firing generation in the api background and polling — better UX, but an api restart
+mid-generation loses the work with nothing durable tracking it, so the synchronous path is safer for now.

@@ -59,9 +59,23 @@ export function registerMoveDraftRoutes(server: FastifyInstance, deps: ServerDep
     // No draft yet — say WHY, plainly, and what unblocks it (never a silent empty state).
     const current = await deps.strategyService.getCurrent(business.id);
     if (!current) return reply.send({ status: 'blocked', reason: 'no_adopted_strategy', message: NO_ADOPTED_STRATEGY_MESSAGE, unblock: 'adopt_strategy' });
-    // Draft-on-surface: a strategy IS adopted but no draft yet — enqueue production (deterministic jobId dedupes
-    // repeated loads), and tell the founder it's coming.
+    // Draft-on-surface: a strategy IS adopted but no draft yet.
     const planVersionId = (request.query as { planVersionId?: string }).planVersionId ?? '';
+    // BRIDGE (2026-10-07): there is NO workers service in production, so the queue below has no consumer and a
+    // job would sit 'pending' forever (see docs/operations/known-issues.md). Produce INLINE here — exactly as
+    // carousel does in carousel.routes.ts — and return the finished draft. First view generates + persists;
+    // later views hit the early read above. Web shows an honest "BB is writing your page" wait, not a spinner.
+    if (deps.produceLandingMove) {
+      const produced = await deps.produceLandingMove(business.id, actionId, planVersionId);
+      if (produced.status === 'blocked') {
+        return reply.send({ status: 'blocked', reason: produced.reason, message: produced.message, ...(produced.reason === 'no_adopted_strategy' ? { unblock: 'adopt_strategy' } : {}) });
+      }
+      const made = produced.moveDraft;
+      if (made?.draft && made.status !== 'blocked') return reply.send(projectDraft(made));
+      return reply.send({ status: 'blocked', reason: 'no_safe_copy', message: 'Nu am putut genera copie sigură pentru această pagină. Mișcarea rămâne cu instrucțiunea ei simplă.' });
+    }
+    // INTENDED DESIGN (unused until a real workers service drains bb-move-draft — see known-issues.md): enqueue
+    // production (deterministic jobId dedupes repeated loads) and tell the founder it's coming. Kept on purpose.
     await deps.moveDraftQueue?.enqueueMoveDraft({ jobType: 'MOVE_DRAFT', businessId: business.id, actionId, planVersionId, jobId: `move-draft:${business.id}:${actionId}`, correlationId: `move-draft:${business.id}:${actionId}`, traceId: `move-draft:${business.id}:${actionId}`, founderId: null, enqueuedAt: new Date().toISOString() });
     return reply.send({ status: 'pending', message: 'Se pregătește pagina ta — revino în scurt timp.' });
   });

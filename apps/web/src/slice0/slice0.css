@@ -1239,6 +1239,7 @@
 .s0-landing-cta { margin: 1.5rem 0; font-weight: 600; }
 .s0-landing-accept { margin-top: .5rem; }
 .s0-landing-accepted { color: var(--s0-ok, #047857); font-weight: 600; }
+.s0-landing-wait { color: var(--s0-muted, #6b7280); font-size: .9rem; margin: .4rem 0 0; }
 
 /* Provenance — quiet by default; a light inline marker that expands the honest backing per section. */
 .s0-landing-prov { margin-top: .4rem; }

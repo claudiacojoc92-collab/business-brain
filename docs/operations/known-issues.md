@@ -260,3 +260,32 @@ later if the file gets long.
 - **Fix (not done):** give EN a verb-anchored therapeutic match (so the negator scan has a verb position to look
   before), then apply the same per-occurrence exemption with EN negators (not / don't / doesn't / without / no
   longer). Scope it exactly as RO: therapeutic rule only, never the outcome/prevention rules.
+
+## No workers service in production — every queue-backed feature (reel, reel-shoot, move-draft) never completes
+
+- **Found:** 2026-10-07, during the landing-move deploy. Deploying the `workers` service returned **"Service
+  not found".** The production project (`adequate-appreciation` / `production`) has services `api, web,
+  migrate, Redis, Postgres, founder-mvp-migrate, Postgres-WbaE` — and **no workers process at all.**
+- **What:** `apps/api` is **producer-only** (`CMD node apps/api/dist/main.js`; it builds a `QueueRegistry`
+  solely to *enqueue*). The consumer is the separate `apps/workers` process (`Dockerfile.workers`,
+  `CMD node apps/workers/dist/main.js`), which has **never been deployed** here. So any route that enqueues
+  — `reel.routes`, `reel-shoot.routes`, and (as originally built) `move-draft.routes` — drops a job into a
+  queue **nothing drains**. The job sits in Redis forever; the feature shows `pending` and never resolves.
+- **Why carousel works anyway:** the carousel route runs the generation **inline** in the request
+  (`await deps.carouselService.generate(...)` in `carousel.routes.ts`), no queue. That inline pattern is the
+  only reason any asset has ever been produced in prod.
+- **Blast radius:** **reel and reel-shoot have never completed in production.** Whatever a founder triggered
+  enqueued and stalled. There may be a **pile of stale jobs already in Redis** from every such attempt.
+- **Bridge in place (2026-10-07):** `move-draft` now produces **inline** in the api route, like carousel, with
+  the enqueue path kept but unused (see `move-draft.routes.ts` and intent/2026-10-05-landing-move/plan.md).
+  This unblocks the landing move only; it does NOT fix reel/reel-shoot.
+- **Proper fix (its own piece of work — do NOT improvise on a deploy morning):**
+  1. Stand up a real `workers` Railway service from `Dockerfile.workers`, wired to `Redis` + `Postgres-WbaE`
+     + the full env incl. `GOOGLE_OAUTH_ENCRYPTION_KEY` (never restart it into a missing key).
+  2. **Before it first boots, deal with the stale Redis jobs** — inspect every queue (`reel`, `reel-shoot`,
+     `move-draft`, …) for backlog and decide drain-vs-discard **per queue**. A fresh worker will otherwise
+     fire all of them at once, on real founder data, the moment it starts. This is the actual risk, and the
+     reason "deploy workers now" was rejected for the landing deploy.
+  3. Once a worker drains `bb-move-draft`, flip `move-draft.routes` back to the enqueue path (the code is
+     already there) and restore the async "writing your page" surface.
+  4. Re-verify reel/reel-shoot end-to-end in prod for the first time, deliberately, with eyes.
