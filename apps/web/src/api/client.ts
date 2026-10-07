@@ -1199,12 +1199,12 @@ export function reelCreateFromPlan(businessId: string, planId: string): Promise<
 }
 
 // ── Landing move (draft / accept / edit / rewrite) ──────────────────────────────────────────────────────
-export interface LandingSectionView { role: string; heading: string | null; body: string }
-/** Provenance per licensed fact: anchored (verbatim from a page, with sourceUrl), synthesized (BB's reading),
- *  or founder (the founder's own statement). Populated once the API exposes it (provenance build). */
-export interface LandingFactView { text: string; source: 'anchored' | 'synthesized' | 'founder'; sourceUrl: string | null }
+/** Provenance per section: anchored (a fact present verbatim from a page, with sourceUrl), synthesized (BB's
+ *  reading, no source claimed), or founder (the founder hand-edited it — their own text, no gate, no source). */
+export interface LandingFactView { text: string | null; source: 'anchored' | 'synthesized' | 'founder'; sourceUrl: string | null }
+export interface LandingSectionView { role: string; heading: string | null; body: string; facts: LandingFactView[] }
 export type LandingDraftView =
-  | { status: 'drafted' | 'edited' | 'accepted'; version: number; sections: LandingSectionView[]; cta: string; facts?: LandingFactView[] }
+  | { status: 'drafted' | 'edited' | 'accepted'; version: number; sections: LandingSectionView[]; cta: string; ctaFacts: LandingFactView[] }
   | { status: 'blocked'; reason: string; message: string; unblock?: string }
   | { status: 'pending'; message: string };
 

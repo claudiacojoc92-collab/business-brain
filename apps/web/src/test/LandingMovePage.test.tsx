@@ -35,8 +35,28 @@ describe('LandingMovePage — draft-primary, legible blocked state, fail-closed 
     expect(screen.getByText('landing.accept')).toBeTruthy();
   });
 
+  it('provenance is honest per section: anchored names the source; a founder edit says "your text", never sourced', async () => {
+    vi.mocked(api.getLandingDraft).mockResolvedValue({
+      status: 'edited', version: 2, cta: 'Programează.', ctaFacts: [],
+      sections: [
+        { role: 'what', heading: 'Ce', body: 'Oferim kinetoterapie.', facts: [{ source: 'anchored', text: 'Kinetoterapie', sourceUrl: 'https://www.bodymovestudio.ro/servicii' }] },
+        { role: 'who', heading: 'Cine', body: 'Textul meu.', facts: [{ source: 'founder', text: null, sourceUrl: null }] },
+      ],
+    } as never);
+    render(<LandingMovePage />);
+    await screen.findByText('Oferim kinetoterapie.');
+    // Two provenance toggles (one per section). Expand the anchored one → fact + host; expand the founder one → "your text".
+    const toggles = screen.getAllByText('landing.prov.toggle');
+    expect(toggles).toHaveLength(2);
+    fireEvent.click(toggles[0]);
+    expect(await screen.findByText('“Kinetoterapie”')).toBeTruthy();
+    expect(screen.getByText(/www\.bodymovestudio\.ro/)).toBeTruthy();
+    fireEvent.click(toggles[1]);
+    expect(await screen.findByText('landing.prov.founder')).toBeTruthy();
+  });
+
   it('a rewrite that cannot pass the gate shows WHY and leaves the previous text intact', async () => {
-    vi.mocked(api.getLandingDraft).mockResolvedValue({ status: 'drafted', version: 1, sections: [{ role: 'proof', heading: 'Echipa', body: 'Florin Laza.' }], cta: 'Programează.' } as never);
+    vi.mocked(api.getLandingDraft).mockResolvedValue({ status: 'drafted', version: 1, sections: [{ role: 'proof', heading: 'Echipa', body: 'Florin Laza.', facts: [{ source: 'synthesized', text: null, sourceUrl: null }] }], cta: 'Programează.', ctaFacts: [] } as never);
     vi.mocked(api.rewriteLandingSection).mockRejectedValue(new (api.ApiError as unknown as new (s: number, c: string, m: string) => Error)(422, 'REWRITE_BLOCKED', 'could not pass the safety gate'));
     render(<LandingMovePage />);
     await screen.findByText('Florin Laza.');

@@ -8,7 +8,9 @@ import type { Logger } from '@bb/infrastructure';
 function makeLogger(): Logger { return { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() } as unknown as Logger; }
 
 const DRAFT = { sections: [{ role: 'what', heading: 'Ce facem', body: 'Oferim ședințe.' }, { role: 'proof', heading: 'Echipa', body: 'Florin Laza.' }], cta: 'Programează.' };
-const mdDrafted = (status = 'drafted', version = 1) => ({ moveDraftId: 'm1', businessId: 'b1', actionId: 'a1', planVersionId: 'pv1', kind: 'landing', language: 'ro', draft: DRAFT, snapshot: {} as any, safetyDecision: {} as any, status, version });
+// A snapshot with one anchored people-atom that appears verbatim in the 'proof' section → provenance resolves it.
+const SNAPSHOT = { licensedPropositions: [{ ref: 'A1', text: 'Florin Laza', source: 'business_evidence', atomClass: 'people', sourceUrl: 'https://www.bodymovestudio.ro/echipa' }] };
+const mdDrafted = (status = 'drafted', version = 1) => ({ moveDraftId: 'm1', businessId: 'b1', actionId: 'a1', planVersionId: 'pv1', kind: 'landing', language: 'ro', draft: DRAFT, snapshot: SNAPSHOT as any, safetyDecision: {} as any, status, version });
 
 function buildServer(extra: any = {}) {
   const deps = {
@@ -54,6 +56,12 @@ describe('move-draft routes — legible states, accept, rewrite', () => {
     expect(b.cta).toBe('Programează.');
     expect(b.snapshot).toBeUndefined();
     expect(b.safetyDecision).toBeUndefined();
+    // Provenance rides along per section, resolved from the (hidden) snapshot — never the raw snapshot itself.
+    const proof = b.sections.find((s: any) => s.role === 'proof');
+    expect(proof.facts).toEqual([{ source: 'anchored', text: 'Florin Laza', sourceUrl: 'https://www.bodymovestudio.ro/echipa' }]);
+    const what = b.sections.find((s: any) => s.role === 'what');
+    expect(what.facts).toEqual([{ source: 'synthesized', text: null, sourceUrl: null }]); // no anchored atom present
+    expect(Array.isArray(b.ctaFacts)).toBe(true);
   });
 
   it('POST accept calls the service and returns the accepted draft', async () => {

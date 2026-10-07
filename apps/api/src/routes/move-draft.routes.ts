@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { ServerDeps } from '../server';
 import { AuthenticationError, ValidationError, NotFoundError } from '@bb/shared';
-import { NO_ADOPTED_STRATEGY_MESSAGE, type LandingDraft } from '@bb/application';
+import { NO_ADOPTED_STRATEGY_MESSAGE, resolveProvenance, type LandingDraft, type MoveDraft, type SectionProvenance } from '@bb/application';
 
 interface AuthedUser { sub: string; role: string }
 function founderOf(request: FastifyRequest): string {
@@ -12,12 +12,19 @@ function founderOf(request: FastifyRequest): string {
 
 const ROLES = ['hero_headline', 'hero_subhead', 'what', 'who', 'proof', 'how_it_works', 'cta'];
 
-/** Founder-facing: the sections + CTA + status. Internal ids, the snapshot and the safety trace stay hidden. */
-function projectDraft(draft: LandingDraft, status: string, version: number) {
+/** Founder-facing: the sections + CTA + status + PROVENANCE. Internal ids, the snapshot and the safety trace
+ *  stay hidden, but each section carries its honest backing (anchored fact + source / synthesized / founder's
+ *  own text) resolved from the licensed propositions — so the UI can answer "which fact backs this, and where
+ *  did it come from?" without exposing the raw snapshot. */
+function projectDraft(md: MoveDraft) {
+  const draft = md.draft as LandingDraft;
+  const prov: SectionProvenance[] = resolveProvenance(draft, md.snapshot.licensedPropositions);
+  const factsFor = (role: string) => (prov.find((p) => p.role === role)?.facts ?? []);
   return {
-    status, version,
-    sections: draft.sections.map((s) => ({ role: s.role, heading: s.heading ?? null, body: s.body })),
+    status: md.status, version: md.version,
+    sections: draft.sections.map((s) => ({ role: s.role, heading: s.heading ?? null, body: s.body, facts: factsFor(s.role) })),
     cta: draft.cta,
+    ctaFacts: factsFor('cta'),
   };
 }
 
@@ -45,7 +52,7 @@ export function registerMoveDraftRoutes(server: FastifyInstance, deps: ServerDep
     const s = services(reply); if (!s) return;
 
     const md = await s.repo.latestForAction(business.id, actionId);
-    if (md?.draft && md.status !== 'blocked') return reply.send(projectDraft(md.draft, md.status, md.version));
+    if (md?.draft && md.status !== 'blocked') return reply.send(projectDraft(md));
     if (md && (md.status === 'blocked' || !md.draft)) {
       return reply.send({ status: 'blocked', reason: 'no_safe_copy', message: 'Nu am putut genera copie sigură pentru această pagină. Mișcarea rămâne cu instrucțiunea ei simplă.' });
     }
@@ -65,7 +72,7 @@ export function registerMoveDraftRoutes(server: FastifyInstance, deps: ServerDep
     const { business } = await requireBusiness(request, businessId);
     const s = services(reply); if (!s) return;
     const md = await s.svc.accept(business.id, actionId); // throws NotFound / NOT_ACCEPTABLE → legible 4xx
-    return reply.send(projectDraft(md.draft!, md.status, md.version));
+    return reply.send(projectDraft(md));
   });
 
   // POST edit one section — the founder's OWN words; append an 'edited' version (not re-gated). CTA allowed.
@@ -77,7 +84,7 @@ export function registerMoveDraftRoutes(server: FastifyInstance, deps: ServerDep
     const { business } = await requireBusiness(request, businessId);
     const s = services(reply); if (!s) return;
     const md = await s.svc.editSection(business.id, actionId, role as LandingDraft['sections'][number]['role'] | 'cta', heading, body);
-    return reply.send(projectDraft(md.draft!, md.status, md.version));
+    return reply.send(projectDraft(md));
   });
 
   // POST rewrite one section — regenerate it, re-gate, append. Fail-closed: a rewrite that can't pass the gate
@@ -88,6 +95,6 @@ export function registerMoveDraftRoutes(server: FastifyInstance, deps: ServerDep
     const { business } = await requireBusiness(request, businessId);
     const s = services(reply); if (!s) return;
     const md = await s.svc.rewriteSection(business.id, actionId, role as LandingDraft['sections'][number]['role']);
-    return reply.send(projectDraft(md.draft!, md.status, md.version));
+    return reply.send(projectDraft(md));
   });
 }

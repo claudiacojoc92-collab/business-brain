@@ -176,9 +176,11 @@ export class MoveDraftService {
     const latest = await this.deps.repo.latestForAction(businessId, actionId);
     if (!latest || !latest.draft) throw new NotFoundError('MOVE_DRAFT_NOT_FOUND', 'There is no draft to edit.');
     const prev = latest.draft;
+    // Mark the hand-edited unit 'founder' — these are the founder's words and were NOT gated; provenance must
+    // show them as the founder's own text and claim no source (see provenance.ts).
     const draft: LandingDraft = role === 'cta'
-      ? { ...prev, cta: body }
-      : { ...prev, sections: prev.sections.map((s) => (s.role === role ? { role: s.role, ...(heading !== undefined && heading !== '' ? { heading } : {}), body } : s)) };
+      ? { ...prev, cta: body, ctaOrigin: 'founder' }
+      : { ...prev, sections: prev.sections.map((s) => (s.role === role ? { role: s.role, ...(heading !== undefined && heading !== '' ? { heading } : {}), body, origin: 'founder' } : s)) };
     const next: MoveDraft = { ...latest, draft, status: 'edited', version: latest.version + 1, producedAt: this.clock() };
     await this.deps.repo.save(next);
     this.deps.log?.({ type: 'move_draft', actionId, disposition: 'edited', failingLayer: null, repairAttempts: 0 });
@@ -213,8 +215,20 @@ export class MoveDraftService {
       this.deps.log?.({ type: 'move_draft', actionId, disposition: 'rewrite_blocked', failingLayer: result.failingLayer, repairAttempts: attempts });
       throw new ValidationError('REWRITE_BLOCKED', `The rewritten "${role}" section could not pass the safety gate; the previous draft is unchanged.`);
     }
+    // Carry forward founder-edit provenance: the model returns a whole fresh draft, so a section the founder had
+    // hand-edited (and whose text the rewrite left verbatim) must KEEP its 'founder' marker — otherwise their own
+    // words would silently be relabelled BB-generated. Only carry it when the text is actually unchanged.
+    const prevByRole = new Map(latest.draft.sections.map((s) => [s.role, s]));
+    const merged: LandingDraft = {
+      ...draft,
+      sections: draft.sections.map((s) => {
+        const prior = prevByRole.get(s.role);
+        return s.role !== role && prior?.origin === 'founder' && prior.body === s.body ? { ...s, origin: 'founder' as const } : s;
+      }),
+      ctaOrigin: latest.draft.ctaOrigin, // rewrite never targets the CTA (role === 'cta' is rejected above)
+    };
     const next: MoveDraft = {
-      ...latest, draft, safetyDecision: { layersRun: result.layersRun, failingLayer: null, failures: [], repairAttempts: attempts, disposition: 'drafted' },
+      ...latest, draft: merged, safetyDecision: { layersRun: result.layersRun, failingLayer: null, failures: [], repairAttempts: attempts, disposition: 'drafted' },
       status: 'drafted', version: latest.version + 1, producedAt: this.clock(),
     };
     await this.deps.repo.save(next);

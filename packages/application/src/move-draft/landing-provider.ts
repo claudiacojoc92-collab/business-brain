@@ -17,7 +17,7 @@ export interface LandingContextView {
   readonly goal: string;
   readonly audience: string;
   readonly ctaDirection: string;
-  readonly atoms: readonly { readonly value: string; readonly atomClass: AtomClass }[]; // anchored, classed
+  readonly atoms: readonly { readonly value: string; readonly atomClass: AtomClass; readonly sourceUrl: string }[]; // anchored, classed, provenanced
   readonly synthesizedFacts: readonly string[];  // allowedBusinessFacts(understanding) — synthesized, general
   readonly founderOwned: readonly string[];       // active founder statements
   readonly proofFacts: readonly string[];
@@ -40,7 +40,7 @@ export function assembleLandingMove(ctx: LandingContextView | null, ids: Landing
   if (!ctx) return { status: 'blocked', reason: 'no_adopted_strategy', message: NO_ADOPTED_STRATEGY_MESSAGE };
 
   const licensedPropositions: LandingProposition[] = [
-    ...ctx.atoms.map((a, i): LandingProposition => ({ ref: `A${i + 1}`, text: a.value, source: 'business_evidence', atomClass: a.atomClass })),
+    ...ctx.atoms.map((a, i): LandingProposition => ({ ref: `A${i + 1}`, text: a.value, source: 'business_evidence', atomClass: a.atomClass, sourceUrl: a.sourceUrl })),
     ...ctx.synthesizedFacts.map((t, i): LandingProposition => ({ ref: `B${i + 1}`, text: t, source: 'business_evidence' })),
     ...ctx.founderOwned.map((t, i): LandingProposition => ({ ref: `F${i + 1}`, text: t, source: 'founder_owned' })),
   ];

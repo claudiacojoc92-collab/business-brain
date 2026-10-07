@@ -1239,3 +1239,15 @@
 .s0-landing-cta { margin: 1.5rem 0; font-weight: 600; }
 .s0-landing-accept { margin-top: .5rem; }
 .s0-landing-accepted { color: var(--s0-ok, #047857); font-weight: 600; }
+
+/* Provenance — quiet by default; a light inline marker that expands the honest backing per section. */
+.s0-landing-prov { margin-top: .4rem; }
+.s0-landing-prov-toggle { background: none; border: none; color: var(--s0-muted, #6b7280); font-size: .78rem; cursor: pointer; padding: .1rem 0; text-decoration: underline dotted; }
+.s0-landing-prov-toggle:hover { color: var(--s0-ink, #111); }
+.s0-landing-prov-list { list-style: none; margin: .35rem 0 0; padding: .5rem .75rem; border-left: 2px solid var(--s0-line, #e5e7eb); display: flex; flex-direction: column; gap: .35rem; }
+.s0-landing-prov-item { font-size: .82rem; line-height: 1.4; color: var(--s0-muted, #4b5563); }
+.s0-landing-prov-fact { color: var(--s0-ink, #111); }
+.s0-landing-prov-src { color: var(--s0-muted, #6b7280); }
+.s0-landing-prov-src[href]:hover { color: var(--s0-ink, #111); text-decoration: underline; }
+.s0-landing-prov-note { font-style: italic; }
+.s0-landing-prov-anchored { border-left-color: var(--s0-ok, #047857); padding-left: .5rem; }

@@ -30,12 +30,17 @@ export interface LandingSection {
   readonly role: LandingSectionRole;
   readonly heading?: string;
   readonly body: string;
+  /** 'founder' ⇒ the founder hand-edited this section: their words, NOT gated. Provenance must show it as the
+   *  founder's own text and claim no source. Absent/other ⇒ BB-generated (gated). Rewrite clears it. */
+  readonly origin?: 'founder';
 }
 /** A structured landing page — a sequence of prose sections + one CTA. The structure is what makes a good
  *  page AND what lets the safety gate attribute a violation to a section (the carousel per-slide split). */
 export interface LandingDraft {
   readonly sections: LandingSection[];
   readonly cta: string;
+  /** Same bypass marker for a hand-edited CTA (the CTA is a bare string, so its origin lives here). */
+  readonly ctaOrigin?: 'founder';
 }
 
 // ── the authorization snapshot (mirrors carousel's AssetAuthorizationSnapshot; keyed to the MOVE) ──
@@ -43,7 +48,7 @@ export type LandingPropositionSource = 'business_evidence' | 'founder_owned' | '
 /** `atomClass` (when present) is the anchored-atom class this proposition came from; it ROUTES the proposition
  *  to a section (service→what, people→proof, contact_booking→cta, policy→how-it-works). Absent ⇒ synthesized /
  *  founder prose, available to hero / subhead / who. Routing is a generation concern; the safety spec stays flat. */
-export interface LandingProposition { readonly ref: string; readonly text: string; readonly source: LandingPropositionSource; readonly atomClass?: AtomClass }
+export interface LandingProposition { readonly ref: string; readonly text: string; readonly source: LandingPropositionSource; readonly atomClass?: AtomClass; readonly sourceUrl?: string }
 
 /** Immutable record of exactly what BB was authorized to claim when this draft was produced — stored so a
  *  later audit replays from this, never from mutable strategy. */

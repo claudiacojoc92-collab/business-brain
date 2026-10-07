@@ -394,3 +394,16 @@ mapping are new each time.
   **DO NOT WIRE move-draft yet** — the wiring's acceptance test ("publishable draft on Body Move's real facts")
   cannot pass until the atomic-fact lane exists; operator decides the substrate fix first. No commits beyond
   `022c568` this step.
+- 2026-10-06: **Today draft surface committed (`8bb2502`); provenance display next.** The draft is the primary
+  object on screen — sections render top-to-bottom as readable copy (canonical order), per-section edit + rewrite
+  stay quiet until used, rewrite fail-closed shows WHY and keeps prior text, accept adopts, blocked/pending are
+  legible (no blank screen). EN/RO/IT; route `/b/:id/landing/:actionId`; `editSection` append path + edit route.
+  **PRODUCT PROPERTY TO RECORD, not a bug (design, by intent):** a founder HAND-EDIT of a section bypasses the
+  safety layers — it is the founder's own words and their liability; `editSection` appends an `edited` version and
+  runs NO gate (medical/kernel/backstop/people-fidelity/judge are skipped on hand edits). This is correct, but it
+  is a real property: an edited section must therefore NEVER be shown with sourcing markers (that would imply BB
+  sourced text the founder typed). The provenance display distinguishes THREE states honestly, per section:
+  (1) **anchored** → the fact + where it came from (atom `sourceUrl`, verbatim-present in the section);
+  (2) **synthesized** → "BB's reading, not a sourced quote" (no source claimed);
+  (3) **founder-edited** → "your text" (no gate ran, no source claimed). Rewrite re-gates and returns the section
+  to generated provenance. Never discover the hand-edit bypass by surprise — it is written here on purpose.

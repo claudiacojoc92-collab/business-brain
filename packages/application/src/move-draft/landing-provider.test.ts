@@ -8,9 +8,9 @@ const genId = () => 'snap-1';
 const CTX: LandingContextView = {
   strategyVersionId: 'sv1', language: 'ro', goal: 'activarea canalului B2B medical', audience: 'medici din Cluj',
   ctaDirection: 'un număr de telefon direct', atoms: [
-    { value: 'Kinetoterapie', atomClass: 'service' },
-    { value: 'Bogdan Borsan Kinetoterapeut', atomClass: 'people' },
-    { value: '(max. 4 persoane)', atomClass: 'policy' },
+    { value: 'Kinetoterapie', atomClass: 'service', sourceUrl: 'https://www.bodymovestudio.ro/servicii' },
+    { value: 'Bogdan Borsan Kinetoterapeut', atomClass: 'people', sourceUrl: 'https://www.bodymovestudio.ro/echipa' },
+    { value: '(max. 4 persoane)', atomClass: 'policy', sourceUrl: 'https://www.bodymovestudio.ro/servicii' },
   ],
   synthesizedFacts: ['un spațiu integrat de sănătate prin mișcare'], founderOwned: ['punem preț pe calitate'],
   proofFacts: [], voiceLines: ['Mișcare, nu performanță.'],

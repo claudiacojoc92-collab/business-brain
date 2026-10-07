@@ -16,7 +16,7 @@ function fingerprint(ids: string[]): string {
 // space), used ONLY to LOCATE the span. The licensed value is the EXACT original substring found — diacritics
 // and line breaks preserved as written — so `unit.text.slice(charStart, charEnd) === value` holds by
 // construction. No regex, no language gate, no reported-speech template.
-function normalizeNeedle(raw: string): string {
+export function normalizeNeedle(raw: string): string {
   return raw.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 /** Fold `raw` char-by-char, recording the original start/end index of each folded char (whitespace runs → one space). */

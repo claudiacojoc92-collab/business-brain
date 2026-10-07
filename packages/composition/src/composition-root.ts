@@ -727,7 +727,7 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     const ctx = await carouselContext(businessId); // null ⇒ no adopted strategy
     let landingCtx: LandingContextView | null = null;
     if (ctx) {
-      const atoms = (await atomExtractionService.facts(businessId)).map((a) => ({ value: a.value, atomClass: a.atomClass }));
+      const atoms = (await atomExtractionService.facts(businessId)).map((a) => ({ value: a.value, atomClass: a.atomClass, sourceUrl: a.sourceUrl }));
       const snap = await understandingRepo.latest(businessId);
       landingCtx = {
         strategyVersionId: ctx.strategyVersionId, language: snap?.sourceLanguage ?? 'ro',

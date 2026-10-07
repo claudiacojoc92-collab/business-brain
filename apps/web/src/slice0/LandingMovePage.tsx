@@ -1,13 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
-import { ApiError, getLandingDraft, acceptLandingDraft, rewriteLandingSection, editLandingSection, type LandingDraftView, type LandingSectionView } from '../api/client';
+import { ApiError, getLandingDraft, acceptLandingDraft, rewriteLandingSection, editLandingSection, type LandingDraftView, type LandingSectionView, type LandingFactView } from '../api/client';
 
 // The draft is the primary object: sections render top-to-bottom as readable copy in this order, never as a
 // wall of form fields. Edit/rewrite controls are per section and quiet until used.
 const ORDER = ['hero_headline', 'hero_subhead', 'what', 'who', 'how_it_works', 'proof'];
 const ordered = (sections: LandingSectionView[]): LandingSectionView[] =>
   [...sections].sort((a, b) => (ORDER.indexOf(a.role) + 1 || 99) - (ORDER.indexOf(b.role) + 1 || 99));
+
+// Readable source label for an anchored fact: the page host, never the raw URL. founder:// provenance (a
+// declared statement) carries no host, so it falls back to the whole value.
+const hostOf = (url: string | null): string => {
+  if (!url) return '';
+  try { return new URL(url).host || url; } catch { return url.replace(/^founder:\/\//, '').split('/')[0] || url; }
+};
 
 export function LandingMovePage(): JSX.Element {
   const { id = '', actionId = '' } = useParams();
@@ -18,6 +25,7 @@ export function LandingMovePage(): JSX.Element {
   const [busy, setBusy] = useState<string | null>(null);        // role currently acting on
   const [sectionError, setSectionError] = useState<{ role: string; message: string } | null>(null);
   const [editing, setEditing] = useState<{ role: string; heading: string; body: string } | null>(null);
+  const [openProv, setOpenProv] = useState<string | null>(null);  // role whose provenance is expanded
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
@@ -37,6 +45,37 @@ export function LandingMovePage(): JSX.Element {
     try { setView(await fn()); setEditing(null); }
     catch (e) { setSectionError({ role, message: e instanceof ApiError ? e.message : t('landing.error') }); } // previous text intact
     finally { setBusy(null); }
+  };
+
+  // Provenance — the honest three states, inline and quiet. Touch a section, see which fact backs it and where
+  // that fact came from. Never dresses BB's reading, or the founder's own edit, as a sourced quote.
+  const renderProv = (role: string, facts?: LandingFactView[]) => {
+    const list = facts ?? [];
+    if (list.length === 0) return null;
+    const open = openProv === role;
+    return (
+      <div className="s0-landing-prov">
+        <button type="button" className="s0-landing-prov-toggle" aria-expanded={open} onClick={() => setOpenProv(open ? null : role)}>{t('landing.prov.toggle')}</button>
+        {open && (
+          <ul className="s0-landing-prov-list">
+            {list.map((f, i) => (
+              <li key={i} className={`s0-landing-prov-item s0-landing-prov-${f.source}`}>
+                {f.source === 'founder' && <span className="s0-landing-prov-note">{t('landing.prov.founder')}</span>}
+                {f.source === 'synthesized' && <span className="s0-landing-prov-note">{t('landing.prov.synthesized')}</span>}
+                {f.source === 'anchored' && (
+                  <span>
+                    {f.text && <span className="s0-landing-prov-fact">“{f.text}”</span>}{' '}
+                    {f.sourceUrl
+                      ? <a className="s0-landing-prov-src" href={f.sourceUrl} target="_blank" rel="noreferrer">{t('landing.prov.from')} {hostOf(f.sourceUrl)}</a>
+                      : <span className="s0-landing-prov-src">{t('landing.prov.from')} {hostOf(f.sourceUrl)}</span>}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
   };
 
   if (error) return <main className="s0-main"><p className="s0-lede">{error}</p><button className="s0-btn" onClick={() => void load()}>{t('landing.retry')}</button></main>;
@@ -84,6 +123,7 @@ export function LandingMovePage(): JSX.Element {
                   <button className="s0-btn-quiet" disabled={busy === s.role} onClick={() => void act(s.role, () => rewriteLandingSection(id, actionId, s.role))}>{busy === s.role ? t('landing.rewriting') : t('landing.rewrite')}</button>
                 </div>
               )}
+              {renderProv(s.role, s.facts)}
             </>
           )}
           {sectionError?.role === s.role && <p className="s0-landing-err">{sectionError.message}</p>}
@@ -92,6 +132,7 @@ export function LandingMovePage(): JSX.Element {
 
       <section className="s0-landing-cta">
         <p className="s0-landing-body">{view.cta}</p>
+        {renderProv('cta', view.ctaFacts)}
       </section>
 
       {!accepted ? (
