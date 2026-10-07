@@ -725,6 +725,11 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
    */
   const produceLandingMove = async (businessId: string, actionId: string, planVersionId: string) => {
     const ctx = await carouselContext(businessId); // null ⇒ no adopted strategy
+    // move_draft FK-references plan_version, but the surface GET doesn't carry a plan version yet (the real
+    // wiring lands with the capability-aware planner — see intent/2026-10-05-landing-move/plan.md). Resolve the
+    // business's ACTIVE plan version when none was supplied, so the draft attaches to the current plan. This is
+    // correct regardless, and it lets the landing surface render today from a plain URL (no query param).
+    const pvId = planVersionId || (await planService.getActivePlan(businessId))?.plan.planVersionId || '';
     let landingCtx: LandingContextView | null = null;
     if (ctx) {
       const atoms = (await atomExtractionService.facts(businessId)).map((a) => ({ value: a.value, atomClass: a.atomClass, sourceUrl: a.sourceUrl }));
@@ -736,9 +741,9 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
         founderOwned: ctx.ownedStances, proofFacts: ctx.proofFacts, voiceLines: ctx.voiceLines,
       };
     }
-    const assembled = assembleLandingMove(landingCtx, { businessId, actionId, planVersionId }, () => new Date().toISOString(), generateId);
+    const assembled = assembleLandingMove(landingCtx, { businessId, actionId, planVersionId: pvId }, () => new Date().toISOString(), generateId);
     if (assembled.status === 'blocked') return assembled; // legible: { status, reason, message }
-    const md = await moveDraftService.produceLanding({ businessId, actionId, planVersionId, snapshot: assembled.snapshot, communicationJob: assembled.communicationJob, voiceLines: assembled.voiceLines, language: assembled.snapshot.language });
+    const md = await moveDraftService.produceLanding({ businessId, actionId, planVersionId: pvId, snapshot: assembled.snapshot, communicationJob: assembled.communicationJob, voiceLines: assembled.voiceLines, language: assembled.snapshot.language });
     return { status: 'produced' as const, moveDraft: md };
   };
 

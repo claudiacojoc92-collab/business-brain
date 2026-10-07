@@ -547,11 +547,16 @@ The surface bug (landing has no door) and the root bug (the planner assigned "ca
 business whose site BB already catalogued into 30 atoms) are the SAME defect: **the plan model is given a
 strategy and nothing else — not what BB can DO, not what BB already HOLDS.** One design, not two patches.
 
-**A — planner knows what BB can DO.** `draftPlan` input gains a closed, named `executableFormats` list (the
-moves BB performs itself: `landing`, `carousel`, `caption`; `reel` later). The model sets, per action, a new
+**A — planner knows what BB can DO.** `draftPlan` input gains a closed, named `executableFormats` list. **The
+vocabulary is `landing | carousel` ONLY — not caption, not reel.** The model sets, per action, a new
 `executableFormat: ExecutableFormat | null` — non-null ⇒ BB performs this move; null ⇒ founder-only work
 (call a referrer, visit a clinic, sign a contract). `leadsToCreate` becomes derivable from / validated against
 it.
+
+> **RULE (today's lesson, generalized): a format enters `ExecutableFormat` only when it has a REACHABLE
+> SURFACE — not when the generator exists.** Reel has a generator but no worker, so it never completes;
+> caption has no surface. Putting either in the vocabulary lets the planner assign a move that leads nowhere —
+> exactly the bug this whole change fixes. Add a format the day it is reachable, not before.
 
 **B — planner knows what BB HOLDS.** `draftPlan` input gains a bounded `heldFacts` summary — fact CLASSES with
 counts and a few examples (e.g. "service: 11, location: 2, contact_booking: 1, people: 13, policy: 4" + the
@@ -573,8 +578,10 @@ Two layers, and only the second is a real guard:
 - **Prompt-conditioning (necessary, NOT sufficient):** giving the model `heldFacts` + an instruction "never
   assign the founder to gather information BB already holds" relies on the model reading a summary and obeying
   prose. Fragile alone — it is model-following.
-- **Structural enforcement (the guard):** the model emits, per action, a machine-checkable
-  `gathersFactClass: AtomClass | null` from the SAME closed atom-class vocabulary. A DETERMINISTIC rule in
+- **Structural enforcement (the guard):** the model emits, per action, a **REQUIRED** machine-checkable
+  `gathersFactClass: AtomClass | 'none'` — a named atom class OR an explicit `'none'`, never omitted. Required,
+  not optional, ON PURPOSE: an optional field the model omits fails SILENTLY and the defect ships looking
+  clean; a required field that is missing **fails validation**. A DETERMINISTIC rule in
   `plan-quality.validatePlan` then fails any founder-assigned action whose `gathersFactClass` is a class
   `heldFacts` already contains (`assigns_held_info:<class>`), routed through the EXISTING repair loop.
   **Honest caveat:** this is not zero-model. The DECISION is deterministic, but the per-action classification
@@ -584,15 +591,21 @@ Two layers, and only the second is a real guard:
 
 ### Commit sequence (plan only — NOT built)
 
-1. **C1 — contract + closed vocab (no behavior):** `ExecutableFormat` closed type; add `executableFormat` and
-   `gathersFactClass` to `Action`; extend `draftPlan` input with `executableFormats` + `HeldFactsSummary`;
-   existing model sets them null (back-compat). Types compile, behavior unchanged.
+1. **C1 — contract + closed vocab (no behavior):** `ExecutableFormat = 'landing' | 'carousel'` closed type; add
+   `executableFormat: ExecutableFormat | null` and the REQUIRED `gathersFactClass: AtomClass | 'none'` to
+   `Action`; extend `draftPlan` input with `executableFormats` + `HeldFactsSummary`. Because `gathersFactClass`
+   is required, C1 must give the existing model impl a default (`'none'`) so the build stays green until C2
+   teaches the model to set it. Types compile, behavior unchanged.
 2. **C2 — planner prompt + projection:** teach `PLAN_SYSTEM` (inline in `anthropic-plan.model.ts`) the
    executable-format list + heldFacts, to set `executableFormat`/`gathersFactClass`, and to not assign held
    info; map the new fields in the draft→PlanVersion projection (plan.service.ts:72).
-3. **C3 — structural gate + repair:** add `assigns_held_info:<class>` and the
-   `leadsToCreate ⇔ executableFormat` consistency check to `plan-quality.validatePlan`; wire into the existing
-   repair loop. Tests: a "catalogue your services" action with services held → fails → repairs.
+3. **C3 — structural gate + repair:** add `assigns_held_info:<class>`; require `gathersFactClass` on every
+   founder-assigned action (missing ⇒ `missing_gathers_tag` failure, no silent escape); and the
+   `leadsToCreate ⇔ executableFormat` consistency check, which **FAILS CLOSED** — `leadsToCreate: true` with
+   `executableFormat: null` is an action promising creation with no surface behind it (a dead "Make it" / "See
+   what BB wrote" button) → reject, never default. Wire all into the existing repair loop. Tests: a
+   "catalogue your services" action with services held → fails → repairs; a leadsToCreate/no-format action →
+   rejected. **Report after C3, before touching the surface (C5/C6).**
 4. **C4 — composition wiring:** assemble `heldFacts` (atom class counts + understanding facets) and
    `executableFormats`, pass into `generateProposedPlan`/`draftPlan` (reuses the already-wired substrate).
 5. **C5 — CreateHandoff + routing:** populate `requestedAssetFormat` from `action.executableFormat`; branch the
