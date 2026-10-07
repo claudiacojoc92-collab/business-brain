@@ -20,8 +20,9 @@ Read `README.md` and `CLAUDE.md`. Rules you must know: never push without approv
 preflight before any api restart, never print secrets, frozen slices stay frozen.
 
 ## 1. START a session
-Open Claude Code in `~/Desktop/business_brain`. Say:
-> "Orient: git status, current branch, last 5 commits, and anything in progress under intent/."
+Open Claude Code in `~/Desktop/business_brain` and type **`/session-start`** (or say:
+"Orient: git status, current branch, last 5 commits, and anything in progress under intent/").
+Setup details and what's loaded automatically: `session-continuity.md`.
 
 Check you're on the right branch. If picking up existing work, jump to **6. CONTINUE**.
 
@@ -33,7 +34,11 @@ Check you're on the right branch. If picking up existing work, jump to **6. CONT
 Review `intent.md`. Is the Outcome checkable? Are constraints and out-of-scope right? Then approve:
 > "Intent approved, commit it."
 
-**b. Spec (only for larger or risky work).** "Write spec.md for this intent." Review, approve.
+**b. Spec pack (new features, integrations, data or prod changes; see sizing in `intent/README.md`).**
+> "Write the spec pack for this intent: interview me for product requirements, technical requirements,
+> flow, design and data. Ask, don't guess."
+
+Review it. The test: could someone build this without asking a single question? Then approve.
 
 **c. Plan.** Switch to plan mode (Shift+Tab, or the mode selector), then:
 > "Write plan.md for this intent: files, work order, tests, risks."
@@ -45,6 +50,10 @@ Correct it. Look hard at **Risks**: frozen code? migration? prod data? Approve:
 - Let Claude work. It follows `CLAUDE.md` and `docs/operations/agent-sop.md`.
 - Independent pieces can go to sub-agents in parallel: "Use sub-agents for X and Y."
 - Interrupt freely if it drifts from the plan. Changing the plan = update plan.md first.
+
+> **Definition of Done (canonical):** a product task is Done only when it's **live in production and checked
+> there** on real data, with proof on the Linear issue. Built, tested, committed or deployed-but-unchecked =
+> still In Progress (`Awaiting prod`). Details: SOP §3.2.
 
 ## 4. VERIFY (gate: evidence, not claims)
 Ask for proof:
@@ -82,8 +91,8 @@ Combine them: `approve commit, push`. Never blocked-with-approval (you'd run the
 secrets, force push, bare `railway domain`, api restart without the env-key preflight.
 
 ## 6. END a session (2 minutes; this is what makes continuation work)
-> "End of session: append a status line to plan.md (done / next / blockers), and tell me
-> anything uncommitted."
+Type **`/session-end`**. Claude updates the plan status log, writes the handoff (`latest.md`), saves
+lessons to memory, lists anything uncommitted and gives you a resume prompt.
 
 Then decide: commit the work-in-progress, or leave it uncommitted and note that in the status log.
 Anything Claude learned that every future session needs → "add it to the SOP" (or to CLAUDE.md if it's

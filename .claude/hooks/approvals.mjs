@@ -3,7 +3,8 @@
 // operator's own typed message and last until their next message (each prompt replaces the set).
 //   "approve push"            opens the push gate
 //   "approve deploy, commit"  opens several
-//   a plain request to commit ("commit this", "please commit") also opens the commit gate
+//   a request to commit ("commit the changes", "approve commit") opens the whole ship flow:
+//   commit + push + merge (commit → push branch → PR to main → merge). See agent-sop.md §2.6.
 import { writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { GATES } from './rules.mjs';
@@ -14,8 +15,10 @@ export function parseApprovals(prompt) {
   for (const m of text.matchAll(/\bapprove[ds]?\s*:?\s*((?:[a-z-]+\s*(?:,|and|&)?\s*)+)/gi)) {
     for (const word of m[1].toLowerCase().split(/[\s,&]+|\band\b/)) if (GATES[word]) gates.add(word);
   }
-  const negated = /\b(don'?t|do\s+not|no|never|without|not\s+yet|stop)\b[^.!?\n]{0,25}\bcommit/i.test(text);
+  // Negations and hypotheticals ("don't commit", "if I say commit ...") are not requests.
+  const negated = /\b(don'?t|do\s+not|no|never|without|not\s+yet|stop|if|when|whenever)\b[^.!?\n]{0,25}\bcommit/i.test(text);
   if (!negated && /\bcommit\b/i.test(text)) gates.add('commit');
+  if (gates.has('commit')) { gates.add('push'); gates.add('merge'); }
   return [...gates];
 }
 

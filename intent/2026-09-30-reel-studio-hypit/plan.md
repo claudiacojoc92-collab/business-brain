@@ -63,3 +63,22 @@ workspace package isn't possible (Node 24 vs our Node 20) and would couple our b
   word-level timings (e.g. "Stop" 0.11–0.43 s). 6/6 wrapper tests. Nothing committed yet.
   Next: Test B needs target links from the operator (a TikTok + an Instagram Reel, ideally our own);
   Test C needs a folder of our clips.
+- 2026-09-30: **Test B (Instagram) passed**: public reel fetched with no login (6.2 s, 1080×1920,
+  30 fps, audio). Inspect: 3 cuts (1.67 / 2.92 / 5.25 s), no speech (music bed), contact sheet + full
+  frames. Claude wrote ANALYSIS.md + TIMELINE.md (ironic POV meme: static serif caption over 2
+  alternating framings, loopable). TikTok not yet tested. Next: Test C with operator's clips.
+- 2026-10-01: **Test C passed**: operator's single-shot iPhone clip (19.7 s HEVC, rotated) recreated
+  as the reference edit. Second framing = digital punch-in (crop 720×1280 @ 200,420, ×1.5); only
+  phone-scrolling moments used. Caption in EB Garamond 500 @ 54 px (from Hypit's render bundle), rendered
+  to a transparent layer by Hypit's headless Chrome, calibrated to within ~3% of the original width.
+  Output cuts verified at 1.667 / 2.917 / 5.25 s = reference. Operator's own ambient audio (original
+  music not reused; add the trending audio in Instagram when posting).
+  **Gap found:** the final render used ffmpeg + headless Chrome directly, not a Hypit Build (SVML
+  authoring not exercised yet). Local ffmpeg 9 has no drawtext; `-filter_complex_script` is now
+  `-/filter_complex`. Next: fold this recipe into the wrapper (`reel-studio recut`), or author it as
+  Hypit SVML so `build` covers it.
+- 2026-10-01: Operator rejected v1: "doesn't look like the original; must show I'm on my phone and
+  just click Claude Code while it works". Lesson: copy the **story beats**, not just the cut timings.
+  v1 matched timings but dropped the click and aimed the punch-in at hair. v2: 5 shots (wide phone /
+  close phone / wide reach / close click on Claude Code / wide back to phone), punch-ins aimed at the
+  phone and the hand+screen, caption moved up so it never covers the laptop. Awaiting feedback.

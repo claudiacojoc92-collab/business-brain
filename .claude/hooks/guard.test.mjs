@@ -42,6 +42,10 @@ const BLOCK = [
   ['git worktree remove ../x', 'git-destructive'],
   ['git checkout -- .', 'git-destructive'],
   ['git commit -m "x"', 'git-commit'],
+  ['gh pr merge 3 --squash --delete-branch', 'gh-pr-merge'],
+  ['gh pr merge --auto --merge', 'gh-pr-merge'],
+  ['gh api -X PUT repos/o/r/pulls/3/merge', 'gh-pr-merge'],
+  ['gh api repos/o/r/merges -f base=main -f head=feature/x', 'gh-pr-merge'],
   // deletion
   ['rm -rf apps/web/dist', 'rm-outside-scratchpad'],
   ['rm -r ~/Desktop/foo', 'rm-outside-scratchpad'],
@@ -98,6 +102,10 @@ const ALLOW = [
   'docker compose up -d postgres redis',
   'cat .claude/hooks/rules.mjs',
   'node --test .claude/hooks/',
+  'gh pr create --title x --body y',
+  'gh pr view 3 --json mergeable,mergeStateStatus',
+  'gh pr checks 3',
+  'gh pr merge --help',
   // regressions: mentions/reads of protected paths must not be blocked
   "node -e \"import('./.claude/hooks/rules.mjs').then(m=>console.log(m.RULES.length))\"",
   'git status --short -uall .claude',
@@ -117,6 +125,8 @@ test('gate opens only with the matching approval', () => {
   assert.equal(decide(bash('git push'), new Set(['push'])).decision, 'approved');
   assert.ok(blocked(bash('railway up --service web --detach'), ['push']));
   assert.equal(decide(bash('railway up --service web --detach'), new Set(['deploy'])).decision, 'approved');
+  assert.ok(blocked(bash('gh pr merge 3 --squash'), ['push', 'commit']));
+  assert.equal(decide(bash('gh pr merge 3 --squash'), new Set(['merge'])).decision, 'approved');
 });
 
 test('preflight rule has no approval path', () => {
@@ -154,11 +164,18 @@ test('file tools: secrets, frozen slices, migrations, hook config', () => {
 
 test('approval parsing', () => {
   assert.deepEqual(parseApprovals('looks good, approve push'), ['push']);
-  assert.deepEqual(parseApprovals('Approve deploy, commit').sort(), ['commit', 'deploy']);
+  assert.deepEqual(parseApprovals('Approve deploy, commit').sort(), ['commit', 'deploy', 'merge', 'push']);
   assert.deepEqual(parseApprovals('approve: frozen and migration').sort(), ['frozen', 'migration']);
-  assert.deepEqual(parseApprovals('please commit this'), ['commit']);
+  // a commit request opens the whole ship flow
+  assert.deepEqual(parseApprovals('please commit this').sort(), ['commit', 'merge', 'push']);
+  assert.deepEqual(parseApprovals('commit the changes').sort(), ['commit', 'merge', 'push']);
+  assert.deepEqual(parseApprovals('approve commit').sort(), ['commit', 'merge', 'push']);
+  assert.deepEqual(parseApprovals('If I say um, commit the changes, it should ship'), []);
+  assert.deepEqual(parseApprovals('when we commit later, use squash'), []);
   assert.deepEqual(parseApprovals("don't commit yet"), []);
   assert.deepEqual(parseApprovals('do not push or commit anything'), []);
   assert.deepEqual(parseApprovals('push it'), []); // push needs the explicit phrase
+  assert.deepEqual(parseApprovals('approve merge'), ['merge']);
+  assert.deepEqual(parseApprovals('merge it'), []); // merge needs the explicit phrase
   assert.deepEqual(parseApprovals('approve everything'), []);
 });

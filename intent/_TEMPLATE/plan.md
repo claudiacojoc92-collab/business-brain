@@ -20,7 +20,10 @@
 - Unit: `npx vitest run <path>`
 - Types: `npx tsc --noEmit -p <project>/tsconfig.json`
 - Lint: `npx eslint <paths> --max-warnings 0`
-- Live check (browser / curl / DB query) that proves the Outcome in intent.md
+- Local live check (browser / curl / DB query) before deploy
+- **Production verification (Definition of Done):** after deploy (needs `approve deploy`), the exact founder path
+  to exercise on app.getbusinessbrain.com with real data, and what result proves the Outcome in intent.md.
+  Nothing in this plan is Done until this passes and is recorded on the Linear issue.
 
 ## Risks
 Frozen code touched? Migration? Prod data? Env/secrets? Rollback path?

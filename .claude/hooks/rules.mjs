@@ -1,6 +1,6 @@
 // Enforced rules for Claude Code in this repo. Source of truth for CLAUDE.md "Hard rules" and
 // docs/operations/agent-sop.md "Safety protocols". ADD RULES HERE as the SOP grows, then add a case to
-// guard.test.mjs and run: node --test .claude/hooks/
+// guard.test.mjs and run: node --test '.claude/hooks/*.test.mjs'
 //
 // Rule shape:
 //   id      unique kebab id (shown to Claude and written to .claude/state/hook-log.jsonl)
@@ -25,7 +25,8 @@ const SECRET_PATH =/(^|\/)\.env(?!\.example|\.sample|\.template)(\.[\w-]+)?$|\.p
 
 export const GATES = {
   push: 'git push (any remote/branch)',
-  commit: 'git commit (also opened by a plain request to commit)',
+  merge: 'merging a GitHub PR (gh pr merge, incl. --auto/--admin, or the merge API)',
+  commit: 'ship: commit + push + PR to main + merge (also opened by "commit the changes")',
   'destructive-git': 'reset --hard, clean -f, branch -D, stash drop/clear, worktree remove, remote branch delete',
   delete: 'rm -r outside the scratchpad, docker volume/image removal, make db-reset',
   deploy: 'railway up/redeploy/add/variables --set/domain <name> and other prod infra changes',
@@ -84,6 +85,10 @@ export const RULES = [
   { id: 'git-destructive', tools: ['Bash'],
     match: /\bgit\s+(reset\s+[^;&|]*--hard|clean\s+-[a-zA-Z]*f|branch\s+[^;&|]*-D\b|checkout\s+(--\s+)?\.\s*($|[;&|])|restore\s+[^;&|]*(\.|--worktree)\s*($|[;&|])|stash\s+(drop|clear)|worktree\s+remove|filter-branch|update-ref\s+-d)/,
     action: 'gate', gate: 'destructive-git', reason: 'Discards work or history. Confirm nothing unique is lost first.' },
+  { id: 'gh-pr-merge', tools: ['Bash'],
+    match: /\bgh\s+pr\s+merge\b|\bgh\s+api\b[^;&|]*\/pulls\/\d+\/merge\b|\bgh\s+api\b[^;&|]*\/merges\b/,
+    unless: /\s--help\b/, action: 'gate', gate: 'merge',
+    reason: 'Merging lands code on the target branch. The operator merges, or approves the merge in this message.' },
   { id: 'git-commit', tools: ['Bash'], match: /\bgit\s+commit\b/, action: 'gate', gate: 'commit',
     reason: 'Commit only when the operator asks for it.' },
 

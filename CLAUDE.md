@@ -87,8 +87,20 @@ Gotchas:
 
 ## Hard rules
 
-- Never commit, push, branch, or build unless the task explicitly asks. Never push without the user's
-  explicit approval. Read-only tasks stay read-only.
+- **Definition of Done (canonical, ratified 2026-10-07).** A product issue, sub-issue, milestone or project is
+  **Done only when its capability is live in production**: the commit is deployed to the production Railway
+  services (app.getbusinessbrain.com), and the capability has been exercised **there**, through the path a founder
+  actually uses, against real data, with evidence recorded on the Linear issue (deployment ID/time, prod commit,
+  what was checked, result). Built, tested, committed, merged, or deployed-but-unverified is **not** Done: keep it
+  In Progress with the label `Awaiting prod`. A milestone/project is Done only when all its issues are. Claude
+  never deploys just to close an issue (deploys still need `approve deploy`). Non-product work, the ONLY
+  exceptions: docs/process/tooling = committed and in effect; content = published; decision = recorded in the repo
+  and approved by the operator; open question = answered by the operator. Full rule:
+  `docs/operations/agent-sop.md` §3.2.
+
+- Never commit, push, branch, or build unless the task explicitly asks. Read-only tasks stay read-only.
+  "Commit the changes" means the **ship flow**: commit → push the branch → PR to `main` → merge (merge
+  commit, not squash). Stop on conflicts or failing checks. Merging does not deploy. See SOP §2.6.
 - Before ANY api container restart or rebuild, run `bash tools/preflight-env-key.sh &&` first.
   `GOOGLE_OAUTH_ENCRYPTION_KEY` must be in `.env` or restored from the `~/.config/business-brain/`
   backup. Never restart into a missing key: that orphans every encrypted credential.
@@ -117,18 +129,25 @@ build → verify → ship → handoff): `docs/operations/operator-cheatsheet.md`
 line here and the detail to the SOP.
 
 - Orient first: `git status --short && git log --oneline -5`, then read the task's `plan.md` status log.
+- Specify before building: new features/integrations/data/prod changes need `intent.md` → `spec.md` (product,
+  technical, flow, design, data) → `plan.md`. Interview the operator for answers; never guess them.
 - Verify narrowest-first: `npx vitest run <path>` → `npx tsc --noEmit -p <project>` → `npx eslint <paths>
   --max-warnings 0` → `npm test`. UI changes are verified live in the browser pane, not by tests alone.
-- Stop and ask before: push, branch delete, `reset --hard`, any `railway up/redeploy/variables/domain`,
+- Stop and ask before: push or merge outside the ship flow, branch delete, `reset --hard`, any `railway up/redeploy/variables/domain`,
   prod writes, `rm -r` outside the scratchpad, new migrations, edits to frozen slices.
 - Local DB queries: confirm the DB name first (`businessbrain` vs the override's name).
 - Don't poll with `sleep`; use background tasks or Monitor.
 - Sub-agents own disjoint files and never commit or push. Re-check anything destructive they recommend.
-- End of session: append done / next / blockers to the active `plan.md` status log.
+- Sessions: `/session-start` (briefing from handoff + Linear + git + active intents) and `/session-end` (Linear
+  issue states + progress comments + project status updates, plan status log, handoff in
+  `~/.claude/handoffs/<project>/latest.md`, memory, resume prompt). See `docs/operations/session-continuity.md`.
+- Tracking: Linear team "Business Brain" (BUS-xx). Roadmap label → project (= intent folder) → milestone (plan
+  stage) → issue (work step) → sub-issue. Mention BUS-xx in commits. Never invent roadmap steps. See
+  `docs/operations/linear-workflow.md`.
 
 **Enforced by hooks** (`.claude/hooks/rules.mjs`, active even in bypass mode). A blocked action is
 denied with a `[rule-id]` message. Never work around it: stop, say what you want to run and why, and ask
-the operator to type `approve <gate>` (valid for that one message/turn). Gates: `push`, `commit`,
+the operator to type `approve <gate>` (valid for that one message/turn). Gates: `push`, `merge`, `commit`,
 `destructive-git`, `delete`, `deploy`, `prod`, `prod-write`, `migration`, `frozen`, `rules`. Always
 blocked, no approval path: printing/sourcing secrets, bare `railway domain`, force push, api restart
 without the preflight, editing committed migrations. Sub-agents can never commit or push. New rule =

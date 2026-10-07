@@ -28,7 +28,9 @@ How we have actually been working. They hold for every step.
 - **One step at a time.** A step ships before the next one starts.
 - **Each commit separate and reversible.** No mixed commits.
 - **Full test suite green before any commit.**
-- **A step isn't done until it's verified live against real data.**
+- **A step isn't done until it's verified live against real data.** Ratified 2026-10-07 as the canonical
+  Definition of Done (CLAUDE.md; agent-sop.md §3.2): "live" means **deployed to production and exercised there**
+  through the founder's path, with evidence on the Linear issue.
 - **Pre-existing bugs found along the way get their own commit**, never folded into the feature commit.
 - **Verify deployed configuration against the running environment, not the repo.** The repo did not show the
   Railway `/data` volume, and a repo-only read produced a false "blobs are ephemeral" conclusion (see 2a).
