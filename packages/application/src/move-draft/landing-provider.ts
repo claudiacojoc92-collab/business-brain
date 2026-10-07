@@ -22,6 +22,7 @@ export interface LandingContextView {
   readonly founderOwned: readonly string[];       // active founder statements
   readonly proofFacts: readonly string[];
   readonly voiceLines: readonly string[];
+  readonly regulatedGuard: boolean;   // opt-in medical/regulated-claim tier (default false; see composition's REGULATED_BUSINESS_IDS)
 }
 
 export interface LandingMoveIds { readonly businessId: string; readonly actionId: string; readonly planVersionId: string }
@@ -53,6 +54,7 @@ export function assembleLandingMove(ctx: LandingContextView | null, ids: Landing
     audienceUseContext: ctx.audience, licensedPropositions, proofFacts: [...ctx.proofFacts],
     ctaFunction: ctx.ctaDirection, ownedStances: [...ctx.founderOwned], safetyContractHash: null, producedAt: now(),
     communicationJob, voiceLines, // persisted so a single-section rewrite can re-gate without the provider
+    regulatedGuard: ctx.regulatedGuard, // opt-in — only flagged regulated businesses run the medical tier
   };
   return { status: 'ready', snapshot, communicationJob, voiceLines };
 }

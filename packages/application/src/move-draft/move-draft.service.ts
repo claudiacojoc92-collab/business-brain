@@ -72,15 +72,20 @@ export class MoveDraftService {
    * (deterministic Layer 1/2) + the backstop. All synchronous, no model. The first failing tier is the reason.
    * (The Layer-3 judge runs afterwards in runGate, only if this returns clean.)
    */
-  private gateDeterministic(draft: LandingDraft, spec: AuthorizedMessageSpec, language: 'ro' | 'en', ctx: VoiceSampleContext, peopleValues: string[]): GateResult {
-    const layersRun: GateLayer[] = ['medical'];
+  private gateDeterministic(draft: LandingDraft, spec: AuthorizedMessageSpec, language: 'ro' | 'en', ctx: VoiceSampleContext, peopleValues: string[], regulatedGuard: boolean): GateResult {
+    const layersRun: GateLayer[] = [];
     const sections = this.sectionList(draft);
 
-    // Tier 1 — MEDICAL (regex, cheapest). Fail fast: do not run the kernel/judge on copy the guard rejects.
-    const med = sections.flatMap((s) =>
-      detectRegulatedClaims(s.text, language).map((f): GateFailure => ({ section: s.role, layer: 'medical', rule: `class${f.blockedClass}: ${f.reason}` })),
-    );
-    if (med.length) return { failingLayer: 'medical', failures: med, layersRun };
+    // Tier 1 — MEDICAL/regulated-claim (regex, cheapest). OPT-IN: runs ONLY for an explicitly-flagged regulated
+    // business (snapshot.regulatedGuard). Most businesses are not regulated, so this tier is skipped and the
+    // claim-safety work below (kernel/backstop/people/judge) still protects them. Fail fast when it does run.
+    if (regulatedGuard) {
+      layersRun.push('medical');
+      const med = sections.flatMap((s) =>
+        detectRegulatedClaims(s.text, language).map((f): GateFailure => ({ section: s.role, layer: 'medical', rule: `class${f.blockedClass}: ${f.reason}` })),
+      );
+      if (med.length) return { failingLayer: 'medical', failures: med, layersRun };
+    }
 
     // Tier 2 — proposition kernel (deterministic Layer 1/2, synchronous via classifyLayers) + backstop.
     layersRun.push('kernel', 'backstop');
@@ -115,8 +120,8 @@ export class MoveDraftService {
   }
 
   /** Deterministic tiers, then the Layer-3 judge (3 model calls) ONLY if the cheap tiers passed. */
-  private async runGate(draft: LandingDraft, spec: AuthorizedMessageSpec, language: 'ro' | 'en', ctx: VoiceSampleContext, peopleValues: string[]): Promise<GateResult> {
-    const det = this.gateDeterministic(draft, spec, language, ctx, peopleValues);
+  private async runGate(draft: LandingDraft, spec: AuthorizedMessageSpec, language: 'ro' | 'en', ctx: VoiceSampleContext, peopleValues: string[], regulatedGuard: boolean): Promise<GateResult> {
+    const det = this.gateDeterministic(draft, spec, language, ctx, peopleValues, regulatedGuard);
     if (det.failingLayer !== null || !this.deps.judge) return det;
     const judged = await validateAgainstAuthorization(landingDraftToSampleContent(draft), GATE_CHANNEL, spec, this.deps.judge, 3);
     const layersRun: GateLayer[] = [...det.layersRun, 'judge'];
@@ -127,8 +132,11 @@ export class MoveDraftService {
   async produceLanding(args: ProduceLandingArgs): Promise<MoveDraft> {
     const base = { moveDraftId: this.id(), businessId: args.businessId, actionId: args.actionId, planVersionId: args.planVersionId, kind: 'landing' as const, language: args.language, snapshot: args.snapshot, version: 1, producedAt: this.clock() };
 
-    // The generator must NEVER emit a language the guard can't vouch for: fail closed before generating.
-    if (!isGuardLanguageEnabled(args.language)) {
+    // The regulated-claim guard is OPT-IN (flagged regulated businesses only). When it IS on, the generator must
+    // never emit a language the guard can't vouch for → fail closed before generating. When it's off, the
+    // regulated-claim tier doesn't run, so this language gate doesn't apply.
+    const regulatedGuard = args.snapshot.regulatedGuard ?? false;
+    if (regulatedGuard && !isGuardLanguageEnabled(args.language)) {
       return this.persistBlocked(base, { layersRun: ['medical'], failingLayer: 'medical', failures: [{ section: 'page', layer: 'medical', rule: `language "${args.language}" is not guard-enabled` }], repairAttempts: 0, disposition: 'blocked' });
     }
     const language = args.language as 'ro' | 'en';
@@ -138,12 +146,12 @@ export class MoveDraftService {
     const peopleValues = args.snapshot.licensedPropositions.filter((p) => p.atomClass === 'people').map((p) => p.text);
 
     let draft = await this.deps.model.draft({ snapshot: args.snapshot, communicationJob: args.communicationJob, voiceLines: args.voiceLines, language });
-    let result = await this.runGate(draft, spec, language, ctx, peopleValues);
+    let result = await this.runGate(draft, spec, language, ctx, peopleValues, regulatedGuard);
     let attempts = 0;
     while (result.failingLayer !== null && attempts < MAX_REPAIRS) {
       attempts++;
       draft = await this.deps.model.repair({ snapshot: args.snapshot, communicationJob: args.communicationJob, voiceLines: args.voiceLines, language, previous: draft, failures: result.failures.map((f) => ({ section: f.section, rule: `${f.layer} — ${f.rule}` })) });
-      result = await this.runGate(draft, spec, language, ctx, peopleValues);
+      result = await this.runGate(draft, spec, language, ctx, peopleValues, regulatedGuard);
     }
 
     const passed = result.failingLayer === null;
@@ -194,7 +202,9 @@ export class MoveDraftService {
     const latest = await this.deps.repo.latestForAction(businessId, actionId);
     if (!latest || !latest.draft) throw new NotFoundError('MOVE_DRAFT_NOT_FOUND', 'There is no draft to rewrite.');
     const snap = latest.snapshot;
-    if (!isGuardLanguageEnabled(snap.language)) throw new ValidationError('LANGUAGE_NOT_SUPPORTED', 'This language is not guard-enabled.');
+    const regulatedGuard = snap.regulatedGuard ?? false;
+    // The guard-enabled-language gate only applies when the regulated-claim tier is on (opt-in).
+    if (regulatedGuard && !isGuardLanguageEnabled(snap.language)) throw new ValidationError('LANGUAGE_NOT_SUPPORTED', 'This language is not guard-enabled.');
     const language = snap.language as 'ro' | 'en';
     const communicationJob = snap.communicationJob ?? '';
     const voiceLines = snap.voiceLines ?? [];
@@ -203,12 +213,12 @@ export class MoveDraftService {
     const peopleValues = snap.licensedPropositions.filter((p) => p.atomClass === 'people').map((p) => p.text);
 
     let draft = await this.deps.model.rewriteSection({ snapshot: snap, communicationJob, voiceLines, language, previous: latest.draft, role });
-    let result = await this.runGate(draft, spec, language, ctx, peopleValues);
+    let result = await this.runGate(draft, spec, language, ctx, peopleValues, regulatedGuard);
     let attempts = 0;
     while (result.failingLayer !== null && attempts < MAX_REPAIRS) {
       attempts++;
       draft = await this.deps.model.repair({ snapshot: snap, communicationJob, voiceLines, language, previous: draft, failures: result.failures.map((f) => ({ section: f.section, rule: `${f.layer} — ${f.rule}` })) });
-      result = await this.runGate(draft, spec, language, ctx, peopleValues);
+      result = await this.runGate(draft, spec, language, ctx, peopleValues, regulatedGuard);
     }
     if (result.failingLayer !== null) {
       // Fail-closed: do not replace a good draft with an ungated rewrite. Legible to the caller.

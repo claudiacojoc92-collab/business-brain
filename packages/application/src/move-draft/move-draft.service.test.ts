@@ -12,6 +12,7 @@ const SNAP: LandingAuthorizationSnapshot = {
   ],
   proofFacts: [], ctaFunction: 'programează o primă ședință', ownedStances: [], safetyContractHash: null,
   producedAt: '2026-10-05T00:00:00.000Z',
+  regulatedGuard: true, // these cases exercise the (opt-in) regulated-claim tier, so it must be ON for them
 };
 
 const CLEAN: LandingDraft = {
@@ -70,6 +71,15 @@ describe('MoveDraftService — orchestration', () => {
     expect(md.draft).not.toBeNull();
     expect(md.safetyDecision.failingLayer).toBeNull();
     expect(r.saved[0]?.status).toBe('drafted'); // persisted
+  });
+
+  it('opt-in guard OFF (default): the regulated-claim tier does NOT run — a medical-worded draft is not blocked by it', async () => {
+    const m = model([MEDICAL]);
+    // No judge: runGate returns the deterministic result. With regulatedGuard off, the medical tier is skipped.
+    const svc = new MoveDraftService({ model: m, repo: repo() });
+    const md = await svc.produceLanding({ ...args, snapshot: { ...SNAP, regulatedGuard: false } });
+    expect(md.safetyDecision.layersRun).not.toContain('medical'); // the tier was skipped entirely
+    expect(md.safetyDecision.failures.some((f) => f.layer === 'medical')).toBe(false);
   });
 
   it('gate order: a medical failure fails fast — the Layer-3 judge is NOT called', async () => {

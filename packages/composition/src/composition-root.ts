@@ -181,6 +181,15 @@ export interface CompositionRoot {
 }
 
 /**
+ * Businesses for which the OPT-IN medical/regulated-claim guard runs on landing/move copy. DEFAULT EMPTY —
+ * most businesses are NOT regulated, so the regulated-claim tier does not fire for them. A real regulated
+ * client (a medical/clinical business) is added here DELIBERATELY, by us, when they become a client. Body Move
+ * is a TEST business, not regulated, and is intentionally absent. The kernel/backstop/people-fidelity/judge
+ * safety layers always run regardless; this set gates only the regulated-claim tier. See known-issues.md.
+ */
+const REGULATED_BUSINESS_IDS: ReadonlySet<string> = new Set<string>([]);
+
+/**
  * Wires all dependencies and registers all handlers.
  * Called once at API startup.
  * Source: Repository Structure V1 Section 02.
@@ -739,6 +748,11 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
         goal: ctx.goal, audience: ctx.audience, ctaDirection: ctx.ctaDirection,
         atoms, synthesizedFacts: allowedBusinessFacts(snap?.understanding ?? null),
         founderOwned: ctx.ownedStances, proofFacts: ctx.proofFacts, voiceLines: ctx.voiceLines,
+        // OPT-IN medical/regulated-claim guard: default OFF for every business. Only businesses explicitly
+        // added to REGULATED_BUSINESS_IDS (real regulated clients, added deliberately) run the medical tier.
+        // Body Move is a TEST business, not regulated — it is NOT in the set. The kernel/backstop/people/judge
+        // layers still run for everyone; this flag gates only the regulated-claim tier. See known-issues.md.
+        regulatedGuard: REGULATED_BUSINESS_IDS.has(businessId),
       };
     }
     const assembled = assembleLandingMove(landingCtx, { businessId, actionId, planVersionId: pvId }, () => new Date().toISOString(), generateId);

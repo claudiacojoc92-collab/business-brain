@@ -13,7 +13,7 @@ const CTX: LandingContextView = {
     { value: '(max. 4 persoane)', atomClass: 'policy', sourceUrl: 'https://www.bodymovestudio.ro/servicii' },
   ],
   synthesizedFacts: ['un spațiu integrat de sănătate prin mișcare'], founderOwned: ['punem preț pe calitate'],
-  proofFacts: [], voiceLines: ['Mișcare, nu performanță.'],
+  proofFacts: [], voiceLines: ['Mișcare, nu performanță.'], regulatedGuard: true,
 };
 
 describe('assembleLandingMove — adoption gate + strategy conditioning', () => {

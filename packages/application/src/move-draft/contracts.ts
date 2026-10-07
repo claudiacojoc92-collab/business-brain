@@ -72,6 +72,11 @@ export interface LandingAuthorizationSnapshot {
   // the snapshot — no migration). The communication job + voice are what the generator/gate need beyond facts.
   readonly communicationJob?: string;
   readonly voiceLines?: string[];
+  /** OPT-IN medical/regulated-claim guard. Absent/false ⇒ the regulated-claim tier does NOT run for this
+   *  business (the default — most businesses are not regulated). true ⇒ the business is an explicitly-flagged
+   *  regulated client (composition's REGULATED_BUSINESS_IDS) and the medical tier applies. The kernel, backstop,
+   *  people-fidelity and judge layers always run regardless — this flag gates ONLY the regulated-claim tier. */
+  readonly regulatedGuard?: boolean;
 }
 
 export type MoveDraftStatus =
