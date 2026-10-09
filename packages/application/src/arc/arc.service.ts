@@ -1,7 +1,7 @@
 import type { StrategyVersionRecord } from '../strategy/index';
 import type { PlanVersion } from '../plan/index';
 import type { GovernedUnderstanding } from '../bi/index';
-import { agendaUnknowns } from '../bi/index';
+import { agendaUnknowns, isHousekeeping, restatesNotShown, makesUnlicensedClaim } from '../bi/index';
 import type { GoalCandidate } from '../conversation/index';
 import { computeArcMoment } from './moment';
 import type {
@@ -199,31 +199,50 @@ export class ArcService {
     // dangled. Carry the MORE CONCRETE statement (a quote/number names the referent), drop the softer half.
     const concreteScore = (s: string): number => (/[„“"'”]/.test(s) ? 2 : 0) + (/\d/.test(s) ? 1 : 0);
     const grounded = (a: string, b: string): string => (!b ? a : !a ? b : concreteScore(b) > concreteScore(a) ? b : a);
-    const tensions = (u?.contradictions ?? [])
-      // A capability gap (sells X, its own sources never show X) is the primary contradiction whenever the model
-      // classified one; otherwise the model's own ranking stands (stable sort keeps its order).
+    type TensionRow = { tension: string; grounding: string; sourceRefs: string[] };
+    // PRIMARY, decided in code: when the model's capability check says the business never shows what it sells, that
+    // gap (stated across all sources) leads "What stood out". The model's own ordering of contradictions proved
+    // unstable for this, so it only supplies the signal.
+    // The claim-type gate (trust, credibility, conversion, recommendation…) applies here too: an item that makes such
+    // a claim is dropped; a so-what that does loses only the so-what line.
+    const licensed = (x: string | undefined): string => { const v = (x ?? '').trim(); return v && !makesUnlicensedClaim(v) ? v : ''; };
+    const cc = u?.capabilityCheck;
+    const primaryGap: TensionRow | null = cc && cc.shown === false && (cc.insight ?? '').trim()
+      && !makesUnlicensedClaim(cc.insight)
+      ? { tension: cc.insight.trim(), grounding: licensed(cc.soWhat), sourceRefs: clean(cc.sourceRefs) }
+      : null;
+    const rows = (u?.contradictions ?? [])
+      // Website housekeeping (legal pages, copywriting critiques of a quoted phrase) is never business insight.
+      .filter((c) => !isHousekeeping(`${c.tension ?? ''} ${c.statementA ?? ''} ${c.statementB ?? ''}`) && !makesUnlicensedClaim(c.tension ?? ''))
+      // With the capability gap as primary, drop anything that restates it ("never shows / no example / no
+      // evidence", e.g. the same gap told about one channel): two slots for one insight is the bug this prevents.
+      .filter((c) => !primaryGap || (c.kind !== 'capability_gap' && !restatesNotShown(`${c.tension ?? ''} ${c.soWhat ?? ''}`)))
+      // Without a capability check, at most ONE capability gap is shown, first.
+      .filter((c, i, all) => c.kind !== 'capability_gap' || all.findIndex((x) => x.kind === 'capability_gap') === i)
       .slice()
       .sort((x, y) => Number(y.kind === 'capability_gap') - Number(x.kind === 'capability_gap'))
-      .map((c) => {
+      .map((c): TensionRow | null => {
         const tension = (c.tension ?? '').trim();
         const a = (c.statementA ?? '').trim();
         const b = (c.statementB ?? '').trim();
+        const soWhat = licensed(c.soWhat);
         const sourceRefs = clean(c.sourceRefs);
         if (!tension && !a && !b) return null;
-        if (!tension) return { tension: a && b ? `${a} — yet ${b}` : a || b, grounding: '', sourceRefs };
-        return { tension, grounding: grounded(a, b), sourceRefs };
+        if (!tension) return { tension: a && b ? `${a} — yet ${b}` : a || b, grounding: soWhat, sourceRefs };
+        // The line under the tension is its SO-WHAT (the consequence for the business) when the model gave one;
+        // older snapshots fall back to the more concrete of the two statements.
+        return { tension, grounding: soWhat || grounded(a, b), sourceRefs };
       })
-      .filter((x): x is { tension: string; grounding: string; sourceRefs: string[] } => Boolean(x))
-      // The model RANKS the contradictions (biggest first; see the understanding prompt's STRATEGIC LENS), so keep
-      // its order. The old re-sort by "concreteness" (quotes/numbers first) pushed audit details such as two dates
-      // that differ above the strategic contradiction, which rarely carries a number.
-      .slice(0, 3);
+      .filter((x): x is TensionRow => Boolean(x));
+    const tensions = (primaryGap ? [primaryGap, ...rows] : rows).slice(0, 3);
 
     // Confident = anchored in the evidence: the grounded Aha findings + what the offer states explicitly +
     // positioning the site actually backs up. Inferring = read from PATTERN (implied positioning, who the
     // site *appears* aimed at) — honestly flagged as possibly wrong. Unanswered = what the sources can't tell.
     const confident = dedupe([
-      ...aha1.map((a) => a.finding.trim()),
+      // Findings: no housekeeping (older snapshots predate the gate), and with the capability gap already leading
+      // "What stood out", none that restate it (the same insight in two cards).
+      ...aha1.map((a) => a.finding.trim()).filter((f) => !isHousekeeping(f) && !(primaryGap && restatesNotShown(f))),
       ...clean(u?.offer?.explicit),
       ...clean(u?.positioning?.evidenceBacked),
     ]).slice(0, 5);

@@ -50,8 +50,14 @@ export interface GovernedUnderstanding {
    * projection uses it deterministically: a `capability_gap` (sells X, never shows X) is always shown first.
    * Optional: snapshots written before it existed have none.
    */
-  readonly contradictions: { statementA: string; statementB: string; tension: string; sourceRefs: string[]; kind?: ContradictionKind }[];
+  readonly contradictions: { statementA: string; statementB: string; tension: string; sourceRefs: string[]; kind?: ContradictionKind; soWhat?: string }[];
   readonly unknowns: string[];
+  /**
+   * The model's answer to the CAPABILITY CHECK: what the business sells and whether its own sources ever show it.
+   * When `shown` is false, the arc projection makes `insight` the primary "What stood out" item (decided in code,
+   * not left to the model's ordering). Optional: older snapshots have none.
+   */
+  readonly capabilityCheck?: { sells: string; shown: boolean; insight: string; soWhat: string; sourceRefs: string[] };
 }
 
 /** The (≤3) things BB could NOT learn from the site — the SINGLE source for both the understanding "What I'll ask
