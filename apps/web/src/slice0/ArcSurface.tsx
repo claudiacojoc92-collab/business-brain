@@ -5,10 +5,10 @@ import { translate, isLocale } from '../i18n/messages';
 import { isNotFound } from './errors';
 import { parseOpenerTurn, type ArcOpener } from './parse-briefing';
 import {
-  getArc, arcAddSource, arcAddLink, arcAddText, arcAddFile, arcAddInstagram, getInstagramConnectUrl,
+  getArc, arcAddSource, arcAddLink, arcAddText, arcAddFile, arcAddInstagram, getInstagramConnectUrl, getArcSources, arcRemoveSource,
   arcPourInDone, arcConversation, arcConfirmUnderstanding, arcCorrectUnderstanding,
   arcMirrorSeen, arcAdoptStrategy, arcChallengeStrategy, arcAdoptWeekDay, arcGenerateEmail,
-  arcSaveEmail, arcExportEmail, arcContainerSeen, arcConfirmGoal, arcSkipQuestion, type ArcView,
+  arcSaveEmail, arcExportEmail, arcContainerSeen, arcConfirmGoal, arcSkipQuestion, type ArcView, type ArcSourceItem,
 } from '../api/client';
 // Instagram is back in the pour-in (2026-10-08) via the DIRECT Instagram Login connector: it authorizes whatever
 // Instagram account the browser is logged into (no Business-vs-personal picker). The Page-picker flow via Facebook
@@ -242,6 +242,12 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
   const [history, setHistory] = useState<ArcView[]>([]);
   const [viewIdx, setViewIdx] = useState<number | null>(null);
   const [histOpen, setHistOpen] = useState(false);
+  // The pour-in re-opened from a later moment (Back from the first moment, History → Your sources, or Sources).
+  // Also opens straight away when the browser comes back from Instagram consent while the arc is past pour-in.
+  const [editingSources, setEditingSources] = useState(() => {
+    const q = new URLSearchParams(window.location.search);
+    return q.get('connected') === 'instagram' || q.get('error') != null;
+  });
   const [discuss, setDiscuss] = useState(false); // strategy: the "let's talk about it" box, revealed on demand
   const [stratDetails, setStratDetails] = useState(false); // strategy: the minor cards (not-now / reconsider) — collapsed by default so a tired founder reads the bet + 2 reasons + acts, details on demand
   const started = useRef(false);
@@ -323,7 +329,23 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
   const shownIdx = viewIdx ?? liveIdx;
   const shown = history[shownIdx] ?? view;
   const readOnly = viewIdx !== null && shownIdx < liveIdx;
-  const goBack = () => setViewIdx(Math.max(0, shownIdx - 1));
+  const openSources = () => { setHistOpen(false); setEditingSources(true); };
+  // Back walks the moments re-readable in this session; from the earliest one it opens the sources (pour-in).
+  const goBack = () => (shownIdx > 0 ? setViewIdx(shownIdx - 1) : openSources());
+  const pastPourIn = view.moment !== 'pour_in';
+
+  if (editingSources && pastPourIn) {
+    return (
+      <div className="s0-strat">
+        <SourcesEditor
+          businessId={businessId}
+          onUpdated={(v) => { setEditingSources(false); setHistory([]); apply(v); }}
+          onCancel={() => setEditingSources(false)}
+          cancelLabel={t('arc.sources.backTo', { moment: t(`arc.moment.${view.moment}`) })}
+        />
+      </div>
+    );
+  }
   const goCurrent = () => setViewIdx(null);
   const selectHist = (i: number) => { setViewIdx(i >= liveIdx ? null : i); setHistOpen(false); };
 
@@ -331,15 +353,17 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
     <div className="s0-strat">
       <div className="s0-topline">
         <div className="s0-strat-ctx">{shown.businessName} · {weekday}</div>
-        {history.length > 1 ? (
+        {pastPourIn ? (
           <div className="s0-topnav">
-            {shownIdx > 0 ? <button type="button" className="s0-navbtn" onClick={goBack}>← {t('arc.back')}</button> : null}
+            <button type="button" className="s0-navbtn" onClick={goBack}>← {t('arc.back')}</button>
             <button type="button" className="s0-navbtn" onClick={() => setHistOpen((o) => !o)} aria-expanded={histOpen}>{t('arc.history')}</button>
+            <button type="button" className="s0-navbtn" onClick={openSources}>{t('arc.sources')}</button>
           </div>
         ) : null}
       </div>
       {histOpen ? (
         <ul className="s0-histlist" role="list">
+          <li><button type="button" className="s0-histitem" onClick={openSources}>{t('arc.moment.pour_in')}</button></li>
           {history.map((h, i) => (
             <li key={i}><button type="button" className={`s0-histitem${i === shownIdx ? ' is-current' : ''}`} onClick={() => selectHist(i)}>{t(`arc.moment.${h.moment}`)}</button></li>
           ))}
@@ -540,7 +564,7 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
 
 // The prominent "✓ Added" state, shown INSIDE each connector card so the founder sees, at a glance, exactly
 // what BB took in from that source (the URL/file + a short confirmation like "10 pages read").
-function PourInAdded({ items, t }: { items: { url: string; type: string; detail?: string }[]; t: T }) {
+function PourInAdded({ items, t, onRemove }: { items: ArcSourceItem[]; t: T; onRemove?: (item: ArcSourceItem) => void }) {
   if (items.length === 0) return null;
   return (
     <div className="s0-pourin-added-list">
@@ -551,6 +575,9 @@ function PourInAdded({ items, t }: { items: { url: string; type: string; detail?
             <div className="s0-pourin-added-url">{s.url}</div>
             <div className="s0-pourin-added-detail">{t('home.empty.added')}{s.detail ? ` · ${s.detail}` : ''}</div>
           </div>
+          {onRemove ? (
+            <button type="button" className="s0-btn-ghost s0-pourin-remove" onClick={() => onRemove(s)} aria-label={`${t('arc.sources.remove')} ${s.url}`}>{t('arc.sources.remove')}</button>
+          ) : null}
         </div>
       ))}
     </div>
@@ -560,7 +587,7 @@ function PourInAdded({ items, t }: { items: { url: string; type: string; detail?
 // ── Moment 1: the multi-source pour-in. Every connector shown is REAL and functional (website, paste-a-link,
 //    file upload, Instagram); nothing is a "coming soon" stub. Durable sources come from the server view. Adding
 //    only INGESTS — the strategist synthesizes over the union when the founder clicks "Done adding — start". ──
-function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: string; view: ArcView; busy: boolean; onReload: () => Promise<void>; onDone: () => void; t: T }) {
+function PourIn({ businessId, view, busy, onReload, onDone, t, editing = false }: { businessId: string; view: ArcView; busy: boolean; onReload: () => Promise<void>; onDone: () => void; t: T; editing?: boolean }) {
   const [url, setUrl] = useState('');
   const [link, setLink] = useState('');
   const [desc, setDesc] = useState('');
@@ -573,6 +600,15 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
   const addedOf = (types: string[]) => sources.filter((s) => types.includes(s.type));
 
   const ok = (state: string) => state === 'synced' || state === 'partial';
+
+  // Remove = unlink from the business (the next understanding no longer reads it). Re-adding brings it back.
+  async function removeSource(item: ArcSourceItem) {
+    if (disabled) return;
+    setErr(null);
+    try { await arcRemoveSource(businessId, item.url, item.type); await onReload(); }
+    catch { setErr(t('arc.sources.removeFail')); }
+  }
+  const removable = disabled ? undefined : removeSource;
 
   async function addWebsite(e: React.FormEvent) {
     e.preventDefault();
@@ -662,14 +698,14 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
   return (
     <>
       <div className="s0-strat-msg">
-        <p className="s0-strat-msg-line">{t('home.empty.lead')}</p>
-        <p className="s0-strat-msg-line s0-strat-msg-sub">{t('home.empty.sub')}</p>
+        <p className="s0-strat-msg-line">{t(editing ? 'arc.moment.pour_in' : 'home.empty.lead')}</p>
+        <p className="s0-strat-msg-line s0-strat-msg-sub">{t(editing ? 'arc.sources.sub' : 'home.empty.sub')}</p>
       </div>
       <div className="s0-pourin">
         {/* WEBSITE */}
         <div className={`s0-pourin-web${addedOf(['website']).length ? ' s0-pourin-web-has' : ''}`}>
           <label className="s0-pourin-web-k">{t('home.empty.website')}</label>
-          <PourInAdded items={addedOf(['website'])} t={t} />
+          <PourInAdded onRemove={removable} items={addedOf(['website'])} t={t} />
           <form className="s0-pourin-web-row" onSubmit={addWebsite}>
             <input className="s0-pourin-web-input" type="text" inputMode="url" value={url} placeholder={t('home.empty.website.ph')} onChange={(e) => setUrl(e.target.value)} aria-label={t('home.empty.website')} />
             <button type="submit" className="s0-btn s0-btn-inline" disabled={disabled || !url.trim()}>{adding === 'website' ? t('home.empty.adding') : t('home.empty.website.add')}</button>
@@ -679,7 +715,7 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
         {/* INSTAGRAM — connect (Instagram Login), then read the profile + recent posts in as observed evidence */}
         <div className={`s0-pourin-web${addedOf(['instagram']).length ? ' s0-pourin-web-has' : ''}`}>
           <label className="s0-pourin-web-k">{t('home.empty.ig')}{igConnected ? <span className="s0-pourin-item-hint"> · {t('home.empty.ig.connected')}</span> : null}</label>
-          <PourInAdded items={addedOf(['instagram'])} t={t} />
+          <PourInAdded onRemove={removable} items={addedOf(['instagram'])} t={t} />
           <div className="s0-pourin-web-row">
             {igConnected
               ? <button type="button" className="s0-btn s0-btn-inline" disabled={disabled} onClick={() => { if (!disabled) void addInstagram(); }}>{adding === 'instagram' ? t('home.empty.adding') : t('home.empty.ig.add')}</button>
@@ -690,7 +726,7 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
         {/* PASTE A LINK — the universal catch-all (a competitor page, a testimonial, any page) */}
         <div className={`s0-pourin-web${addedOf(['link']).length ? ' s0-pourin-web-has' : ''}`}>
           <label className="s0-pourin-web-k">{t('home.empty.link')} <span className="s0-pourin-item-hint">· {t('home.empty.link.hint')}</span></label>
-          <PourInAdded items={addedOf(['link'])} t={t} />
+          <PourInAdded onRemove={removable} items={addedOf(['link'])} t={t} />
           <form className="s0-pourin-web-row" onSubmit={addLink}>
             <input className="s0-pourin-web-input" type="text" inputMode="url" value={link} placeholder={t('home.empty.link.ph')} onChange={(e) => setLink(e.target.value)} aria-label={t('home.empty.link')} />
             <button type="submit" className="s0-btn s0-btn-inline" disabled={disabled || !link.trim()}>{adding === 'link' ? t('home.empty.adding') : t('home.empty.website.add')}</button>
@@ -700,7 +736,7 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
         {/* UPLOAD A FILE — PDF / Word / text (offer, brochure, proposal, case study) */}
         <div className={`s0-pourin-web${addedOf(['pdf', 'docx', 'text']).length ? ' s0-pourin-web-has' : ''}`}>
           <label className="s0-pourin-web-k" htmlFor="s0-pourin-file">{t('home.empty.upload')} <span className="s0-pourin-item-hint">· {t('home.empty.upload.hint')}</span></label>
-          <PourInAdded items={addedOf(['pdf', 'docx', 'text'])} t={t} />
+          <PourInAdded onRemove={removable} items={addedOf(['pdf', 'docx', 'text'])} t={t} />
           <div className="s0-pourin-web-row">
             <input id="s0-pourin-file" ref={fileRef} className="s0-pourin-file" type="file" multiple accept=".pdf,.docx,.doc,.txt,.md" onChange={addFiles} disabled={disabled} aria-label={t('home.empty.upload')} />
             {adding === 'file' ? <span className="s0-pourin-adding-tag">{t('home.empty.adding')}</span> : null}
@@ -711,7 +747,7 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
             still tell BB what their business is, in words, and reach the Start CTA. */}
         <div className={`s0-pourin-web${addedOf(['description']).length ? ' s0-pourin-web-has' : ''}`}>
           <label className="s0-pourin-web-k" htmlFor="s0-pourin-desc">{t('home.empty.describe')} <span className="s0-pourin-item-hint">· {t('home.empty.describe.hint')}</span></label>
-          <PourInAdded items={addedOf(['description'])} t={t} />
+          <PourInAdded onRemove={removable} items={addedOf(['description'])} t={t} />
           <form onSubmit={addText}>
             <textarea id="s0-pourin-desc" className="s0-pourin-desc" value={desc} rows={4} placeholder={t('home.empty.describe.ph')} onChange={(e) => setDesc(e.target.value)} aria-label={t('home.empty.describe')} />
             <div className="s0-pourin-web-row">
@@ -731,10 +767,57 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
         {sources.length > 0 ? (
           <div className="s0-pourin-cta">
             <p className="s0-pourin-cta-line">{t(sources.length === 1 ? 'home.empty.ready.one' : 'home.empty.ready.many', { n: String(sources.length) })}</p>
-            <button type="button" className="s0-pourin-done" disabled={disabled} onClick={onDone}>{t('home.empty.done')}</button>
+            <button type="button" className="s0-pourin-done" disabled={disabled} onClick={onDone}>{t(editing ? 'arc.sources.update' : 'home.empty.done')}</button>
           </div>
         ) : null}
       </div>
+    </>
+  );
+}
+
+/**
+ * The pour-in, re-opened AFTER the founder has moved past it: from the arc ("Sources" / Back from the first
+ * moment) and from the Sources page once the arc is done. Same affordances (add website, Instagram, link, file,
+ * text; remove), loaded from GET /arc/sources since the arc view only carries sources at pour-in. "Update my
+ * understanding" re-reads everything (POST /arc/pour-in/done) and hands back the fresh view.
+ */
+export function SourcesEditor({ businessId, onUpdated, onCancel, cancelLabel }: {
+  businessId: string; onUpdated: (v: ArcView) => void; onCancel?: () => void; cancelLabel?: string;
+}) {
+  const { locale } = useLocale() as { t: T; locale: string };
+  const t: T = useCallback((key: string, vars?: Record<string, string>) => translate(isLocale(locale) ? locale : 'en', key, vars), [locale]);
+  const [data, setData] = useState<{ sources: ArcSourceItem[]; igConnected: boolean } | null>(null);
+  const [loadErr, setLoadErr] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<ArcView['error']>(null);
+  const reload = useCallback(async () => {
+    try { setData(await getArcSources(businessId)); setLoadErr(false); } catch { setLoadErr(true); }
+  }, [businessId]);
+  useEffect(() => { void reload(); }, [reload]);
+
+  async function update() {
+    setBusy(true); setResult(null);
+    try {
+      const v = await arcPourInDone(businessId);
+      if (v.error?.kind === 'pourin_empty' || v.error?.kind === 'pourin_failed') setResult(v.error);
+      else onUpdated(v);
+    } catch { setResult({ kind: 'pourin_failed' }); }
+    finally { setBusy(false); }
+  }
+
+  const back = onCancel ? (
+    <div className="s0-topline"><div className="s0-topnav">
+      <button type="button" className="s0-navbtn" onClick={onCancel}>← {cancelLabel ?? t('arc.back')}</button>
+    </div></div>
+  ) : null;
+  if (loadErr) return <>{back}<div className="s0-error" role="alert">{t('arc.sources.loadFail')}</div></>;
+  if (!data) return <>{back}<ArcWorking t={t} messageKey="arc.working" /></>;
+  const view: ArcView = { moment: 'pour_in', businessName: '', sources: data.sources, igConnected: data.igConnected, error: result };
+  return (
+    <>
+      {back}
+      <PourIn businessId={businessId} view={view} busy={busy} onReload={reload} onDone={() => void update()} t={t} editing />
+      {busy ? <ArcWorking t={t} messageKey="arc.working.reading" /> : null}
     </>
   );
 }

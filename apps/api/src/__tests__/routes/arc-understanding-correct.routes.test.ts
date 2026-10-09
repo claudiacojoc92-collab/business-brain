@@ -74,6 +74,10 @@ describe('readArcCorrectionReflection — the reply persists (survives refresh)'
     expect(out).toEqual({ reflection: 'Schroth is your core specialty.', changes: 'shifts what to lead with', holds: 'referrals hold', ask: 'who finds you for Schroth?' });
   });
 
+  it('returns null once the understanding was reopened after the reply (new sources → a new understanding)', async () => {
+    expect(await readArcCorrectionReflection(dbReturning([{ event_type: 'arc_understanding_reopened', metadata: {} }]), 'b1', 'f1')).toBeNull();
+  });
+
   it('returns null when the founder has not corrected yet (nothing to re-show)', async () => {
     expect(await readArcCorrectionReflection(dbReturning([]), 'b1', 'f1')).toBeNull();
     expect(await readArcCorrectionReflection(dbReturning([{ metadata: { reflection: '' } }]), 'b1', 'f1')).toBeNull();

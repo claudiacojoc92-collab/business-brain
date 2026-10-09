@@ -52,6 +52,8 @@ export type FounderEventType =
   | 'mirror_corrected'       // the founder corrected a lane, and the mirror recomputed
   // Day One arc — durable phase markers (no new table; the arc's moment is derived from these + engine state).
   | 'arc_source_added'       // Moment 1: a source the founder added (url in metadata) — the durable pour-in list
+  | 'arc_source_removed'     // a source the founder removed from the business (url + type in metadata)
+  | 'arc_understanding_reopened' // the founder changed sources after Pour-in → the new understanding needs review
   | 'arc_pour_in_done'       // Moment 1 → 2: the founder clicked "Done adding — start"
   | 'arc_understanding_confirmed' // Moment 3 → 4: the founder confirmed what BB understood
   | 'arc_correction_reflected' // Moment 3: the substantive reply to the LATEST correction (persisted so it survives refresh)
@@ -81,9 +83,17 @@ export interface FounderEventInput {
 }
 
 export function recordFounderEvent(db: KyselyDB, ev: FounderEventInput): void {
+  void recordFounderEventAwaited(db, ev);
+}
+
+/**
+ * Same write, but awaitable: for events that STATE depends on right away (a removed source, a reopened
+ * understanding), so the very next read sees them. Still never throws.
+ */
+export async function recordFounderEventAwaited(db: KyselyDB, ev: FounderEventInput): Promise<void> {
   let meta = '{}';
   try { meta = JSON.stringify(ev.metadata ?? {}).slice(0, 2000); } catch { meta = '{}'; }
-  void sql`
+  await sql`
     INSERT INTO app.founder_event (id, account_id, business_id, event_type, surface, occurred_at, metadata)
     VALUES (${generateId()}, ${ev.accountId}, ${ev.businessId ?? null}, ${ev.eventType},
             ${ev.surface ?? null}, now(), ${meta}::jsonb)
@@ -276,10 +286,24 @@ const has = async (db: KyselyDB, businessId: string, accountId: string, type: st
 };
 
 /** Read the arc's durable phase markers for this founder+business. Missing table / error → all false. */
+/** Confirmed AND (never reopened OR the latest confirm is newer than the latest reopen). */
+async function confirmedSinceReopen(db: KyselyDB, businessId: string, accountId: string): Promise<boolean> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r: any = await sql`SELECT max(occurred_at) FILTER (WHERE event_type='arc_understanding_confirmed') AS confirmed,
+        max(occurred_at) FILTER (WHERE event_type='arc_understanding_reopened') AS reopened
+      FROM app.founder_event WHERE business_id=${businessId} AND account_id=${accountId}
+        AND event_type IN ('arc_understanding_confirmed','arc_understanding_reopened')`.execute(db);
+    const row = r?.rows?.[0];
+    if (!row?.confirmed) return false;
+    return !row.reopened || new Date(row.confirmed).getTime() > new Date(row.reopened).getTime();
+  } catch { return false; }
+}
+
 export async function readArcFlags(db: KyselyDB, businessId: string, accountId: string): Promise<ArcFlags> {
   const [pourInDone, understandingConfirmed, mirrorSeen, emailExported, containerSeen] = await Promise.all([
     has(db, businessId, accountId, 'arc_pour_in_done'),
-    has(db, businessId, accountId, 'arc_understanding_confirmed'),
+    confirmedSinceReopen(db, businessId, accountId),
     has(db, businessId, accountId, 'arc_mirror_seen'),
     has(db, businessId, accountId, 'arc_email_exported'),
     has(db, businessId, accountId, 'arc_container_seen'),
@@ -297,29 +321,29 @@ const ARC_SOURCE_TYPES: ReadonlySet<string> = new Set(['website', 'link', 'pdf',
 /**
  * One row per source, in the order sources were FIRST added, but showing the LATEST read of each: re-adding a
  * source (e.g. Instagram after the 12→50 post change) must update its "N posts read" line, not keep the first.
- * `rows` are arc_source_added events oldest-first.
+ * A removed source (arc_source_removed) drops out; adding it again later appends it. `rows` are
+ * arc_source_added / arc_source_removed events oldest-first.
  */
-export function foldArcSourceEvents(rows: readonly { metadata?: unknown }[]): ArcSourceRow[] {
-  const out: ArcSourceRow[] = [];
-  const at = new Map<string, number>();
+export function foldArcSourceEvents(rows: readonly { event_type?: string; metadata?: unknown }[]): ArcSourceRow[] {
+  const byUrl = new Map<string, ArcSourceRow>(); // insertion order = first-added order
   for (const row of rows) {
     const meta = (row?.metadata && typeof row.metadata === 'object' ? row.metadata : {}) as Record<string, unknown>;
     const u = String(meta['url'] ?? '').trim();
     if (!u) continue;
+    if (row.event_type === 'arc_source_removed') { byUrl.delete(u); continue; } // re-adding later appends it again
     const t = String(meta['type'] ?? '').trim();
     const detail = String(meta['detail'] ?? '').trim();
     const item: ArcSourceRow = { url: u, type: (ARC_SOURCE_TYPES.has(t) ? t : 'website') as ArcSourceType, ...(detail ? { detail } : {}) };
-    const i = at.get(u);
-    if (i === undefined) { at.set(u, out.length); out.push(item); } else out[i] = item;
+    byUrl.set(u, item); // a re-read keeps its place but shows the latest detail
   }
-  return out;
+  return [...byUrl.values()];
 }
 
 export async function readArcSources(db: KyselyDB, businessId: string, accountId: string): Promise<ArcSourceRow[]> {
   try {
     // The NEWEST 50 events (re-adds must never fall off the end), replayed oldest-first below.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const r: any = await sql`SELECT metadata, occurred_at FROM (SELECT metadata, occurred_at FROM app.founder_event WHERE business_id=${businessId} AND account_id=${accountId} AND event_type='arc_source_added' ORDER BY occurred_at DESC LIMIT 50) latest ORDER BY occurred_at ASC`.execute(db);
+    const r: any = await sql`SELECT event_type, metadata, occurred_at FROM (SELECT event_type, metadata, occurred_at FROM app.founder_event WHERE business_id=${businessId} AND account_id=${accountId} AND event_type IN ('arc_source_added','arc_source_removed') ORDER BY occurred_at DESC LIMIT 100) latest ORDER BY occurred_at ASC`.execute(db);
     return foldArcSourceEvents(r?.rows ?? []);
   } catch { return []; }
 }
@@ -339,8 +363,10 @@ export function recordArcCorrectionReflection(db: KyselyDB, accountId: string, b
 /** The most recent correction reflection for this business (null if the founder hasn't corrected yet). */
 export async function readArcCorrectionReflection(db: KyselyDB, businessId: string, accountId: string): Promise<CorrectionReflection | null> {
   try {
+    // Latest reflection, unless the understanding was reopened after it (a new understanding has no reply yet).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const r: any = await sql`SELECT metadata FROM app.founder_event WHERE business_id=${businessId} AND account_id=${accountId} AND event_type='arc_correction_reflected' ORDER BY occurred_at DESC LIMIT 1`.execute(db);
+    const r: any = await sql`SELECT event_type, metadata FROM app.founder_event WHERE business_id=${businessId} AND account_id=${accountId} AND event_type IN ('arc_correction_reflected','arc_understanding_reopened') ORDER BY occurred_at DESC LIMIT 1`.execute(db);
+    if (r?.rows?.[0]?.event_type === 'arc_understanding_reopened') return null;
     const meta = r?.rows?.[0]?.metadata;
     if (!meta || typeof meta !== 'object') return null;
     const reflection = String(meta.reflection ?? '').trim();

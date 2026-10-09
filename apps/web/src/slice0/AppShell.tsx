@@ -32,6 +32,7 @@ function navItems(base: string, t: (k: string) => string) {
   return [
     { to: `${base}/home`, label: t('nav.home'), match: (p: string) => p.startsWith(`${base}/home`) },
     { to: base, label: t('nav.business'), match: (p: string) => p === base },
+    { to: `${base}/sources`, label: t('nav.sources'), match: (p: string) => p.startsWith(`${base}/sources`) },
     { to: `${base}/strategy`, label: t('nav.strategy'), match: (p: string) => p.startsWith(`${base}/strategy`) || p.startsWith(`${base}/voice`) },
     { to: `${base}/today`, label: t('nav.today'), match: (p: string) => p.startsWith(`${base}/today`) || p.startsWith(`${base}/plan`) },
     { to: `${base}/create`, label: t('nav.create'), match: (p: string) => p.startsWith(`${base}/create`) || p.startsWith(`${base}/photos`) || p.startsWith(`${base}/reel`) },

@@ -30,3 +30,19 @@ describe('foldArcSourceEvents — the pour-in source list', () => {
     expect(foldArcSourceEvents([{ metadata: {} }, { metadata: null }, ev('y.com', 'weird')])).toEqual([{ url: 'y.com', type: 'website' }]);
   });
 });
+
+describe('foldArcSourceEvents — removed sources', () => {
+  const removed = (url: string, type: string) => ({ event_type: 'arc_source_removed', metadata: { url, type } });
+  const added = (url: string, type: string, detail?: string) => ({ event_type: 'arc_source_added', ...ev(url, type, detail) });
+
+  it('a removed source drops out of the list', () => {
+    const rows = foldArcSourceEvents([added('x.ro', 'website'), added('@me', 'instagram', '50 posts read'), removed('@me', 'instagram')]);
+    expect(rows.map((r) => r.url)).toEqual(['x.ro']);
+  });
+
+  it('adding it again after removal brings it back, at the end', () => {
+    const rows = foldArcSourceEvents([added('x.ro', 'website'), added('@me', 'instagram'), removed('@me', 'instagram'), added('brochure.pdf', 'pdf'), added('@me', 'instagram', '50 posts read')]);
+    expect(rows.map((r) => r.url)).toEqual(['x.ro', 'brochure.pdf', '@me']);
+    expect(rows[2]?.detail).toBe('50 posts read');
+  });
+});

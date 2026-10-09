@@ -126,6 +126,8 @@ export interface IBusinessEvidenceLinkRepository {
   /** Idempotently bind immutable fragments to a business (no copy, no re-key). */
   bind(businessId: string, links: { fragmentId: string; source: string }[]): Promise<{ linked: number }>;
   listFragmentIds(businessId: string): Promise<string[]>;
+  /** Remove business links (the fragments themselves stay in the append-only ledger). */
+  unbind(businessId: string, fragmentIds: readonly string[]): Promise<{ unlinked: number }>;
 }
 
 export interface DiscoveredProfile {

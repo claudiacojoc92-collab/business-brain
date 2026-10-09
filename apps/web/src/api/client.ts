@@ -472,7 +472,8 @@ export function getHomeBriefing(businessId: string): Promise<HomeBriefing> {
 // ── Day One: the nine-moment arc ──
 export type ArcMoment = 'pour_in' | 'understanding' | 'conversation' | 'mirror' | 'strategy' | 'week_day' | 'email' | 'container' | 'done';
 export interface ArcTurn { id: string; role: 'founder' | 'bb'; content: string }
-export type ArcSourceType = 'website' | 'link' | 'pdf' | 'docx' | 'text' | 'instagram';
+export type ArcSourceType = 'website' | 'link' | 'pdf' | 'docx' | 'text' | 'instagram' | 'description';
+export interface ArcSourceItem { url: string; type: ArcSourceType; detail?: string }
 /** The result of adding one pour-in source — light (no synthesis happens until "Done adding — start"). */
 export interface AddSourceResult { state: 'synced' | 'partial' | 'empty' | 'failed'; error?: string; needsAuth?: boolean; pagesRead?: number }
 export interface ArcView {
@@ -483,7 +484,7 @@ export interface ArcView {
   error?: { kind: 'generation' | 'pourin_empty' | 'pourin_failed' | 'need_goal' | 'need_understanding' | 'strategy_insufficient'; goalCandidate?: { stateId: string | null; statement: string } | null; detail?: string | null } | null;
   contentLanguage?: string | null; // the source/founder language — arc chrome localizes to this
   strategyChange?: { because: string } | null; // Moment 6 — transient "the bet changed because…" note
-  sources?: { url: string; type: ArcSourceType; detail?: string }[];
+  sources?: ArcSourceItem[];
   igConnected?: boolean;
   understanding?: { does: string; serves: string; standsOut: string; tensions: { tension: string; grounding: string; sourceRefs: string[] }[]; confident: string[]; inferring: string[]; unanswered: string[] };
   correctionReflection?: { reflection: string; changes: string; holds: string; ask: string };
@@ -499,6 +500,12 @@ const ARC = (b: string) => `v1/businesses/${encodeURIComponent(b)}/arc`;
 const arcPost = <T = ArcView>(b: string, path: string, body?: unknown): Promise<T> =>
   request<T>(`${ARC(b)}/${path}`, { method: 'POST', body: JSON.stringify(body ?? {}) });
 export const getArc = (b: string): Promise<ArcView> => request<ArcView>(ARC(b));
+// The source list at any moment (Pour-in re-opened later in the arc, or the Sources page past the arc).
+export const getArcSources = (b: string): Promise<{ sources: ArcSourceItem[]; igConnected: boolean }> =>
+  request<{ sources: ArcSourceItem[]; igConnected: boolean }>(`${ARC(b)}/sources`);
+// Remove a source from the business (unlinked; the next understanding no longer reads it).
+export const arcRemoveSource = (b: string, url: string, type: string): Promise<{ removed: boolean; sources: ArcSourceItem[] }> =>
+  arcPost<{ removed: boolean; sources: ArcSourceItem[] }>(b, 'source/remove', { url, type });
 // Pour-in sources — each ingests only; the bridge fires on arcPourInDone.
 export const arcAddSource = (b: string, url: string): Promise<AddSourceResult> => arcPost<AddSourceResult>(b, 'source', { url }); // website
 export const arcAddLink = (b: string, url: string): Promise<AddSourceResult> => arcPost<AddSourceResult>(b, 'source/link', { url });

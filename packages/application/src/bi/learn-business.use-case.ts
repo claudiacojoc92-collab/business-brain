@@ -36,6 +36,7 @@ import {
   type LearnFromMaterialParams,
 } from './contracts';
 import { instagramDigest, type InstagramFragmentView } from './instagram-digest';
+import { fragmentMatchesSource, type PourInSourceRef } from './pour-in-source';
 import { bridgeFragmentsToObservations, webObservationsToPageObservations, suppliedMaterialToObservations, hostOf } from './bridge';
 import { assertWellFormed, validateAha, type ValidatedFinding } from './validation';
 
@@ -252,6 +253,19 @@ export class LearnBusinessService {
     await this.deps.evidenceRepo.appendMany(fragments);
     await this.deps.links.bind(p.businessId, fragments.map((f) => ({ fragmentId: f.id, source: p.source })));
     return { stored: fragments.length };
+  }
+
+  /**
+   * Remove a pour-in source from a business: unlink every bound fragment that belongs to it, so the next
+   * understanding no longer reads it. The fragments stay in the ledger (history is not rewritten); deleting the
+   * data itself is the Data Deletion route.
+   */
+  async unlinkPourInSource(p: { businessId: string; founderId: string; source: PourInSourceRef }): Promise<{ unlinked: number }> {
+    const boundIds = new Set(await this.deps.links.listFragmentIds(p.businessId));
+    const mine = (await this.deps.evidenceRepo.findByFounder(p.founderId)).filter((f) => boundIds.has(f.id));
+    const ids = mine.filter((f) => fragmentMatchesSource(f, p.source)).map((f) => f.id);
+    if (ids.length === 0) return { unlinked: 0 };
+    return this.deps.links.unbind(p.businessId, ids);
   }
 
   /**
