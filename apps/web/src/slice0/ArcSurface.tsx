@@ -80,27 +80,35 @@ function ArcInput({ ph, onSend, cta, t, text, setText, busy, act, workingKey, au
 
 // FIX 2c — a tension card that shows each tension line + ONE muted grounding line, so the referent resolves in the
 // card (the field the tension names) without stacking three sentences.
-function TensionCard({ label, items, whyLabel }: { label: string; items: { tension: string; grounding: string; sourceRefs: string[] }[]; whyLabel: string }) {
+// Ranked, not listed: the first tension is THE primary insight (the server orders them: a capability gap first,
+// otherwise the model's ranking), shown large; the rest sit under "Also" as secondary.
+function TensionCard({ label, items, whyLabel, alsoLabel }: { label: string; items: { tension: string; grounding: string; sourceRefs: string[] }[]; whyLabel: string; alsoLabel: string }) {
   const rows = items.filter((x) => (x.tension ?? '').trim());
   if (!rows.length) return null; // zero tensions → the card is omitted silently (never narrate an absence)
+  const row = (x: { tension: string; grounding: string; sourceRefs: string[] }) => (
+    <>
+      {x.tension}
+      {x.grounding ? <span className="s0-u-grounding">{x.grounding}</span> : null}
+      {/* proof on demand: collapsed by default — the grounding already carries the concrete fact. */}
+      {x.sourceRefs.length ? (
+        <details className="s0-u-why">
+          <summary>{whyLabel}</summary>
+          <ul className="s0-u-why-list">{x.sourceRefs.map((s, j) => <li key={j}>{s}</li>)}</ul>
+        </details>
+      ) : null}
+    </>
+  );
+  const [primary, ...rest] = rows;
   return (
     <div className="s0-u-card s0-u-card--primary">
       <div className="s0-u-card-label"><span className="s0-u-ic" aria-hidden="true">◆</span>{label}</div>
-      <ul className="s0-u-list">
-        {rows.map((x, i) => (
-          <li key={i}>
-            {x.tension}
-            {x.grounding ? <span className="s0-u-grounding">{x.grounding}</span> : null}
-            {/* proof on demand: collapsed by default — the grounding already carries the concrete fact. */}
-            {x.sourceRefs.length ? (
-              <details className="s0-u-why">
-                <summary>{whyLabel}</summary>
-                <ul className="s0-u-why-list">{x.sourceRefs.map((s, j) => <li key={j}>{s}</li>)}</ul>
-              </details>
-            ) : null}
-          </li>
-        ))}
-      </ul>
+      <div className="s0-u-primary">{row(primary!)}</div>
+      {rest.length ? (
+        <>
+          <div className="s0-u-also">{alsoLabel}</div>
+          <ul className="s0-u-list">{rest.map((x, i) => <li key={i}>{row(x)}</li>)}</ul>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -433,7 +441,7 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
               {u.serves ? <p className="s0-u-card-lead s0-u-serves">{t('arc.understanding.servesLead', { who: u.serves })}</p> : null}
             </div>
             {/* 2 — What stood out: ≤3 tensions, sharpest first, each grounded + proof on demand. Omitted if none. */}
-            <TensionCard label={t('arc.understanding.stoodout')} items={u.tensions} whyLabel={t('arc.understanding.why')} />
+            <TensionCard label={t('arc.understanding.stoodout')} items={u.tensions} whyLabel={t('arc.understanding.why')} alsoLabel={t('arc.understanding.also')} />
             {/* 3 — What I'll ask about: the site's unknowns, framed forward as the agenda for the conversation next. */}
             {u.unanswered.length ? (
               <div className="s0-u-card s0-u-card--question">
