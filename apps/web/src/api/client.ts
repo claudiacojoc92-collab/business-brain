@@ -1010,7 +1010,8 @@ export interface MetaPageRead {
 
 // Instagram Login
 export const getInstagramStatus = () => socialFetch<{ connected: boolean }>('api/sources/instagram/status');
-export const getInstagramConnectUrl = () => socialFetch<{ authUrl?: string; error?: string }>('api/sources/instagram/connect');
+export const getInstagramConnectUrl = (returnTo?: string) =>
+  socialFetch<{ authUrl?: string; error?: string }>(`api/sources/instagram/connect${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ''}`);
 export const readInstagram = () => socialFetch<InstagramRead>('api/sources/instagram/read');
 export const disconnectInstagram = () => socialFetch<{ connected: boolean }>('api/sources/instagram/disconnect', { method: 'POST' });
 

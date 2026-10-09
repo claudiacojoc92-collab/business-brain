@@ -12,7 +12,7 @@
  */
 import type { ImportedAccount, ImportedPost, InstagramImportPort } from '@bb/application';
 import type { CredentialStore } from '../../auth/credential-store';
-import { PendingAuthStore, createState } from '../../auth/oauth';
+import { type PendingStore, createState } from '../../auth/oauth';
 import {
   buildAuthUrl, exchangeCode, exchangeLongLived, IG_GRAPH, type InstagramOAuthConfig, type FetchImpl,
 } from './instagram-oauth';
@@ -56,7 +56,7 @@ export class InstagramConnector implements InstagramImportPort {
   constructor(
     private readonly credentials: CredentialStore,
     private readonly oauth: InstagramOAuthConfig,
-    private readonly pending: PendingAuthStore,
+    private readonly pending: PendingStore,
   ) {
     this.doFetch = oauth.fetchImpl ?? fetch;
     this.graph = oauth.graphBase ?? IG_GRAPH;
@@ -77,7 +77,7 @@ export class InstagramConnector implements InstagramImportPort {
    * mapping that Meta's Deauthorize / Data-Deletion callbacks rely on.
    */
   async handleCallback(state: string, code: string): Promise<{ founderId: string; returnTo?: string; igUserId?: string }> {
-    const p = this.pending.take(state);
+    const p = await this.pending.take(state);
     if (!p) throw new Error('invalid or expired OAuth state');
     const short = await exchangeCode(this.oauth, code);
     if (!short.accessToken) throw new Error('no access token in exchange response');

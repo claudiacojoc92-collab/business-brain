@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { InstagramConnector, returnToFromState } from '../connectors/instagram/instagram.connector';
-import { PendingAuthStore } from '../auth/oauth';
+import { InMemoryPendingStore } from '../auth/oauth';
 import type { CredentialStore } from '../auth/credential-store';
 
 const noopStore: CredentialStore = {
   save: async () => {}, load: async () => null, has: async () => false, delete: async () => {},
 };
 const mkConnector = () =>
-  new InstagramConnector(noopStore, { appId: 'a', appSecret: 's', redirectUri: 'https://app.getbusinessbrain.com/api/sources/instagram/callback' }, new PendingAuthStore());
+  new InstagramConnector(noopStore, { appId: 'a', appSecret: 's', redirectUri: 'https://app.getbusinessbrain.com/api/sources/instagram/callback' }, new InMemoryPendingStore());
 
 describe('returnToFromState', () => {
   it('recovers an app path encoded in the state', () => {

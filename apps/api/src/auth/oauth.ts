@@ -62,3 +62,70 @@ export class PendingAuthStore {
     return p;
   }
 }
+
+/**
+ * Durable, cross-process pending-authorization store. Same contract as PendingAuthStore, but async so
+ * a shared backend (Redis) can be used: a flow started on one API process/replica must be redeemable at
+ * /callback on another. `take` is single-use and fails closed (returns null) on a miss/expiry/backend error.
+ */
+export interface PendingStore {
+  put(state: string, pending: PendingAuth): void;
+  take(state: string): Promise<PendingAuth | null>;
+}
+
+/** Minimal Redis surface used here — implemented by ioredis (`.call`). */
+export interface RedisLike {
+  call(command: string, ...args: (string | number)[]): Promise<unknown>;
+}
+
+const PENDING_PREFIX = 'oauth:pending:';
+
+/**
+ * Redis-backed PendingStore (production). put ⇒ `SET oauth:pending:<state> <json> EX 600`;
+ * take ⇒ atomic `GETDEL` (single-use). Missing/expired/error ⇒ null (fail closed). Holds only the
+ * pre-token verifier binding + founderId/returnTo — never a token. State is the opaque, unguessable
+ * lookup key (CSRF); founderId/returnTo come ONLY from the stored payload, never the callback query.
+ */
+export class RedisPendingStore implements PendingStore {
+  constructor(private readonly redis: RedisLike, private readonly ttlMs = 10 * 60 * 1000, private readonly log?: (m: string) => void) {}
+  private key(state: string): string { return PENDING_PREFIX + state; }
+
+  put(state: string, pending: PendingAuth): void {
+    // Fire-and-forget: the SET lands in milliseconds, long before the user returns from Instagram consent.
+    // A failed SET simply means the later take() misses ⇒ fail closed ⇒ the user retries. Never logs a token.
+    void Promise.resolve(this.redis.call('SET', this.key(state), JSON.stringify(pending), 'EX', Math.ceil(this.ttlMs / 1000)))
+      .catch((e) => this.log?.(`pending put failed: ${e instanceof Error ? e.message : 'redis error'}`));
+  }
+
+  async take(state: string): Promise<PendingAuth | null> {
+    let raw: unknown;
+    try {
+      raw = await this.redis.call('GETDEL', this.key(state)); // atomic read+delete ⇒ single-use
+    } catch (e) {
+      this.log?.(`pending take failed (fail-closed): ${e instanceof Error ? e.message : 'redis error'}`);
+      return null; // Redis unavailable ⇒ FAIL CLOSED, never accept the callback
+    }
+    if (raw == null) return null; // missing or already expired by Redis EX
+    try {
+      const p = JSON.parse(String(raw)) as PendingAuth;
+      if (typeof p.createdAt === 'number' && Date.now() - p.createdAt > this.ttlMs) return null; // belt-and-suspenders
+      return p;
+    } catch {
+      return null;
+    }
+  }
+}
+
+/** In-memory async PendingStore — dev/test fallback when no REDIS_URL. Not cross-process. */
+export class InMemoryPendingStore implements PendingStore {
+  private readonly map = new Map<string, PendingAuth>();
+  constructor(private readonly ttlMs = 10 * 60 * 1000) {}
+  put(state: string, pending: PendingAuth): void { this.map.set(state, pending); }
+  async take(state: string, now = Date.now()): Promise<PendingAuth | null> {
+    const p = this.map.get(state);
+    if (!p) return null;
+    this.map.delete(state);
+    if (now - p.createdAt > this.ttlMs) return null;
+    return p;
+  }
+}

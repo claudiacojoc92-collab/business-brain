@@ -5,14 +5,14 @@ import { translate, isLocale } from '../i18n/messages';
 import { isNotFound } from './errors';
 import { parseOpenerTurn, type ArcOpener } from './parse-briefing';
 import {
-  getArc, arcAddSource, arcAddLink, arcAddText, arcAddFile,
+  getArc, arcAddSource, arcAddLink, arcAddText, arcAddFile, arcAddInstagram, getInstagramConnectUrl,
   arcPourInDone, arcConversation, arcConfirmUnderstanding, arcCorrectUnderstanding,
   arcMirrorSeen, arcAdoptStrategy, arcChallengeStrategy, arcAdoptWeekDay, arcGenerateEmail,
   arcSaveEmail, arcExportEmail, arcContainerSeen, arcConfirmGoal, arcSkipQuestion, type ArcView,
 } from '../api/client';
-// NOTE: Instagram is intentionally HIDDEN from the pour-in until after MVP validation (founder decision).
-// The direct Instagram Login connector + the /arc/source/instagram route are left in place, unused, for when
-// we return to it (via Facebook Login for Business). See docs/sources/instagram-arc-connector-later.md.
+// Instagram is back in the pour-in (2026-10-08) via the DIRECT Instagram Login connector: it authorizes whatever
+// Instagram account the browser is logged into (no Business-vs-personal picker). The Page-picker flow via Facebook
+// Login for Business is the later Option B, see docs/sources/instagram-arc-connector-later.md.
 
 import { ArcWorking, type T } from './ArcWorking';
 
@@ -564,10 +564,11 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
   const [url, setUrl] = useState('');
   const [link, setLink] = useState('');
   const [desc, setDesc] = useState('');
-  const [adding, setAdding] = useState<null | 'website' | 'link' | 'file' | 'text'>(null);
+  const [adding, setAdding] = useState<null | 'website' | 'link' | 'file' | 'text' | 'instagram'>(null);
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const sources = view.sources ?? [];
+  const igConnected = view.igConnected ?? false;
   const disabled = adding !== null || busy;
   const addedOf = (types: string[]) => sources.filter((s) => types.includes(s.type));
 
@@ -602,6 +603,41 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
       if (ok(res.state)) { setDesc(''); await onReload(); } else setErr(srcErr(res.error, t, 'home.empty.filefail'));
     } catch { setErr(t('home.empty.filefail')); } finally { setAdding(null); }
   }
+
+  async function addInstagram() {
+    setAdding('instagram'); setErr(null);
+    try {
+      const res = await arcAddInstagram(businessId);
+      if (ok(res.state)) await onReload(); else setErr(srcErr(res.error, t, 'home.empty.igfail'));
+    } catch { setErr(t('home.empty.igfail')); } finally { setAdding(null); }
+  }
+
+  // Not connected yet → Instagram consent. The callback returns the browser to THIS page with ?connected=instagram
+  // (or ?error=...), and the effect below reads the account in, so the founder clicks once.
+  async function connectInstagram() {
+    if (disabled) return;
+    setErr(null);
+    try {
+      const res = await getInstagramConnectUrl(window.location.pathname);
+      if (res.authUrl) window.location.href = res.authUrl;
+      else setErr(t('home.empty.igfail'));
+    } catch { setErr(t('home.empty.igfail')); }
+  }
+
+  // Back from Instagram consent: strip the query (a refresh must not re-trigger), then read the account in once.
+  const igReturn = useRef(false);
+  useEffect(() => {
+    if (igReturn.current) return;
+    const q = new URLSearchParams(window.location.search);
+    const connected = q.get('connected') === 'instagram';
+    const failed = q.get('error');
+    if (!connected && failed == null) return;
+    igReturn.current = true;
+    window.history.replaceState(null, '', window.location.pathname);
+    if (connected) void addInstagram();
+    else setErr(t('home.empty.igfail'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on the OAuth return
+  }, []);
 
   // Multi-file: the founder can select several documents at once (brochures, offers, a case study). Each is
   // uploaded as its OWN source (one request per file, in parallel) → its own added ✓ card, or its own error line.
@@ -638,6 +674,17 @@ function PourIn({ businessId, view, busy, onReload, onDone, t }: { businessId: s
             <input className="s0-pourin-web-input" type="text" inputMode="url" value={url} placeholder={t('home.empty.website.ph')} onChange={(e) => setUrl(e.target.value)} aria-label={t('home.empty.website')} />
             <button type="submit" className="s0-btn s0-btn-inline" disabled={disabled || !url.trim()}>{adding === 'website' ? t('home.empty.adding') : t('home.empty.website.add')}</button>
           </form>
+        </div>
+
+        {/* INSTAGRAM — connect (Instagram Login), then read the profile + recent posts in as observed evidence */}
+        <div className={`s0-pourin-web${addedOf(['instagram']).length ? ' s0-pourin-web-has' : ''}`}>
+          <label className="s0-pourin-web-k">{t('home.empty.ig')}{igConnected ? <span className="s0-pourin-item-hint"> · {t('home.empty.ig.connected')}</span> : null}</label>
+          <PourInAdded items={addedOf(['instagram'])} t={t} />
+          <div className="s0-pourin-web-row">
+            {igConnected
+              ? <button type="button" className="s0-btn s0-btn-inline" disabled={disabled} onClick={() => { if (!disabled) void addInstagram(); }}>{adding === 'instagram' ? t('home.empty.adding') : t('home.empty.ig.add')}</button>
+              : <button type="button" className="s0-btn-ghost" disabled={disabled} onClick={() => void connectInstagram()}>{t('home.empty.ig.connect')}</button>}
+          </div>
         </div>
 
         {/* PASTE A LINK — the universal catch-all (a competitor page, a testimonial, any page) */}

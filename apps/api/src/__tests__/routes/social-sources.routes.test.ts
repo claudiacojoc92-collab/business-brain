@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { registerSocialSourcesRoutes } from '../../routes/social-sources.routes';
 import type { ServerDeps } from '../../server';
+import { __resetInstagramConnectorForTest } from '../../connectors/instagram/instagram-connector.instance';
+import { returnToFromState } from '../../connectors/instagram/instagram.connector';
 
 /**
  * Social-sources routing — the App-Review surface is REAL and authenticated. Proves: every founder
@@ -51,5 +53,38 @@ describe('social sources routes', () => {
     // Unconfigured → 503 (route exists, no 401): the callback never requires a Bearer token.
     const res = await app.inject({ method: 'GET', url: '/api/sources/meta/callback?state=x&code=y' });
     expect(res.statusCode).toBe(503);
+  });
+});
+
+describe('instagram connect returnTo (pour-in returns to the arc)', () => {
+  const KEYS = ['INSTAGRAM_APP_ID', 'INSTAGRAM_APP_SECRET', 'GOOGLE_OAUTH_ENCRYPTION_KEY', 'DATABASE_URL', 'REDIS_URL'] as const;
+  const saved: Record<string, string | undefined> = {};
+  let igApp: FastifyInstance;
+  beforeEach(async () => {
+    for (const k of KEYS) saved[k] = process.env[k];
+    process.env['INSTAGRAM_APP_ID'] = 'app'; process.env['INSTAGRAM_APP_SECRET'] = 'secret';
+    process.env['GOOGLE_OAUTH_ENCRYPTION_KEY'] = '0'.repeat(64); process.env['DATABASE_URL'] = 'postgresql://x@localhost:1/none';
+    delete process.env['REDIS_URL']; // in-memory pending store; authorize() never touches the DB
+    __resetInstagramConnectorForTest();
+    igApp = Fastify(); registerSocialSourcesRoutes(igApp, deps); await igApp.ready();
+  });
+  afterEach(async () => {
+    await igApp.close(); __resetInstagramConnectorForTest();
+    for (const k of KEYS) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
+  });
+  const returnOf = async (q: string): Promise<string | null> => {
+    const res = await igApp.inject({ method: 'GET', url: `/api/sources/instagram/connect${q}`, headers: AUTH });
+    expect(res.statusCode).toBe(200);
+    const state = new URL((res.json() as { authUrl: string }).authUrl).searchParams.get('state') ?? '';
+    return returnToFromState(state);
+  };
+
+  it('carries the pour-in path through the OAuth state', async () => {
+    expect(await returnOf(`?returnTo=${encodeURIComponent('/b/01ABC/home')}`)).toBe('/b/01ABC/home');
+  });
+  it('rejects off-origin return paths and falls back to /sources', async () => {
+    expect(await returnOf(`?returnTo=${encodeURIComponent('//evil.example')}`)).toBe('/sources');
+    expect(await returnOf(`?returnTo=${encodeURIComponent('https://evil.example')}`)).toBe('/sources');
+    expect(await returnOf('')).toBe('/sources');
   });
 });

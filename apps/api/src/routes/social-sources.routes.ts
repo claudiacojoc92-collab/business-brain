@@ -79,9 +79,13 @@ export function registerSocialSourcesRoutes(server: FastifyInstance, deps: Serve
   // Called WITH the Bearer token; returns the consent URL for the client to navigate to. The Sources
   // page flow returns the browser to /sources after the callback (the Business Brain page passes its own
   // returnTo). The path is carried in the OAuth state, so it survives even an api restart mid-flow.
+  // The pour-in passes its own `returnTo` (e.g. /b/<id>/home) so the founder lands back on the arc; only a
+  // same-origin app path is accepted (no scheme, no protocol-relative //), anything else falls back to /sources.
   server.get('/api/sources/instagram/connect', async (request, reply) => {
     const f = founderOf(request, reply); if (!f) return; const c = needIg(reply); if (!c) return;
-    await reply.send({ authUrl: c.authorize(f, '/sources').authUrl });
+    const asked = String((request.query as Record<string, unknown>)['returnTo'] ?? '');
+    const returnTo = asked.startsWith('/') && !asked.startsWith('//') && !asked.includes('\\') ? asked : '/sources';
+    await reply.send({ authUrl: c.authorize(f, returnTo).authUrl });
   });
 
   // Browser redirect target — identity comes from the OAuth `state`, not a header. The SPA destination is
