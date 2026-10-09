@@ -200,6 +200,10 @@ export class ArcService {
     const concreteScore = (s: string): number => (/[„“"'”]/.test(s) ? 2 : 0) + (/\d/.test(s) ? 1 : 0);
     const grounded = (a: string, b: string): string => (!b ? a : !a ? b : concreteScore(b) > concreteScore(a) ? b : a);
     const tensions = (u?.contradictions ?? [])
+      // A capability gap (sells X, its own sources never show X) is the primary contradiction whenever the model
+      // classified one; otherwise the model's own ranking stands (stable sort keeps its order).
+      .slice()
+      .sort((x, y) => Number(y.kind === 'capability_gap') - Number(x.kind === 'capability_gap'))
       .map((c) => {
         const tension = (c.tension ?? '').trim();
         const a = (c.statementA ?? '').trim();
@@ -210,9 +214,9 @@ export class ArcService {
         return { tension, grounding: grounded(a, b), sourceRefs };
       })
       .filter((x): x is { tension: string; grounding: string; sourceRefs: string[] } => Boolean(x))
-      // Sharpest first. The snapshot carries NO severity, so this is an honest proxy, not a scoring model: a
-      // concrete, checkable tension (a quoted field / a number) outranks a vague one; ties break to corroboration.
-      .sort((x, y) => (concreteScore(`${y.tension} ${y.grounding}`) - concreteScore(`${x.tension} ${x.grounding}`)) || (y.sourceRefs.length - x.sourceRefs.length))
+      // The model RANKS the contradictions (biggest first; see the understanding prompt's STRATEGIC LENS), so keep
+      // its order. The old re-sort by "concreteness" (quotes/numbers first) pushed audit details such as two dates
+      // that differ above the strategic contradiction, which rarely carries a number.
       .slice(0, 3);
 
     // Confident = anchored in the evidence: the grounded Aha findings + what the offer states explicitly +

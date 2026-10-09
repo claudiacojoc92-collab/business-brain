@@ -32,6 +32,7 @@ export interface PageObservation {
   readonly sourceKind?: ObservationSourceKind;
 }
 export type ObservationSourceKind = 'website' | 'supplied' | 'instagram';
+export type ContradictionKind = 'capability_gap' | 'priority_vs_effort' | 'story_vs_reality' | 'audience_mismatch' | 'other';
 
 export interface SourceRef {
   readonly label: string;
@@ -44,7 +45,12 @@ export interface GovernedUnderstanding {
   readonly audience: { addressed: string[]; appearsTargeted: string[]; unknown: string[]; sourceRefs: string[] };
   readonly messaging: { recurringThemes: string[]; sourceRefs: string[] };
   readonly acquisition: { visiblePaths: string[]; sourceRefs: string[] };
-  readonly contradictions: { statementA: string; statementB: string; tension: string; sourceRefs: string[] }[];
+  /**
+   * `kind` is the model's classification of the tension (see the understanding prompt's STRATEGIC LENS). The arc
+   * projection uses it deterministically: a `capability_gap` (sells X, never shows X) is always shown first.
+   * Optional: snapshots written before it existed have none.
+   */
+  readonly contradictions: { statementA: string; statementB: string; tension: string; sourceRefs: string[]; kind?: ContradictionKind }[];
   readonly unknowns: string[];
 }
 

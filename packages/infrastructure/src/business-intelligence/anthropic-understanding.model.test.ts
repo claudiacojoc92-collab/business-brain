@@ -89,3 +89,24 @@ describe('understanding — LIVE language split (real model)', () => {
     expect(composed).toMatch(/\b(the|is|appears|for)\b/);
   }, 90_000);
 });
+
+describe('understanding systemPrompt — strategic lens (business, not website audit)', () => {
+  const p = systemPrompt('en');
+  it('runs the capability check and makes a capability gap the primary contradiction', () => {
+    expect(p).toMatch(/CAPABILITY CHECK/);
+    expect(p).toMatch(/MUST be contradictions\[0\]/);
+    expect(p).toMatch(/"capability_gap"/);
+  });
+  it('keeps website housekeeping (legal-page dates, vague copy) out of contradictions and aha', () => {
+    expect(p).toMatch(/legal pages \(Privacy, Terms, Data Deletion/);
+    expect(p).toMatch(/NEVER go in contradictions or aha\.findings/);
+  });
+  it('requires the so-what and a ranked list', () => {
+    expect(p).toMatch(/THE SO-WHAT TEST/);
+    expect(p).toMatch(/RANK, do not list/);
+  });
+  it('does not contain the Business Brain test case itself (the dogfood run must find it, not echo it)', () => {
+    expect(p).not.toMatch(/decision system/i);
+  });
+});
+

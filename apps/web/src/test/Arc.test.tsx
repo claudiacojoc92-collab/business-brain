@@ -514,4 +514,15 @@ describe('ArcSurface — one surface, eight moments', () => {
       expect(screen.queryByText('arc.sources')).toBeNull();
     });
   });
+
+  it('Understanding: the first tension is the primary insight; the rest sit under "Also"', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: { does: 'X', serves: 'Y', standsOut: '', confident: [], inferring: [], unanswered: [],
+      tensions: [{ tension: 'PRIMARY gap', grounding: '', sourceRefs: [] }, { tension: 'second', grounding: '', sourceRefs: [] }, { tension: 'third', grounding: '', sourceRefs: [] }] } }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    const primary = await screen.findByText('PRIMARY gap');
+    expect(primary.closest('.s0-u-primary')).not.toBeNull();
+    expect(screen.getByText('arc.understanding.also')).toBeInTheDocument();
+    expect(screen.getByText('second').closest('.s0-u-list')).not.toBeNull();
+  });
 });
+

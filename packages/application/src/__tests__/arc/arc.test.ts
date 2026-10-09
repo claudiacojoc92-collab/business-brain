@@ -93,6 +93,19 @@ describe('ArcService.view — each moment composes from the reused engines', () 
     expect(v.understanding?.unanswered).toContain('whether corporate partnerships convert');
   });
 
+  it('what stood out: a capability gap is shown first; otherwise the model\'s ranking is kept (no re-sort by numbers/quotes)', async () => {
+    const withContradictions = (contradictions: any[]) => makeDeps({ understanding: { latest: async () => ({ understanding: {
+      offer: { summary: 'x', explicit: [], unclear: [] }, positioning: { summary: 'y', evidenceBacked: [], implied: [] },
+      audience: { addressed: [], appearsTargeted: [], unknown: [] }, messaging: { recurringThemes: [] }, contradictions, unknowns: [],
+    } }) } }).deps;
+    const audit = { kind: 'other', statementA: 'Privacy updated "9 October 2026"', statementB: 'Terms updated "10 July 2026"', tension: 'The legal pages carry dates 3 months apart', sourceRefs: ['Terms'] };
+    const social = { kind: 'audience_mismatch', statementA: 'site targets studios', statementB: 'Instagram is a travel feed', tension: 'The Instagram speaks to a different audience', sourceRefs: ['Instagram'] };
+    const gap = { kind: 'capability_gap', statementA: 'sells a decision system', statementB: 'no example output anywhere', tension: 'It sells a decision system but never shows a decision', sourceRefs: ['Homepage'] };
+    const shown = async (cs: any[]) => (await new ArcService(withContradictions(cs)).view('B', 'BB', 'en', flags({ pourInDone: true }), [], null)).understanding!.tensions.map((x) => x.tension);
+    expect((await shown([social, audit, gap]))[0]).toBe('It sells a decision system but never shows a decision');
+    expect(await shown([social, audit])).toEqual(['The Instagram speaks to a different audience', 'The legal pages carry dates 3 months apart']); // model order kept
+  });
+
   it('reflectCorrection replies substantively, grounded in the correction + current understanding', async () => {
     const reflectCalls: any[] = [];
     const { deps } = makeDeps({ reflect: { reflect: async (i: any) => { reflectCalls.push(i); return { reflection: `Noted: ${i.correction}`, changes: 'shifts what to lead with', holds: 'referrals hold', ask: 'what else?' }; } } });
