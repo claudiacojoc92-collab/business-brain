@@ -103,7 +103,9 @@ describe('ArcService.view — each moment composes from the reused engines', () 
     const gap = { kind: 'capability_gap', statementA: 'sells a decision system', statementB: 'no example output anywhere', tension: 'It sells a decision system but never shows a decision', sourceRefs: ['Homepage'] };
     const shown = async (cs: any[]) => (await new ArcService(withContradictions(cs)).view('B', 'BB', 'en', flags({ pourInDone: true }), [], null)).understanding!.tensions.map((x) => x.tension);
     expect((await shown([social, audit, gap]))[0]).toBe('It sells a decision system but never shows a decision');
-    expect(await shown([social, audit])).toEqual(['The Instagram speaks to a different audience', 'The legal pages carry dates 3 months apart']); // model order kept
+    const depth = { kind: 'priority_vs_effort', statementA: 'four steps billed equally', statementB: 'step 1 described in far more depth', tension: 'The reading step is far more developed than strategy and plan', sourceRefs: ['Homepage'] };
+    expect(await shown([social, depth])).toEqual(['The Instagram speaks to a different audience', 'The reading step is far more developed than strategy and plan']); // model order kept
+    expect(await shown([audit, social])).toEqual(['The Instagram speaks to a different audience']); // housekeeping dropped
   });
 
   it('reflectCorrection replies substantively, grounded in the correction + current understanding', async () => {
@@ -239,5 +241,35 @@ describe('ArcService.view — each moment composes from the reused engines', () 
     expect(emailCalls[0].todaysMove).toBe('Draft the clinic target list');
     expect(emailCalls[0].voiceBoundaries).toContain('warm, proof-led');
     expect(email.subject).toMatch(/Body Move/);
+  });
+});
+
+describe('ArcService.view — what stood out with a capability check', () => {
+  const view = async (u: any, findings: any[] = []) => (await new ArcService(makeDeps({
+    understanding: { latest: async () => ({ understanding: { offer: { summary: 'x', explicit: [], unclear: [] }, positioning: { summary: 'y', evidenceBacked: [], implied: [] },
+      audience: { addressed: [], appearsTargeted: [], unknown: [] }, messaging: { recurringThemes: [] }, unknowns: [], ...u } }) },
+    aha1: { latest: async () => ({ findings }) },
+  }).deps).view('B', 'BB', 'en', flags({ pourInDone: true }), [], null)).understanding!;
+  const cc = { sells: 'a decision system', shown: false, insight: 'It sells a decision system, and nothing on its site or in its posts shows one decision.', soWhat: 'A founder signs up on a description alone.', sourceRefs: ['Homepage'] };
+
+  it('the capability gap is the primary (from capabilityCheck), restatements are dropped, a different point stays', async () => {
+    const u = await view({ capabilityCheck: cc, contradictions: [
+      { kind: 'story_vs_reality', statementA: 'a', statementB: 'b', tension: "The product's own Instagram presence shows nothing about the product.", soWhat: 's', sourceRefs: [] },
+      { kind: 'audience_mismatch', statementA: 'a', statementB: 'b', tension: 'The Instagram speaks to tech founders, not the studio owners it targets.', soWhat: 'Studio owners cannot see themselves in it.', sourceRefs: [] },
+      { kind: 'capability_gap', statementA: 'a', statementB: 'b', tension: 'No page shows a sample output.', sourceRefs: [] },
+    ] });
+    expect(u.tensions.map((t) => t.tension)).toEqual([cc.insight, 'The Instagram speaks to tech founders, not the studio owners it targets.']);
+    expect(u.tensions[0]!.grounding).toBe(cc.soWhat);                    // sub-text = the so-what
+    expect(u.tensions[1]!.grounding).toBe('Studio owners cannot see themselves in it.');
+  });
+
+  it('a so-what that makes a forbidden claim type is blanked; findings that restate the gap or are housekeeping leave "confident"', async () => {
+    const u = await view({ capabilityCheck: { ...cc, soWhat: 'This erodes the credibility of the product.' }, contradictions: [] }, [
+      { finding: 'Neither the website nor the Instagram account shows a single example of the output.' },
+      { finding: 'The homepage states "Marketing is the first area" but no page names any other area.' },
+      { finding: 'The reading step is described in far more depth than strategy and plan.' },
+    ]);
+    expect(u.tensions[0]!.grounding).toBe('');
+    expect(u.confident).toEqual(['The reading step is described in far more depth than strategy and plan.']);
   });
 });
