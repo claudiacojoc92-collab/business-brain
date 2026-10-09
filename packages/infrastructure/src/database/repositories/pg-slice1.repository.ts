@@ -37,6 +37,16 @@ export class PgBusinessEvidenceLinkRepository implements IBusinessEvidenceLinkRe
     return { linked };
   }
 
+  async unbind(businessId: string, fragmentIds: readonly string[]): Promise<{ unlinked: number }> {
+    if (fragmentIds.length === 0) return { unlinked: 0 };
+    const res = await (this.db as any)
+      .deleteFrom('workspace.business_evidence_links')
+      .where('business_id', '=', businessId)
+      .where('evidence_fragment_id', 'in', [...fragmentIds])
+      .executeTakeFirst();
+    return { unlinked: Number(res?.numDeletedRows ?? 0) };
+  }
+
   async listFragmentIds(businessId: string): Promise<string[]> {
     const rows = await (this.db as any)
       .selectFrom('workspace.business_evidence_links')

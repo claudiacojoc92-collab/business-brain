@@ -20,6 +20,7 @@ vi.mock('../api/client', () => ({
   getInstagramConnectUrl: vi.fn(), arcPourInDone: vi.fn(), arcConversation: vi.fn(),
   arcConfirmUnderstanding: vi.fn(), arcCorrectUnderstanding: vi.fn(), arcMirrorSeen: vi.fn(), arcAdoptStrategy: vi.fn(), arcChallengeStrategy: vi.fn(),
   arcAdoptWeekDay: vi.fn(), arcGenerateEmail: vi.fn(), arcSaveEmail: vi.fn(), arcExportEmail: vi.fn(), arcContainerSeen: vi.fn(),
+  getArcSources: vi.fn(), arcRemoveSource: vi.fn(),
 }));
 
 import * as api from '../api/client';
@@ -445,5 +446,72 @@ describe('ArcSurface — one surface, eight moments', () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'done' }));
     render(<ArcSurface businessId="b1" onDone={onDone} />);
     await waitFor(() => expect(onDone).toHaveBeenCalled());
+  });
+
+  describe('going back to the sources after Pour-in', () => {
+    const understood = v({ moment: 'understanding', understanding: { does: 'X', serves: 'Y', standsOut: '', tensions: [], confident: [], inferring: [], unanswered: [] } });
+    const sources = [
+      { url: 'bodymovestudio.ro', type: 'website' as const, detail: '8 pages read' },
+      { url: '@claudiacojoc', type: 'instagram' as const, detail: '50 posts read' },
+    ];
+
+    it('from Understanding, Back opens Pour-in with every source editable (add, remove, update)', async () => {
+      vi.mocked(api.getArc).mockResolvedValue(understood);
+      vi.mocked(api.getArcSources).mockResolvedValue({ sources, igConnected: true });
+      render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+      fireEvent.click(await screen.findByText(/arc\.back/));
+      expect(await screen.findByText('bodymovestudio.ro')).toBeInTheDocument();
+      expect(screen.getByText('@claudiacojoc')).toBeInTheDocument();
+      expect(screen.getByText('home.empty.website')).toBeInTheDocument();     // add website
+      expect(screen.getByText('home.empty.ig.add')).toBeInTheDocument();      // add / re-read Instagram
+      expect(screen.getByText('home.empty.link')).toBeInTheDocument();        // add link
+      expect(screen.getByText('home.empty.upload')).toBeInTheDocument();      // add file
+      expect(screen.getAllByText('arc.sources.remove')).toHaveLength(2);      // remove each source
+      expect(screen.getByText('arc.sources.update')).toBeInTheDocument();
+      expect(api.getArcSources).toHaveBeenCalledWith('b1');
+    });
+
+    it('Remove unlinks the source and reloads the list', async () => {
+      vi.mocked(api.getArc).mockResolvedValue(understood);
+      vi.mocked(api.getArcSources).mockResolvedValueOnce({ sources, igConnected: true }).mockResolvedValueOnce({ sources: [sources[0]!], igConnected: true });
+      vi.mocked(api.arcRemoveSource).mockResolvedValue({ removed: true, sources: [sources[0]!] });
+      render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+      fireEvent.click(await screen.findByText(/arc\.back/));
+      await screen.findByText('@claudiacojoc');
+      fireEvent.click(screen.getByLabelText('arc.sources.remove @claudiacojoc'));
+      await waitFor(() => expect(api.arcRemoveSource).toHaveBeenCalledWith('b1', '@claudiacojoc', 'instagram'));
+      await waitFor(() => expect(screen.queryByText('@claudiacojoc')).toBeNull());
+    });
+
+    it('Update my understanding re-reads and returns to the (new) Understanding', async () => {
+      vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'conversation', turns: [] }));
+      vi.mocked(api.getArcSources).mockResolvedValue({ sources, igConnected: true });
+      vi.mocked(api.arcPourInDone).mockResolvedValue(v({ moment: 'understanding', understanding: { does: 'NEW READING', serves: 'Y', standsOut: '', tensions: [], confident: [], inferring: [], unanswered: [] } }));
+      render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+      fireEvent.click(await screen.findByText('arc.sources'));
+      fireEvent.click(await screen.findByText('arc.sources.update'));
+      await waitFor(() => expect(api.arcPourInDone).toHaveBeenCalledWith('b1'));
+      expect(await screen.findByText(/NEW READING/)).toBeInTheDocument();
+      expect(screen.queryByText('arc.sources.update')).toBeNull();
+    });
+
+    it('History lists the sources first; going back to the moment leaves the editor', async () => {
+      vi.mocked(api.getArc).mockResolvedValue(understood);
+      vi.mocked(api.getArcSources).mockResolvedValue({ sources, igConnected: false });
+      render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+      fireEvent.click(await screen.findByText('arc.history'));
+      fireEvent.click(screen.getByText('arc.moment.pour_in'));
+      expect(await screen.findByText('arc.sources.update')).toBeInTheDocument();
+      fireEvent.click(screen.getByText(/arc\.sources\.backTo/));
+      await waitFor(() => expect(screen.queryByText('arc.sources.update')).toBeNull());
+    });
+
+    it('first-time Pour-in shows no Back/History/Sources controls', async () => {
+      vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [] }));
+      render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+      await screen.findByText('home.empty.website');
+      expect(screen.queryByText(/arc\.back/)).toBeNull();
+      expect(screen.queryByText('arc.sources')).toBeNull();
+    });
   });
 });

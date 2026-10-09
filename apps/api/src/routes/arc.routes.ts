@@ -3,11 +3,12 @@ import multipart from '@fastify/multipart';
 import type { ServerDeps } from '../server';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
 import { fetchDocument, extractReadableText } from '@bb/infrastructure';
-import { recordFounderEvent, readArcFlags, readArcSources, readArcEmail, recordArcCorrectionReflection, readArcCorrectionReflection, recordArcMirror, readArcMirror, type FounderEventType } from '../telemetry/founder-events';
+import { recordFounderEvent, recordFounderEventAwaited, readArcFlags, readArcSources, readArcEmail, recordArcCorrectionReflection, readArcCorrectionReflection, recordArcMirror, readArcMirror, type FounderEventType } from '../telemetry/founder-events';
 import { detectType, assertWithinBounds, MAX_BYTES } from '../connectors/upload/detect';
 import { extractPdf, extractDocx, extractText } from '../connectors/upload/extract';
 import { contentLanguageFor, noteFounderText } from './content-language';
 import { getInstagramConnector } from '../connectors/instagram/instagram-connector.instance';
+import { fileSourceSlug } from '@bb/application';
 
 // How many recent Instagram posts the pour-in reads (2 media pages of 25 + one reach-insights call per post).
 const IG_POURIN_MAX_POSTS = 50;
@@ -101,7 +102,7 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
     let host = url; try { host = new URL(doc.finalUrl || url).host.replace(/^www\./, ''); } catch { /* keep the raw url as label */ }
     const { stored } = await deps.learnBusinessService.ingestTextForPourIn({
       businessId: business.id, founderId, source: 'founder_supplied', provenance: 'declared',
-      items: [{ ref: `Link: ${host}`, url: doc.finalUrl || url, text, pageType: 'link' }],
+      items: [{ ref: `Link: ${host}`, url: doc.finalUrl || url, text, pageType: 'link', meta: { sourceKey: url } }],
     });
     if (stored > 0) mark(founderId, business.id, 'arc_source_added', { url, type: 'link', detail: host });
     await reply.status(200).send({ state: stored > 0 ? 'synced' : 'empty' });
@@ -186,8 +187,8 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
       try { doc = type === 'pdf' ? await extractPdf(bytes, file.filename) : type === 'docx' ? await extractDocx(bytes, file.filename) : extractText(bytes, file.filename); }
       catch { await reply.status(200).send({ state: 'failed', error: 'FILE_UNREADABLE' }); return; }
 
-      const slug = (file.filename.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase().slice(0, 60)) || 'file';
-      const items = doc.units.slice(0, 20).map((u, i) => ({ ref: `${file.filename} · ${u.anchor.label}`, url: `founder://file/${slug}/${i + 1}`, text: u.text, pageType: 'founder_supplied' }));
+      const slug = fileSourceSlug(file.filename);
+      const items = doc.units.slice(0, 20).map((u, i) => ({ ref: `${file.filename} · ${u.anchor.label}`, url: `founder://file/${slug}/${i + 1}`, text: u.text, pageType: 'founder_supplied', meta: { sourceKey: file.filename } }));
       const { stored } = await deps.learnBusinessService.ingestTextForPourIn({ businessId: business.id, founderId, source: 'founder_supplied', provenance: 'declared', items });
       if (stored > 0) {
         const partWord = type === 'pdf' ? 'page' : 'section';
@@ -207,7 +208,9 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
   const flagRoute = (path: string, type: FounderEventType) =>
     server.post(`/v1/businesses/:id/arc/${path}`, async (request: FastifyRequest, reply: FastifyReply) => {
       const { founderId, business, language } = await requireBusiness(request);
-      mark(founderId, business.id, type);
+      // Awaited: the view below derives the moment from this very flag (fire-and-forget raced it, so a confirm
+      // could come back still showing the old moment until the next reload).
+      await recordFounderEventAwaited(deps.db, { accountId: founderId, businessId: business.id, eventType: type, surface: 'arc' });
       await reply.status(200).send(await viewFor(business.id, business.name, language, founderId));
     });
   // Moment 1 → 2: "Done adding — start" — the BRIDGE fires here, synthesizing ONE understanding snapshot over
@@ -230,8 +233,72 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
       await reply.status(200).send({ ...view, error: { kind: 'pourin_empty' } });
       return;
     }
-    mark(founderId, business.id, 'arc_pour_in_done');
-    await reply.status(200).send(await viewFor(business.id, business.name, language, founderId));
+    // Back from a later moment with changed sources: this is a RE-READ. The new understanding needs the founder's
+    // review again (progress is kept: conversation answers, an adopted strategy and the plan all stay), and an
+    // adopted strategy is checked against it by the existing impact evaluator (never re-adopted automatically).
+    const before = await readArcFlags(deps.db, business.id, founderId);
+    if (before.pourInDone) {
+      await recordFounderEventAwaited(deps.db, { accountId: founderId, businessId: business.id, eventType: 'arc_understanding_reopened', surface: 'arc' });
+    } else {
+      await recordFounderEventAwaited(deps.db, { accountId: founderId, businessId: business.id, eventType: 'arc_pour_in_done', surface: 'arc' });
+    }
+    const view = await viewFor(business.id, business.name, language, founderId);
+    if (before.pourInDone) void checkStrategyAgainstNewSources(founderId, business.id, business.name, language, view);
+    await reply.status(200).send(view);
+  });
+
+  // An adopted strategy meets the re-read business: run the living-state impact check in the background (it is a
+  // model call; the founder is already reviewing the new understanding). The verdict lands as an impact_evaluated
+  // event, which the home "what changed" surfaces already read. Failures never reach the founder.
+  async function checkStrategyAgainstNewSources(founderId: string, businessId: string, businessName: string, language: string, view: Awaited<ReturnType<typeof viewFor>>): Promise<void> {
+    try {
+      const current = await deps.strategyService.getCurrent(businessId);
+      if (!current) return;
+      const sources = await readArcSources(deps.db, businessId, founderId);
+      const u = view.understanding;
+      const text = [
+        `The founder changed the business's sources and BB re-read them. Sources now: ${sources.map((x) => `${x.url} (${x.type})`).join(', ') || 'none'}.`,
+        u ? `Updated understanding: what it does: ${u.does} Who it serves: ${u.serves} What stands out: ${u.standsOut}` : '',
+      ].filter(Boolean).join('\n');
+      let currentMove: { actionId: string; what: string } | null = null;
+      try { const first = (await deps.planService.today(businessId))?.ready?.[0]; if (first) currentMove = { actionId: first.actionId, what: first.what }; } catch { /* no plan */ }
+      const { result, newVersion } = await deps.impactService.evaluate(businessId, founderId, businessName, 'add_context', text, language, { persistInput: false, currentMove });
+      recordFounderEvent(deps.db, {
+        accountId: founderId, businessId, eventType: 'impact_evaluated', surface: 'add_context',
+        metadata: {
+          verdict: result.verdict, source: 'add_context', whatChanged: result.whatChanged.slice(0, 4),
+          todayChanges: result.todayImpact.changes, todayReason: result.todayImpact.reason ?? '', newMove: result.todayImpact.newMove,
+          strategyChanges: result.strategyImpact.changes, newVersionId: newVersion?.id ?? null,
+        },
+      });
+    } catch (e) {
+      server.log.warn({ err: e instanceof Error ? e.message : 'impact failed' }, 'arc re-read impact check');
+    }
+  }
+
+  // The source list at ANY moment (the pour-in screen re-opened from later in the arc, or from Home).
+  server.get('/v1/businesses/:id/arc/sources', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { founderId, business } = await requireBusiness(request);
+    const ig = getInstagramConnector();
+    const [sources, igState] = await Promise.all([
+      readArcSources(deps.db, business.id, founderId),
+      ig ? ig.status(founderId).catch(() => 'disconnected' as const) : Promise.resolve('disconnected' as const),
+    ]);
+    await reply.status(200).send({ sources, igConnected: igState === 'connected' });
+  });
+
+  // REMOVE a source: unlink its fragments from the business (the ledger keeps them) and drop it from the list.
+  server.post('/v1/businesses/:id/arc/source/remove', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { founderId, business } = await requireBusiness(request);
+    const body = (request.body ?? {}) as { url?: string; type?: string };
+    const url = (body.url ?? '').trim();
+    const type = (body.type ?? '').trim();
+    if (!url || !type) throw new ValidationError('SOURCE_REQUIRED', 'Which source should I remove?');
+    const listed = (await readArcSources(deps.db, business.id, founderId)).find((x) => x.url === url && x.type === type);
+    if (!listed) throw new NotFoundError('SOURCE_NOT_FOUND', 'That source is not on this business.');
+    const { unlinked } = await deps.learnBusinessService.unlinkPourInSource({ businessId: business.id, founderId, source: { url, type } });
+    await recordFounderEventAwaited(deps.db, { accountId: founderId, businessId: business.id, eventType: 'arc_source_removed', surface: 'arc', metadata: { url, type, unlinked } });
+    await reply.status(200).send({ removed: true, unlinked, sources: await readArcSources(deps.db, business.id, founderId) });
   });
 
   // Moment 3: the founder corrects what BB understood. HELD as founder-owned state (business_correction),

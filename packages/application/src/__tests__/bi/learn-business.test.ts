@@ -88,6 +88,7 @@ function makeDeps(over: {
         return { linked };
       },
       listFragmentIds: async () => Array.from(boundSet),
+      unbind: async (_b, ids) => { let unlinked = 0; for (const id of ids) if (boundSet.delete(id)) unlinked += 1; return { unlinked }; },
     },
     profiles: {
       upsertMany: async (_b, ps) => { for (const p of ps) if (!profileStore.some((x) => x.url === p.url)) profileStore.push({ id: 'dp-' + p.url, platform: p.platform, url: p.url, status: 'discovered' }); },
