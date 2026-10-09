@@ -275,7 +275,7 @@ export class LearnBusinessService {
       if (!text.trim()) continue;
       if (f.source === 'instagram') {
         // Profile + every post fold into ONE summary observation (below), not one source per post.
-        instagram.push({ url: f.sourceUrl ?? '', text, pageType: typeof payload['pageType'] === 'string' ? (payload['pageType'] as string) : '', meta: payload });
+        instagram.push({ url: f.sourceUrl ?? '', text, pageType: typeof payload['pageType'] === 'string' ? (payload['pageType'] as string) : '', meta: payload, capturedAt: new Date(f.capturedAt).getTime() });
         continue;
       }
       extra.push({

@@ -12,6 +12,8 @@ export interface InstagramFragmentView {
   readonly text: string;
   readonly pageType: string;          // 'instagram_profile' | 'instagram_post'
   readonly meta: Record<string, unknown>;
+  /** When BB stored this copy (ms epoch). Re-adding Instagram stores new copies; the newest one wins. */
+  readonly capturedAt?: number;
 }
 
 export const IG_DIGEST_MAX_CHARS = 8000;
@@ -50,14 +52,27 @@ function postOf(f: InstagramFragmentView): Post | null {
 }
 
 /** Build the one Instagram observation, or null when there is nothing to read. */
+const storedAt = (f: InstagramFragmentView): number => f.capturedAt ?? 0;
+const isDated = (f: InstagramFragmentView): boolean => str(f.meta['postedAt']) != null;
+/** Of two stored copies of the same post, keep the dated one (current ingest), then the newest. */
+const betterCopy = (a: InstagramFragmentView, b: InstagramFragmentView): InstagramFragmentView =>
+  isDated(a) !== isDated(b) ? (isDated(a) ? a : b) : (storedAt(b) > storedAt(a) ? b : a);
+
 export function instagramDigest(fragments: readonly InstagramFragmentView[]): PageObservation | null {
-  const profile = fragments.find((f) => f.pageType === 'instagram_profile');
-  const seen = new Set<string>();
-  const posts: Post[] = [];
+  // Re-adding Instagram stores new copies of the profile and of posts already read: use the newest profile and,
+  // per post URL, the newest dated copy (older undated rows would otherwise shadow it).
+  const profile = fragments.filter((f) => f.pageType === 'instagram_profile')
+    .reduce<InstagramFragmentView | undefined>((best, f) => (!best || storedAt(f) > storedAt(best) ? f : best), undefined);
+  const byUrl = new Map<string, InstagramFragmentView>();
+  const unkeyed: InstagramFragmentView[] = [];
   for (const f of fragments) {
     if (f.pageType !== 'instagram_post') continue;
-    if (f.url && seen.has(f.url)) continue; // re-adding Instagram stores the same posts again
-    if (f.url) seen.add(f.url);
+    if (!f.url) { unkeyed.push(f); continue; }
+    const prev = byUrl.get(f.url);
+    byUrl.set(f.url, prev ? betterCopy(prev, f) : f);
+  }
+  const posts: Post[] = [];
+  for (const f of [...byUrl.values(), ...unkeyed]) {
     const p = postOf(f);
     if (p) posts.push(p);
   }
