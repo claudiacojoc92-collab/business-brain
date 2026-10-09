@@ -55,3 +55,31 @@ describe('instagramDigest — one Instagram source for synthesis', () => {
     expect(instagramDigest([])).toBeNull();
   });
 });
+
+describe('instagramDigest — re-added Instagram (old undated rows + new dated copies)', () => {
+  const oldPost = (i: number): InstagramFragmentView => ({ url: `https://instagram.com/p/m${i}`, pageType: 'instagram_post', text: `Recovery class ${i}: mobility after knee surgery.\n(${i} likes, 2 comments)`, meta: {}, capturedAt: 1000 });
+  const oldProfile: InstagramFragmentView = { url: 'https://instagram.com/bodymove', pageType: 'instagram_profile', text: 'Instagram @bodymove. 900 followers.', meta: {}, capturedAt: 1000 };
+
+  it('per post URL the newest DATED copy wins, whichever order the rows arrive in', () => {
+    const fresh = [1, 2, 3].map((i) => ({ ...post(i), capturedAt: 2000 }));
+    for (const rows of [[...[1, 2].map(oldPost), ...fresh], [...fresh, ...[1, 2].map(oldPost)]]) {
+      const d = instagramDigest([oldProfile, { ...profile, capturedAt: 2000 }, ...rows])!;
+      const lines = d.text.split('\n').filter((l) => l.startsWith('- '));
+      expect(lines).toHaveLength(3);
+      expect(d.text).not.toContain('undated');
+    }
+  });
+
+  it('a dated copy beats an undated one even if the undated one was stored later', () => {
+    const d = instagramDigest([{ ...post(1), capturedAt: 1000 }, { ...oldPost(1), capturedAt: 3000 }])!;
+    expect(d.text).toContain('- 2026-09-29 ·');
+  });
+
+  it('the newest profile record is used (follower count from the latest read)', () => {
+    const d = instagramDigest([{ ...profile, capturedAt: 2000 }, oldProfile, post(1)])!;
+    expect(d.text).toContain('1200 followers');
+    expect(d.text).not.toContain('900 followers');
+    const d2 = instagramDigest([oldProfile, { ...profile, capturedAt: 2000 }, post(1)])!;
+    expect(d2.text).toContain('1200 followers');
+  });
+});

@@ -294,22 +294,33 @@ export interface ArcSourceRow { readonly url: string; readonly type: ArcSourceTy
 const ARC_SOURCE_TYPES: ReadonlySet<string> = new Set(['website', 'link', 'pdf', 'docx', 'text', 'instagram']);
 
 /** The durable pour-in list: every source the founder has added, with its type (default 'website' for legacy rows). */
+/**
+ * One row per source, in the order sources were FIRST added, but showing the LATEST read of each: re-adding a
+ * source (e.g. Instagram after the 12→50 post change) must update its "N posts read" line, not keep the first.
+ * `rows` are arc_source_added events oldest-first.
+ */
+export function foldArcSourceEvents(rows: readonly { metadata?: unknown }[]): ArcSourceRow[] {
+  const out: ArcSourceRow[] = [];
+  const at = new Map<string, number>();
+  for (const row of rows) {
+    const meta = (row?.metadata && typeof row.metadata === 'object' ? row.metadata : {}) as Record<string, unknown>;
+    const u = String(meta['url'] ?? '').trim();
+    if (!u) continue;
+    const t = String(meta['type'] ?? '').trim();
+    const detail = String(meta['detail'] ?? '').trim();
+    const item: ArcSourceRow = { url: u, type: (ARC_SOURCE_TYPES.has(t) ? t : 'website') as ArcSourceType, ...(detail ? { detail } : {}) };
+    const i = at.get(u);
+    if (i === undefined) { at.set(u, out.length); out.push(item); } else out[i] = item;
+  }
+  return out;
+}
+
 export async function readArcSources(db: KyselyDB, businessId: string, accountId: string): Promise<ArcSourceRow[]> {
   try {
+    // The NEWEST 50 events (re-adds must never fall off the end), replayed oldest-first below.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const r: any = await sql`SELECT metadata, occurred_at FROM app.founder_event WHERE business_id=${businessId} AND account_id=${accountId} AND event_type='arc_source_added' ORDER BY occurred_at ASC LIMIT 50`.execute(db);
-    const out: ArcSourceRow[] = [];
-    const seen = new Set<string>();
-    for (const row of (r?.rows ?? [])) {
-      const meta = row?.metadata && typeof row.metadata === 'object' ? row.metadata : {};
-      const u = String(meta.url ?? '').trim();
-      if (!u || seen.has(u)) continue;
-      seen.add(u);
-      const t = String(meta.type ?? '').trim();
-      const detail = String(meta.detail ?? '').trim();
-      out.push({ url: u, type: (ARC_SOURCE_TYPES.has(t) ? t : 'website') as ArcSourceType, ...(detail ? { detail } : {}) });
-    }
-    return out;
+    const r: any = await sql`SELECT metadata, occurred_at FROM (SELECT metadata, occurred_at FROM app.founder_event WHERE business_id=${businessId} AND account_id=${accountId} AND event_type='arc_source_added' ORDER BY occurred_at DESC LIMIT 50) latest ORDER BY occurred_at ASC`.execute(db);
+    return foldArcSourceEvents(r?.rows ?? []);
   } catch { return []; }
 }
 
