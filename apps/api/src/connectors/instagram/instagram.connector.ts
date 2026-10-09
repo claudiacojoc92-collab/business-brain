@@ -18,6 +18,7 @@ import {
 } from './instagram-oauth';
 
 export const INSTAGRAM_PROVIDER = 'instagram';
+const INSIGHTS_CONCURRENCY = 5;
 
 // The OAuth `state` = "<csrf>.<base64url(returnTo)>". Instagram returns it verbatim, so the SPA return
 // path survives the round trip independent of the in-memory pending store (resilient to api restarts).
@@ -238,11 +239,17 @@ export class InstagramConnector implements InstagramImportPort {
     });
     for (let guard = 0; guard < 25 && posts.length < opts.maxPosts; guard += 1) {
       const items = Array.isArray(page['data']) ? (page['data'] as Record<string, unknown>[]) : [];
-      for (const m of items) {
-        if (posts.length >= opts.maxPosts) break;
+      const take = items.slice(0, opts.maxPosts - posts.length);
+      // Per-post reach, fetched a few at a time (one call per post; sequential made a 50-post read slow).
+      const reaches: (number | null)[] = [];
+      for (let i = 0; i < take.length; i += INSIGHTS_CONCURRENCY) {
+        reaches.push(...await Promise.all(take.slice(i, i + INSIGHTS_CONCURRENCY).map(async (m) => {
+          try { return insightReach(await graphGet(`/${String(m['id'] ?? '')}/insights`, { metric: 'reach' })); } catch { return null; }
+        })));
+      }
+      for (const [idx, m] of take.entries()) {
         const mediaId = String(m['id'] ?? '');
-        let reach: number | null = null;
-        try { reach = insightReach(await graphGet(`/${mediaId}/insights`, { metric: 'reach' })); } catch { reach = null; }
+        const reach = reaches[idx] ?? null;
         posts.push({
           postExternalId: mediaId,
           permalink: m['permalink'] ? String(m['permalink']) : null,

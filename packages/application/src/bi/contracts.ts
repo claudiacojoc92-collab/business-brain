@@ -24,7 +24,14 @@ export interface PageObservation {
   readonly text: string;
   readonly lang: string | null;
   readonly provenance?: ObservationProvenance; // default 'observed' (back-compat); 'declared' = founder-supplied
+  /**
+   * Which pour-in source this came from, so synthesis can budget by kind (website pages are capped; every
+   * non-website source is always included). Absent on legacy single-source paths: then a declared observation
+   * counts as non-website and an observed one as a website page.
+   */
+  readonly sourceKind?: ObservationSourceKind;
 }
+export type ObservationSourceKind = 'website' | 'supplied' | 'instagram';
 
 export interface SourceRef {
   readonly label: string;

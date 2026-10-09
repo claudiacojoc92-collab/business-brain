@@ -16,13 +16,32 @@ import type {
 
 const LANG_NAME: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian' };
 const PER_PAGE_CHARS = 3500;
-const MAX_PAGES = 10;
+const INSTAGRAM_SUMMARY_CHARS = 8000; // the one Instagram source carries up to 50 posts
+const MAX_WEBSITE_PAGES_ALONE = 10;  // website-only: unchanged
+const MAX_WEBSITE_PAGES_MIXED = 8;   // with other sources: website pages give up two slots
 
-function buildSourcesBlock(observations: PageObservation[]): string {
-  return observations
-    .slice(0, MAX_PAGES)
+/** Legacy single-source paths don't tag sourceKind: an observed page is a website page, declared text is not. */
+const isWebsitePage = (o: PageObservation): boolean => (o.sourceKind ? o.sourceKind === 'website' : o.provenance !== 'declared');
+
+/**
+ * Which sources the model reads. Website pages are capped; every non-website source (files, links, pasted text,
+ * the Instagram summary) is ALWAYS included. The old rule (first 10 of the union, website first) silently dropped
+ * everything a founder added beyond their website.
+ */
+export function selectSources(observations: PageObservation[]): PageObservation[] {
+  const website = observations.filter(isWebsitePage);
+  const other = observations.filter((o) => !isWebsitePage(o));
+  return [...website.slice(0, other.length ? MAX_WEBSITE_PAGES_MIXED : MAX_WEBSITE_PAGES_ALONE), ...other];
+}
+
+export function buildSourcesBlock(observations: PageObservation[]): string {
+  return selectSources(observations)
     .map((o) => {
-      const text = o.text.length > PER_PAGE_CHARS ? o.text.slice(0, PER_PAGE_CHARS) : o.text;
+      const max = o.sourceKind === 'instagram' ? INSTAGRAM_SUMMARY_CHARS : PER_PAGE_CHARS;
+      const text = o.text.length > max ? o.text.slice(0, max) : o.text;
+      if (o.sourceKind === 'instagram') {
+        return `### OBSERVED-INSTAGRAM ref="${o.ref}" url="${o.url}"\n${text}`;
+      }
       if (o.provenance === 'declared') {
         return `### FOUNDER-SUPPLIED ref="${o.ref}" (the founder pasted this for you to inspect — declared, not independently observed)\n${text}`;
       }
@@ -40,6 +59,8 @@ export function systemPrompt(lang: string): string {
     '',
     'Sources come in two lanes, and you MUST preserve the difference:',
     '- OBSERVED-PAGE blocks = fetched from the business\'s own website (what the site shows).',
+    '- OBSERVED-INSTAGRAM blocks = the business\'s own Instagram account (recent posts: date, caption, likes,',
+    '  comments), read through the Instagram API. Observed, like the website: what the business posts publicly.',
     '- FOUNDER-SUPPLIED blocks = text the founder pasted for you to inspect. This is DECLARED, the',
     '  founder\'s own self-description — NOT independently observed reality. Attribute it as what the',
     '  founder states ("the founder describes…", "you told me…"), and NEVER treat a founder\'s marketing',
