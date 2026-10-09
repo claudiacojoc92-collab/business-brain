@@ -60,20 +60,46 @@ describe('ArcSurface — one surface, eight moments', () => {
     expect(screen.queryByText('home.empty.done')).toBeNull();                        // …but no CTA with zero sources
   });
 
-  it('Moment 1: exactly three real connectors — website, paste-a-link, upload; Instagram is HIDDEN; no NEXT/stubs', async () => {
-    // Post-decision: Instagram is hidden until after MVP validation. The pour-in shows ONLY the three working,
-    // no-OAuth connectors — each a real affordance, no "Next" pill, no "coming soon", no Instagram entry point.
-    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [] }));
+  it('Moment 1: every connector is a REAL affordance (website, Instagram, link, upload); no NEXT pills or stubs', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [], igConnected: false }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
     expect(await screen.findByText('home.empty.website')).toBeInTheDocument();
+    expect(screen.getByText('home.empty.ig')).toBeInTheDocument();
     expect(screen.getByText('home.empty.link')).toBeInTheDocument();
     expect(screen.getByText('home.empty.upload')).toBeInTheDocument();
-    expect(screen.queryByText('home.empty.ig')).toBeNull();                          // Instagram hidden entirely
-    expect(screen.queryByText('home.empty.ig.connect')).toBeNull();
-    expect(screen.queryByText('home.empty.ig.add')).toBeNull();
+    expect(screen.getByText('home.empty.ig.connect')).toBeInTheDocument();           // not connected → connect affordance
     expect(screen.queryByText('home.empty.soon')).toBeNull();                        // no "Next" pill anywhere
     expect(screen.queryByText('home.empty.wiring')).toBeNull();                      // no "coming soon" note
     expect(screen.queryByText('home.empty.google')).toBeNull();                      // unbuilt connectors hidden, not stubbed
+  });
+
+  it('Moment 1: Connect Instagram asks for the consent URL with this page as the return path', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [], igConnected: false }));
+    vi.mocked(api.getInstagramConnectUrl).mockResolvedValue({ error: 'nope' });
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    fireEvent.click(await screen.findByText('home.empty.ig.connect'));
+    await waitFor(() => expect(api.getInstagramConnectUrl).toHaveBeenCalledWith(window.location.pathname));
+    expect(await screen.findByRole('alert')).toHaveTextContent('home.empty.igfail');
+  });
+
+  it('Moment 1: once Instagram is connected, the founder can read it in (Add my Instagram)', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [], igConnected: true }));
+    vi.mocked(api.arcAddInstagram).mockResolvedValue({ state: 'synced' });
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    const add = await screen.findByText('home.empty.ig.add');
+    expect(screen.queryByText('home.empty.ig.connect')).toBeNull();
+    fireEvent.click(add);
+    await waitFor(() => expect(api.arcAddInstagram).toHaveBeenCalledWith('b1'));
+  });
+
+  it('Moment 1: back from Instagram consent (?connected=instagram) reads the account in once and clears the query', async () => {
+    window.history.replaceState(null, '', '/b/b1/home?connected=instagram');
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [], igConnected: true }));
+    vi.mocked(api.arcAddInstagram).mockResolvedValue({ state: 'synced' });
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    await waitFor(() => expect(api.arcAddInstagram).toHaveBeenCalledTimes(1));
+    expect(window.location.search).toBe('');
+    window.history.replaceState(null, '', '/');
   });
 
   it('Moment 1: selecting several files uploads each as its own source (multi-file, one action)', async () => {

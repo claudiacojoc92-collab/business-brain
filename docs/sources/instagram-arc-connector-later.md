@@ -1,4 +1,10 @@
-# Instagram in the pour-in — deferred until after MVP validation
+# Instagram in the pour-in — direct Instagram Login now, Facebook Login for Business later
+
+> **Update 2026-10-08 (operator priority change):** the card is BACK in the pour-in (between "Add your website"
+> and "Paste a link") on the DIRECT Instagram Login connector, with the Redis-backed pending OAuth state from
+> hotfix 891a6ba. Known limit: it authorizes whichever Instagram account the browser is logged into (no
+> Business-vs-personal picker). The Facebook Login for Business flow below is now "Option B". The section
+> "What is in place right now" describes the 2026-09-17 hidden state and is kept for history.
 
 **Status: HIDDEN, not deleted.** Founder decision (post-Issue-2): move to MVP validation now with the three
 working no-OAuth connectors (website, paste-a-link, file upload); return to Instagram after real testers
