@@ -9,6 +9,9 @@ import { extractPdf, extractDocx, extractText } from '../connectors/upload/extra
 import { contentLanguageFor, noteFounderText } from './content-language';
 import { getInstagramConnector } from '../connectors/instagram/instagram-connector.instance';
 
+// How many recent Instagram posts the pour-in reads (2 media pages of 25 + one reach-insights call per post).
+const IG_POURIN_MAX_POSTS = 50;
+
 interface AuthedUser { sub: string; role: string }
 function founderOf(request: FastifyRequest): string {
   const user = (request as unknown as { user?: AuthedUser }).user;
@@ -126,22 +129,26 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
     if (!ig) { await reply.status(200).send({ state: 'failed', error: 'IG_NOT_CONFIGURED' }); return; }
     if ((await ig.status(founderId)) !== 'connected') { await reply.status(200).send({ state: 'failed', needsAuth: true, error: 'IG_NOT_CONNECTED' }); return; }
     try {
-      const account = await ig.importAccount(founderId, { maxPosts: 12 });
+      const account = await ig.importAccount(founderId, { maxPosts: IG_POURIN_MAX_POSTS });
       const username = account.username ?? 'instagram';
       const profileUrl = `https://instagram.com/${username}`;
-      const items: { ref: string; url: string; text: string; pageType: string }[] = [];
+      // `meta` keeps the structured fields next to the text so synthesis can build its one Instagram summary
+      // (date · caption · likes, comments) without re-parsing prose.
+      const items: { ref: string; url: string; text: string; pageType: string; meta?: Record<string, unknown> }[] = [];
       const profileBits = [
         `Instagram @${username}.`,
         account.followersCount != null ? `${account.followersCount} followers.` : '',
         account.mediaCount != null ? `${account.mediaCount} posts.` : '',
         account.accountType ? `Account type: ${account.accountType}.` : '',
       ].filter(Boolean).join(' ');
-      if (profileBits.trim()) items.push({ ref: `Instagram (@${username})`, url: profileUrl, text: profileBits, pageType: 'instagram_profile' });
+      if (profileBits.trim()) items.push({ ref: `Instagram (@${username})`, url: profileUrl, text: profileBits, pageType: 'instagram_profile',
+        meta: { username, followersCount: account.followersCount, mediaCount: account.mediaCount, accountType: account.accountType } });
       account.posts.forEach((post, i) => {
         const caption = (post.caption ?? '').trim();
         if (!caption) return;
         const eng = [post.likes != null ? `${post.likes} likes` : '', post.comments != null ? `${post.comments} comments` : '', post.reach != null ? `reach ${post.reach}` : ''].filter(Boolean).join(', ');
-        items.push({ ref: `Instagram post ${i + 1}`, url: post.permalink || `${profileUrl}/p/${post.postExternalId}`, text: eng ? `${caption}\n(${eng})` : caption, pageType: 'instagram_post' });
+        items.push({ ref: `Instagram post ${i + 1}`, url: post.permalink || `${profileUrl}/p/${post.postExternalId}`, text: eng ? `${caption}\n(${eng})` : caption, pageType: 'instagram_post',
+          meta: { caption, postedAt: post.postedAt, likes: post.likes, comments: post.comments } });
       });
       const { stored } = await deps.learnBusinessService.ingestTextForPourIn({ businessId: business.id, founderId, source: 'instagram', provenance: 'observed', items });
       const postCount = items.filter((it) => it.pageType === 'instagram_post').length;

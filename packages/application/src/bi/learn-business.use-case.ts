@@ -35,6 +35,7 @@ import {
   type WebsiteIngestionResult,
   type LearnFromMaterialParams,
 } from './contracts';
+import { instagramDigest, type InstagramFragmentView } from './instagram-digest';
 import { bridgeFragmentsToObservations, webObservationsToPageObservations, suppliedMaterialToObservations, hostOf } from './bridge';
 import { assertWellFormed, validateAha, type ValidatedFinding } from './validation';
 
@@ -232,7 +233,7 @@ export class LearnBusinessService {
   async ingestTextForPourIn(p: {
     businessId: string; founderId: string;
     source: string; provenance: ObservationProvenance;
-    items: { ref: string; url: string; text: string; pageType: string }[];
+    items: { ref: string; url: string; text: string; pageType: string; meta?: Record<string, unknown> }[];
   }): Promise<{ stored: number }> {
     const observed = p.provenance === 'observed';
     const fragments = p.items
@@ -245,7 +246,7 @@ export class LearnBusinessService {
         confidenceKind: observed ? 'observed' : 'declared',
         visibility: observed ? 'public' : 'private',
         occurredAt: null,
-        payload: { text: it.text.slice(0, 8000), kind: p.source, ref: it.ref, pageType: it.pageType },
+        payload: { ...(it.meta ?? {}), text: it.text.slice(0, 8000), kind: p.source, ref: it.ref, pageType: it.pageType },
       }));
     if (fragments.length === 0) return { stored: 0 };
     await this.deps.evidenceRepo.appendMany(fragments);
@@ -262,14 +263,21 @@ export class LearnBusinessService {
   async bridgePourIn(p: { businessId: string; founderId: string; businessName: string; interfaceLanguage: string }): Promise<LearnBusinessResult> {
     const boundIds = new Set(await this.deps.links.listFragmentIds(p.businessId));
     const mine = (await this.deps.evidenceRepo.findByFounder(p.founderId)).filter((f) => boundIds.has(f.id));
-    const websiteObs = bridgeFragmentsToObservations(mine, ''); // observed website pages (all bound hosts)
+    const websiteObs = bridgeFragmentsToObservations(mine, '') // observed website pages (all bound hosts)
+      .map((o) => ({ ...o, sourceKind: 'website' as const }));
     const extra: PageObservation[] = [];
+    const instagram: InstagramFragmentView[] = [];
     for (const f of mine) {
       if (f.source === 'website') continue;
       const payload = (f.payload ?? {}) as Record<string, unknown>;
       if (payload['kind'] === 'block') continue;
       const text = typeof payload['text'] === 'string' ? (payload['text'] as string) : '';
       if (!text.trim()) continue;
+      if (f.source === 'instagram') {
+        // Profile + every post fold into ONE summary observation (below), not one source per post.
+        instagram.push({ url: f.sourceUrl ?? '', text, pageType: typeof payload['pageType'] === 'string' ? (payload['pageType'] as string) : '', meta: payload });
+        continue;
+      }
       extra.push({
         ref: typeof payload['ref'] === 'string' && (payload['ref'] as string) ? (payload['ref'] as string) : (f.source === 'instagram' ? 'Instagram' : 'What you told me'),
         url: f.sourceUrl ?? '',
@@ -278,8 +286,11 @@ export class LearnBusinessService {
         text,
         lang: null,
         provenance: f.confidenceKind === 'observed' ? 'observed' : 'declared',
+        sourceKind: 'supplied',
       });
     }
+    const igDigest = instagramDigest(instagram);
+    if (igDigest) extra.push(igDigest);
     const union = uniqueRefs(dedupeByUrl([...websiteObs, ...extra]));
     if (union.length === 0) return { state: 'empty', pagesRead: 0, discovered: [], aha: { status: 'insufficient', findings: [] } };
     const profileVersion = union.some((o) => o.provenance === 'declared') ? SUPPLIED_UNDERSTANDING_PROFILE_VERSION : UNDERSTANDING_PROFILE_VERSION;
