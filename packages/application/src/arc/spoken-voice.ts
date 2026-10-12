@@ -9,12 +9,21 @@
 const AND: Record<string, string> = { en: 'and', ro: 'și', it: 'e' };
 
 export function withoutDashes(s: string): string {
+  // Within a line only: a dash that STARTS a line is a bullet and stays (a "\n- item" list must not collapse into
+  // commas, which it did in the first version of this cleanup).
   return (s ?? '')
-    .replace(/\s+[—–]\s+(?=[\])])/g, '')           // a dash right before a closing bracket: drop it
-    .replace(/\s*[—–]\s*/g, ', ')                   // em/en dash between words → comma
-    .replace(/\s+-\s+/g, ', ')                                // a spaced hyphen used as a dash
-    .replace(/,\s*,/g, ',')
-    .replace(/,\s*([.!?;:])/g, '$1');
+    .split('\n')
+    .map((line) => {
+      const bullet = line.match(/^(\s*[-\u2014\u2013\u2022*]\s+)/)?.[1] ?? '';
+      const rest = line.slice(bullet.length)
+        .replace(/[ \t]+[\u2014\u2013][ \t]+(?=[\])])/g, '')     // a dash right before a closing bracket: drop it
+        .replace(/[ \t]*[\u2014\u2013][ \t]*/g, ', ')            // em/en dash between words → comma
+        .replace(/[ \t]+-[ \t]+/g, ', ')                       // a spaced hyphen used as a dash
+        .replace(/,[ \t]*,/g, ',')
+        .replace(/,[ \t]*([.!?;:])/g, '$1');
+      return bullet ? `${bullet.replace(/[\u2014\u2013]/, '-')}${rest}` : rest;
+    })
+    .join('\n');
 }
 
 export function simplePlaceholders(s: string): string {

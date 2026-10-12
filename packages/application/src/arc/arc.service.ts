@@ -9,6 +9,7 @@ import type {
   ArcUnderstanding, CorrectionReflection, ICorrectionReflectionModel, ArcWeekStory, IWeekStoryModel,
 } from './contracts';
 import { guardWeekStory, weekStoryInput, storyJargon } from './week-story';
+import { unbackedClaims, softenUnbackedClaims } from './email-claims';
 
 /** Narrow ports onto the existing engines — the arc REUSES them, it does not reimplement them. */
 export interface ArcDeps {
@@ -386,7 +387,7 @@ export class ArcService {
     const core = current?.record.bundle.core ?? null;
     const active = await this.deps.plan.getActive(businessId);
     const move = (active?.plan.priorities.flatMap((p) => p.actions)[0]?.what ?? '').trim();
-    return this.deps.email.draft({
+    const input = {
       businessName,
       interfaceLanguage: language,
       strategyBet: first(core?.coreBet.priority, core?.goal),
@@ -394,6 +395,17 @@ export class ArcService {
       todaysMove: move,
       voiceBoundaries: (await this.deps.voiceBoundaries(businessId)).slice(0, 8),
       founderContext: (await this.deps.founderContext(businessId)).slice(0, 6),
-    });
+    };
+    // Never send a claim the founder can't stand behind ("a confirmed date" that doesn't exist): one repair pass,
+    // then a deterministic softening if the repair still claims it.
+    let email = await this.deps.email.draft(input);
+    const claims = unbackedClaims(email, input.founderContext);
+    if (claims.length) {
+      const second = await this.deps.email.draft(input, claims);
+      const left = unbackedClaims(second, input.founderContext);
+      this.deps.log?.({ type: 'arc_email_claim_repair', detail: JSON.stringify({ businessId, claims, left }) });
+      email = left.length ? softenUnbackedClaims(second) : second;
+    }
+    return email;
   }
 }

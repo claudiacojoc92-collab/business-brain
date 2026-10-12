@@ -189,6 +189,7 @@ export interface EmailDraftInput {
   readonly founderContext: string[];    // a few grounded founder-declared facts, may be []
 }
 export interface IEmailModelPort {
-  /** Return { subject, body }. Never throw — on any failure return a safe, clearly-grounded fallback. */
-  draft(input: EmailDraftInput): Promise<ArcEmail>;
+  /** Return { subject, body }. Never throw — on any failure return a safe, clearly-grounded fallback. `rewrite` = the
+   * unbacked claims a first draft made ("a confirmed date"), for the one repair pass. */
+  draft(input: EmailDraftInput, rewrite?: string[]): Promise<ArcEmail>;
 }

@@ -6,6 +6,9 @@ describe('spoken voice cleanup (shared by week story + email)', () => {
     expect(spoken('the runbook — scheduling the session')).toBe('the runbook, scheduling the session');
     expect(spoken('thank you for your patience — and for asking twice.')).toBe('thank you for your patience, and for asking twice.');
     expect(spoken('a well-known, self-service setup')).toBe('a well-known, self-service setup'); // real hyphens stay
+    // bullets stay bullets (the first version collapsed "\n- item" lists into commas)
+    expect(spoken('You will receive:\n- A runbook — no engineer needed\n- A pass/fail criterion')).toBe('You will receive:\n- A runbook, no engineer needed\n- A pass/fail criterion');
+    expect(spoken('Next:\n— Book the session')).toBe('Next:\n- Book the session');
   });
   it('cuts an explained placeholder to its first phrase', () => {
     expect(spoken('on [specific date — to be confirmed by end of this week].')).toBe('on [specific date].');
