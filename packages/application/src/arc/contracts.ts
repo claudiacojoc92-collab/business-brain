@@ -73,7 +73,8 @@ export interface CorrectionReflection {
   readonly reflection: string; // what BB understood from the correction, in the founder's own terms
   readonly changes: string;    // what the correction changes about the understanding
   readonly holds: string;      // what it does NOT change — what still holds
-  readonly ask: string;        // the invitation to add anything else
+  // No question (operator, 2026-10-12): correcting the understanding never opens a Q&A. Questions live only in the
+  // capped conversation; after a correction the founder's next step is "Let's start".
 }
 export interface CorrectionReflectionInput {
   readonly businessName: string;

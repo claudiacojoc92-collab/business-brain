@@ -356,7 +356,7 @@ const clip = (s: unknown): string => String(s ?? '').slice(0, CAP);
 export function recordArcCorrectionReflection(db: KyselyDB, accountId: string, businessId: string, r: CorrectionReflection): void {
   recordFounderEvent(db, {
     accountId, businessId, eventType: 'arc_correction_reflected', surface: 'arc',
-    metadata: { reflection: clip(r.reflection), changes: clip(r.changes), holds: clip(r.holds), ask: clip(r.ask) },
+    metadata: { reflection: clip(r.reflection), changes: clip(r.changes), holds: clip(r.holds) },
   });
 }
 
@@ -371,7 +371,8 @@ export async function readArcCorrectionReflection(db: KyselyDB, businessId: stri
     if (!meta || typeof meta !== 'object') return null;
     const reflection = String(meta.reflection ?? '').trim();
     if (!reflection) return null;
-    return { reflection, changes: String(meta.changes ?? '').trim(), holds: String(meta.holds ?? '').trim(), ask: String(meta.ask ?? '').trim() };
+    // Replies saved before 2026-10-12 also carry an `ask` (a question); it is no longer shown, so it is not read back.
+    return { reflection, changes: String(meta.changes ?? '').trim(), holds: String(meta.holds ?? '').trim() };
   } catch { return null; }
 }
 

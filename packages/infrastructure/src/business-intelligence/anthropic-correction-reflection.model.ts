@@ -1,10 +1,12 @@
 import { createAnthropicClient } from '../llm/anthropic-client';
-import type { ICorrectionReflectionModel, CorrectionReflectionInput, CorrectionReflection } from '@bb/application';
+import { withoutQuestions, type ICorrectionReflectionModel, type CorrectionReflectionInput, type CorrectionReflection } from '@bb/application';
 
 /**
  * DAY ONE Moment 3 — the strategist's SUBSTANTIVE reply when the founder corrects what BB understood. NOT a
  * "✓ Got it" stub: it reflects the correction in the founder's own terms, says what it CHANGES about the
- * understanding, says what it does NOT change (what still holds), and invites more. Grounded in the current
+ * understanding and what it does NOT change (what still holds). It asks NOTHING (operator, 2026-10-12): a question
+ * here kept founders correcting forever instead of moving on; questions live only in the capped conversation, and
+ * the founder's next step is "Let's start". Question sentences are stripped in code as well. Grounded in the current
  * understanding (what stands out, the tensions, what BB was confident about) so the change/holds are specific,
  * not generic. Fails SAFE — on any error / missing key it returns a plain but honest, non-empty reflection.
  */
@@ -14,13 +16,13 @@ function rules(l: string): string {
   return [
     `You are Business Brain, a strategist, replying to a founder who just CORRECTED what you understood about`,
     `their business. LANGUAGE — write EVERYTHING in ${l}: this business's content language, decided once for the business, whatever language the founder's words, corrections or sources below are in. Every field and every sentence in ${l}; NEVER mix languages, and never let other-language content in this prompt leak into the output. Return ONLY valid JSON with EXACTLY this shape:`,
-    '{ "reflection": "", "changes": "", "holds": "", "ask": "" }',
+    '{ "reflection": "", "changes": "", "holds": "" }',
     '',
     '- reflection: restate what the correction tells you, IN THE FOUNDER\'S OWN TERMS — specific, not "got it".',
     '- changes: name what this correction CHANGES about how you read the business (tie it to what you had said).',
     '- holds: name what it does NOT change — one concrete thing from the current understanding that still holds.',
-    '- ask: one short, genuine invitation to add what the sources cannot show (their priority, the real',
-    '  differentiation, what customers value) — a real question, not "anything else?".',
+    '- NO QUESTIONS. Do not ask the founder anything, in any field, in any form ("what else…?", "is that right?").',
+    '  Every sentence is a statement. The founder moves on when they are ready; you do not invite another round.',
     '- Ground every part in the CORRECTION and the CURRENT UNDERSTANDING below. Do NOT invent facts, numbers,',
     '  or market/competitor/customer claims. If the correction contradicts something you inferred, say so plainly.',
     '- Warm, concrete, and brief — 1–2 sentences per field. This is a conversation, not a report.',
@@ -38,7 +40,7 @@ function userBlock(i: CorrectionReflectionInput): string {
     ...(i.tensions.length ? ['- Tensions you had flagged:', ...i.tensions.map((t, n) => `  ${n + 1}. ${t}`)] : ['- Tensions you had flagged: (none)']),
     ...(i.confident.length ? ['- What you were confident about:', ...i.confident.map((c, n) => `  ${n + 1}. ${c}`)] : ['- What you were confident about: (little)']),
     '',
-    'Reflect the correction: what you now understand, what it changes, what still holds, and what else you need.',
+    'Reflect the correction: what you now understand, what it changes, and what still holds. Ask nothing.',
   ].join('\n');
 }
 
@@ -59,7 +61,6 @@ export class AnthropicCorrectionReflectionModel implements ICorrectionReflection
       reflection: `Noted — you're telling me: “${input.correction.trim()}”.`,
       changes: 'I’ll fold that into how I read the business.',
       holds: 'The rest of what I understood still holds unless you tell me otherwise.',
-      ask: 'What else matters here that the website can’t show me?',
     };
     if (!this.apiKey) return fallback;
     try {
@@ -72,11 +73,11 @@ export class AnthropicCorrectionReflectionModel implements ICorrectionReflection
       });
       const block = Array.isArray(resp?.content) ? resp.content.find((c: { type?: string }) => c?.type === 'text') : null;
       const p = extractJson((block as { text?: string } | null)?.text ?? '') as Partial<CorrectionReflection>;
-      const reflection = String(p.reflection ?? '').trim();
-      const changes = String(p.changes ?? '').trim();
-      const holds = String(p.holds ?? '').trim();
-      const ask = String(p.ask ?? '').trim();
-      return reflection ? { reflection, changes: changes || fallback.changes, holds: holds || fallback.holds, ask: ask || fallback.ask } : fallback;
+      // Statements only: any question sentence the model still writes is dropped.
+      const reflection = withoutQuestions(String(p.reflection ?? ''));
+      const changes = withoutQuestions(String(p.changes ?? ''));
+      const holds = withoutQuestions(String(p.holds ?? ''));
+      return reflection ? { reflection, changes: changes || fallback.changes, holds: holds || fallback.holds } : fallback;
     } catch { return fallback; }
   }
 }

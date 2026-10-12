@@ -247,7 +247,7 @@ describe('ArcSurface — one surface, eight moments', () => {
     expect(screen.queryByText('arc.understanding.constraint.none')).toBeNull();
   });
 
-  it('Moment 3: a correction gets a SUBSTANTIVE grounded reply (reflection/changes/holds/ask), not "✓ Got it"', async () => {
+  it('Moment 3: a correction gets a SUBSTANTIVE grounded reply (reflection/changes/holds), no question, Let’s start next', async () => {
     const u = { does: 'Physio memberships', serves: 'post-op patients', standsOut: 'recovery-led', tensions: [], confident: [], inferring: [], unanswered: [] };
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: u }));
     vi.mocked(api.arcCorrectUnderstanding).mockResolvedValue(v({
@@ -256,7 +256,6 @@ describe('ArcSurface — one surface, eight moments', () => {
         reflection: 'Noted — Schroth Therapy is more central than the site suggests.',
         changes: 'That changes what I think you should lead with.',
         holds: 'It doesn’t change the referral direction — that holds.',
-        ask: 'What else should I know that the site can’t show?',
       },
     }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
@@ -268,13 +267,11 @@ describe('ArcSurface — one surface, eight moments', () => {
     expect(await screen.findByText(/Schroth Therapy is more central/)).toBeInTheDocument(); // substantive reflection
     expect(screen.getByText(/what I think you should lead with/)).toBeInTheDocument();     // what changes
     expect(screen.getByText(/referral direction — that holds/)).toBeInTheDocument();       // what holds
-    // The question is UNMISSABLE: its own labelled ArcQuestion card, visually SEPARATE from the reflection.
-    const qCard = screen.getByText('arc.question.label').closest('.s0-arc-question') as HTMLElement;
-    expect(qCard).toBeTruthy();
-    expect(within(qCard).getByText(/What else should I know/)).toBeInTheDocument();         // the ask lives in the question card
+    expect(screen.queryByText('arc.question.label')).toBeNull();                           // NO "Question for you" card
+    expect(screen.getByText('arc.understanding.confirm →')).toBeInTheDocument();          // "Let's start" is the next step
     const reflectionCard = screen.getByText(/Schroth Therapy is more central/).closest('.s0-arc-reflection') as HTMLElement;
     expect(reflectionCard).toBeTruthy();
-    expect(within(reflectionCard).queryByText(/What else should I know/)).toBeNull();       // the question is NOT buried in the reflection
+    expect(within(reflectionCard).queryByText(/\?/)).toBeNull();                              // the reply asks nothing
     expect(screen.queryByText('arc.noted')).toBeNull();                                    // NOT the tiny generic ack
     expect((screen.getByPlaceholderText('arc.understanding.ph') as HTMLTextAreaElement).value).toBe(''); // field cleared
   });
@@ -291,18 +288,16 @@ describe('ArcSurface — one surface, eight moments', () => {
     expect((screen.getByPlaceholderText('arc.understanding.ph') as HTMLTextAreaElement).value).toBe('my correction'); // text kept
   });
 
-  it('Moment 3: a persisted correction reflection RE-SHOWS on refresh (the view carries it on load)', async () => {
+  it('Moment 3: a persisted correction reflection RE-SHOWS on refresh (the view carries it on load), still no question', async () => {
     // Refresh = a fresh getArc. The backend re-attaches the persisted reflection to the understanding view, so
     // the reflection + its question must render on initial load — not only in the just-submitted response.
     const u = { does: 'Physio memberships', serves: 'post-op patients', standsOut: 'recovery-led', tensions: [], confident: [], inferring: [], unanswered: [] };
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: u, correctionReflection: {
-      reflection: 'Schroth is your core specialty.', changes: 'lead with Schroth', holds: 'referrals hold', ask: 'Who finds you for Schroth right now?',
+      reflection: 'Schroth is your core specialty.', changes: 'lead with Schroth', holds: 'referrals hold',
     } }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
     expect(await screen.findByText('Schroth is your core specialty.')).toBeInTheDocument();     // reflection persists on load
-    const q = screen.getByText('Who finds you for Schroth right now?');
-    expect(q.closest('.s0-arc-question')).toBeTruthy();                                          // the question persists, in its card
-    expect(screen.getByText('arc.question.label')).toBeInTheDocument();
+    expect(screen.queryByText('arc.question.label')).toBeNull();                                 // no question card
   });
 
   it('Moment 4: the conversation renders as a VISIBLE THREAD (all turns, no toggle); current question is the ArcQuestion', async () => {

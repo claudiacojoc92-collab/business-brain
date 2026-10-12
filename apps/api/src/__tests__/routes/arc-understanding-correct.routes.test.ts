@@ -25,7 +25,7 @@ function buildServer() {
     arcService: {
       view: async (_id: string, name: string) => ({ moment: 'understanding', businessName: name, understanding }),
       reflectCorrection: async (_id: string, _name: string, _lang: string, correction: string) => ({
-        reflection: `Noted — ${correction}`, changes: 'shifts what to lead with', holds: 'referrals hold', ask: 'what else?',
+        reflection: `Noted — ${correction}`, changes: 'shifts what to lead with', holds: 'referrals hold',
       }),
     },
   } as any;
@@ -50,7 +50,7 @@ describe('arc Moment 3 — understanding correction route', () => {
     expect(body.correctionReflection?.reflection).toMatch(/post-op recovery/);
     expect(body.correctionReflection?.changes).toBeTruthy();
     expect(body.correctionReflection?.holds).toBeTruthy();
-    expect(body.correctionReflection?.ask).toBeTruthy();
+    expect(body.correctionReflection?.ask).toBeUndefined(); // a correction reply never asks (operator, 2026-10-12)
     // Held deterministically as a business_correction under the 'understanding' subject — no model step.
     expect(record).toHaveBeenCalledWith('b1', 'founder-1', 'understanding', 'We focus on post-op recovery, not general fitness.', 'en');
     await server.close();
@@ -69,9 +69,10 @@ describe('readArcCorrectionReflection — the reply persists (survives refresh)'
   const dbReturning = (rows: any[]) => ({ getExecutor: () => ({ transformQuery: (n: any) => n, compileQuery: () => ({ sql: '', parameters: [] }), executeQuery: async () => ({ rows }) }) }) as any;
 
   it('returns the latest persisted reflection so a reload re-shows it', async () => {
+    // a reply saved before 2026-10-12 still carries an `ask`: it is not read back (no question is ever shown)
     const db = dbReturning([{ metadata: { reflection: 'Schroth is your core specialty.', changes: 'shifts what to lead with', holds: 'referrals hold', ask: 'who finds you for Schroth?' } }]);
     const out = await readArcCorrectionReflection(db, 'b1', 'f1');
-    expect(out).toEqual({ reflection: 'Schroth is your core specialty.', changes: 'shifts what to lead with', holds: 'referrals hold', ask: 'who finds you for Schroth?' });
+    expect(out).toEqual({ reflection: 'Schroth is your core specialty.', changes: 'shifts what to lead with', holds: 'referrals hold' });
   });
 
   it('returns null once the understanding was reopened after the reply (new sources → a new understanding)', async () => {

@@ -490,7 +490,7 @@ export interface ArcView {
     // Strategic Depth W1 — null on understandings made before it existed.
     constraint?: { decided: true; text: string } | { decided: false } | null;
     stage?: { stage: 'validating' | 'growth' | 'plateau'; evidence: string[]; secondary?: { stage: 'validating' | 'growth' | 'plateau'; area: string } | null } | { stage: 'undetermined' } | null };
-  correctionReflection?: { reflection: string; changes: string; holds: string; ask: string };
+  correctionReflection?: { reflection: string; changes: string; holds: string };
   turns?: ArcTurn[];
   coverage?: { key: string; covered: boolean }[]; // conversation — quiet progress map
   mirror?: { founderWords: string; against: string; tension: string } | null;

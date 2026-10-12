@@ -501,7 +501,6 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
               {cr.changes ? <div className="s0-arc-reflection-part"><div className="s0-arc-reflection-label">{t('arc.correct.changes')}</div><p className="s0-arc-reflection-body">{cr.changes}</p></div> : null}
               {cr.holds ? <div className="s0-arc-reflection-part"><div className="s0-arc-reflection-label">{t('arc.correct.holds')}</div><p className="s0-arc-reflection-body">{cr.holds}</p></div> : null}
             </div>
-            {cr.ask ? <ArcQuestion text={cr.ask} t={t} /> : null}
           </>) : null}
           {!ro ? (<>
             <div className="s0-strat-actions">

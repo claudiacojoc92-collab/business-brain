@@ -78,3 +78,5 @@ only, not frozen slices. Rollback: revert the commit; older snapshots render unc
   hundreds of members; target passed; offer not passed: no price, no member benefits), run a via the retry. Browser
   check passed (real ArcSurface + harness cards: Body Move split stage, BIZZ.CLUB, Business Brain; desktop + 375px, no
   overflow, no console errors). / next — commit + deploy (needs approve commit + approve deploy) / blockers — gate phrases
+- 2026-10-12: done — W1 deployed (a8e7f02, PR #15; api 1049e04f, web a187e736) / next — operator re-reads Business
+  Brain + Body Move in prod (Sources → Update my understanding), records Prod verification / blockers — none (BUS-64)

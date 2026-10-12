@@ -58,7 +58,7 @@ function makeDeps(over: any = {}) {
     voiceBoundaries: async () => ['warm, proof-led', 'a short call'],
     founderContext: async () => ['We have printed clinic brochures'],
     email: { draft: async (i: any) => { emailCalls.push(i); return { subject: `About ${i.businessName}`, body: `Advancing: ${i.todaysMove}` }; } },
-    reflect: { reflect: async (i: any) => ({ reflection: `Noted: ${i.correction}`, changes: 'that shifts what to lead with', holds: 'the referral direction still holds', ask: 'what else should I know?' }) },
+    reflect: { reflect: async (i: any) => ({ reflection: `Noted: ${i.correction}`, changes: 'that shifts what to lead with', holds: 'the referral direction still holds' }) },
     ...over,
   };
   return { deps, emailCalls };
@@ -110,12 +110,12 @@ describe('ArcService.view — each moment composes from the reused engines', () 
 
   it('reflectCorrection replies substantively, grounded in the correction + current understanding', async () => {
     const reflectCalls: any[] = [];
-    const { deps } = makeDeps({ reflect: { reflect: async (i: any) => { reflectCalls.push(i); return { reflection: `Noted: ${i.correction}`, changes: 'shifts what to lead with', holds: 'referrals hold', ask: 'what else?' }; } } });
+    const { deps } = makeDeps({ reflect: { reflect: async (i: any) => { reflectCalls.push(i); return { reflection: `Noted: ${i.correction}`, changes: 'shifts what to lead with', holds: 'referrals hold' }; } } });
     const out = await new ArcService(deps).reflectCorrection('B', 'Body Move', 'en', 'Schroth Therapy matters more than the site suggests.');
     expect(out.reflection).toContain('Schroth Therapy matters more');
     expect(out.changes).toBeTruthy();
     expect(out.holds).toBeTruthy();
-    expect(out.ask).toBeTruthy();
+    expect('ask' in out).toBe(false); // a correction reply never asks (operator, 2026-10-12)
     // grounded: the model received the correction AND the current understanding (tensions/confident).
     expect(reflectCalls[0].correction).toMatch(/Schroth Therapy/);
     expect(reflectCalls[0].tensions).toContain('kinetotherapy may be the real business — or the site is out of sync with the offer');

@@ -425,6 +425,19 @@ describe('ConversationService — pacing cap (operator, 2026-10-12): at most 3 q
     expect(await svc.hasGoal(P.businessId)).toBe(false);
   });
 
+  it('after the goal is confirmed, a later message (e.g. a mirror answer) is acknowledged and never re-opens the confirm', async () => {
+    const m = makeDeps({ interpretation: 'Noted.', declarations: [{ kind: 'goal', statement: 'Fill the clinic by spring' }] as any });
+    const svc = new ConversationService(m.deps);
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    await answer(svc, 'a'); await answer(svc, 'b'); await answer(svc, 'c');
+    await svc.setGoal(P.businessId, P.founderId, 'Fill the clinic by spring', P.language);
+    expect(m.getStatus()).toBe('ready_for_aha2');
+    const v = await answer(svc, 'the mirror is right, the clinic matters more');
+    expect(v.readyForAha2).toBe(true);
+    expect(m.getStatus()).toBe('ready_for_aha2');
+    expect(await svc.awaitingGoal(P.businessId)).toBe(false);
+  });
+
   it('drawer (contextual) turns never count toward the cap; the opener + 2 discovery questions are still asked', async () => {
     const m = makeDeps({ interpretation: 'Noted.', nextQuestion: 'What else?' });
     const svc = new ConversationService(m.deps);

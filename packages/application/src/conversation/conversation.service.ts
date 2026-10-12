@@ -367,6 +367,13 @@ export class ConversationService {
     if (ack) await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: ack, language, infoNeedKey: null });
     const active = await this.deps.state.listActive(businessId);
     const hasGoal = active.some((s) => s.kind === 'goal');
+    // Already handed over (the goal was confirmed, or the strategy was assumed): a later message — e.g. an answer to the
+    // mirror — is acknowledged but never re-opens the goal confirm.
+    if (session.status === 'ready_for_aha2') {
+      this.deps.log?.({ type: 'conversation_capped', detail: JSON.stringify({ businessId, answered, hasGoal, next: 'already_ready' }) });
+      const turns = await this.deps.conversations.listTurns(session.id);
+      return { session, turns, readyForAha2: true };
+    }
     const candidate = await this.goalCandidate(businessId);
     const awaitGoal = Boolean(candidate);
     await this.deps.conversations.setStatus(session.id, awaitGoal ? 'active' : 'ready_for_aha2', awaitGoal ? AWAITING_GOAL_FOCUS : null);
