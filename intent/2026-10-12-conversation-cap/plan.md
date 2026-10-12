@@ -10,3 +10,5 @@
   Option A + mirror-skip race + no re-open after confirm built and walked through the real routes, UNCOMMITTED /
   next — browser check of the correction card, commit, merge, deploy api+web, QuFi prod walk / blockers —
   approve commit approve deploy (BUS-65)
+- 2026-10-12: done — Option A shipped (fe171a1, PR #17 merged e8bfc89; api 43914911, web 2dc5b161; clean worktree 2050 tests) / next —
+  QuFi prod walk (no question on old corrections → Let's start → 3 questions → goal confirm → strategy) / blockers — none (BUS-65)

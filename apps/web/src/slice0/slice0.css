@@ -585,6 +585,44 @@
 .s0-u > *:nth-child(6) { animation-delay: .35s; }
 @media (prefers-reduced-motion: reduce) { .s0-u > * { animation: none; } .s0-u-card:hover { transform: none; } }
 
+/* WEEK — Moment 6 as a chapter (2026-10-12). One column, generous air, no nested cards: the statement IS the
+   section (editorial serif, no label), the three beats sit on the page between hairlines, and Today is the only
+   raised surface — the most prominent thing here. */
+.s0-wk { display: flex; flex-direction: column; margin: 8px 0 0; }
+.s0-wk > * { animation: s0-u-in .5s cubic-bezier(.16, 1, .3, 1) both; }
+.s0-wk > *:nth-child(2) { animation-delay: .06s; }
+.s0-wk > *:nth-child(3) { animation-delay: .12s; }
+.s0-wk > *:nth-child(4) { animation-delay: .2s; }
+.s0-wk > *:nth-child(5) { animation-delay: .3s; }
+.s0-wk-context { margin: 0 0 18px; font-size: 13.5px; line-height: 1.45; color: var(--s0-ink-3); letter-spacing: .01em; }
+.s0-wk-statement { margin: 0; font-family: var(--s0-editorial); font-optical-sizing: auto; font-size: clamp(30px, 6.4vw, 44px); line-height: 1.1; letter-spacing: -0.025em; font-weight: 440; color: var(--s0-ink); text-wrap: balance; max-width: 20ch; }
+.s0-wk-why { margin: 20px 0 0; font-size: 17px; line-height: 1.6; color: var(--s0-ink-2); max-width: 52ch; text-wrap: pretty; }
+.s0-wk-beats { list-style: none; margin: 44px 0 0; padding: 0; border-top: 1px solid var(--s0-line); }
+.s0-wk-beat { display: grid; grid-template-columns: 52px 1fr; gap: 0 8px; padding: 22px 0; border-bottom: 1px solid var(--s0-line); }
+.s0-wk-num { font-size: 14px; font-weight: 600; letter-spacing: .14em; color: var(--s0-clay); font-variant-numeric: tabular-nums lining-nums; padding-top: 3px; }
+.s0-wk-beat-title { margin: 0; font-size: 19px; line-height: 1.35; font-weight: 600; letter-spacing: -0.01em; color: var(--s0-ink); text-wrap: balance; }
+.s0-wk-beat-why { margin: 6px 0 0; font-size: 15.5px; line-height: 1.55; color: var(--s0-ink-2); max-width: 58ch; text-wrap: pretty; }
+.s0-wk-today {
+  position: relative; overflow: hidden; margin-top: 44px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--s0-clay) 16%, var(--s0-bg-2)), var(--s0-bg-2) 72%);
+  border: 1px solid color-mix(in srgb, var(--s0-clay) 34%, var(--s0-line));
+  border-radius: 20px; padding: clamp(26px, 5.5vw, 40px);
+  box-shadow: 0 18px 50px rgba(0,0,0,.28);
+}
+.s0-wk-today::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--s0-clay); }
+.s0-wk-today-label { font-size: 11.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--s0-clay); font-weight: 700; margin-bottom: 14px; }
+.s0-wk-today-move { margin: 0; font-family: var(--s0-editorial); font-optical-sizing: auto; font-size: clamp(22px, 4.4vw, 28px); line-height: 1.22; letter-spacing: -0.015em; font-weight: 460; color: var(--s0-ink); text-wrap: balance; }
+.s0-wk-today-detail { margin: 14px 0 0; font-size: 16px; line-height: 1.6; color: var(--s0-ink-2); max-width: 58ch; text-wrap: pretty; }
+.s0-wk-done { margin: 22px 0 0; padding-top: 18px; border-top: 1px solid color-mix(in srgb, var(--s0-clay) 24%, var(--s0-line)); font-size: 15.5px; line-height: 1.55; color: var(--s0-ink); max-width: 58ch; }
+.s0-wk-done-label { color: var(--s0-clay); font-weight: 600; }
+@media (max-width: 520px) {
+  .s0-wk-beat { grid-template-columns: 1fr; }
+  .s0-wk-num { padding: 0 0 6px; }
+  .s0-wk-statement { max-width: none; }
+}
+.s0-strat-actions.s0-wk-actions { margin-top: 28px; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 12px; }
+@media (prefers-reduced-motion: reduce) { .s0-wk > * { animation: none; } }
+
 /* The pour-in's closing decision — the moment that triggers the whole arc. A separate, prominent block (32px
    above so it reads as its own decision, not part of the source list): a centered count line + a full-width
    solid-clay CTA with white text. This is the visual focal point of the pour-in bottom. */

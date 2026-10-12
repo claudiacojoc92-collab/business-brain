@@ -1,0 +1,131 @@
+{
+ "nullPlans": 0,
+ "runs": [
+  {
+   "run": 1,
+   "planVersionId": "01M4QQ8NNFCH7WHZW26WFE0FXW",
+   "monthDirection": "The next 30 days are entirely about making the testnet self-service and then putting a specific date and runbook in front of the two organisations that have already asked. Nothing else moves until those two things are done.",
+   "priorities": [
+    "Make the testnet runnable without your engineers present",
+    "Deliver a specific date and the runbook to the two waiting organisations"
+   ],
+   "moves": [
+    "Identify every step in the current environment setup that requires a QuFi engineer to intervene — commands that fail silently, configuration values that live only in someone's head, dependencies that are not yet scripted — and write them down as a gap list.",
+    "Work through the gap list and tighten the environment setup: script the manual steps, surface the hidden configuration values, and resolve the QPL onboarding steps that currently require your team to be present.",
+    "Write the testnet runbook as a self-service evaluation document: step-by-step setup instructions, the pass/fail criteria the bank's security team already understands, and the exact commands needed to run the verification layer end-to-end without QuFi present."
+   ],
+   "jargonFirstDraft": [
+    "work order"
+   ],
+   "jargonLeft": [],
+   "story": {
+    "planVersionId": "01M4QQ8NNFCH7WHZW26WFE0FXW",
+    "context": "Week 1 of your 60-day push to get a signed pilot with the bank.",
+    "statement": "This week you find out exactly where the testnet breaks without you.",
+    "whyNow": "You cannot write an honest runbook until you know every step that silently depends on your team being in the room. The outreach to the two waiting organisations comes later. This comes first.",
+    "chapters": [
+     {
+      "title": "Map every step that needs a QuFi engineer",
+      "why": "You cannot fix the self-service gap until you can see precisely where it is."
+     },
+     {
+      "title": "Script the manual steps and surface hidden config",
+      "why": "Closing each gap on the list turns the testnet from a demo into something the bank can run alone."
+     },
+     {
+      "title": "Write the runbook the bank's security team can follow",
+      "why": "The runbook is the thing you send the two waiting organisations, so it has to be honest and complete."
+     }
+    ],
+    "today": {
+     "move": "Write down every point in the current setup where a QuFi engineer has to step in.",
+     "detail": "Go through the setup flow end to end. Note every command that fails silently, every config value that lives only in someone's head, every QPL onboarding step your team currently handles by hand."
+    },
+    "doneLooksLike": "A written list naming every manual intervention point, with enough detail that an engineer who did not build it can pick up each item and fix it."
+   }
+  },
+  {
+   "run": 2,
+   "planVersionId": "01M4QQAEMVGPCMPKYDN03HQH3J",
+   "monthDirection": "The next 30 days are entirely about making the testnet self-service and then putting a specific date and runbook in front of the two organisations that have already asked. Nothing else moves until those two things are done.",
+   "priorities": [
+    "Make the testnet runnable without your engineers present",
+    "Send the two waiting organisations a specific date, the runbook, and a defined next step"
+   ],
+   "moves": [
+    "Identify every step in the current environment setup that requires a QuFi engineer to intervene, and write down exactly what makes each step manual or team-dependent.",
+    "Run a focused engineering sprint to automate or script every manual step identified, and complete QPL onboarding so a developer can reach a working first setup without your team on the call.",
+    "Write the self-service runbook: a step-by-step evaluation document that covers environment setup, the verification layer audit steps, and the pass/fail criteria the bank's security team already understands."
+   ],
+   "jargonFirstDraft": [],
+   "jargonLeft": [],
+   "story": {
+    "planVersionId": "01M4QQAEMVGPCMPKYDN03HQH3J",
+    "context": "Week 1 of your 60-day push to get a signed pilot with the bank.",
+    "statement": "This week you map exactly what is broken before you fix anything.",
+    "whyNow": "You cannot automate steps you have not named. The two organisations who have already asked twice are waiting on a runbook, and the runbook cannot be written until the gaps are on paper.",
+    "chapters": [
+     {
+      "title": "Write down every step that needs you",
+      "why": "A precise list of manual steps is the only thing that makes the engineering sprint next week focused rather than guesswork."
+     },
+     {
+      "title": "Script every manual step, finish QPL onboarding",
+      "why": "These two gaps are the only things stopping the bank's security team from running the testnet without you on the call."
+     },
+     {
+      "title": "Write the runbook the security team will actually follow",
+      "why": "The runbook is what you send the two waiting organisations, not a deck, so it has to exist before any date goes out."
+     }
+    ],
+    "today": {
+     "move": "Walk the current environment setup and write down every step that requires a QuFi engineer.",
+     "detail": "Go through setup start to finish as if you were an external developer. For each step that stalls without your team, write what makes it team-dependent and why an outsider cannot complete it alone."
+    },
+    "doneLooksLike": "A written list of every manual or team-dependent step, each with a note on why an external team cannot complete it alone."
+   }
+  },
+  {
+   "run": 3,
+   "planVersionId": "01M4QQC6XT54086FF7ANDG6Y11",
+   "monthDirection": "The next 30 days are entirely about making the testnet self-service and then putting a specific date and runbook in front of the two organisations that have already asked. Nothing else moves until those two things are done.",
+   "priorities": [
+    "Make the testnet runnable without your engineers present",
+    "Build the self-service runbook as an evaluation document",
+    "Deliver a specific testnet date and runbook to the two waiting organisations"
+   ],
+   "moves": [
+    "Identify every step in the current QPL onboarding and environment setup that requires a QuFi engineer to intervene, and write each one down as a discrete gap to close.",
+    "Work through the gap list and close each blocker — automate or script the manual environment steps, and extend the QPL onboarding documentation so a developer can complete first setup without your team.",
+    "Run an internal dry-run: have a team member who was not part of the original build follow the runbook from scratch, in a clean environment, with no help from the engineers who built it."
+   ],
+   "jargonFirstDraft": [],
+   "jargonLeft": [],
+   "story": {
+    "planVersionId": "01M4QQC6XT54086FF7ANDG6Y11",
+    "context": "Week 1 of your 60-day push to get a signed pilot with the bank.",
+    "statement": "This week you find out exactly what is broken.",
+    "whyNow": "You cannot write a runbook a bank's security team can follow until you know every point where the process currently requires you. The engineering work and the outreach both wait on this.",
+    "chapters": [
+     {
+      "title": "Write down every step that needs you",
+      "why": "You cannot close gaps you have not named, and the runbook cannot exist until this list does."
+     },
+     {
+      "title": "Close each blocker, one by one",
+      "why": "Scripting the manual steps and extending the QPL documentation turns the gap list into a self-service testnet."
+     },
+     {
+      "title": "Run the dry-run with a fresh team member",
+      "why": "If your own team gets stuck following the runbook cold, the bank's security team will too."
+     }
+    ],
+    "today": {
+     "move": "Walk the current setup process and write down every step that requires a QuFi engineer.",
+     "detail": "Go through QPL onboarding and environment setup end to end. Every point where an external team would be blocked without you gets its own line, with a brief note on what removing that blocker would take."
+    },
+    "doneLooksLike": "A written list of every blocker in the current setup, each with a note on what it would take to remove it."
+   }
+  }
+ ]
+}

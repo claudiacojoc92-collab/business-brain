@@ -194,6 +194,44 @@ function GoalConfirm({ candidate, t, busy, onConfirm }: {
 // it must be UNMISSABLE (its own bordered card + a "Question for you" label + prominent text), never quiet
 // italic prose. Used everywhere the strategist asks: the Moment 3 correction reflection, the Moment 4
 // conversation question, the Moment 5 mirror question — one place, so every question looks the same.
+/**
+ * Moment 6 — the week as a strategist's chapter (operator, 2026-10-12): where it sits, what it IS (the statement is
+ * the section, no label), why now, three numbered beats, and Today as the one prominent card with what done looks
+ * like. No card-in-card: the beats are a list on the page, only Today is raised. An older api (no story) shows the
+ * plan titles in the same shape.
+ */
+function WeekStory({ w, t }: { w: NonNullable<ArcView['weekDay']>; t: T }) {
+  const s = w.story;
+  const chapters = s?.chapters.length ? s.chapters : w.week.slice(0, 3).map((title) => ({ title, why: '' }));
+  const move = s?.today.move || w.today || '';
+  return (
+    <div className="s0-wk">
+      <p className="s0-wk-context">{s?.context || t('arc.week.eyebrow')}</p>
+      {s?.statement ? <h2 className="s0-wk-statement">{s.statement}</h2> : null}
+      {s?.whyNow ? <p className="s0-wk-why">{s.whyNow}</p> : null}
+      <ol className="s0-wk-beats">
+        {chapters.map((c, n) => (
+          <li key={n} className="s0-wk-beat">
+            <span className="s0-wk-num" aria-hidden="true">{String(n + 1).padStart(2, '0')}</span>
+            <div>
+              <p className="s0-wk-beat-title">{c.title}</p>
+              {c.why ? <p className="s0-wk-beat-why">{c.why}</p> : null}
+            </div>
+          </li>
+        ))}
+      </ol>
+      {move ? (
+        <section className="s0-wk-today" aria-label={t('arc.week.today')}>
+          <div className="s0-wk-today-label">{t('arc.week.today')}</div>
+          <p className="s0-wk-today-move">{move}</p>
+          {s?.today.detail ? <p className="s0-wk-today-detail">{s.today.detail}</p> : null}
+          {s?.doneLooksLike ? <p className="s0-wk-done"><span className="s0-wk-done-label">{t('arc.week.done')}:</span> {s.doneLooksLike}</p> : null}
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
 function ArcQuestion({ text, t }: { text: string; t: T }) {
   if (!text.trim()) return null;
   return (
@@ -592,13 +630,9 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
       case 'week_day': {
         const w = m.weekDay!;
         return (<>
-          <div className="s0-u">
-            <div className="s0-u-hero"><div className="s0-u-hero-eyebrow">{t('arc.week.eyebrow')}</div><p className="s0-u-hero-title">{t('arc.week.intro')}</p></div>
-            <UCard label={t('arc.week.week')} kind="primary" bullets={w.week} />
-            {w.today ? <UCard label={t('arc.week.today')} kind="evidence" paragraph={w.today} /> : null}
-          </div>
+          <WeekStory w={w} t={t} />
           {!ro ? (
-            <div className="s0-strat-actions">
+            <div className="s0-strat-actions s0-wk-actions">
               <button type="button" className="s0-btn" disabled={busy} onClick={() => act(async () => {
                 const after = await arcAdoptWeekDay(businessId);
                 if (after.moment === 'email') await arcGenerateEmail(businessId);

@@ -1,7 +1,7 @@
 import { sql } from 'kysely';
 import { generateId } from '@bb/shared';
 import type { KyselyDB } from '@bb/infrastructure';
-import type { CorrectionReflection } from '@bb/application';
+import type { CorrectionReflection, ArcWeekStory } from '@bb/application';
 
 /**
  * M7 founder-test observability. A thin, fire-and-forget recorder for FOUNDER-BEHAVIOR events into
@@ -59,6 +59,7 @@ export type FounderEventType =
   | 'arc_correction_reflected' // Moment 3: the substantive reply to the LATEST correction (persisted so it survives refresh)
   | 'arc_mirror_built'       // Moment 5: the mirror contrast (persisted so it's stable across refresh, no re-generation)
   | 'arc_mirror_seen'        // Moment 5 → 6: the founder answered the mirror
+  | 'arc_week_story_built'   // Moment 6: the week told as a chapter (persisted per plan version so a refresh never re-writes it)
   | 'arc_email_saved'        // Moment 8: the current email draft (subject+body in metadata)
   | 'arc_email_exported'     // Moment 8 → 9: the founder exported the email
   | 'arc_container_seen';    // Moment 9 → done: the founder saw (or dismissed) the container
@@ -503,4 +504,30 @@ export async function readPublishedRefsInWindow(
   } catch {
     return [];
   }
+}
+
+/**
+ * Persist the week story (Moment 6) so it is STABLE across refresh. Skipped (not truncated) if it would exceed the
+ * metadata cap: a cut JSON string would not parse, and an unsaved story is simply re-told on the next view.
+ */
+export function recordArcWeekStory(db: KyselyDB, accountId: string, businessId: string, story: ArcWeekStory): void {
+  if (JSON.stringify(story).length > 1990) return;
+  recordFounderEvent(db, { accountId, businessId, eventType: 'arc_week_story_built', surface: 'arc', metadata: { ...story } });
+}
+
+/** The most recent persisted week story (null if none). The caller only uses it when its planVersionId matches. */
+export async function readArcWeekStory(db: KyselyDB, businessId: string, accountId: string): Promise<ArcWeekStory | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r: any = await sql`SELECT metadata FROM app.founder_event WHERE business_id=${businessId} AND account_id=${accountId} AND event_type='arc_week_story_built' ORDER BY occurred_at DESC LIMIT 1`.execute(db);
+    const m = r?.rows?.[0]?.metadata;
+    if (!m || typeof m !== 'object' || typeof m.planVersionId !== 'string' || !Array.isArray(m.chapters)) return null;
+    const str = (x: unknown): string => (typeof x === 'string' ? x : '');
+    return {
+      planVersionId: m.planVersionId, context: str(m.context), statement: str(m.statement), whyNow: str(m.whyNow),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      chapters: m.chapters.map((c: any) => ({ title: str(c?.title), why: str(c?.why) })),
+      today: { move: str(m.today?.move), detail: str(m.today?.detail) }, doneLooksLike: str(m.doneLooksLike),
+    };
+  } catch { return null; }
 }

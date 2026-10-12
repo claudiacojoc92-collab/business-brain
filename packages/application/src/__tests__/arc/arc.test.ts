@@ -163,6 +163,50 @@ describe('ArcService.view — each moment composes from the reused engines', () 
     expect(v.error?.kind).toBe('generation');
   });
 
+  it('week_day: the week is told as a chapter once per plan version; a saved story for the same plan is reused', async () => {
+    const tells: any[] = [];
+    const story = { context: 'Week 1 of your 6 months to more memberships.', statement: 'The referral channel opens this week.', whyNow: 'Clinics are the shortest path.',
+      chapters: [{ title: 'Name the clinics', why: 'Outreach needs names.' }],
+      today: { move: 'Draft the clinic target list.', detail: 'Names and one contact each.' }, doneLooksLike: 'A clinic list you can send from.' };
+    const drive = makeDeps({ strategy: { getCurrent: async () => ({ record: STRAT }), proposalOrGenerate: async () => STRAT },
+      weekStory: { tell: async (i: any) => { tells.push(i); return story; } } });
+    const svc = new ArcService(drive.deps);
+    const f = flags({ pourInDone: true, understandingConfirmed: true, mirrorSeen: true });
+    const v = await svc.view('B', 'Body Move', 'en', f, [], null);
+    expect(v.weekDay?.story?.statement).toBe('The referral channel opens this week.');
+    expect(v.weekDay?.story?.planVersionId).toBe('p1');
+    expect(tells[0].goal).toBe('Grow memberships');
+    expect(tells[0].priorities.map((p: any) => p.title)).toEqual(['Build the clinic list', 'First outreach']);
+    expect(tells[0].moves.map((m: any) => m.what)).toEqual(['Draft the clinic target list']); // the week = the plan's first actions
+    // Same plan → the saved story comes back untouched, no second model call.
+    const again = await svc.view('B', 'Body Move', 'en', f, [], null, false, null, v.weekDay!.story!);
+    expect(again.weekDay?.story).toEqual(v.weekDay!.story);
+    expect(tells).toHaveLength(1);
+    // A story saved for an older plan is NOT reused.
+    await svc.view('B', 'Body Move', 'en', f, [], null, false, null, { ...v.weekDay!.story!, planVersionId: 'p0' });
+    expect(tells).toHaveLength(2);
+  });
+
+  it('week_day: a draft with consultant phrasing gets ONE repair pass naming the phrases', async () => {
+    const calls: any[] = [];
+    const deck = { statement: 'Align the stakeholders.', whyNow: 'x.', chapters: [{ title: 'Name the clinics', why: 'Outreach needs names.' }], today: { move: 'Draft it.', detail: 'Now.' }, doneLooksLike: 'A list.' };
+    const plain = { ...deck, statement: 'The clinics hear from you this week.' };
+    const drive = makeDeps({ strategy: { getCurrent: async () => ({ record: STRAT }), proposalOrGenerate: async () => STRAT },
+      weekStory: { tell: async (_i: any, rewrite?: string[]) => { calls.push(rewrite ?? null); return rewrite ? plain : deck; } } });
+    const v = await new ArcService(drive.deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
+    expect(calls).toEqual([null, ['stakeholders']]);
+    expect(v.weekDay?.story?.statement).toBe('The clinics hear from you this week.');
+  });
+
+  it('week_day: a story model that throws still shows the week in the same shape (plan wording)', async () => {
+    const drive = makeDeps({ strategy: { getCurrent: async () => ({ record: STRAT }), proposalOrGenerate: async () => STRAT },
+      weekStory: { tell: async () => { throw new Error('model down'); } } });
+    const v = await new ArcService(drive.deps).view('B', 'Body Move', 'en', flags({ pourInDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
+    expect(v.error).toBeUndefined();
+    expect(v.weekDay?.story?.chapters.map((c) => c.title)).toEqual(['Draft the clinic target list']);
+    expect(v.weekDay?.story?.today.move).toBe('Draft the clinic target list');
+  });
+
   it('cross-session continuity: a returning founder resumes each late moment from PERSISTED state — no regeneration, no error', async () => {
     let built = 0;
     const saved = { founderWords: 'w', against: 'a', tension: 't' };
