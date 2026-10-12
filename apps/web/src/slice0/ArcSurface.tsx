@@ -293,6 +293,13 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
   const [discuss, setDiscuss] = useState(false); // strategy: the "let's talk about it" box, revealed on demand
   const [stratDetails, setStratDetails] = useState(false); // strategy: the minor cards (not-now / reconsider) — collapsed by default so a tired founder reads the bet + 2 reasons + acts, details on demand
   const started = useRef(false);
+  // Every new moment (or a history step, or the sources editor) starts at the TOP. The pour-in page is long: pressing
+  // "Done" left the scroll where it was, so the understanding opened half-way down its own card.
+  const shownMoment = viewIdx !== null ? `history:${viewIdx}` : editingSources ? 'sources' : (view?.moment ?? null);
+  useEffect(() => {
+    if (!shownMoment) return;
+    try { window.scrollTo({ top: 0 }); } catch { /* jsdom / unsupported */ }
+  }, [shownMoment]);
 
   // Arc CHROME (labels, buttons, the question tag, provenance, error copy) is UI, so it is ENGLISH like the rest of
   // the product (operator rule 2026-10-07). What BB writes (the understanding, questions, strategy, email) arrives
@@ -551,6 +558,13 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
               <p className="s0-u-hero-title">{s.bet}</p>
               {s.over || s.horizon ? <p className="s0-u-hero-sub">{[s.over ? t('arc.strategy.over', { over: s.over }) : '', s.horizon ? t('arc.strategy.horizon', { horizon: s.horizon }) : ''].filter(Boolean).join(' · ')}</p> : null}
             </div>
+            {/* No goal was given before the conversation cap: say plainly what this strategy assumed. */}
+            {s.assumedGoal ? (
+              <div className="s0-u-card s0-u-card--assumed" role="note">
+                <div className="s0-u-card-label"><span className="s0-u-ic" aria-hidden="true">!</span>{t('arc.strategy.assumed')}</div>
+                <p className="s0-u-card-lead">{t('arc.strategy.assumed.body', { constraint: s.assumedGoal })}</p>
+              </div>
+            ) : null}
             {/* Default view for a tired founder at 22:00: the bet + at most 2 reasons + the actions. The full
                 trade-offs and the minor cards (not-now / reconsider) live behind "Arată detalii". */}
             <UCard label={t('arc.strategy.tradeoffs')} kind="primary" bullets={stratDetails ? s.tradeOffs : s.tradeOffs.slice(0, 2)} />

@@ -90,7 +90,9 @@ export interface ICorrectionReflectionModel {
 }
 export interface ArcTurn { readonly id: string; readonly role: 'founder' | 'bb'; readonly content: string }
 export interface ArcMirror { readonly founderWords: string; readonly against: string; readonly tension: string }
-export interface ArcStrategy { readonly bet: string; readonly over: string; readonly horizon: string; readonly tradeOffs: string[]; readonly notNow: string[]; readonly reconsider: string[]; readonly proposalId: string | null; readonly adoptable: boolean }
+export interface ArcStrategy { readonly bet: string; readonly over: string; readonly horizon: string; readonly tradeOffs: string[]; readonly notNow: string[]; readonly reconsider: string[]; readonly proposalId: string | null; readonly adoptable: boolean;
+  /** The constraint the strategy ASSUMED as the goal (the founder gave none before the cap); null when the goal is the founder's. */
+  readonly assumedGoal?: string | null }
 export interface ArcWeekDay { readonly week: string[]; readonly today: string | null; readonly canCreate: boolean }
 export interface ArcEmail { readonly subject: string; readonly body: string }
 export interface ArcContainerItem { readonly labelKey: string; readonly statement: string; readonly provenance: 'observed' | 'declared' | 'inferred' | 'unknown' }

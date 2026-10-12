@@ -35,6 +35,9 @@ export interface StrategyReconsider { readonly condition: string; }
 
 export interface StrategyCore {
   readonly goal: string;
+  /** Set when the founder gave NO goal before the conversation cap: the strategy was built on an ASSUMED goal (remove
+   * the named constraint). Holds that constraint, so the card can say exactly what was assumed. */
+  readonly assumedGoal?: string;
   readonly horizon: string;
   readonly diagnosis: string; // the central marketing problem/opportunity THIS strategy solves for the goal
   readonly coreBet: StrategyCoreBet;
