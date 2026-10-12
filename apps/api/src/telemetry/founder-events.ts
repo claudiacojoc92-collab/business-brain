@@ -60,6 +60,7 @@ export type FounderEventType =
   | 'arc_mirror_built'       // Moment 5: the mirror contrast (persisted so it's stable across refresh, no re-generation)
   | 'arc_mirror_seen'        // Moment 5 → 6: the founder answered the mirror
   | 'arc_week_story_built'   // Moment 6: the week told as a chapter (persisted per plan version so a refresh never re-writes it)
+  | 'arc_container_built'    // Moment 9: which unknowns the founder already answered (persisted per input fingerprint)
   | 'arc_email_saved'        // Moment 8: the current email draft (subject+body in metadata)
   | 'arc_email_exported'     // Moment 8 → 9: the founder exported the email
   | 'arc_container_seen';    // Moment 9 → done: the founder saw (or dismissed) the container
@@ -99,6 +100,21 @@ export async function recordFounderEventAwaited(db: KyselyDB, ev: FounderEventIn
     VALUES (${generateId()}, ${ev.accountId}, ${ev.businessId ?? null}, ${ev.eventType},
             ${ev.surface ?? null}, now(), ${meta}::jsonb)
   `.execute(db).catch(() => { /* swallow — telemetry is never allowed to affect the founder */ });
+}
+
+/**
+ * The same insert WITHOUT the 2000-character telemetry cut, for the few events that hold founder-facing CONTENT the
+ * page re-reads (the week story, the container judgement). A cut JSON would not parse, and cutting the content to
+ * fit is how a sentence ended in "…" (2026-10-12). Bounded at 20000 so a runaway model output cannot bloat a row.
+ */
+function recordContentEvent(db: KyselyDB, ev: FounderEventInput): void {
+  let meta = '';
+  try { meta = JSON.stringify(ev.metadata ?? {}); } catch { return; }
+  if (meta.length > 20000) return;
+  void sql`
+    INSERT INTO app.founder_event (id, account_id, business_id, event_type, surface, occurred_at, metadata)
+    VALUES (${generateId()}, ${ev.accountId}, ${ev.businessId ?? null}, ${ev.eventType}, ${ev.surface ?? null}, now(), ${meta}::jsonb)
+  `.execute(db).catch(() => { /* swallow: an unsaved story/judgement is simply rebuilt on the next view */ });
 }
 
 // ── Return loop: "since you were last here" ─────────────────────────────────────────────────────────────
@@ -350,15 +366,10 @@ export async function readArcSources(db: KyselyDB, businessId: string, accountId
 }
 
 // ── Moment 3 correction reflection — persisted so the substantive reply + question survive a refresh ──
-const CAP = 700; // per field; keeps the whole JSON under recordFounderEvent's ~2000-char metadata cap
-const clip = (s: unknown): string => String(s ?? '').slice(0, CAP);
 
 /** Persist the LATEST correction reflection (the reply the founder sees at Moment 3), so a reload re-shows it. */
 export function recordArcCorrectionReflection(db: KyselyDB, accountId: string, businessId: string, r: CorrectionReflection): void {
-  recordFounderEvent(db, {
-    accountId, businessId, eventType: 'arc_correction_reflected', surface: 'arc',
-    metadata: { reflection: clip(r.reflection), changes: clip(r.changes), holds: clip(r.holds) },
-  });
+  recordContentEvent(db, { accountId, businessId, eventType: 'arc_correction_reflected', surface: 'arc', metadata: { reflection: r.reflection, changes: r.changes, holds: r.holds } });
 }
 
 /** The most recent correction reflection for this business (null if the founder hasn't corrected yet). */
@@ -379,10 +390,7 @@ export async function readArcCorrectionReflection(db: KyselyDB, businessId: stri
 
 /** Persist the mirror contrast (Moment 5) so it is STABLE across refresh and never re-generated on every view. */
 export function recordArcMirror(db: KyselyDB, accountId: string, businessId: string, m: { founderWords: string; against: string; tension: string }): void {
-  recordFounderEvent(db, {
-    accountId, businessId, eventType: 'arc_mirror_built', surface: 'arc',
-    metadata: { founderWords: clip(m.founderWords), against: clip(m.against), tension: clip(m.tension) },
-  });
+  recordContentEvent(db, { accountId, businessId, eventType: 'arc_mirror_built', surface: 'arc', metadata: { founderWords: m.founderWords, against: m.against, tension: m.tension } });
 }
 
 /** The most recent persisted mirror contrast (null if none built yet). */
@@ -510,9 +518,13 @@ export async function readPublishedRefsInWindow(
  * Persist the week story (Moment 6) so it is STABLE across refresh. Skipped (not truncated) if it would exceed the
  * metadata cap: a cut JSON string would not parse, and an unsaved story is simply re-told on the next view.
  */
+/** The current email draft, whole (the old path cut the body at 1600 characters). */
+export function recordArcEmail(db: KyselyDB, accountId: string, businessId: string, e: { subject: string; body: string }): void {
+  recordContentEvent(db, { accountId, businessId, eventType: 'arc_email_saved', surface: 'arc', metadata: { subject: e.subject, body: e.body } });
+}
+
 export function recordArcWeekStory(db: KyselyDB, accountId: string, businessId: string, story: ArcWeekStory): void {
-  if (JSON.stringify(story).length > 1990) return;
-  recordFounderEvent(db, { accountId, businessId, eventType: 'arc_week_story_built', surface: 'arc', metadata: { ...story } });
+  recordContentEvent(db, { accountId, businessId, eventType: 'arc_week_story_built', surface: 'arc', metadata: { ...story } });
 }
 
 /** The most recent persisted week story (null if none). The caller only uses it when its planVersionId matches. */
@@ -529,5 +541,23 @@ export async function readArcWeekStory(db: KyselyDB, businessId: string, account
       chapters: m.chapters.map((c: any) => ({ title: str(c?.title), why: str(c?.why) })),
       today: { move: str(m.today?.move), detail: str(m.today?.detail) }, doneLooksLike: str(m.doneLooksLike),
     };
+  } catch { return null; }
+}
+
+/** Persist the container's judged answers (Moment 9) so a view never re-judges unchanged input. */
+export function recordArcContainer(db: KyselyDB, accountId: string, businessId: string, c: { answered: { index: number; answer: string }[]; answeredKey: string }): void {
+  const metadata = { answeredKey: c.answeredKey, answered: c.answered.map((a) => ({ index: a.index, answer: a.answer })) };
+  recordContentEvent(db, { accountId, businessId, eventType: 'arc_container_built', surface: 'arc', metadata });
+}
+
+/** The most recent persisted container judgement (null if none). The caller uses it only when its key matches. */
+export async function readArcContainer(db: KyselyDB, businessId: string, accountId: string): Promise<{ answered: { index: number; answer: string }[]; answeredKey: string } | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r: any = await sql`SELECT metadata FROM app.founder_event WHERE business_id=${businessId} AND account_id=${accountId} AND event_type='arc_container_built' ORDER BY occurred_at DESC LIMIT 1`.execute(db);
+    const m = r?.rows?.[0]?.metadata;
+    if (!m || typeof m !== 'object' || typeof m.answeredKey !== 'string' || !Array.isArray(m.answered)) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return { answeredKey: m.answeredKey, answered: m.answered.map((a: any) => ({ index: Number(a?.index), answer: String(a?.answer ?? '') })) };
   } catch { return null; }
 }

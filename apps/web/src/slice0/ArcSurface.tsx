@@ -183,7 +183,7 @@ function GoalConfirm({ candidate, t, busy, onConfirm }: {
         aria-label={t('arc.goal.fieldlabel')} placeholder={cold ? t('arc.goal.placeholder') : ''}
       />
       <div className="s0-strat-actions">
-        <button type="button" className="s0-btn" disabled={busy || !text.trim()} onClick={() => onConfirm(text.trim(), candidate?.stateId ?? null)}>{t('arc.goal.confirm')} →</button>
+        <button type="button" className="s0-btn" disabled={busy || !text.trim()} onClick={() => onConfirm(text.trim(), candidate?.stateId ?? null)}>{t(cold ? 'arc.goal.set' : 'arc.goal.confirm')} →</button>
         {!cold ? <button type="button" className="s0-btn-quiet" disabled={busy} onClick={() => setText('')}>{t('arc.goal.notit')}</button> : null}
       </div>
     </div>
@@ -580,7 +580,7 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
           </div>
           {!ro ? (<>
             <ArcInput ph={t('arc.mirror.ph')} onSend={(ans) => arcMirrorSeen(businessId, ans)} cta={t('arc.send')} t={t} text={text} setText={setText} busy={busy} act={act} workingKey="arc.working.strategy" />
-            <div className="s0-strat-actions"><button type="button" className="s0-linkbtn" disabled={busy} onClick={() => act(() => arcMirrorSeen(businessId), 'arc.working.strategy')}>{t('arc.mirror.skip')}</button></div>
+            <div className="s0-strat-actions"><button type="button" className="s0-btn-ghost" disabled={busy} onClick={() => act(() => arcMirrorSeen(businessId), 'arc.working.strategy')}>{t('arc.mirror.skip')}</button></div>
           </>) : null}
         </>);
       }
@@ -926,6 +926,13 @@ function EmailMoment({ businessId, view, busy, readOnly, onAct, t }: { businessI
     await arcSaveEmail(businessId, subject, body).catch(() => undefined);
     await onAct(() => arcExportEmail(businessId));
   }
+  // One click to a filled Gmail compose window (operator, 2026-10-12: copy-to-clipboard left five manual steps).
+  // A plain link, so the new tab opens on the click itself (no popup blocker); the save + export run alongside.
+  const gmailHref = gmailComposeUrl(subject, body);
+  async function openedInGmail() {
+    await arcSaveEmail(businessId, subject, body).catch(() => undefined);
+    await onAct(() => arcExportEmail(businessId));
+  }
 
   return (
     <>
@@ -942,12 +949,20 @@ function EmailMoment({ businessId, view, busy, readOnly, onAct, t }: { businessI
       {copied ? <p className="s0-arc-copied">{t('arc.email.copied')}</p> : null}
       {!readOnly ? (
         <div className="s0-strat-actions">
-          <button type="button" className="s0-btn" disabled={busy || !subject.trim() || !body.trim()} onClick={exportEmail}>{t('arc.email.export')} →</button>
+          {subject.trim() && body.trim() && !busy
+            ? <a className="s0-btn" href={gmailHref} target="_blank" rel="noopener noreferrer" onClick={() => { void openedInGmail(); }}>{t('arc.email.gmail')} →</a>
+            : <button type="button" className="s0-btn" disabled>{t('arc.email.gmail')} →</button>}
+          <button type="button" className="s0-btn-ghost" disabled={busy || !subject.trim() || !body.trim()} onClick={exportEmail}>{t('arc.email.export')}</button>
           <button type="button" className="s0-btn-ghost" disabled={busy} onClick={() => onAct(async () => { const r = await arcGenerateEmail(businessId); setSubject(r.email.subject); setBody(r.email.body); return getArc(businessId); })}>{t('arc.email.revise')}</button>
         </div>
       ) : null}
     </>
   );
+}
+
+/** Gmail's compose URL with the subject and body filled in (no recipient: the founder picks who it goes to). */
+export function gmailComposeUrl(subject: string, body: string): string {
+  return `https://mail.google.com/mail/?view=cm&fs=1&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
 // ── Moment 9 (container) — the read-only "what I know" view, in the shared card language. ──

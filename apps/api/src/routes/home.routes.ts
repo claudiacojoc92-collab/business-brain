@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { ServerDeps } from '../server';
 import { AuthenticationError, NotFoundError } from '@bb/shared';
 import { composeHomeBriefing, type HomeBriefingInput, type HomeLine } from '@bb/application';
-import { readTodayNote } from '../telemetry/founder-events';
+import { readTodayNote, readArcWeekStory } from '../telemetry/founder-events';
 
 interface AuthedUser { sub: string; role: string }
 function founderOf(request: FastifyRequest): string {
@@ -54,6 +54,18 @@ export function registerHomeRoutes(server: FastifyInstance, deps: ServerDeps): v
     if (note?.kind === 'strategy_adopted') changeLine = { key: 'home.line.changed.strategy', vars: { v: String(note.version) } };
     else if (note?.kind === 'impact' && note.reason.trim()) changeLine = { key: 'home.line.changed.impact', vars: { reason: note.reason.trim() } };
 
+    // Today's move in the founder's voice: when the ready move is the week's first move of the same plan, use the
+    // week story's re-told (gated, cleaned) sentence instead of the plan's long brief text.
+    let todayWhat = today?.ready?.[0]?.what ?? '';
+    try {
+      const ready = today?.ready?.[0];
+      if (ready) {
+        const [story, active] = await Promise.all([readArcWeekStory(deps.db, business.id, founderId), deps.planService.getActivePlan(business.id)]);
+        const firstId = active ? [...active.plan.priorities].sort((x, y) => x.order - y.order).flatMap((p) => p.actions)[0]?.actionId : null;
+        if (story && active && story.planVersionId === active.plan.planVersionId && firstId === ready.actionId && story.today.move.trim()) todayWhat = story.today.move;
+      }
+    } catch (e) { deps.logger.warn({ err: e, businessId: business.id }, 'home: week story read failed, plan wording used'); }
+
     const input: HomeBriefingInput = {
       businessName: business.name,
       now: new Date().toISOString(),
@@ -61,7 +73,7 @@ export function registerHomeRoutes(server: FastifyInstance, deps: ServerDeps): v
       strategy: current ? { bet: current.record.bundle.core.coreBet.priority, adoptedAt: current.adoptedAt } : null,
       today: {
         state: today ? 'active' : 'none',
-        move: today?.ready?.[0] ? { what: today.ready[0].what, canCreate: today.ready[0].leadsToCreate } : null,
+        move: today?.ready?.[0] ? { what: todayWhat, canCreate: today.ready[0].leadsToCreate } : null,
         blocked: today?.blockedFallback ? { what: today.blockedFallback.action.what } : null,
       },
       changeLine,

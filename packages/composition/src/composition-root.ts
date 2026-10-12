@@ -135,7 +135,7 @@ import { AnthropicVoiceModel } from '@bb/infrastructure';
 import { AnthropicPlanModel } from '@bb/infrastructure';
 import { AnthropicImpactModel } from '@bb/infrastructure';
 import { AnthropicMirrorModel } from '@bb/infrastructure';
-import { AnthropicEmailModel, AnthropicCorrectionReflectionModel, AnthropicWeekStoryModel } from '@bb/infrastructure';
+import { AnthropicEmailModel, AnthropicCorrectionReflectionModel, AnthropicWeekStoryModel, AnthropicContainerAnswersModel } from '@bb/infrastructure';
 import { AnthropicCarouselModel } from '@bb/infrastructure';
 import { AnthropicObservationModel, AnthropicOpportunityModel } from '@bb/infrastructure';
 import { AnthropicVideoObservationModel, AnthropicReelOpportunityModel } from '@bb/infrastructure';
@@ -526,6 +526,8 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     email: new AnthropicEmailModel(anthropicKey),
     reflect: new AnthropicCorrectionReflectionModel(anthropicKey),
     weekStory: new AnthropicWeekStoryModel(anthropicKey),
+    founderSaid: async (bid) => (await founderStateRepo.listSaid(bid)).map((s) => ({ kind: s.kind, statement: s.statement, status: s.status, sourceTurnId: s.sourceTurnId ?? null })),
+    containerAnswers: new AnthropicContainerAnswersModel(anthropicKey),
     // eslint-disable-next-line no-console
     log: (e) => console.error('[arc]', JSON.stringify(e)),
   });

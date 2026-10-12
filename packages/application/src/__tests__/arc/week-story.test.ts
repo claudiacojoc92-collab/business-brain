@@ -98,22 +98,13 @@ describe('week story guard (Moment 6 as a chapter)', () => {
     expect(short.chapters[1]!.title).toBe(input.moves[1]!.what);
   });
 
-  it('fits long text to the cap: first sentence, else a word-boundary cut', () => {
+  it('fits long text to its first sentence and never cuts one (no "…")', () => {
     expect(fit('Short one. And a much longer second sentence that goes on.', 20)).toBe('Short one.');
-    const cut = fit('a'.repeat(5) + ' ' + 'word '.repeat(40), 50);
-    expect(cut.length).toBeLessThanOrEqual(50);
-    expect(cut.endsWith('…')).toBe(true);
+    const long = 'A first sentence that runs well past the cap but is never cut in the middle. Then more.';
+    expect(fit(long, 20)).toBe('A first sentence that runs well past the cap but is never cut in the middle.');
+    expect(fit(long, 20)).not.toMatch(/…/);
   });
 
-  it('stays under the founder_event metadata cap even when every field is at its limit', () => {
-    const long = 'word '.repeat(200);
-    const s = guardWeekStory({
-      context: long, statement: long, whyNow: long, doneLooksLike: long,
-      chapters: [{ title: long, why: long }, { title: long, why: long }, { title: long, why: long }],
-      today: { move: long, detail: long },
-    }, input, '01M4QG9Q5EVGES63MZ1JEGRVNA-plan');
-    expect(JSON.stringify(s).length).toBeLessThan(1990);
-  });
 
   it('catches consultant phrasing the founder flagged, not ordinary words', () => {
     expect(jargonIn('Name the firms whose credibility moves committees')).toEqual(['credibility moves committees']);

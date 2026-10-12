@@ -1,4 +1,5 @@
 import { createAnthropicClient } from '../llm/anthropic-client';
+import { VOICE_RULES } from '@bb/application';
 import type { IWeekStoryModel, WeekStoryInput, ArcWeekStory } from '@bb/application';
 
 /**
@@ -9,7 +10,7 @@ import type { IWeekStoryModel, WeekStoryInput, ArcWeekStory } from '@bb/applicat
  */
 const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian' };
 
-function rules(l: string, chapters: number): string {
+function rulesBase(l: string, chapters: number): string {
   return [
     `You are Business Brain, the founder's strategist, telling them what their first week is. LANGUAGE — write EVERYTHING in ${l}: this business's content language, whatever language the material below is in. Never mix languages.`,
     'Return ONLY valid JSON with EXACTLY this shape:',
@@ -55,6 +56,11 @@ function rules(l: string, chapters: number): string {
     '- Partner verbs, not manager verbs: "find", "name", "pick", "write", "send", "lock", "call" — never "identify", "ensure",',
     '  "facilitate", "utilize", "implement", "establish" to open a title or today\'s move.',
   ].join('\n');
+}
+
+/** The founder-facing prompt + the ONE shared voice block (spoken-voice.ts), same on every surface. */
+function rules(l: string, chapters: number): string {
+  return `${rulesBase(l, chapters)}\n\n${VOICE_RULES}`;
 }
 
 function userBlock(i: WeekStoryInput): string {

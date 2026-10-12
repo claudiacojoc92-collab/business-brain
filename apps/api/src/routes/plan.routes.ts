@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { spoken } from '@bb/application';
 import type { ServerDeps } from '../server';
 import { recordFounderEvent, readReturnSummary, readTodayNote, readLatestOutcomeText, readWeeklyReachPrompt } from '../telemetry/founder-events';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
@@ -54,6 +55,17 @@ function projectBlockedMove(action: Action, blocker: ProjBlocker, plan: PlanVers
     material: blocker.kind === 'missing_material' ? blocker.material ?? null : null,
     constraint: blocker.kind === 'operating_constraint' ? blocker.detail : null,
   };
+}
+
+/** ONE voice on the Today page too (operator, 2026-10-12): the plan's BB-authored move text, in place, by field name. */
+const SPOKEN_KEYS = new Set(['what', 'whyNow', 'doneLooksLike', 'need']);
+function spokenFields<T>(v: T): T {
+  if (Array.isArray(v)) return v.map(spokenFields) as unknown as T;
+  if (v && typeof v === 'object') {
+    return Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([k, x]) =>
+      [k, typeof x === 'string' && SPOKEN_KEYS.has(k) ? spoken(x) : spokenFields(x)])) as T;
+  }
+  return v;
 }
 
 function projectToday(
@@ -170,7 +182,7 @@ export function registerPlanRoutes(server: FastifyInstance, deps: ServerDeps): v
     // Attribution by asking (V081): the skippable weekly reach prompt, shown only on a real operating business
     // (one with an active plan). Reflective-only; reset/suppressed weekly via founder_event.
     const weeklyPrompt = await readWeeklyReachPrompt(deps.db, business.id, founderId);
-    await reply.status(200).send({ state: 'active', ...projectToday(today, active.plan), sinceLastHere, todayNote, weeklyPrompt });
+    await reply.status(200).send({ state: 'active', ...spokenFields(projectToday(today, active.plan)), sinceLastHere, todayNote, weeklyPrompt });
   });
 
   // Mark an action done/deferred/skipped — append-only; applies to the Active plan only.

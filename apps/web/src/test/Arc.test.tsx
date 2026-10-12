@@ -512,7 +512,12 @@ describe('ArcSurface — one surface, eight moments', () => {
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
     expect((await screen.findByDisplayValue('About Body Move')).tagName).toBe('INPUT');
     expect(screen.getByDisplayValue('Hi there,')).toBeInTheDocument();
-    expect(screen.getByText('arc.email.export →')).toBeInTheDocument();
+    expect(screen.getByText('arc.email.export')).toBeInTheDocument();
+    // One click to a filled Gmail compose window (2026-10-12): subject + body in the URL, opened in a new tab.
+    const gmail = screen.getByText('arc.email.gmail →').closest('a')!;
+    expect(gmail.getAttribute('href')).toBe('https://mail.google.com/mail/?view=cm&fs=1&su=About%20Body%20Move&body=Hi%20there%2C');
+    expect(gmail.getAttribute('target')).toBe('_blank');
+    expect(screen.getByText('arc.email.revise')).toBeInTheDocument();
   });
 
   it('Moment 9: container offers, then reveals read-only items with provenance', async () => {

@@ -415,13 +415,15 @@ describe('ConversationService — pacing cap (operator, 2026-10-12): at most 3 q
     expect(m.sessions[0].currentFocus.includes(String.fromCharCode(0))).toBe(false); // Postgres TEXT rejects NUL — the marker must be plain text
   });
 
-  it('nothing goal-shaped → ready WITHOUT a goal (the strategy assumes one from the constraint)', async () => {
+  it('nothing goal-shaped → the goal step opens with an EMPTY box, never skipped (operator, 2026-10-12)', async () => {
     const m = makeDeps({ interpretation: 'Understood.' });
     const svc = new ConversationService(m.deps);
     await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
     await answer(svc, 'a'); await answer(svc, 'b');
     const v = await answer(svc, 'c');
-    expect(v.readyForAha2).toBe(true);
+    expect(v.readyForAha2).toBe(false);
+    expect(await svc.awaitingGoal(P.businessId)).toBe(true);
+    expect(await svc.goalCandidate(P.businessId)).toBeNull(); // → the founder writes the goal in an empty box
     expect(await svc.hasGoal(P.businessId)).toBe(false);
   });
 
@@ -447,7 +449,7 @@ describe('ConversationService — pacing cap (operator, 2026-10-12): at most 3 q
     expect(m.getStatus()).toBe('active');            // 2 discovery answers: not capped yet
     expect(bbQuestions(m.turns).length).toBeGreaterThanOrEqual(2);
     await answer(svc, 'c');
-    expect(m.getStatus()).toBe('ready_for_aha2');    // 3rd discovery answer: capped
+    expect(await svc.awaitingGoal(P.businessId)).toBe(true); // 3rd discovery answer: capped → the goal step
   });
 });
 

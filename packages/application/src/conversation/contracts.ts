@@ -46,6 +46,8 @@ export interface FounderStateItem {
   readonly scope: string | null;
   readonly temporary: boolean;
   readonly status: 'active' | 'superseded' | 'deleted';
+  /** The conversation turn the classifier filed it from; null = written directly (e.g. the founder-confirmed goal). */
+  readonly sourceTurnId?: string | null;
 }
 
 export interface FounderObservation {

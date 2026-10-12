@@ -49,15 +49,13 @@ export function storyJargon(raw: Partial<Omit<ArcWeekStory, 'planVersionId'>> | 
   return [...new Set(texts.flatMap((t) => (typeof t === 'string' ? jargonIn(t) : [])))];
 }
 
-/** Shorten to the cap: the first sentence if that fits, else a word-boundary cut with an ellipsis. */
+/**
+ * Keep a field short WITHOUT ever cutting a sentence (operator, 2026-10-12: "no truncation"). Over the cap → its first
+ * sentence, whole. The caps steer the prompt; they never produce a "…".
+ */
 export function fit(s: string, cap: number): string {
   const t = (s ?? '').replace(/\s+/g, ' ').trim();
-  if (t.length <= cap) return t;
-  const one = firstSentence(t);
-  if (one.length <= cap) return one;
-  const cut = t.slice(0, cap - 1);
-  const sp = cut.lastIndexOf(' ');
-  return `${(sp > cap * 0.6 ? cut.slice(0, sp) : cut).replace(/[\s,;:—–-]+$/, '')}…`;
+  return t.length <= cap ? t : firstSentence(t);
 }
 
 const numbersIn = (s: string): string[] => (s.match(/\d+(?:[.,]\d+)?/g) ?? []);

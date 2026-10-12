@@ -1,0 +1,180 @@
+{
+  "businessId": "01M4QYAECETMHMQ58K2X4JR5V2",
+  "goalOffered": null,
+  "surfaces": {
+    "pour-in": "website: synced, 10 pages",
+    "understanding": {
+      "does": "You sell a post-quantum cryptographic verification layer to institutions and developers who need to verify transactions before settlement, without changing existing infrastructure.",
+      "serves": "Institutions (enterprise, regulation and audit)",
+      "standsOut": "You are betting on being the universal pre-settlement verification layer that any network can plug into without changing its core.",
+      "constraint": {
+        "decided": true,
+        "text": "Your verification network is not yet live: no node is running, no transaction has been processed, and nothing can be bought or integrated today."
+      },
+      "stage": {
+        "stage": "validating",
+        "evidence": [
+          "No named paying customer, integration partner or live node count on any page.",
+          "Performance figures (10,000+ nodes, 100,000+ verifications per second) are labelled as targets and goals, not actuals.",
+          "QuVault, QuSettle and QuFi Verify are described as 'the first applications' with no evidence of live use.",
+          "The conclusion page lists 'next steps' including 'expand network participation' and 'deploy enterprise solutions', indicating these have not yet happened."
+        ],
+        "secondary": null
+      },
+      "tensions": [
+        "You describe a complete protocol and a $50T market. You show no price, no way to buy, no way to contact you, and no stated model for how the network makes money. | This means an institution or developer who wants to engage has no path to do so from the site, so whatever pipeline exists runs entirely outside what you publish.",
+        "You claim 200+ organisations in your pipeline across 50+ countries. You name none of them and show no evidence of what any engagement looks like. | This means a prospective partner reading the site has to take the pipeline claim entirely on your word, with nothing to compare their own situation against.",
+        "You are speaking to institutions, developers and node operators at the same time. Every page uses the same protocol-level language, with no path, example or entry point written for any one of them specifically. | This means each audience has to work out for themselves whether QuFi is relevant to them and what their next step would be, so the site does the same work for no one in particular."
+      ],
+      "unanswered": [
+        "Which of the three audiences (enterprise institutions, developers, node operators) are you prioritising for your first commercial relationship, and what does that engagement look like?",
+        "What does a paying or committed relationship look like right now: a pilot agreement, a licensing deal, a node stake, or something else?",
+        "What the commercial model is: node participation, protocol fees, enterprise licensing, or something else."
+      ]
+    },
+    "correction replies": [
+      "QuFi has no production network running yet, no signed customers, and the 200+ organisations are conversations and expressed interest, not contracts or commitments. The team is technical and you have not yet decided which enterprise buyer you are building toward first. / The pipeline tension I flagged was real but I had the wrong frame: the problem is not that you hide evidence of traction, it is that you present interest as traction before you have earned the right to. The first decision you face is not messaging or pricing, it is picking one buyer type and building the first proof of value around them specifically. / The three-audience problem still stands exactly as it was: enterprises, developers and node operators all land on the same protocol-level language with no entry point written for any one of them, and that gap gets harder to close the longer you stay pre-launch without a named first customer to write toward.",
+      "You are saying that for a pre-launch protocol, the first buyer does not need to be the biggest or the most lucrative. You need one real deployment in production, even at a smaller institution, because 'we did it here' is the proof that unlocks the next ten. The reference story is the commercial asset, not the contract value. / This corrects how I was reading your pipeline tension. I had flagged the 200+ organisations claim as a credibility problem, implying you needed to name bigger, more impressive names. You are telling me the priority is not the size or number of names but getting one of them across the line in production. The right first buyer is the one who will let you deploy and tell the story, not the one who writes the largest check. / The core product logic still holds: QuSettle and QuFi Verify only become real to the next buyer when a current buyer has run them against live transactions. That production proof is exactly what you are describing as the thing that matters most right now.",
+      "You have a mid-tier European bank already in active conversation, and they have told you exactly what they need to move forward: a security audit of the protocol, a testnet they can run on their own, and one named engineer they can call directly. You are treating this reference as more valuable than three faster but thinner integrations. / This breaks the tension around your pipeline being invisible and unverifiable. You are not chasing 200 unnamed organisations at once. You are deliberately slowing down to land one bank properly, because their public endorsement does more work than volume ever could. That reframes how I read your go-forward priority: depth with this one bank comes before breadth across the pipeline. / The tension around no stated price, no way to buy, and no way to contact you still stands. Even with this bank in conversation, anyone else who finds QuFi Network right now hits a wall with no entry point and no next step written for them.",
+      "The testnet is what everything waits on right now. The audit runs alongside it, the engineer is just whoever owns that task, and the testnet itself is built but not yet open to anyone outside the team. That 60-day window is the one thing that has to move before anything else can. / I had read the audit and the named engineer as the main near-term constraint, which was wrong. The real blocker is getting the testnet to a state where external developers and node operators can actually touch it. That shifts how I read the pipeline tension too: 200-plus organisations cannot meaningfully engage until there is something live for them to test against. / The three-audience problem still stands. Enterprises, developers and node operators all land on the same protocol-level language with no entry point written for any one of them, and that gap does not wait for the testnet to matter.",
+      "The mid-tier European bank is not a cold lead or a name in a spreadsheet. Their security team has already sat down with yours, the relationship is warm, and a second EU bank in the same regulatory circle is lined up behind them. The testnet is the single gate both banks are waiting on before the next step. / This breaks the tension around your pipeline claim. What you had was not 200 anonymous logos but a sequenced, relationship-led path where one warm bank pulls the second into the conversation. The testnet is not a product milestone sitting in isolation. It is the commercial unlock that moves real institutions forward, which means shipping it is the most urgent revenue act you have right now. / The institutional focus on QuSettle still holds exactly as understood. You are not replacing banks or their settlement rails. You are the verification layer that sits in front of what they already run, and that is precisely why a security team at a regulated EU bank is willing to meet yours before anything is live.",
+      "The next 60 days have one job: get the testnet to a state where a real bank's security team can run their own tests against it. That is the finish line, not a demo, not a pitch deck, not a pipeline update. / This sharpens how I read the pipeline claim. You are not managing 200+ organisations toward a sale right now. You are managing one relationship toward a technical gate, and everything else waits behind that gate. The tension I flagged about no way to buy or contact you matters less at this moment than whether the testnet holds up under a professional security review. / The core bet still stands: QuFi sits in front of existing settlement infrastructure and verifies without replacing it. That is exactly what a bank's security team will be probing, so the no-infrastructure-change promise is the thing they will either confirm or break in the next 60 days."
+    ],
+    "conversation": [
+      "BB: I have read what you gave me on QuFi Network. One thing stands out before we talk.\nYou are 60 days from a testnet that a bank security team can run against, yet the site reads as if the network is already live at scale.\nYou claim 200+ organisations in pipeline across 50+ countries, but there is no contact form, no demo path, and no pricing anywhere on the site.\nThe site speaks to institutions, developers and node operators in the same breath, which means none of them feel spoken to directly.\nWhich of those three audiences you are actually trying to close first, and what closing even looks like right now.\nWho are you trying to get to yes first?",
+      "FOUNDER: The bank's security team will run an end-to-end verification of a real \ntransaction flow: they submit a transaction, our node verifies it, and \nthey receive a signed proof they can validate independently. If they \ncan reproduce that on their own infrastructure without our engineers \non the call, we've passed.",
+      "BB: That is a sharp, falsifiable definition of success, which is rare and useful. But it tells me the bank already exists, this is not a prospecting problem, it is a proof problem. The question that changes everything is what happens after they pass it: is there a commercial agreement waiting on the other side of that test, or does passing just earn you the right to keep talking?\n\nWhat does the commercial model look like: if they pass the test and say yes, what are they actually buying, a license, a node stake, a protocol fee arrangement, or something else?",
+      "FOUNDER: API references exist. QPL onboarding is partial — a developer can read \nit but needs our team for the first setup. Environment setup is \nmanual today. All three would need to be tightened before a bank's \nteam can run solo. That's the real work of the next 60 days.",
+      "BB: Got it, the 60 days are really about removing your engineers from the critical path, not about the cryptography or the protocol itself. That is a meaningful distinction: the technology works, but the handoff does not yet. One thing I still do not know: if the bank's team runs it solo and signs off, what are they actually buying? Is there a commercial agreement already scoped on the other side of that test, or does passing earn you the next conversation?\n\nWhat does the commercial model look like: a license, a protocol fee, a node arrangement, or something else entirely?",
+      "FOUNDER: Both. Two of the warm contacts are actively waiting for the testnet \ndate — they've asked us twice. The rest are warm introductions that \nwent quiet. The 60-day clock is real for the two active ones; for the \nrest, we need the testnet live before they re-engage."
+    ],
+    "goal": {
+      "offered": "(no goal step shown)",
+      "moment": "mirror",
+      "strategyAssumed": null
+    },
+    "mirror": "(no mismatch shown)",
+    "strategy": {
+      "bet": "Make the testnet self-serviceable for the two warm contacts who are already waiting.",
+      "over": "Reaching new audiences or fixing how the site speaks to institutions, developers, and node operators.",
+      "horizon": "60 days",
+      "tradeOffs": [
+        "The site problem is real, but it does not matter yet. You have no live transaction to point to. Fix the product first, then fix how you talk about it.",
+        "New contacts will ask the same question the warm ones are already asking: can I run it myself? You cannot answer yes yet, so do not start new conversations you cannot finish."
+      ],
+      "notNow": [
+        "Leave the site alone for now. Until one bank team runs a solo verification and you can show what that looks like, there is nothing concrete to say to any of those audiences.",
+        "Do not go back to the contacts that went quiet yet. They will re-engage when the testnet is live. Reaching out before that just burns the relationship again.",
+        "Skip the conversion infrastructure for now. You are not ready to handle inbound at scale, and the two contacts you need do not need a form, they need a testnet date."
+      ],
+      "reconsider": [
+        "If either warm contact goes cold or pulls out before the testnet is ready, the bet changes because you no longer have a known first user to build toward.",
+        "If the self-service gap turns out to need more than 60 days to close, you need to decide whether to give one contact a partially-assisted run or reset the timeline.",
+        "If a third institution reaches out unprompted before the testnet is ready, that is a signal the market is moving and you may need to start a waitlist or a structured preview process."
+      ],
+      "proposalId": "01M4QYJ7EN35QDHSV6Z8KE55GG",
+      "assumedGoal": "Your verification network is not yet live: no node is running, no transaction has been processed, and nothing can be bought or integrated today.",
+      "adoptable": true
+    },
+    "week": {
+      "planVersionId": "01M4QYM2FHRYXMKWXKGPB19EVP",
+      "context": "Week 1 of your 60-day push to make the testnet self-serviceable for the two warm contacts who are already waiting.",
+      "statement": "This week you find out exactly where the path breaks.",
+      "whyNow": "You cannot give the two warm contacts a date because environment setup is still manual and partial.",
+      "chapters": [
+        {
+          "title": "Walk the setup path as a bank engineer would",
+          "why": "You cannot close gaps you have not named, and the existing API references are not a finished path."
+        },
+        {
+          "title": "Fix every manual step the walkthrough surfaces",
+          "why": "Each unresolved manual step is a support call waiting to happen when the bank team tries."
+        },
+        {
+          "title": "Run a cold second walkthrough to confirm the path holds",
+          "why": "The only honest proof the path works is someone who did not build the fixes completing it without help."
+        }
+      ],
+      "today": {
+        "move": "Walk the full setup path yourself, from nothing, exactly as a bank engineer would.",
+        "detail": "Start with no prior context and follow only what the current docs provide. Every point where you make a judgment call, look something up outside the docs, or do something manually that is not yet scripted goes on the list."
+      },
+      "doneLooksLike": "A written list of every manual step, missing script, and undocumented decision point between receiving access and submitting a test transaction."
+    },
+    "email": {
+      "subject": "Testnet date and setup brief, coming your way",
+      "body": "Hi [Name],\n\nThank you for your patience, and sorry for the wait. You have asked twice and you deserve a straight answer.\n\nHere is where we are: I am walking the full setup path right now, step by step, exactly as your engineer would from a clean start. I am writing down every point where the docs fall short, every manual step, and every judgment call. When that is done, I will turn it into one short document: what the testnet does, what you need to run it, and what you get back, a signed proof you can validate yourselves.\n\nWe are targeting sending that brief and a confirmed testnet date to you by [your date here].\n\nThe goal is simple. Your team reads the brief, sets up the environment without calling us, submits a test transaction, and receives a proof they can check on their own. No hand-holding required.\n\nI will be back in your inbox by [your date here] with the brief and the date locked. If anything changes before then, I will tell you immediately.\n\nThanks again for staying with us.\n\n[Your name]"
+    },
+    "container": [
+      {
+        "labelKey": "arc.container.lbl.offer",
+        "statement": "You sell a post-quantum cryptographic verification layer to institutions and developers who need to verify transactions before settlement, without changing existing infrastructure.",
+        "provenance": "observed"
+      },
+      {
+        "labelKey": "arc.container.lbl.positioning",
+        "statement": "You are betting on being the universal pre-settlement verification layer that any network can plug into without changing its core.",
+        "provenance": "observed"
+      },
+      {
+        "labelKey": "arc.container.lbl.audience",
+        "statement": "Institutions (enterprise, regulation and audit), Developers (APIs and SDKs), Organisations joining as verifier nodes",
+        "provenance": "observed"
+      },
+      {
+        "labelKey": "arc.container.lbl.told",
+        "statement": "You are pre-launch with no production network yet, a testnet in development but not ready for external use, and API references exist but QPL onboarding is partial and environment setup is manual.",
+        "provenance": "declared"
+      },
+      {
+        "labelKey": "arc.container.lbl.told",
+        "statement": "You are prioritising a mid-tier European bank as your first commercial relationship, with their security team already having met yours and two warm contacts actively waiting for the testnet date.",
+        "provenance": "declared"
+      },
+      {
+        "labelKey": "arc.container.lbl.told",
+        "statement": "Your first committed relationship looks like a testnet integration the bank's security team can run themselves, validated by an independent end-to-end verification where they submit a transaction and receive a signed proof they can reproduce without your engineers present.",
+        "provenance": "declared"
+      },
+      {
+        "labelKey": "arc.container.lbl.constraint",
+        "statement": "API references exist but QPL onboarding is partial and environment setup is manual, so a bank team cannot run solo yet.",
+        "provenance": "declared"
+      }
+    ],
+    "today (home)": {
+      "context": {
+        "name": "QuFi Network",
+        "day": 1,
+        "bet": "Make the testnet self-serviceable for the two warm contacts who are already waiting."
+      },
+      "lines": [
+        {
+          "key": "home.line.bet",
+          "vars": {
+            "bet": "Make the testnet self-serviceable for the two warm contacts who are already waiting."
+          }
+        },
+        {
+          "key": "home.line.today",
+          "vars": {
+            "move": "Walk the full setup path yourself, from nothing, exactly as a bank engineer would."
+          }
+        },
+        {
+          "key": "home.line.canWork"
+        },
+        {
+          "key": "home.line.ask"
+        }
+      ]
+    },
+    "today (page)": [
+      {
+        "what": "Walk the current setup path yourself, step by step, exactly as a bank engineer would, starting from nothing: and write down every point where you had to make a judgment call, look something up outside the docs, or do something manually that is not yet scripted.",
+        "whyNow": "You cannot write instructions that close the gap until you know precisely where the gap is. The existing API references are a starting point, not a finished path. This surfaces the exact friction points before any writing begins.",
+        "doneLooksLike": "You have a written list of every manual step, missing script, and undocumented decision point a bank engineer would hit between receiving access and submitting a test transaction."
+      }
+    ]
+  }
+}

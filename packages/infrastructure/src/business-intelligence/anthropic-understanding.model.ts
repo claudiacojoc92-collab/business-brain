@@ -1,5 +1,5 @@
 import { createAnthropicClient } from '../llm/anthropic-client';
-import {
+import { VOICE_RULES,
   sameInsight,
   visibilityPhrased,
   type IUnderstandingModelPort,
@@ -75,7 +75,7 @@ const ROOT_CAUSE_ORDER = [
   '  A business whose stage is growth or plateau has users, so its users level is passed.',
 ];
 
-export function systemPrompt(lang: string): string {
+function systemPromptBase(lang: string): string {
   const langName = LANG_NAME[lang] ?? 'English';
   return [
     'You are the analyst inside Business Brain. You read a business\'s SOURCE material and produce',
@@ -326,6 +326,11 @@ export function systemPrompt(lang: string): string {
     'understand the line instantly. (This is the READING step, so it stays observational — describe what the sources',
     'show; do NOT switch into "you should" advice, that is the strategy\'s job.)',
   ].join('\n');
+}
+
+/** The founder-facing prompt + the ONE shared voice block (spoken-voice.ts), same on every surface. */
+export function systemPrompt(lang: string): string {
+  return `${systemPromptBase(lang)}\n\n${VOICE_RULES}`;
 }
 
 export { visibilityPhrased };

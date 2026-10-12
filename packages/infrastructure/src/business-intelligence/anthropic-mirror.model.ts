@@ -1,4 +1,5 @@
 import { createAnthropicClient } from '../llm/anthropic-client';
+import { VOICE_RULES } from '@bb/application';
 import type { IMirrorModelPort, MirrorContrastInput, MirrorContrastOutput, MirrorMismatch } from '@bb/application';
 
 /**
@@ -20,7 +21,7 @@ const SHAPE = `{
   }]
 }`;
 
-function rules(l: string): string {
+function rulesBase(l: string): string {
   return [
     `You are Business Brain holding up a MIRROR to a founder. LANGUAGE — write EVERYTHING in ${l}: this business's content language, decided once for the business, whatever language the founder's words, corrections or sources below are in. Every field and every sentence in ${l}; NEVER mix languages, and never let other-language content in this prompt leak into the output. Return ONLY valid JSON in`,
     'EXACTLY this shape (no prose around it):',
@@ -42,8 +43,12 @@ function rules(l: string): string {
     '- FOUNDER-HUMAN VOICE for the `tension`: say it the way a sharp friend would over coffee, not a consultant in a',
     '  deck. Second person, active verbs, plain words, a concrete image — NOT stacked nouns or abstraction. ≤ ~20',
     '  words. BAD (consultant): "Publicurile au criterii de decizie incompatibile într-un mesaj unificat." GOOD',
-    '  (founder-human): "Vorbești la fel către femeia cu durere de spate și mama care vrea să slăbească — dar ele nu',
+    '  (founder-human): "Vorbești la fel către femeia cu durere de spate și mama care vrea să slăbească, dar ele nu',
     '  caută același lucru." Keep it calm and factual (still a reflection, never a fix), just human.',
+    '- THE SITE IS ONE CHANNEL, NOT THE BUSINESS. Before you hold the founder\'s intent against something MISSING on the',
+    '  site (no contact form, no sign-up, no pricing page, no enquiry path), check how the founder says buyers actually',
+    '  arrive. When the founder\'s words show the sale runs through relationships, introductions, existing conversations',
+    '  or a named buyer (typical of enterprise and B2B), a missing site path is NOT a mismatch: drop it.',
     '- Do NOT propose fixes, strategy, or next steps. Only reflect the contrast. Do NOT restate a lane back as',
     '  if it were a mismatch — a mismatch is a CONTRAST between two things, not a summary of one.',
     '- Good contrast shapes: a stated priority vs. undifferentiated positioning; a stated constraint vs. a',
@@ -51,6 +56,11 @@ function rules(l: string): string {
     '  they don\'t track; a refusal the strategy nonetheless requires; a belief the observed evidence does not',
     '  corroborate; a reconsider condition the founder never defined.',
   ].join('\n');
+}
+
+/** The founder-facing prompt + the ONE shared voice block (spoken-voice.ts), same on every surface. */
+function rules(l: string): string {
+  return `${rulesBase(l)}\n\n${VOICE_RULES}`;
 }
 
 function userBlock(input: MirrorContrastInput): string {
