@@ -19,6 +19,10 @@ function rules(l: string): string {
     '- Sound like THIS founder: honor the VOICE boundaries (do exactly what they permit; never do what they forbid).',
     '- Speak to the AUDIENCE named. Be warm, specific, and brief — a professional outreach, not a sales blast.',
     '- Do NOT invent facts, results, numbers, testimonials, or offers not grounded in the founder context.',
+    '- NEVER say something is confirmed, scheduled, signed, finished or live unless the FOUNDER CONTEXT says exactly that.',
+    '  A date you do not hold is NOT a fact: it is a target or a promise to confirm. Write "we are targeting [date],',
+    '  pending internal confirmation" or "we will confirm the date by [date]", never "we have a confirmed date of [date]".',
+    '  The reader may act on every sentence; a status that turns out untrue costs the founder their credibility.',
     '- Placeholders: only where the founder must fill a fact you do not hold (a name, a date). Each is ONE short phrase',
     '  in brackets, like [Name] or [your date here]. Never explain inside a placeholder and never nest one.',
     '  Keep the whole body under ~1200 characters.',
@@ -30,7 +34,7 @@ function rules(l: string): string {
     '- NO DASHES. Never the em-dash "—", the en-dash "–", or a hyphen used as a dash. Join clauses with a period or a comma.',
     '- No "+", "/", "&" or "·" as joiners, in the subject or the body. Write "and". The subject reads like a sentence',
     '  fragment a professional would send to a bank or a clinic: "Testnet date and runbook", "Update on the pilot".',
-    '- No consultant words (perimeter, stakeholders, align, alignment, leverage, deliverables, critical path).',
+    '- No consultant words (perimeter, stakeholders, align, alignment, leverage, deliverables, critical path, discrete item).',
   ].join('\n');
 }
 
@@ -58,7 +62,7 @@ export class AnthropicEmailModel implements IEmailModelPort {
     this.modelId = modelId ?? process.env['LLM_STRONG_MODEL'] ?? 'claude-sonnet-4-6';
   }
 
-  async draft(input: EmailDraftInput): Promise<ArcEmail> {
+  async draft(input: EmailDraftInput, rewrite?: string[]): Promise<ArcEmail> {
     // Fail-safe fallback in the CONTENT language (never an English template dropped onto a Romanian business).
     const key: 'en' | 'ro' | 'it' = input.interfaceLanguage === 'ro' ? 'ro' : input.interfaceLanguage === 'it' ? 'it' : 'en';
     const fallback = FALLBACK[key](input);
@@ -69,7 +73,9 @@ export class AnthropicEmailModel implements IEmailModelPort {
       const resp: any = await client.messages.create({
         model: this.modelId, max_tokens: 1600, temperature: 0, // deterministic → one language, no mid-response drift
         system: rules(LANG[input.interfaceLanguage] ?? 'English'),
-        messages: [{ role: 'user', content: userBlock(input) }],
+        messages: [{ role: 'user', content: userBlock(input) + (rewrite?.length
+          ? `\n\nREWRITE: your last draft stated something the founder never confirmed: ${rewrite.map((r) => `"${r}"`).join(', ')}. Write the whole email again. Anything not confirmed in FOUNDER CONTEXT is a target or a promise to confirm, never a fact.`
+          : '') }],
       });
       const block = Array.isArray(resp?.content) ? resp.content.find((c: { type?: string }) => c?.type === 'text') : null;
       const p = extractJson((block as { text?: string } | null)?.text ?? '') as { subject?: unknown; body?: unknown };
