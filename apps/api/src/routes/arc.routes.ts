@@ -350,7 +350,9 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
       await deps.conversationService.startOrResume(business.id, founderId, business.name, language);
       await deps.conversationService.submitResponse(business.id, founderId, business.name, answer, language);
     }
-    mark(founderId, business.id, 'arc_mirror_seen');
+    // Awaited, like flagRoute: the view below derives the moment from this flag. Fire-and-forget raced it, so "skip"
+    // came back still on the mirror (found walking QuFi through the real routes, 2026-10-12).
+    await recordFounderEventAwaited(deps.db, { accountId: founderId, businessId: business.id, eventType: 'arc_mirror_seen', surface: 'arc' });
     await reply.status(200).send(await viewFor(business.id, business.name, language, founderId));
   });
 
