@@ -1,7 +1,7 @@
 import type { StrategyVersionRecord } from '../strategy/index';
 import type { PlanVersion } from '../plan/index';
 import type { GovernedUnderstanding } from '../bi/index';
-import { agendaUnknowns, isHousekeeping, restatesNotShown, makesUnlicensedClaim } from '../bi/index';
+import { agendaUnknowns, isHousekeeping, restatesNotShown, makesUnlicensedClaim, makesUnlicensedSoWhatClaim, sameInsight, firstSentence } from '../bi/index';
 import type { GoalCandidate } from '../conversation/index';
 import { computeArcMoment } from './moment';
 import type {
@@ -205,36 +205,49 @@ export class ArcService {
     // unstable for this, so it only supplies the signal.
     // The claim-type gate (trust, credibility, conversion, recommendation…) applies here too: an item that makes such
     // a claim is dropped; a so-what that does loses only the so-what line.
-    const licensed = (x: string | undefined): string => { const v = (x ?? '').trim(); return v && !makesUnlicensedClaim(v) ? v : ''; };
+    // A so-what may name trust (the consequence of missing proof); every other banned claim type blanks it.
+    const licensed = (x: string | undefined): string => { const v = (x ?? '').trim(); return v && !makesUnlicensedSoWhatClaim(v) ? v : ''; };
     const cc = u?.capabilityCheck;
     const primaryGap: TensionRow | null = cc && cc.shown === false && (cc.insight ?? '').trim()
       && !makesUnlicensedClaim(cc.insight)
       ? { tension: cc.insight.trim(), grounding: licensed(cc.soWhat), sourceRefs: clean(cc.sourceRefs) }
       : null;
     const rows = (u?.contradictions ?? [])
-      // Website housekeeping (legal pages, copywriting critiques of a quoted phrase) is never business insight.
-      .filter((c) => !isHousekeeping(`${c.tension ?? ''} ${c.statementA ?? ''} ${c.statementB ?? ''}`) && !makesUnlicensedClaim(c.tension ?? ''))
-      // With the capability gap as primary, drop anything that restates it ("never shows / no example / no
-      // evidence", e.g. the same gap told about one channel): two slots for one insight is the bug this prevents.
-      .filter((c) => !primaryGap || (c.kind !== 'capability_gap' && !restatesNotShown(`${c.tension ?? ''} ${c.soWhat ?? ''}`)))
+      // Website housekeeping (legal pages, any critique of a quoted phrase or of the wording) is never business insight.
+      // Judged on what the item SAYS (tension + so-what), not on its statements, which may cite a legal page as a source.
+      .filter((c) => !isHousekeeping(`${c.tension ?? ''} ${c.soWhat ?? ''}`) && !makesUnlicensedClaim(c.tension ?? ''))
+      // With the capability gap as primary, a second capability_gap item is the same insight.
+      .filter((c) => !primaryGap || c.kind !== 'capability_gap')
       // Without a capability check, at most ONE capability gap is shown, first.
       .filter((c, i, all) => c.kind !== 'capability_gap' || all.findIndex((x) => x.kind === 'capability_gap') === i)
       .slice()
       .sort((x, y) => Number(y.kind === 'capability_gap') - Number(x.kind === 'capability_gap'))
-      .map((c): TensionRow | null => {
+      .map((c): TensionRow & { kind?: string } | null => {
         const tension = (c.tension ?? '').trim();
         const a = (c.statementA ?? '').trim();
         const b = (c.statementB ?? '').trim();
         const soWhat = licensed(c.soWhat);
         const sourceRefs = clean(c.sourceRefs);
         if (!tension && !a && !b) return null;
-        if (!tension) return { tension: a && b ? `${a} — yet ${b}` : a || b, grounding: soWhat, sourceRefs };
+        if (!tension) return { tension: a && b ? `${a} — yet ${b}` : a || b, grounding: soWhat, sourceRefs, kind: c.kind };
         // The line under the tension is its SO-WHAT (the consequence for the business) when the model gave one;
-        // older snapshots fall back to the more concrete of the two statements.
-        return { tension, grounding: soWhat || grounded(a, b), sourceRefs };
+        // older snapshots (no soWhat at all) fall back to the more concrete of the two statements. A so-what blanked by
+        // the claim-type gate stays blank: a source quote under the tension is not a consequence.
+        return { tension, grounding: (c.soWhat ?? '').trim() ? soWhat : grounded(a, b), sourceRefs, kind: c.kind };
       })
-      .filter((x): x is TensionRow => Boolean(x));
-    const tensions = (primaryGap ? [primaryGap, ...rows] : rows).slice(0, 3);
+      .filter((x): x is TensionRow & { kind?: string } => Boolean(x));
+    // "What stood out" is 3-4 DIFFERENT tensions: one slot per insight. An item is dropped when it makes the same
+    // point as one already kept (word overlap on the tension, or on tension + consequence: the same gap retold with
+    // other nouns still lands on the same consequence) or repeats a specific kind already kept ('other' may repeat).
+    const kept: (TensionRow & { kind?: string })[] = primaryGap ? [{ ...primaryGap, kind: 'capability_gap' }] : [];
+    const same = (x: TensionRow, y: TensionRow): boolean =>
+      sameInsight(x.tension, y.tension) || sameInsight(`${x.tension} ${x.grounding}`, `${y.tension} ${y.grounding}`, 0.47);
+    for (const r of rows) {
+      if (kept.some((k) => same(k, r))) continue;
+      if (r.kind && r.kind !== 'other' && kept.some((k) => k.kind === r.kind)) continue;
+      kept.push(r);
+    }
+    const tensions: TensionRow[] = kept.slice(0, 4).map(({ tension, grounding, sourceRefs }) => ({ tension, grounding, sourceRefs }));
 
     // Confident = anchored in the evidence: the grounded Aha findings + what the offer states explicitly +
     // positioning the site actually backs up. Inferring = read from PATTERN (implied positioning, who the
@@ -253,10 +266,12 @@ export class ArcService {
     // Card 3 "What I'll ask you about" — the SAME ≤3 unknowns the conversation seeds as its opening agenda.
     const unanswered = agendaUnknowns(u);
 
+    // "What I read" stays 3-4 lines: one sentence on what you sell, one on what you're betting on, one audience line.
+    const oneLine = (x?: string): string => { const v = firstSentence(x ?? ''); return v && !isHousekeeping(v) ? v : ''; };
     return {
-      does: first(u?.offer?.summary),
-      serves: clean(u?.audience?.addressed).slice(0, 3).join(' · '),
-      standsOut: first(u?.positioning?.summary),
+      does: oneLine(u?.offer?.summary),
+      serves: clean(u?.audience?.addressed).slice(0, 1).join(''),
+      standsOut: oneLine(u?.positioning?.summary),
       tensions,
       confident,
       inferring,

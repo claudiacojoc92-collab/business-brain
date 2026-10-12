@@ -1,3 +1,5 @@
+import { isHousekeeping, restatesNotShown, sameInsight } from './insight-text';
+
 /**
  * Slice 1 "BB learned my business" — contracts.
  *
@@ -32,7 +34,7 @@ export interface PageObservation {
   readonly sourceKind?: ObservationSourceKind;
 }
 export type ObservationSourceKind = 'website' | 'supplied' | 'instagram';
-export type ContradictionKind = 'capability_gap' | 'priority_vs_effort' | 'story_vs_reality' | 'audience_mismatch' | 'other';
+export type ContradictionKind = 'capability_gap' | 'customer_proof' | 'channel_mismatch' | 'commercial_path' | 'priority_vs_effort' | 'story_vs_reality' | 'audience_mismatch' | 'other';
 
 export interface SourceRef {
   readonly label: string;
@@ -60,17 +62,30 @@ export interface GovernedUnderstanding {
   readonly capabilityCheck?: { sells: string; shown: boolean; insight: string; soWhat: string; sourceRefs: string[] };
 }
 
+// Narrow on purpose: "what is your priority: users, validation or a paid launch?" is a goal question and stays.
+const COMMERCIAL_TOPIC = /\b(pric\w*|cost\w*|charg\w*|monetis\w*|monetiz\w*|subscription\w*|paid (model|plan|tier|version)|(move|path|transition) to paid)\b/i;
+const CHANNEL_TOPIC = /(@\w+|\binstagram\b)/i;
+
 /** The (≤3) things BB could NOT learn from the site — the SINGLE source for both the understanding "What I'll ask
  * you about" card AND the conversation's opening agenda (seeded as needs). Using one derivation guarantees what BB
- * shows equals what it asks. Deterministic, order-preserving, deduped. */
+ * shows equals what it asks. Deterministic, order-preserving, deduped. A question about the site's wording
+ * (housekeeping) or one that restates an observation already shown in "What stood out" is not asked. */
 export function agendaUnknowns(u: GovernedUnderstanding | null): string[] {
   if (!u) return [];
+  const shown = [u.capabilityCheck?.shown === false ? u.capabilityCheck.insight : '', ...(u.contradictions ?? []).map((c) => c.tension)]
+    .map((x) => (x ?? '').trim()).filter(Boolean);
+  // Once an observation names a gap, the questions don't re-open it under another wording ("what will you charge"
+  // next to a commercial-path observation, "is this account yours" next to a channel observation).
+  const kinds = new Set((u.contradictions ?? []).map((c) => c.kind));
+  const reopens = (q: string): boolean => (kinds.has('commercial_path') && COMMERCIAL_TOPIC.test(q)) || (kinds.has('channel_mismatch') && CHANNEL_TOPIC.test(q))
+    || (u.capabilityCheck?.shown === false && restatesNotShown(q));
   const seen = new Set<string>();
   const out: string[] = [];
   for (const x of [...(u.unknowns ?? []), ...(u.offer?.unclear ?? []), ...(u.audience?.unknown ?? [])]) {
     const v = (x ?? '').trim();
     const k = v.toLowerCase();
-    if (v && !seen.has(k)) { seen.add(k); out.push(v); }
+    if (!v || seen.has(k) || isHousekeeping(v) || reopens(v) || shown.some((t) => sameInsight(v, t, 0.4))) continue;
+    seen.add(k); out.push(v);
   }
   return out.slice(0, 3);
 }

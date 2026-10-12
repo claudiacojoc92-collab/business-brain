@@ -252,15 +252,38 @@ describe('ArcService.view — what stood out with a capability check', () => {
   }).deps).view('B', 'BB', 'en', flags({ pourInDone: true }), [], null)).understanding!;
   const cc = { sells: 'a decision system', shown: false, insight: 'It sells a decision system, and nothing on its site or in its posts shows one decision.', soWhat: 'A founder signs up on a description alone.', sourceRefs: ['Homepage'] };
 
-  it('the capability gap is the primary (from capabilityCheck), restatements are dropped, a different point stays', async () => {
+  it('the capability gap is the primary (from capabilityCheck); different dimensions all stay, same-point and same-kind items go', async () => {
     const u = await view({ capabilityCheck: cc, contradictions: [
-      { kind: 'story_vs_reality', statementA: 'a', statementB: 'b', tension: "The product's own Instagram presence shows nothing about the product.", soWhat: 's', sourceRefs: [] },
+      { kind: 'channel_mismatch', statementA: 'a', statementB: 'b', tension: 'Your most active public channel shows nothing about what you sell.', soWhat: 's', sourceRefs: [] },
       { kind: 'audience_mismatch', statementA: 'a', statementB: 'b', tension: 'The Instagram speaks to tech founders, not the studio owners it targets.', soWhat: 'Studio owners cannot see themselves in it.', sourceRefs: [] },
       { kind: 'capability_gap', statementA: 'a', statementB: 'b', tension: 'No page shows a sample output.', sourceRefs: [] },
+      { kind: 'channel_mismatch', statementA: 'a', statementB: 'b', tension: 'Your Instagram is about travel, never the offer.', sourceRefs: [] },
+      { kind: 'other', statementA: 'a', statementB: 'b', tension: 'You sell a decision system, and nothing on your site or posts shows one decision.', sourceRefs: [] },
+      { kind: 'commercial_path', statementA: 'a', statementB: 'b', tension: 'You are free during the pilot. You show no path to paid.', soWhat: 'c', sourceRefs: [] },
+      { kind: 'customer_proof', statementA: 'a', statementB: 'b', tension: 'No customer result is shown.', soWhat: 'd', sourceRefs: [] },
     ] });
-    expect(u.tensions.map((t) => t.tension)).toEqual([cc.insight, 'The Instagram speaks to tech founders, not the studio owners it targets.']);
+    expect(u.tensions.map((t) => t.tension)).toEqual([cc.insight, 'Your most active public channel shows nothing about what you sell.',
+      'The Instagram speaks to tech founders, not the studio owners it targets.', 'You are free during the pilot. You show no path to paid.']); // capped at 4
     expect(u.tensions[0]!.grounding).toBe(cc.soWhat);                    // sub-text = the so-what
-    expect(u.tensions[1]!.grounding).toBe('Studio owners cannot see themselves in it.');
+    expect(u.tensions[2]!.grounding).toBe('Studio owners cannot see themselves in it.');
+  });
+
+  it('a so-what may name trust; credibility/conversion still blank it; a tension naming trust is still dropped', async () => {
+    const u = await view({ capabilityCheck: { ...cc, soWhat: 'This means a founder signs up on trust alone, so the description carries the sale.' }, contradictions: [
+      { kind: 'commercial_path', statementA: 'a', statementB: 'b', tension: 'You are free during the pilot. You show no path to paid.', soWhat: 'This means it hurts conversion.', sourceRefs: [] },
+      { kind: 'customer_proof', statementA: 'a', statementB: 'b', tension: 'Nobody can trust a product with no named customer.', soWhat: 'x', sourceRefs: [] },
+    ] });
+    expect(u.tensions[0]!.grounding).toBe('This means a founder signs up on trust alone, so the description carries the sale.');
+    expect(u.tensions[1]!.grounding).toBe('');
+    expect(u.tensions.map((t) => t.tension)).not.toContain('Nobody can trust a product with no named customer.');
+  });
+
+  it('an item whose statements merely CITE a legal page as a source is not housekeeping', async () => {
+    const u = await view({ capabilityCheck: cc, contradictions: [
+      { kind: 'commercial_path', statementA: 'Free during the pilot — stated on the Homepage, Terms of Service and Privacy Policy', statementB: 'No page states a price',
+        tension: 'You are free during the pilot. You show no path to paid.', soWhat: 'This means a founder cannot judge the cost of relying on you, so the free period has to carry everything.', sourceRefs: [] },
+    ] });
+    expect(u.tensions.map((t) => t.tension)).toContain('You are free during the pilot. You show no path to paid.');
   });
 
   it('a so-what that makes a forbidden claim type is blanked; findings that restate the gap or are housekeeping leave "confident"', async () => {
