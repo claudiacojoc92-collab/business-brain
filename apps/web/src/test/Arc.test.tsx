@@ -469,12 +469,30 @@ describe('ArcSurface — one surface, eight moments', () => {
     await waitFor(() => expect(screen.getByPlaceholderText('arc.strategy.ph')).toBeInTheDocument());
   });
 
-  it('Moment 7: week and day names the week + today', async () => {
+  it('Moment 6: an api without a story still names the week + today', async () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'week_day', weekDay: { week: ['Build the clinic list', 'First outreach'], today: 'Draft the clinic target list', canCreate: false } }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
     expect(await screen.findByText('Build the clinic list')).toBeInTheDocument();
     expect(screen.getByText('Draft the clinic target list')).toBeInTheDocument();
     expect(screen.getByText('arc.week.draft →')).toBeInTheDocument();
+  });
+
+  it('Moment 6: the week reads as a chapter — statement, numbered beats, Today with done, no "This week" label', async () => {
+    const story = { planVersionId: 'p1', context: 'Week 1 of your six-month push to a signed pilot.', statement: 'The testnet becomes real this week.',
+      whyNow: 'Two banks are waiting on it. Everything else can wait.',
+      chapters: [{ title: 'Find every silent dependency', why: 'The auditor runs it without you.' }, { title: 'Draw the pilot perimeter', why: 'Procurement says yes to something bounded.' }, { title: 'Show the bank the plan', why: 'Visible validation closes.' }],
+      today: { move: 'Find every silent dependency in the testnet setup.', detail: 'Walk it end to end.' }, doneLooksLike: 'A written list of every place an engineer has to intervene.' };
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'week_day', weekDay: { week: ['a', 'b', 'c'], today: 'x', canCreate: false, story } }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    expect(await screen.findByRole('heading', { name: 'The testnet becomes real this week.' })).toBeInTheDocument();
+    expect(screen.getByText('Week 1 of your six-month push to a signed pilot.')).toBeInTheDocument();
+    expect(screen.getByText('01')).toBeInTheDocument();
+    expect(screen.getByText('03')).toBeInTheDocument();
+    expect(screen.getByText('Find every silent dependency')).toBeInTheDocument();
+    expect(screen.getByText('Find every silent dependency in the testnet setup.')).toBeInTheDocument();
+    expect(screen.getByText('A written list of every place an engineer has to intervene.')).toBeInTheDocument();
+    expect(screen.queryByText('arc.week.intro')).toBeNull();
+    expect(screen.getByText('arc.week.writefirst')).toBeInTheDocument();
   });
 
   it('Moment 8: the email body keeps focus across keystrokes (EmailMoment is module-level) [regression]', async () => {

@@ -6,8 +6,9 @@ import type { GoalCandidate } from '../conversation/index';
 import { computeArcMoment } from './moment';
 import type {
   ArcFlags, ArcView, ArcTurn, ArcEmail, ArcMirror, IEmailModelPort, ArcContainerItem, ArcSource,
-  ArcUnderstanding, CorrectionReflection, ICorrectionReflectionModel,
+  ArcUnderstanding, CorrectionReflection, ICorrectionReflectionModel, ArcWeekStory, IWeekStoryModel,
 } from './contracts';
+import { guardWeekStory, weekStoryInput, storyJargon } from './week-story';
 
 /** Narrow ports onto the existing engines — the arc REUSES them, it does not reimplement them. */
 export interface ArcDeps {
@@ -34,6 +35,8 @@ export interface ArcDeps {
   founderContext: (businessId: string) => Promise<string[]>;
   email: IEmailModelPort;
   reflect: ICorrectionReflectionModel;
+  /** Re-tells the week as a strategist's chapter. Absent (tests) ⇒ the plan's own wording in the same shape. */
+  weekStory?: IWeekStoryModel;
   /** Structured arc telemetry (mirrors the carousel). Absent ⇒ silent (tests). Every per-moment failure and the
    * reflect-back both log here, so a production arc failure is never invisible. */
   log?: (e: { type: string; detail?: string }) => void;
@@ -61,7 +64,7 @@ export class ArcService {
   constructor(private readonly deps: ArcDeps) {}
 
   /** Compose the whole-arc view for the current moment — durable flags + typed sources + igConnected + savedEmail from the route. */
-  async view(businessId: string, businessName: string, language: string, flags: ArcFlags, sources: ArcSource[], savedEmail: ArcEmail | null, igConnected = false, savedMirror: ArcMirror | null = null): Promise<ArcView> {
+  async view(businessId: string, businessName: string, language: string, flags: ArcFlags, sources: ArcSource[], savedEmail: ArcEmail | null, igConnected = false, savedMirror: ArcMirror | null = null, savedWeekStory: ArcWeekStory | null = null): Promise<ArcView> {
     const snap = await this.deps.understanding.latest(businessId);
     const status = await this.deps.conversation.status(businessId);
     const current = await this.deps.strategy.getCurrent(businessId);
@@ -177,7 +180,8 @@ export class ArcService {
         const priorities = (plan.priorities ?? []).slice().sort((a, b) => a.order - b.order);
         const week = priorities.map((p) => p.title.trim()).filter(Boolean).slice(0, 5);
         const firstAction = priorities.flatMap((p) => p.actions)[0] ?? null;
-        return { ...base, weekDay: { week, today: firstAction?.what?.trim() ?? null, canCreate: Boolean(firstAction?.leadsToCreate) } };
+        const story = firstAction ? await this.weekStory(plan, current?.record ?? null, businessName, language, savedWeekStory) : null;
+        return { ...base, weekDay: { week, today: firstAction?.what?.trim() ?? null, canCreate: Boolean(firstAction?.leadsToCreate), story } };
       }
 
       case 'email':
@@ -327,6 +331,31 @@ export class ArcService {
    * an invitation to add more. Never throws (the model fails safe). The correction itself is already held as
    * founder state by the route; this is the reflection the founder sees.
    */
+  /**
+   * The week told as a chapter. Built ONCE per plan version (the route persists it and passes it back as `saved`),
+   * so a refresh never re-writes the page. The model only re-voices; `guardWeekStory` keeps what the plan licenses.
+   * `language` is the business's content language (the route resolves it), never the UI locale.
+   */
+  private async weekStory(plan: PlanVersion, strategy: StrategyVersionRecord | null, businessName: string, language: string, saved: ArcWeekStory | null): Promise<ArcWeekStory> {
+    if (saved && saved.planVersionId === plan.planVersionId) return saved;
+    const input = weekStoryInput(plan, strategy, businessName, language);
+    let raw = null;
+    if (this.deps.weekStory) {
+      try {
+        raw = await this.deps.weekStory.tell(input);
+        // ONE repair pass when the draft talks like a deck; keep whichever draft has less jargon.
+        const jargon = storyJargon(raw);
+        if (jargon.length) {
+          const second = await this.deps.weekStory.tell(input, jargon);
+          const left = storyJargon(second);
+          this.deps.log?.({ type: 'arc_week_story_repair', detail: JSON.stringify({ jargon, left }) });
+          if (second && left.length < jargon.length) raw = second;
+        }
+      } catch (e) { this.deps.log?.({ type: 'arc_moment_threw', detail: JSON.stringify({ moment: 'week_day', part: 'story', err: errText(e) }) }); }
+    }
+    return guardWeekStory(raw, input, plan.planVersionId);
+  }
+
   async reflectCorrection(businessId: string, businessName: string, language: string, correction: string): Promise<CorrectionReflection> {
     const snap = await this.deps.understanding.latest(businessId);
     const u = this.projectUnderstanding(snap?.understanding ?? null, (await this.deps.aha1.latest(businessId))?.findings ?? []);

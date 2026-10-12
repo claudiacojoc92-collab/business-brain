@@ -91,6 +91,12 @@ export function makesUnlicensedClaim(text: string): boolean {
   return UNLICENSED_CLAIM_TERMS.some((p) => startsWord(t, p));
 }
 
+/** The claim terms a text uses — so a RE-TELLING (the week story) can be held to the terms its source already licensed. */
+export function claimTermsIn(text: string): string[] {
+  const t = text.toLowerCase();
+  return UNLICENSED_CLAIM_TERMS.filter((p) => startsWord(t, p));
+}
+
 /**
  * The understanding SUB-TEXT (a tension's so-what) may name trust (operator decision 2026-10-12): "this asks a founder to
  * sign up on trust alone" is the consequence of a missing proof, not a claim about how buyers will behave. Every other

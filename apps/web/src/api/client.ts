@@ -495,7 +495,10 @@ export interface ArcView {
   coverage?: { key: string; covered: boolean }[]; // conversation — quiet progress map
   mirror?: { founderWords: string; against: string; tension: string } | null;
   strategy?: { bet: string; over: string; horizon: string; tradeOffs: string[]; notNow: string[]; reconsider: string[]; proposalId: string | null; adoptable: boolean; assumedGoal?: string | null };
-  weekDay?: { week: string[]; today: string | null; canCreate: boolean };
+  weekDay?: { week: string[]; today: string | null; canCreate: boolean;
+    // The week told as a chapter (2026-10-12); null/absent on an older api.
+    story?: { planVersionId: string; context: string; statement: string; whyNow: string; chapters: { title: string; why: string }[];
+      today: { move: string; detail: string }; doneLooksLike: string } | null };
   email?: { subject: string; body: string } | null;
   container?: { items: { labelKey: string; statement: string; provenance: 'observed' | 'declared' | 'inferred' | 'unknown' }[] };
 }

@@ -94,7 +94,40 @@ export interface ArcMirror { readonly founderWords: string; readonly against: st
 export interface ArcStrategy { readonly bet: string; readonly over: string; readonly horizon: string; readonly tradeOffs: string[]; readonly notNow: string[]; readonly reconsider: string[]; readonly proposalId: string | null; readonly adoptable: boolean;
   /** The constraint the strategy ASSUMED as the goal (the founder gave none before the cap); null when the goal is the founder's. */
   readonly assumedGoal?: string | null }
-export interface ArcWeekDay { readonly week: string[]; readonly today: string | null; readonly canCreate: boolean }
+export interface ArcWeekDay { readonly week: string[]; readonly today: string | null; readonly canCreate: boolean;
+  /** The week told as a strategist's chapter (operator, 2026-10-12). Absent only when the plan has no priorities. */
+  readonly story?: ArcWeekStory | null }
+
+/**
+ * Moment 6 — the SAME plan (priorities, first action, done definition), told as a chapter in a story instead of a
+ * project brief: where this week sits, what it actually is, why now, three beats, today's one move, and what done
+ * looks like. Presentation only: it never adds a move, a number or a claim the plan and strategy don't hold.
+ */
+export interface ArcWeekStory {
+  readonly planVersionId: string;  // the plan it tells; a new plan version → a new story
+  readonly context: string;        // "Week 1 of your six-month push to a signed bank pilot."
+  readonly statement: string;      // "The testnet becomes real this week."
+  readonly whyNow: string;         // "Two banks are waiting on it. Everything else can wait."
+  readonly chapters: { readonly title: string; readonly why: string }[]; // ≤ 3: the week's first actions, plan order, verb-first titles
+  readonly today: { readonly move: string; readonly detail: string };
+  readonly doneLooksLike: string;
+}
+export interface WeekStoryInput {
+  readonly businessName: string;
+  readonly language: string;
+  readonly goal: string;
+  readonly horizon: string;
+  readonly bet: string;
+  readonly monthDirection: string;
+  readonly priorities: { readonly title: string; readonly why: string }[]; // the month's arc, plan order (context only)
+  readonly moves: { readonly what: string; readonly why: string }[];       // this week's beats: the first ≤ 3 actions, plan order
+  readonly today: { readonly what: string; readonly why: string; readonly done: string } | null; // = moves[0], with its done
+}
+export interface IWeekStoryModel {
+  /** Raw model draft (unguarded). May throw / return junk — `guardWeekStory` decides what survives. `rewrite` = the
+   * consultant phrases a first draft used, for the one repair pass. */
+  tell(input: WeekStoryInput, rewrite?: string[]): Promise<Partial<Omit<ArcWeekStory, 'planVersionId'>> | null>;
+}
 export interface ArcEmail { readonly subject: string; readonly body: string }
 export interface ArcContainerItem { readonly labelKey: string; readonly statement: string; readonly provenance: 'observed' | 'declared' | 'inferred' | 'unknown' }
 export interface ArcContainer { readonly items: ArcContainerItem[] }

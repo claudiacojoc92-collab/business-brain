@@ -3,7 +3,7 @@ import multipart from '@fastify/multipart';
 import type { ServerDeps } from '../server';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
 import { fetchDocument, extractReadableText } from '@bb/infrastructure';
-import { recordFounderEvent, recordFounderEventAwaited, readArcFlags, readArcSources, readArcEmail, recordArcCorrectionReflection, readArcCorrectionReflection, recordArcMirror, readArcMirror, type FounderEventType } from '../telemetry/founder-events';
+import { recordFounderEvent, recordFounderEventAwaited, readArcFlags, readArcSources, readArcEmail, recordArcCorrectionReflection, readArcCorrectionReflection, recordArcMirror, readArcMirror, recordArcWeekStory, readArcWeekStory, type FounderEventType } from '../telemetry/founder-events';
 import { detectType, assertWithinBounds, MAX_BYTES } from '../connectors/upload/detect';
 import { extractPdf, extractDocx, extractText } from '../connectors/upload/extract';
 import { contentLanguageFor, noteFounderText } from './content-language';
@@ -38,26 +38,30 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
 
   async function viewFor(businessId: string, businessName: string, language: string, founderId: string) {
     const ig = getInstagramConnector();
-    const [flags, sources, email, reflection, savedMirror, igState] = await Promise.all([
+    const [flags, sources, email, reflection, savedMirror, savedWeekStory, igState] = await Promise.all([
       readArcFlags(deps.db, businessId, founderId),
       readArcSources(deps.db, businessId, founderId),
       readArcEmail(deps.db, businessId, founderId),
       readArcCorrectionReflection(deps.db, businessId, founderId),
       readArcMirror(deps.db, businessId, founderId),
+      readArcWeekStory(deps.db, businessId, founderId),
       ig ? ig.status(founderId).catch(() => 'disconnected' as const) : Promise.resolve('disconnected' as const),
     ]);
     const connected = igState === 'connected';
-    let view = await deps.arcService.view(businessId, businessName, language, flags, sources, email, connected, savedMirror);
+    let view = await deps.arcService.view(businessId, businessName, language, flags, sources, email, connected, savedMirror, savedWeekStory);
 
     // Persist a freshly-built mirror contrast so it is STABLE across refresh and not re-generated on every view.
     if (view.moment === 'mirror' && !savedMirror && view.mirror) recordArcMirror(deps.db, founderId, businessId, view.mirror);
+    // Same for the week story, per plan version (a new plan proposal → a new story).
+    const story = view.weekDay?.story;
+    if (story && story.planVersionId !== savedWeekStory?.planVersionId) recordArcWeekStory(deps.db, founderId, businessId, story);
 
     // Moment 4 opener is generated LAZILY on view (startOrResume runs otherwise only on a POST). WRAPPED so a model
     // failure here is a PER-MOMENT error (the founder retries the conversation), never a whole-arc surface failure.
     if (view.moment === 'conversation' && (view.turns?.length ?? 0) === 0) {
       try {
         await deps.conversationService.startOrResume(businessId, founderId, businessName, language);
-        view = await deps.arcService.view(businessId, businessName, language, flags, sources, email, connected, savedMirror);
+        view = await deps.arcService.view(businessId, businessName, language, flags, sources, email, connected, savedMirror, savedWeekStory);
       } catch {
         view = { ...view, error: { kind: 'generation' } };
       }

@@ -215,6 +215,7 @@ export { AnthropicImpactModel } from './business-intelligence/anthropic-impact.m
 export { AnthropicMirrorModel } from './business-intelligence/anthropic-mirror.model';
 export { AnthropicEmailModel } from './business-intelligence/anthropic-email.model';
 export { AnthropicCorrectionReflectionModel } from './business-intelligence/anthropic-correction-reflection.model';
+export { AnthropicWeekStoryModel } from './business-intelligence/anthropic-week-story.model';
 
 // Website ingestion + social-discovery adapters (relocated from apps/api) + the API-agnostic website connector.
 export { WebsiteIngestionAdapter } from './business-intelligence/website-ingestion.adapter';
