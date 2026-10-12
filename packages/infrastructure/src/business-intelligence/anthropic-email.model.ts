@@ -1,5 +1,5 @@
 import { createAnthropicClient } from '../llm/anthropic-client';
-import type { IEmailModelPort, EmailDraftInput, ArcEmail } from '@bb/application';
+import { spoken, plainSubject, type IEmailModelPort, type EmailDraftInput, type ArcEmail } from '@bb/application';
 
 /**
  * DAY ONE Moment 8 — the first work item. Drafts a real, sendable email grounded in the HELD strategy (the
@@ -19,8 +19,18 @@ function rules(l: string): string {
     '- Sound like THIS founder: honor the VOICE boundaries (do exactly what they permit; never do what they forbid).',
     '- Speak to the AUDIENCE named. Be warm, specific, and brief — a professional outreach, not a sales blast.',
     '- Do NOT invent facts, results, numbers, testimonials, or offers not grounded in the founder context.',
-    '- No placeholders like [Name] beyond a single greeting slot. Keep the whole body under ~1200 characters.',
+    '- Placeholders: only where the founder must fill a fact you do not hold (a name, a date). Each is ONE short phrase',
+    '  in brackets, like [Name] or [your date here]. Never explain inside a placeholder and never nest one.',
+    '  Keep the whole body under ~1200 characters.',
     '- No hype, no pressure, no fake urgency. One clear, easy next step.',
+    '',
+    'VOICE — the same rules as every other thing Business Brain writes for this founder:',
+    '- Write the way the founder would say it out loud. Active voice, "we" and "you": "We close every gap before we hand',
+    '  it over", never "each gap gets closed before anything is handed to your team".',
+    '- NO DASHES. Never the em-dash "—", the en-dash "–", or a hyphen used as a dash. Join clauses with a period or a comma.',
+    '- No "+", "/", "&" or "·" as joiners, in the subject or the body. Write "and". The subject reads like a sentence',
+    '  fragment a professional would send to a bank or a clinic: "Testnet date and runbook", "Update on the pilot".',
+    '- No consultant words (perimeter, stakeholders, align, alignment, leverage, deliverables, critical path).',
   ].join('\n');
 }
 
@@ -63,8 +73,9 @@ export class AnthropicEmailModel implements IEmailModelPort {
       });
       const block = Array.isArray(resp?.content) ? resp.content.find((c: { type?: string }) => c?.type === 'text') : null;
       const p = extractJson((block as { text?: string } | null)?.text ?? '') as { subject?: unknown; body?: unknown };
-      const subject = String(p.subject ?? '').trim();
-      const body = String(p.body ?? '').trim();
+      // Deterministic backstop for the voice rules (dashes, "+" joiners, explained placeholders), shared with the week.
+      const subject = plainSubject(String(p.subject ?? ''), key);
+      const body = spoken(String(p.body ?? '')).trim();
       return subject && body ? { subject, body } : fallback;
     } catch { return fallback; }
   }
