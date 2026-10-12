@@ -208,6 +208,30 @@ describe('ArcSurface — one surface, eight moments', () => {
     expect(screen.getByText('arc.understanding.stage.means.area.validating:the medical channel')).toBeInTheDocument();
   });
 
+  it('pacing cap: a strategy built on an ASSUMED goal shows the flag with the constraint it assumed', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'strategy', strategy: { bet: 'first customer', over: 'scale', horizon: '3 months', tradeOffs: ['r1'], notNow: [], reconsider: [], proposalId: 'v1', adoptable: true, assumedGoal: 'No customer has used QuFi and got a result.' } }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    expect(await screen.findByText('arc.strategy.assumed')).toBeInTheDocument();
+    expect(screen.getByText('arc.strategy.assumed.body:No customer has used QuFi and got a result.')).toBeInTheDocument();
+  });
+
+  it('a moment change scrolls to the top (pour-in "Done" used to land mid-understanding)', async () => {
+    const scrollTo = vi.fn();
+    const orig = window.scrollTo;
+    window.scrollTo = scrollTo as unknown as typeof window.scrollTo;
+    try {
+      vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'pour_in', sources: [{ kind: 'website', label: 'acme.com' }] as never, igConnected: false }));
+      vi.mocked(api.arcPourInDone).mockResolvedValue(v({ moment: 'understanding', understanding: { does: 'READ', serves: '', standsOut: '', tensions: [], confident: [], inferring: [], unanswered: [] } }));
+      render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+      const done = await screen.findByText('home.empty.done');
+      await waitFor(() => expect(scrollTo).toHaveBeenCalledWith({ top: 0 })); // first moment shown
+      scrollTo.mockClear();
+      fireEvent.click(done);
+      await screen.findByText(/READ/);
+      await waitFor(() => expect(scrollTo).toHaveBeenCalledWith({ top: 0 })); // the understanding opens at the top
+    } finally { window.scrollTo = orig; }
+  });
+
   it('Strategic Depth W1: undecided says so honestly; an older snapshot (no fields) renders as before', async () => {
     const base = { does: 'X', serves: '', standsOut: '', tensions: [{ tension: 'T1', grounding: '', sourceRefs: [] }], confident: [], inferring: [], unanswered: [] };
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: { ...base, constraint: { decided: false }, stage: { stage: 'undetermined' } } }));

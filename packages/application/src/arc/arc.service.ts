@@ -24,7 +24,7 @@ export interface ArcDeps {
   mirror: { build(businessId: string, businessName: string, language: string): Promise<{ contrasts: { founderWords: string; against: string; tension: string }[] }> };
   strategy: {
     getCurrent(businessId: string): Promise<{ record: StrategyVersionRecord } | null>;
-    proposalOrGenerate(businessId: string, businessName: string, language: string): Promise<StrategyVersionRecord>;
+    proposalOrGenerate(businessId: string, businessName: string, language: string, assumedGoal?: string | null): Promise<StrategyVersionRecord>;
   };
   plan: {
     getActive(businessId: string): Promise<{ plan: PlanVersion } | null>;
@@ -110,8 +110,15 @@ export class ArcService {
       }
 
       case 'strategy': {
+        // No goal held and nothing goal-shaped to confirm (the founder hit the conversation cap without one): build on an
+        // ASSUMED goal — remove the named constraint — and flag it on the card, rather than asking a further question.
+        let assumedGoal: string | null = null;
+        if (!(await this.deps.conversation.hasGoal(businessId)) && !(await this.deps.conversation.goalCandidate(businessId))) {
+          const c = u?.constraint;
+          assumedGoal = c?.decided && (c.statement ?? '').trim() ? factOnly(firstSentence(c.statement)) : null;
+        }
         let rec;
-        try { rec = await this.deps.strategy.proposalOrGenerate(businessId, businessName, language); }
+        try { rec = await this.deps.strategy.proposalOrGenerate(businessId, businessName, language, assumedGoal); }
         catch (e) {
           this.deps.log?.({ type: 'arc_moment_threw', detail: JSON.stringify({ businessId, moment: 'strategy', err: errText(e) }) });
           return { ...base, error: { kind: 'generation' } }; // a real throw is genuinely transient — retry is right
@@ -148,6 +155,7 @@ export class ArcService {
               .filter(Boolean).slice(0, 3).map(scrubJargon),
             reconsider: (core.reconsiderTriggers ?? []).map((r) => r.condition).filter(Boolean).slice(0, 3).map(scrubJargon),
             proposalId: rec.status === 'proposal' ? rec.id : null,
+            assumedGoal: core.assumedGoal ?? null,
             adoptable: rec.status === 'proposal',
           },
         };

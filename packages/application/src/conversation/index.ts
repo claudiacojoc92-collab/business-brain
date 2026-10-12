@@ -18,6 +18,8 @@ export {
   type ConversationDeps,
   type ConversationView,
   type FounderModelProjection,
+  withoutQuestions,
+  MAX_DISCOVERY_ANSWERS,
 } from './conversation.service';
 export { Aha2Service, type Aha2Deps, type Aha2Event } from './aha2.service';
 export { BoundSourceReader } from './bound-source-reader';

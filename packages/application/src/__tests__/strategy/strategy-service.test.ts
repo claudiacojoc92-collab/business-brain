@@ -125,6 +125,21 @@ describe('StrategyService — lifecycle + repair + adoption', () => {
     expect(m.calls().generateCalls).toBe(0);
   });
 
+  it('no founder goal + an assumed goal (conversation cap) → generates on it, and the bundle records what was assumed', async () => {
+    const m = makeDeps({ generate: async () => ({ strategy: validBundle() }), founder: [{ kind: 'preference', statement: 'prefer referrals' }] });
+    const rec = await new StrategyService(m.deps).generate(P.businessId, P.businessName, P.language, { assumedGoal: 'No customer has used the product and got a result.' });
+    expect(m.calls().generateCalls).toBe(1);
+    expect(m.lastInput().founderState.find((f: any) => f.kind === 'goal').statement).toMatch(/^ASSUMED .*No customer has used the product/);
+    expect(rec.bundle.core.assumedGoal).toBe('No customer has used the product and got a result.');
+  });
+
+  it('a held founder goal always wins over an assumed one', async () => {
+    const m = makeDeps({ generate: async () => ({ strategy: validBundle() }) });
+    const rec = await new StrategyService(m.deps).generate(P.businessId, P.businessName, P.language, { assumedGoal: 'ignored' });
+    expect(rec.bundle.core.assumedGoal).toBeUndefined();
+    expect(m.lastInput().founderState.filter((f: any) => f.kind === 'goal')).toHaveLength(1);
+  });
+
   it('adoption creates Current; reopen returns the same version; regenerate does not overwrite it', async () => {
     const m = makeDeps({ generate: async () => ({ strategy: validBundle() }) });
     const svc = new StrategyService(m.deps);

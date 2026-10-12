@@ -83,8 +83,20 @@ export class StrategyService {
     return { input, ctx, hasGoal: founderState.some((f) => f.kind === 'goal'), snapId: snap?.id ?? null };
   }
 
-  async generate(businessId: string, businessName: string, language: string): Promise<StrategyVersionRecord> {
-    const { input, ctx, hasGoal } = await this.loadInput(businessId, businessName, language);
+  /**
+   * `opts.assumedGoal` (the named constraint) is used ONLY when no founder goal is held — the founder reached the
+   * conversation cap without stating one (operator, 2026-10-12). It joins the founder state as an explicitly assumed
+   * goal and is recorded on the bundle (core.assumedGoal) so the card flags it. A held goal always wins.
+   */
+  async generate(businessId: string, businessName: string, language: string, opts: { assumedGoal?: string | null } = {}): Promise<StrategyVersionRecord> {
+    const loaded = await this.loadInput(businessId, businessName, language);
+    const { input, ctx } = loaded;
+    const assumed = !loaded.hasGoal ? (opts.assumedGoal ?? '').trim() : '';
+    if (assumed) {
+      // input.founderState and ctx.founder are the same array: the gates see the assumed goal too.
+      input.founderState.push({ ref: `F${input.founderState.length + 1}`, kind: 'goal', statement: `ASSUMED (the founder did not state a goal): remove this constraint — ${assumed}` });
+    }
+    const hasGoal = loaded.hasGoal || Boolean(assumed);
 
     // A goal-relative strategy needs a governed business + a founder goal. Honest insufficient otherwise.
     if (input.businessElements.length === 0 || !hasGoal) {
@@ -153,6 +165,9 @@ export class StrategyService {
   }
 
   private async persist(businessId: string, bundle: StrategyBundle, status: 'proposal' | 'insufficient', gateResults: StrategyGateResult[], input: StrategyModelInput, language: string): Promise<StrategyVersionRecord> {
+    // An assumed goal (see generate) is recorded on the bundle, so every surface that shows this version can flag it.
+    const assumedRow = input.founderState.find((f) => f.kind === 'goal' && f.statement.startsWith('ASSUMED (the founder did not state a goal): remove this constraint — '));
+    if (assumedRow) bundle = { ...bundle, core: { ...bundle.core, assumedGoal: assumedRow.statement.replace('ASSUMED (the founder did not state a goal): remove this constraint — ', '') } };
     const version = await this.deps.strategy.nextVersion(businessId);
     return this.deps.strategy.save({
       id: generateId(), businessId, version, status, bundle, gateResults,

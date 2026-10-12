@@ -51,7 +51,7 @@ function makeDeps(over: any = {}) {
       unknowns: ['whether corporate partnerships convert'],
     } }) },
     aha1: { latest: async () => ({ findings: [{ finding: 'Referrals already drive most new members.' }] }) },
-    conversation: { status: async () => 'ready_for_aha2', turns: async () => [{ id: 't1', role: 'bb', content: 'What have you tried?' }] },
+    conversation: { status: async () => 'ready_for_aha2', turns: async () => [{ id: 't1', role: 'bb', content: 'What have you tried?' }], hasGoal: async () => true, goalCandidate: async () => null },
     mirror: { build: async () => ({ contrasts: [{ founderWords: 'You said recovery is the priority', against: 'Your site promotes six categories equally', tension: 'A priority your site does not reflect.' }] }) },
     strategy: { getCurrent: async () => null, proposalOrGenerate: async () => STRAT },
     plan: { getActive: async () => null, proposalOrGenerate: async () => PLAN },
@@ -241,6 +241,29 @@ describe('ArcService.view — each moment composes from the reused engines', () 
     expect(emailCalls[0].todaysMove).toBe('Draft the clinic target list');
     expect(emailCalls[0].voiceBoundaries).toContain('warm, proof-led');
     expect(email.subject).toMatch(/Body Move/);
+  });
+});
+
+describe('ArcService.view — strategy after the conversation cap (operator, 2026-10-12)', () => {
+  it('no goal held and nothing goal-shaped → the strategy is built on the named constraint as an ASSUMED goal, and says so', async () => {
+    const calls: any[] = [];
+    const { deps } = makeDeps({
+      understanding: { latest: async () => ({ understanding: { offer: { summary: 'x' }, positioning: { summary: '' }, audience: { addressed: [] }, contradictions: [], unknowns: [],
+        constraint: { decided: true, statement: 'No customer has used QuFi and got a result, so every claim rests on the spec.', why: '', sourceRefs: [] } } }) },
+      conversation: { status: async () => 'ready_for_aha2', turns: async () => [], hasGoal: async () => false, goalCandidate: async () => null },
+      strategy: { getCurrent: async () => null, proposalOrGenerate: async (...a: any[]) => { calls.push(a); return { ...STRAT, bundle: { core: { ...STRAT.bundle.core, assumedGoal: a[3] } } }; } },
+    });
+    const v = await new ArcService(deps).view('B', 'QuFi', 'en', flags({ pourInDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
+    expect(calls[0][3]).toBe('No customer has used QuFi and got a result.');
+    expect(v.strategy?.assumedGoal).toBe('No customer has used QuFi and got a result.');
+  });
+
+  it('a held goal → no assumed goal is passed', async () => {
+    const calls: any[] = [];
+    const { deps } = makeDeps({ strategy: { getCurrent: async () => null, proposalOrGenerate: async (...a: any[]) => { calls.push(a); return STRAT; } } });
+    const v = await new ArcService(deps).view('B', 'BB', 'en', flags({ pourInDone: true, understandingConfirmed: true, mirrorSeen: true }), [], null);
+    expect(calls[0][3]).toBeNull();
+    expect(v.strategy?.assumedGoal ?? null).toBeNull();
   });
 });
 

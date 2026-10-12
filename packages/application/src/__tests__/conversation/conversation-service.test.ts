@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect } from 'vitest';
-import { ConversationService, type ConversationDeps, type ConversationStepOutput } from '../../conversation/index';
+import { ConversationService, withoutQuestions, type ConversationDeps, type ConversationStepOutput } from '../../conversation/index';
 
 const EMPTY_STEP: ConversationStepOutput = {
   interpretation: '', nextQuestion: 'What matters most right now?', readyForAha2: false,
@@ -378,5 +378,70 @@ describe('ConversationService', () => {
     await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
     await svc.pause(P.businessId);
     expect(m.getStatus()).toBe('paused');
+  });
+});
+
+describe('ConversationService — pacing cap (operator, 2026-10-12): at most 3 questions, then hand over', () => {
+  const answer = async (svc: ConversationService, msg: string, ctx?: string) => svc.submitResponse(P.businessId, P.founderId, P.businessName, msg, P.language, ctx);
+  const bbQuestions = (turns: any[]) => turns.filter((t) => t.role === 'bb' && /\?\s*$/.test(t.content.trim()));
+
+  it('after the 3rd answer: no further question, the reply is the acknowledgement only; a held goal is shown for one-click confirm', async () => {
+    const m = makeDeps({ interpretation: 'Got it — the referrals are the engine. What would you change first?', nextQuestion: 'And by when?', declarations: [{ kind: 'goal', statement: 'Fill the clinic by spring' }] as any });
+    const svc = new ConversationService(m.deps);
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    await answer(svc, 'one'); await answer(svc, 'two');
+    const before = m.turns.length;
+    const v = await answer(svc, 'three');
+    const added = m.turns.slice(before).filter((t: any) => t.role === 'bb');
+    expect(added).toHaveLength(1);
+    expect(added[0].content).toBe('Got it — the referrals are the engine.'); // the question sentence was stripped
+    expect(v.readyForAha2).toBe(false);
+    expect(await svc.awaitingGoal(P.businessId)).toBe(true);
+    expect((await svc.goalCandidate(P.businessId))?.statement).toBe('Fill the clinic by spring');
+    // confirming it releases the strategy
+    await svc.setGoal(P.businessId, P.founderId, 'Fill the clinic by spring', P.language);
+    expect(m.getStatus()).toBe('ready_for_aha2');
+  });
+
+  it('no goal held but goal-shaped words → the one-click confirm (awaiting goal), still no question', async () => {
+    const m = makeDeps({ interpretation: 'Clear.', declarations: [{ kind: 'intention', statement: 'My priority is retainer clients, not one-off projects' }] as any });
+    const svc = new ConversationService(m.deps);
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    await answer(svc, 'a'); await answer(svc, 'b');
+    const v = await answer(svc, 'c');
+    expect(v.readyForAha2).toBe(false);
+    expect(await svc.awaitingGoal(P.businessId)).toBe(true);
+    expect((await svc.goalCandidate(P.businessId))?.statement).toMatch(/retainer clients, not one-off/);
+    expect(m.sessions[0].currentFocus.includes(String.fromCharCode(0))).toBe(false); // Postgres TEXT rejects NUL — the marker must be plain text
+  });
+
+  it('nothing goal-shaped → ready WITHOUT a goal (the strategy assumes one from the constraint)', async () => {
+    const m = makeDeps({ interpretation: 'Understood.' });
+    const svc = new ConversationService(m.deps);
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    await answer(svc, 'a'); await answer(svc, 'b');
+    const v = await answer(svc, 'c');
+    expect(v.readyForAha2).toBe(true);
+    expect(await svc.hasGoal(P.businessId)).toBe(false);
+  });
+
+  it('drawer (contextual) turns never count toward the cap; the opener + 2 discovery questions are still asked', async () => {
+    const m = makeDeps({ interpretation: 'Noted.', nextQuestion: 'What else?' });
+    const svc = new ConversationService(m.deps);
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    await answer(svc, 'why this bet?', 'strategy card'); await answer(svc, 'and this?', 'today');
+    await answer(svc, 'a'); await answer(svc, 'b');
+    expect(m.getStatus()).toBe('active');            // 2 discovery answers: not capped yet
+    expect(bbQuestions(m.turns).length).toBeGreaterThanOrEqual(2);
+    await answer(svc, 'c');
+    expect(m.getStatus()).toBe('ready_for_aha2');    // 3rd discovery answer: capped
+  });
+});
+
+describe('withoutQuestions', () => {
+  it('drops question sentences, keeps statements', () => {
+    expect(withoutQuestions('Got it. The referrals carry you. What would you change first?')).toBe('Got it. The referrals carry you.');
+    expect(withoutQuestions('Is that right?')).toBe('');
+    expect(withoutQuestions('Clear — „the clinic” first.')).toBe('Clear — „the clinic” first.');
   });
 });

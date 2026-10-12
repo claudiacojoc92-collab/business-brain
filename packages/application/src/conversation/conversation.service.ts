@@ -158,7 +158,23 @@ export interface ConversationDeps {
 // FIX 1 — the reflect-back must fire whenever the model wants to advance but no goal is persisted (NOT only when
 // every other need is closed). We mark that state on the session's currentFocus (migration-free, self-correcting:
 // the next real question overwrites it, confirming the goal clears it). Never rendered — internal signal only.
-const AWAITING_GOAL_FOCUS = '\u0000awaiting_goal';
+// Plain text on purpose: Postgres TEXT rejects NUL, so the old NUL-prefixed marker threw on every save
+// ("invalid byte sequence for encoding UTF8: 0x00") — the reflect-back state could never be stored.
+const AWAITING_GOAL_FOCUS = '__awaiting_goal__';
+
+// PACING (operator, 2026-10-12): the discovery conversation is capped. BB asks at most 3 questions (the opener is the
+// first); after the founder's 3rd answer it asks NOTHING more — it acknowledges, then the arc moves on: straight to the
+// strategy when a goal is held, to the one-click "Is this your goal?" confirm when the founder said something
+// goal-shaped, otherwise to a strategy built on an ASSUMED goal (flagged on the strategy card). Founder turns from the
+// contextual drawer (answer mode) are tagged and never count toward the cap.
+export const MAX_DISCOVERY_ANSWERS = 3;
+const ANSWER_MODE_TURN = '__answer_mode__'; // plain text: Postgres TEXT cannot hold NUL
+
+/** Drop question sentences from a reply: at the cap, BB acknowledges but never asks a 4th question. */
+export function withoutQuestions(text: string): string {
+  const sentences = (text ?? '').match(/[^.!?]+[.!?]+["”»)]*\s*|[^.!?]+$/g) ?? [];
+  return sentences.filter((x) => !/\?["”»)]*\s*$/.test(x.trim())).join('').trim();
+}
 
 // FIX 2a — join an interpretation with its follow-up question WITHOUT duplicating: if the model already ended the
 // interpretation with the question, don't append it again.
@@ -228,8 +244,12 @@ export class ConversationService {
     if (!session) throw new Error('NO_CONVERSATION');
     if (language !== session.conversationLanguage) await this.deps.conversations.setLanguage(session.id, language);
 
+    // M6 mode boundary: contextual ANSWER MODE (the founder is looking at a surface and asking about it) vs
+    // the discovery flow (no surface context). Decided up front so the founder turn can be tagged: drawer turns
+    // never count toward the discovery cap.
+    const answerMode = !!(currentContext && currentContext.trim());
     const founderTurn = await this.deps.conversations.appendTurn({
-      id: generateId(), sessionId: session.id, businessId, role: 'founder', content: message, language, infoNeedKey: null,
+      id: generateId(), sessionId: session.id, businessId, role: 'founder', content: message, language, infoNeedKey: answerMode ? ANSWER_MODE_TURN : null,
     });
 
     const out = await this.deps.model.step(await this.buildStepInput(businessId, founderId, businessName, language, session.id, message, currentContext));
@@ -254,11 +274,6 @@ export class ConversationService {
     for (const oc of out.observationCandidates) {
       await this.deps.observations.observe(businessId, oc.behavior, founderTurn.id);
     }
-    // M6 mode boundary: contextual ANSWER MODE (the founder is looking at a surface and asking about it) vs
-    // the discovery flow (no surface context). The condition is deterministic — the presence of currentContext —
-    // so the interviewer's open-need machinery can never leak a stray onboarding question into a strategist reply.
-    const answerMode = !!(currentContext && currentContext.trim());
-
     // Discovery bookkeeping (open needs) advances ONLY in the discovery flow, never on a contextual answer.
     if (!answerMode) {
       if (out.answeredNeedKeys.length) await this.deps.needs.markAnswered(session.id, out.answeredNeedKeys);
@@ -273,6 +288,11 @@ export class ConversationService {
       const updated = await this.deps.conversations.getByBusiness(businessId);
       return { session: updated ?? session, turns, readyForAha2: session.status === 'ready_for_aha2' };
     }
+
+    // PACING CAP — the founder has now answered MAX_DISCOVERY_ANSWERS discovery questions: no further question, ever.
+    const answered = (await this.deps.conversations.listTurns(session.id))
+      .filter((x) => x.role === 'founder' && x.infoNeedKey !== ANSWER_MODE_TURN).length;
+    if (answered >= MAX_DISCOVERY_ANSWERS) return this.closeAtCap(session, businessId, language, out.interpretation, answered);
 
     // FIX 3 — coverage gate. A strategy is only honest once the required-core is covered: goal (a persisted goal
     // row), horizon, whats_working, acquisition_today. `coveredCore` = the forceable three are no longer open.
@@ -336,6 +356,26 @@ export class ConversationService {
     return { session: updated ?? session, turns, readyForAha2: ready };
   }
 
+  /**
+   * The cap fired: acknowledge (question sentences stripped), then hand over. A held goal OR goal-shaped words →
+   * AWAITING_GOAL: the arc shows the one-click "Is this your goal?" confirm (editable; confirming or correcting it
+   * writes the goal and releases the strategy). Nothing goal-shaped → ready WITHOUT a goal: the strategy is built on
+   * an assumed goal from the named constraint and says so.
+   */
+  private async closeAtCap(session: ConversationSession, businessId: string, language: string, interpretation: string | null | undefined, answered: number): Promise<ConversationView> {
+    const ack = withoutQuestions(interpretation ?? '');
+    if (ack) await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: ack, language, infoNeedKey: null });
+    const active = await this.deps.state.listActive(businessId);
+    const hasGoal = active.some((s) => s.kind === 'goal');
+    const candidate = await this.goalCandidate(businessId);
+    const awaitGoal = Boolean(candidate);
+    await this.deps.conversations.setStatus(session.id, awaitGoal ? 'active' : 'ready_for_aha2', awaitGoal ? AWAITING_GOAL_FOCUS : null);
+    this.deps.log?.({ type: 'conversation_capped', detail: JSON.stringify({ businessId, answered, hasGoal, goalCandidate: Boolean(candidate), next: hasGoal ? 'strategy' : awaitGoal ? 'confirm_goal' : 'assumed_goal' }) });
+    const turns = await this.deps.conversations.listTurns(session.id);
+    const updated = await this.deps.conversations.getByBusiness(businessId);
+    return { session: updated ?? session, turns, readyForAha2: !awaitGoal };
+  }
+
   async pause(businessId: string): Promise<void> {
     const session = await this.deps.conversations.getByBusiness(businessId);
     if (session) await this.deps.conversations.setStatus(session.id, 'paused', session.currentFocus);
@@ -379,7 +419,11 @@ export class ConversationService {
   /** The strongest goal-shaped statement the founder already stated (mis-filed as decision/intention), VERBATIM,
    * for reflect-back confirmation — or null to ask cold. Deterministic; never re-runs the turn classifier. */
   async goalCandidate(businessId: string): Promise<GoalCandidate | null> {
-    return selectGoalCandidate(await this.deps.state.listActive(businessId));
+    const active = await this.deps.state.listActive(businessId);
+    // A goal already held is the candidate (the cap's confirm shows it); otherwise the strongest goal-shaped words.
+    const held = [...active].reverse().find((s) => s.kind === 'goal' && (s.statement ?? '').trim());
+    if (held) return { stateId: held.id, kind: 'goal', statement: held.statement.trim(), score: 99, hasTradeoff: false };
+    return selectGoalCandidate(active);
   }
 
   /** FIX 1 — Conversation-side gate signal: the model wanted to advance (marked AWAITING_GOAL) but no goal row
@@ -388,6 +432,8 @@ export class ConversationService {
   async awaitingGoal(businessId: string): Promise<boolean> {
     const session = await this.deps.conversations.getByBusiness(businessId);
     if (!session) return false;
+    // At the cap the confirm is shown even when a goal is held (operator, 2026-10-12): "Is this your goal?" at turn 4.
+    if (session.currentFocus === AWAITING_GOAL_FOCUS && session.status !== 'ready_for_aha2') return true;
     if (await this.hasGoal(businessId)) return false;
     return session.currentFocus === AWAITING_GOAL_FOCUS;
   }

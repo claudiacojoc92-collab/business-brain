@@ -494,7 +494,7 @@ export interface ArcView {
   turns?: ArcTurn[];
   coverage?: { key: string; covered: boolean }[]; // conversation — quiet progress map
   mirror?: { founderWords: string; against: string; tension: string } | null;
-  strategy?: { bet: string; over: string; horizon: string; tradeOffs: string[]; notNow: string[]; reconsider: string[]; proposalId: string | null; adoptable: boolean };
+  strategy?: { bet: string; over: string; horizon: string; tradeOffs: string[]; notNow: string[]; reconsider: string[]; proposalId: string | null; adoptable: boolean; assumedGoal?: string | null };
   weekDay?: { week: string[]; today: string | null; canCreate: boolean };
   email?: { subject: string; body: string } | null;
   container?: { items: { labelKey: string; statement: string; provenance: 'observed' | 'declared' | 'inferred' | 'unknown' }[] };
