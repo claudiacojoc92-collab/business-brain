@@ -99,7 +99,15 @@ describe('understanding systemPrompt — strategic lens (business, not website a
   });
   it('keeps website housekeeping (legal-page dates, vague copy) out of contradictions and aha', () => {
     expect(p).toMatch(/legal pages \(Privacy, Terms, Data Deletion/);
-    expect(p).toMatch(/NEVER go in contradictions or aha\.findings/);
+    expect(p).toMatch(/NEVER\s+'?,?\s*'?\s*appear in ANY field you compose/);
+    expect(p).toMatch(/ANY CRITIQUE OF A PHRASE ON THE SITE/);
+  });
+  it('asks for 3-4 tensions on different dimensions, second person, consequence so-whats, observations not questions', () => {
+    expect(p).toMatch(/3 to 4 real tensions/);
+    expect(p).toMatch(/SECOND PERSON, PRESENT TENSE/);
+    expect(p).toMatch(/CONSEQUENCE, never a paraphrase/);
+    expect(p).toMatch(/A GAP YOU CAN SEE IS AN OBSERVATION, NEVER A QUESTION/);
+    expect(p).toMatch(/"customer_proof", "channel_mismatch"/);
   });
   it('requires the so-what and a ranked list', () => {
     expect(p).toMatch(/THE SO-WHAT TEST/);

@@ -73,34 +73,25 @@ const UNLICENSED_CLAIM_TERMS = [
   'dovedește', 'dovedeste', 'demonstrează', 'demonstreaza', 'dimostra che', 'prova che',
 ];
 
-/**
- * Website HOUSEKEEPING, not business insight: legal pages (their dates, versions, wording) and copywriting
- * critiques of a quoted phrase ("'…' signals / frames / implies …"). Dropped from findings and from
- * "What stood out" deterministically, because the prompt alone did not keep them out.
- */
-const LEGAL_PAGE = /\b(privacy policy|terms of service|terms and conditions|data deletion|cookie policy|legal (page|document)s?|last[- ]updated)\b/i;
-const QUOTED_PHRASE_CRITIQUE = /['"‘“][^'"’”]{3,120}['"’”][^.]{0,40}\b(signal|signals|signalling|signaling|frames|framing|implies|implying|hints|suggests)\b/i;
-// A quoted phrase that "nothing explains": no page names / describes / defines what it refers to.
-const QUOTED_PHRASE_UNEXPLAINED = /['"\u2018\u201c][^'"\u2019\u201d]{3,120}['"\u2019\u201d][^.]{0,100}\b(no|nothing|nowhere|never)\b[^.]{0,40}\b(names?|describes?|explains?|defines?|elaborates?|says|specif\w*)\b/i;
-export function isHousekeeping(text: string): boolean {
-  return LEGAL_PAGE.test(text) || QUOTED_PHRASE_CRITIQUE.test(text) || QUOTED_PHRASE_UNEXPLAINED.test(text);
-}
-
-/**
- * "Something is not shown / demonstrated / exemplified" — the capability gap's point. Used to drop a secondary item
- * that restates it (e.g. the same gap told about one channel) when the capability gap is already the primary.
- */
-const NOT_SHOWN = /\b(no|never|not|zero|none|without|neither|nor)\b[^.]{0,60}\b(show|shows|shown|showing|demonstrat\w*|example|examples|evidence|sample|samples|instance|output)\b/i;
-const SHOWS_NOTHING = /\b(show|shows|shown|showing|demonstrates?)\s+(nothing|no|none)\b/i;
-const NO_CONTENT_ABOUT = /\b(no|zero|nothing|none)\b[^.]{0,30}\b(content|posts?|mention\w*)\b[^.]{0,20}\babout\b/i;
-export function restatesNotShown(text: string): boolean {
-  return NOT_SHOWN.test(text) || SHOWS_NOTHING.test(text) || NO_CONTENT_ABOUT.test(text);
-}
+export { isHousekeeping, restatesNotShown } from './insight-text';
+import { isHousekeeping } from './insight-text';
 
 /** True when the text makes a claim whose TYPE website-only evidence cannot license. */
 export function makesUnlicensedClaim(text: string): boolean {
   const t = text.toLowerCase();
   return UNLICENSED_CLAIM_TERMS.some((p) => t.includes(p));
+}
+
+/**
+ * The understanding SUB-TEXT (a tension's so-what) may name trust (operator decision 2026-10-12): "this asks a founder to
+ * sign up on trust alone" is the consequence of a missing proof, not a claim about how buyers will behave. Every other
+ * banned type (credibility, reputation, conversion, revenue, recommendation…) stays banned here too, and tensions,
+ * findings and implications keep the full gate.
+ */
+const TRUST_TERMS = ['trust', 'încredere', 'incredere', 'fiducia'];
+export function makesUnlicensedSoWhatClaim(text: string): boolean {
+  const t = text.toLowerCase();
+  return UNLICENSED_CLAIM_TERMS.some((p) => !TRUST_TERMS.includes(p) && t.includes(p));
 }
 
 export interface ValidatedFinding {
