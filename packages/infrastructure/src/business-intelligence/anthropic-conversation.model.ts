@@ -1,4 +1,5 @@
 import { createAnthropicClient } from '../llm/anthropic-client';
+import { VOICE_RULES } from '@bb/application';
 import type { IConversationModelPort, ConversationStepInput, ConversationStepOutput } from '@bb/application';
 
 /**
@@ -9,7 +10,7 @@ import type { IConversationModelPort, ConversationStepInput, ConversationStepOut
  */
 const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian' };
 
-function systemPrompt(lang: string): string {
+function systemPromptBase(lang: string): string {
   const l = LANG[lang] ?? 'English';
   return [
     `ABSOLUTE RULE — ONE LANGUAGE: ${l}. Write your ENTIRE reply — EVERY JSON string field (interpretation, nextQuestion, every opener field), every sentence, every label (translate "Sinteza:" / "Diagnostic:"), the closing question — in ${l}. ${l} is this business's content language, decided once for the business; it does NOT follow the language of the founder's latest message. A short reply in another language ("ok", "thanks", "mersi") or a borrowed foreign word changes nothing: still ${l}. The business understanding, held founder state, corrections, aha findings, sources and earlier turns below may be in another language — that MUST NOT leak into your reply. NEVER mix languages within a response. A response that is not 100% ${l} is a FAILURE.`,
@@ -158,6 +159,11 @@ function systemPrompt(lang: string): string {
     '  Every field in ONE language = the response language. If there are genuinely no sources, set opener to null and',
     '  instead ask ONE grounded question from Aha 1 in nextQuestion.',
   ].join('\n');
+}
+
+/** The founder-facing prompt + the ONE shared voice block (spoken-voice.ts), same on every surface. */
+function systemPrompt(lang: string): string {
+  return `${systemPromptBase(lang)}\n\n${VOICE_RULES}`;
 }
 
 function extractJson(text: string): unknown {

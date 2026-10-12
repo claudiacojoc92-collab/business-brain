@@ -1,5 +1,5 @@
 import { createAnthropicClient } from '../llm/anthropic-client';
-import { spoken, plainSubject, type IEmailModelPort, type EmailDraftInput, type ArcEmail } from '@bb/application';
+import { VOICE_RULES, spoken, plainSubject, type IEmailModelPort, type EmailDraftInput, type ArcEmail } from '@bb/application';
 
 /**
  * DAY ONE Moment 8 — the first work item. Drafts a real, sendable email grounded in the HELD strategy (the
@@ -9,7 +9,7 @@ import { spoken, plainSubject, type IEmailModelPort, type EmailDraftInput, type 
  */
 const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian' };
 
-function rules(l: string): string {
+function rulesBase(l: string): string {
   return [
     `You are Business Brain drafting one real email for a founder to send. LANGUAGE — write EVERYTHING in ${l}: this business's content language, decided once for the business, whatever language the founder's words, corrections or sources below are in. Every field and every sentence in ${l}; NEVER mix languages, and never let other-language content in this prompt leak into the output.`,
     'OUTPUT — your ENTIRE response is a SINGLE JSON object and nothing else: no text before or after it, no ```json fences. The first character is "{". Shape:',
@@ -20,8 +20,9 @@ function rules(l: string): string {
     '- Speak to the AUDIENCE named. Be warm, specific, and brief — a professional outreach, not a sales blast.',
     '- Do NOT invent facts, results, numbers, testimonials, or offers not grounded in the founder context.',
     '- NEVER say something is confirmed, scheduled, signed, finished or live unless the FOUNDER CONTEXT says exactly that.',
-    '  A date you do not hold is NOT a fact: it is a target or a promise to confirm. Write "we are targeting [date],',
-    '  pending internal confirmation" or "we will confirm the date by [date]", never "we have a confirmed date of [date]".',
+    '  A date you do not hold is NOT a fact: it is a promise, said plainly in the future tense. Write "We will send the',
+    '  date by [date]", "You will have the runbook by [date]" or "We aim to be ready by [date]", never "we have a confirmed',
+    '  date of [date]" and never stiff phrasing like "we are targeting sending".',
     '  The reader may act on every sentence; a status that turns out untrue costs the founder their credibility.',
     '- Placeholders: only where the founder must fill a fact you do not hold (a name, a date). Each is ONE short phrase',
     '  in brackets, like [Name] or [your date here]. Never explain inside a placeholder and never nest one.',
@@ -36,6 +37,11 @@ function rules(l: string): string {
     '  fragment a professional would send to a bank or a clinic: "Testnet date and runbook", "Update on the pilot".',
     '- No consultant words (perimeter, stakeholders, align, alignment, leverage, deliverables, critical path, discrete item).',
   ].join('\n');
+}
+
+/** The founder-facing prompt + the ONE shared voice block (spoken-voice.ts), same on every surface. */
+function rules(l: string): string {
+  return `${rulesBase(l)}\n\n${VOICE_RULES}`;
 }
 
 function userBlock(i: EmailDraftInput): string {

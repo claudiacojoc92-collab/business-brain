@@ -1,5 +1,5 @@
 import { createAnthropicClient } from '../llm/anthropic-client';
-import { withoutQuestions, type ICorrectionReflectionModel, type CorrectionReflectionInput, type CorrectionReflection } from '@bb/application';
+import { VOICE_RULES, withoutQuestions, type ICorrectionReflectionModel, type CorrectionReflectionInput, type CorrectionReflection } from '@bb/application';
 
 /**
  * DAY ONE Moment 3 — the strategist's SUBSTANTIVE reply when the founder corrects what BB understood. NOT a
@@ -12,7 +12,7 @@ import { withoutQuestions, type ICorrectionReflectionModel, type CorrectionRefle
  */
 const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian' };
 
-function rules(l: string): string {
+function rulesBase(l: string): string {
   return [
     `You are Business Brain, a strategist, replying to a founder who just CORRECTED what you understood about`,
     `their business. LANGUAGE — write EVERYTHING in ${l}: this business's content language, decided once for the business, whatever language the founder's words, corrections or sources below are in. Every field and every sentence in ${l}; NEVER mix languages, and never let other-language content in this prompt leak into the output. Return ONLY valid JSON with EXACTLY this shape:`,
@@ -27,6 +27,11 @@ function rules(l: string): string {
     '  or market/competitor/customer claims. If the correction contradicts something you inferred, say so plainly.',
     '- Warm, concrete, and brief — 1–2 sentences per field. This is a conversation, not a report.',
   ].join('\n');
+}
+
+/** The founder-facing prompt + the ONE shared voice block (spoken-voice.ts), same on every surface. */
+function rules(l: string): string {
+  return `${rulesBase(l)}\n\n${VOICE_RULES}`;
 }
 
 function userBlock(i: CorrectionReflectionInput): string {

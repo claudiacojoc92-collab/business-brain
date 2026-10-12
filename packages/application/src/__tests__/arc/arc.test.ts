@@ -84,7 +84,8 @@ describe('ArcService.view — each moment composes from the reused engines', () 
     expect(v.understanding?.serves).toMatch(/post-op patients/);
     // The diagnostic core: the engine's contradiction is now SURFACED as a tension (it used to be discarded).
     // FIX 2c — tensions carry a grounding line (the concrete statement) so the referent resolves in the card.
-    expect(v.understanding?.tensions).toContainEqual({ tension: 'kinetotherapy may be the real business — or the site is out of sync with the offer', grounding: 'the site gives six categories equal weight', sourceRefs: [] });
+    // ONE voice (2026-10-12): the shared cleanup turns BB's dash into a comma at the view's exit point.
+    expect(v.understanding?.tensions).toContainEqual({ tension: 'kinetotherapy may be the real business, or the site is out of sync with the offer', grounding: 'the site gives six categories equal weight', sourceRefs: [] });
     // Confident = from evidence (Aha1 + explicit offer + evidence-backed positioning); inferring = from pattern.
     expect(v.understanding?.confident).toContain('Referrals already drive most new members.');
     expect(v.understanding?.confident).toContain('physio memberships');

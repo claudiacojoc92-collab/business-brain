@@ -1,44 +1,84 @@
 /**
- * Spoken-voice cleanup shared by the arc's written surfaces (week story, email). Operator, 2026-10-12: one rule set
- * everywhere, not per surface. The prompts carry the rules; this is the deterministic backstop for the parts code can
- * fix safely without rewriting meaning:
- *   - no dashes: an em/en dash used between words becomes a comma ("runbook — scheduling" → "runbook, scheduling"),
- *   - no "+" joiner in a subject ("date + runbook" → "date and runbook", in the content language),
- *   - a placeholder is one short phrase: "[specific date — to be confirmed by Friday]" → "[specific date]".
+ * ONE voice for everything Business Brain writes to a founder (operator, 2026-10-12: "one rule set across every
+ * surface, not just some"). Two halves, used together everywhere:
+ *   - VOICE_RULES: the prompt block every founder-facing model call carries (understanding, conversation, correction
+ *     reply, mirror, strategy, week, email, Talk). Case-free examples only — never a real business in a prompt.
+ *   - spoken(): the deterministic backstop for what code can fix without changing meaning:
+ *       · no dashes: an em/en dash between words becomes a comma, or a colon when it introduces a list
+ *         ("intervene — commands that fail, values that live…" → "intervene: commands that fail, values…"),
+ *       · bullets stay bullets ("- item" lines are never collapsed),
+ *       · a placeholder is one short phrase: "[specific date — to be confirmed by Friday]" → "[specific date]",
+ *       · manager verbs become plain ones (identify → find, ensure → make sure, align on → go over, leverage → use),
+ *       · text inside quotation marks is never touched: a quote of the founder's own words or of their site stays exact.
+ * spoken() is for BB-AUTHORED text only. Founder words (a goal candidate, a mirror's "you said") are never rewritten.
  */
 const AND: Record<string, string> = { en: 'and', ro: 'și', it: 'e' };
 
+export const VOICE_RULES = [
+  'VOICE — the same rules for everything you write to this founder:',
+  '- THE COFFEE TEST: write what a sharp friend would say out loud over coffee, not what a consultant puts in a deck.',
+  '- Second person, active voice: "you", "we". "We close every gap before we hand it over", never "each gap gets closed".',
+  '- Verbs, not nouns: "get the booking page live", not "booking page readiness".',
+  '- Plain verbs: find, pick, write, send, call, fix. Never identify, ensure, align, leverage, utilize, facilitate,',
+  '  streamline, optimize.',
+  '- No consultant words: perimeter, stakeholders, alignment, deliverables, critical path, de-risk, value proposition,',
+  '  go-to-market, actionable, discrete item.',
+  '- People act, things do not: a buyer reads, decides, signs. A report or "credibility" does not "move" anyone.',
+  '- NO DASHES: never the em-dash "—", the en-dash "–", or a hyphen used as a dash. Join clauses with a period or a',
+  '  comma; introduce a list with a colon. No "+", "/", "&" or "·" as joiners.',
+  '- Never cut a sentence short with "…". Write a shorter sentence instead.',
+].join('\n');
+
+/** Split into [outside, inside-quotes, outside, …] so cleanup never rewrites quoted words. */
+const QUOTED = /("[^"\n]*"|“[^”\n]*”|„[^“”\n]*[“”]|«[^»\n]*»)/g;
+const outsideQuotes = (s: string, fn: (part: string) => string): string =>
+  (s ?? '').split(QUOTED).map((part, i) => (i % 2 === 1 ? part : fn(part))).join('');
+
+function dashLine(rest: string): string {
+  return rest
+    .replace(/[ \t]+[—–][ \t]+(?=[\])])/g, '')                          // dash right before a closing bracket
+    // a dash that introduces a list (2+ commas before the sentence ends) → colon
+    .replace(/[ \t]*[—–][ \t]*(?=[^.!?—–]*,[^.!?—–]*,)/g, ': ')
+    .replace(/[ \t]*[—–][ \t]*/g, ', ')                                // any other em/en dash → comma
+    .replace(/[ \t]+-[ \t]+/g, ', ')                                             // a spaced hyphen used as a dash
+    .replace(/([,:])[ \t]*[,:]/g, '$1')
+    .replace(/[,:][ \t]*([.!?;])/g, '$1');
+}
+
 export function withoutDashes(s: string): string {
-  // Within a line only: a dash that STARTS a line is a bullet and stays (a "\n- item" list must not collapse into
-  // commas, which it did in the first version of this cleanup).
-  return (s ?? '')
-    .split('\n')
-    .map((line) => {
-      const bullet = line.match(/^(\s*[-\u2014\u2013\u2022*]\s+)/)?.[1] ?? '';
-      const rest = line.slice(bullet.length)
-        .replace(/[ \t]+[\u2014\u2013][ \t]+(?=[\])])/g, '')     // a dash right before a closing bracket: drop it
-        .replace(/[ \t]*[\u2014\u2013][ \t]*/g, ', ')            // em/en dash between words → comma
-        .replace(/[ \t]+-[ \t]+/g, ', ')                       // a spaced hyphen used as a dash
-        .replace(/,[ \t]*,/g, ',')
-        .replace(/,[ \t]*([.!?;:])/g, '$1');
-      return bullet ? `${bullet.replace(/[\u2014\u2013]/, '-')}${rest}` : rest;
-    })
-    .join('\n');
+  // Within a line only: a dash that STARTS a line is a bullet and stays.
+  return (s ?? '').split('\n').map((line) => {
+    const bullet = line.match(/^(\s*[-—–•*]\s+)/)?.[1] ?? '';
+    const rest = outsideQuotes(line.slice(bullet.length), dashLine);
+    return bullet ? `${bullet.replace(/[—–]/, '-')}${rest}` : rest;
+  }).join('\n');
 }
 
 export function simplePlaceholders(s: string): string {
   // Only bracketed slots with an explanation tucked inside ("[date, to be confirmed by…]") are cut to their first phrase.
   return (s ?? '').replace(/\[([^\]\n]{1,400})\]/g, (whole, inner: string) => {
-    const head = inner.split(/\s*(?:,|;|—|–|\s-\s|\(|\bto be\b|\btbc\b|\btbd\b)\s*/i)[0]!.trim();
+    const head = inner.split(/\s*(?:,|;|—|–|\s-\s|\(|\bto be\b|\btbc\b|\btbd\b|\be\.g\.)\s*/i)[0]!.trim();
     return head && head.length < inner.trim().length ? `[${head}]` : whole;
   });
 }
 
-export function plainSubject(s: string, language: string): string {
-  return withoutDashes((s ?? '').replace(/\s*\+\s*/g, ` ${AND[language] ?? 'and'} `)).replace(/\s{2,}/g, ' ').trim();
+const VERBS: [RegExp, string][] = [
+  [/\bidentifying\b/g, 'finding'], [/\bIdentifying\b/g, 'Finding'], [/\bidentified\b/g, 'found'], [/\bIdentified\b/g, 'Found'],
+  [/\bidentify\b/g, 'find'], [/\bIdentify\b/g, 'Find'],
+  [/\bensuring\b/g, 'making sure'], [/\bEnsuring\b/g, 'Making sure'], [/\bensures\b/g, 'makes sure'], [/\bensured\b/g, 'made sure'],
+  [/\bensure\b/g, 'make sure'], [/\bEnsure\b/g, 'Make sure'],
+  [/\balign on\b/g, 'go over'], [/\bAlign on\b/g, 'Go over'], [/\balign with\b/g, 'agree with'], [/\bAlign with\b/g, 'Agree with'],
+  [/\bleverage\b/g, 'use'], [/\bLeverage\b/g, 'Use'], [/\butilize\b/g, 'use'], [/\bUtilize\b/g, 'Use'],
+];
+export function plainVerbs(s: string): string {
+  return outsideQuotes(s, (part) => VERBS.reduce((acc, [re, rep]) => acc.replace(re, rep), part));
 }
 
-/** Body/field text: placeholders first (so their inner dash is cut, not turned into a comma), then dashes. */
+export function plainSubject(s: string, language: string): string {
+  return plainVerbs(withoutDashes((s ?? '').replace(/\s*\+\s*/g, ` ${AND[language] ?? 'and'} `))).replace(/\s{2,}/g, ' ').trim();
+}
+
+/** BB-authored text: placeholders first (so their inner dash is cut, not turned into a comma), then dashes, then verbs. */
 export function spoken(s: string): string {
-  return withoutDashes(simplePlaceholders(s));
+  return plainVerbs(withoutDashes(simplePlaceholders(s)));
 }

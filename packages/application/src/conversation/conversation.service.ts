@@ -16,7 +16,7 @@ import type {
   FounderObservation,
   FounderStateKind,
 } from './contracts';
-import { selectGoalCandidate, type GoalCandidate } from './goal-candidate';
+import { selectGoalCandidate, type GoalCandidate, isHeldGoal } from './goal-candidate';
 
 /**
  * The Moment 4 opener turn's stored content. When the model produced a STRUCTURED opener (the short pointer),
@@ -298,7 +298,7 @@ export class ConversationService {
     // row), horizon, whats_working, acquisition_today. `coveredCore` = the forceable three are no longer open.
     const openNeeds = await this.deps.needs.listOpen(session.id);
     const openKeys = new Set(openNeeds.map((n) => n.key));
-    const hasGoal = (await this.deps.state.listActive(businessId)).some((s) => s.kind === 'goal');
+    const hasGoal = (await this.deps.state.listActive(businessId)).some(isHeldGoal);
     const coveredCore = FORCEABLE_CORE.every((k) => !openKeys.has(k));
 
     // At most ONE re-step per turn (bounded, never a loop). Agenda enforcement takes precedence over the core backstop.
@@ -366,7 +366,7 @@ export class ConversationService {
     const ack = withoutQuestions(interpretation ?? '');
     if (ack) await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: ack, language, infoNeedKey: null });
     const active = await this.deps.state.listActive(businessId);
-    const hasGoal = active.some((s) => s.kind === 'goal');
+    const hasGoal = active.some(isHeldGoal);
     // Already handed over (the goal was confirmed, or the strategy was assumed): a later message — e.g. an answer to the
     // mirror — is acknowledged but never re-opens the goal confirm.
     if (session.status === 'ready_for_aha2') {
@@ -375,9 +375,11 @@ export class ConversationService {
       return { session, turns, readyForAha2: true };
     }
     const candidate = await this.goalCandidate(businessId);
-    const awaitGoal = Boolean(candidate);
+    // Operator, 2026-10-12: never skip the goal silently. With no clean candidate the founder gets an EMPTY box and
+    // writes the real goal (the assumed-goal path only runs if that step is somehow bypassed).
+    const awaitGoal = true;
     await this.deps.conversations.setStatus(session.id, awaitGoal ? 'active' : 'ready_for_aha2', awaitGoal ? AWAITING_GOAL_FOCUS : null);
-    this.deps.log?.({ type: 'conversation_capped', detail: JSON.stringify({ businessId, answered, hasGoal, goalCandidate: Boolean(candidate), next: hasGoal ? 'strategy' : awaitGoal ? 'confirm_goal' : 'assumed_goal' }) });
+    this.deps.log?.({ type: 'conversation_capped', detail: JSON.stringify({ businessId, answered, hasGoal, goalCandidate: Boolean(candidate), next: candidate ? 'confirm_goal' : 'write_goal' }) });
     const turns = await this.deps.conversations.listTurns(session.id);
     const updated = await this.deps.conversations.getByBusiness(businessId);
     return { session: updated ?? session, turns, readyForAha2: !awaitGoal };
@@ -420,7 +422,7 @@ export class ConversationService {
   /** True when the founder has a PERSISTED goal (kind='goal'). The conversation-ready gate + the strategy moment
    * both consult this: no goal ⇒ the reflect-back surface, never a silent advance or an opaque strategy failure. */
   async hasGoal(businessId: string): Promise<boolean> {
-    return (await this.deps.state.listActive(businessId)).some((s) => s.kind === 'goal');
+    return (await this.deps.state.listActive(businessId)).some(isHeldGoal);
   }
 
   /** The strongest goal-shaped statement the founder already stated (mis-filed as decision/intention), VERBATIM,
@@ -428,7 +430,9 @@ export class ConversationService {
   async goalCandidate(businessId: string): Promise<GoalCandidate | null> {
     const active = await this.deps.state.listActive(businessId);
     // A goal already held is the candidate (the cap's confirm shows it); otherwise the strongest goal-shaped words.
-    const held = [...active].reverse().find((s) => s.kind === 'goal' && (s.statement ?? '').trim());
+    // Only an OUTCOME qualifies: the turn classifier also files conditions as kind='goal'. No clean goal → null, and
+    // the cap's assumed-goal path says so on the strategy card instead of offering a weak candidate.
+    const held = [...active].reverse().find(isHeldGoal);
     if (held) return { stateId: held.id, kind: 'goal', statement: held.statement.trim(), score: 99, hasTradeoff: false };
     return selectGoalCandidate(active);
   }
@@ -481,7 +485,7 @@ export class ConversationService {
     // FIX 3 — coverage hints for the model. requiredCoreOpen: the required-core needs still uncovered (goal is
     // "open" whenever no goal ROW exists, independent of the need's answered flag, because the classifier can mark
     // the goal need answered without persisting a goal). forcedNeedKey: set when the depth cap fired.
-    const hasGoal = knownState.some((s) => s.kind === 'goal');
+    const hasGoal = knownState.some(isHeldGoal);
     const openKeys = new Set(openNeeds.map((n) => n.key));
     const requiredCoreOpen = [...(!hasGoal ? ['goal'] : []), ...FORCEABLE_CORE.filter((k) => openKeys.has(k))];
     const bb = turns.filter((t) => t.role === 'bb');

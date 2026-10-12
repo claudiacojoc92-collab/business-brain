@@ -1,0 +1,194 @@
+{
+  "businessId": "01M4QZK6AJR9AW1MZ23BERW4TZ",
+  "goalOffered": null,
+  "surfaces": {
+    "pour-in": "website: synced, 10 pages",
+    "understanding": {
+      "does": "You sell a post-quantum cryptographic verification layer to institutions and developers who need to verify transactions before settlement, without changing existing infrastructure.",
+      "serves": "Institutions (enterprise, regulation and audit)",
+      "standsOut": "You are betting on being the dedicated verification layer that sits between intent and settlement across every existing network.",
+      "constraint": {
+        "decided": true,
+        "text": "No organisation has used QuFi and got a result yet."
+      },
+      "stage": {
+        "stage": "validating",
+        "evidence": [
+          "All performance figures are labelled 'target' or 'goal', not measured results.",
+          "200+ organisations described as 'in pipeline', not as customers or live integrations.",
+          "No price, sign-up, or onboarding path exists for any of the three named products.",
+          "The conclusion page lists 'next steps' including 'expand network participation' and 'deploy enterprise solutions', confirming nothing is deployed yet."
+        ],
+        "secondary": null
+      },
+      "tensions": [
+        "You sell a live verification network. Your site and every page on it show only architecture diagrams, target metrics, and a pipeline of unnamed organisations. No page shows the network running, a verification completing, or a system integrated. | This means a developer or enterprise buyer cannot tell whether QuFi is a working product or a well-documented proposal, so the technical depth of the site does the opposite of what it intends.",
+        "You present three named products and invite visitors to explore them. None of the three has a price, a sign-up, a demo request, or any step that moves a visitor toward using or paying for anything. | This means the site functions as a technical whitepaper, not a commercial product, so you are relying entirely on direct outreach to convert the institutional interest the site is designed to generate.",
+        "You speak to enterprise compliance teams, blockchain developers and individual node operators in the same pages with the same depth. No part of the site tells any one of them that they are the person you are building this for first. | This means each of the three audiences has to read through material written for the other two to find what is relevant to them, and none of them gets a clear signal that QuFi is built for their specific problem."
+      ],
+      "unanswered": [
+        "Is any part of the network live and processing real verifications today, or is everything still pre-launch?",
+        "Which of QuVault, QuSettle and QuFi Verify is the primary commercial product versus a protocol component.",
+        "Whether any of the three applications is available to buy, license or integrate today, or all are still being built."
+      ]
+    },
+    "correction replies": [
+      "QuFi has no production network running yet, no signed customers, and the 200-plus organisations in the pipeline are conversations and expressed interest, not contracts. The team is technical and you have not yet decided which enterprise buyer you are building for first. / The tension I flagged about the site showing only architecture diagrams and no live network running is not a gap to close urgently, it is the accurate picture of where you are. What changes is how I read the three-audience problem: this is not a messaging fix, it is a founding decision you are still making. Picking your first enterprise buyer is the move that unlocks everything else, because right now the site, the products, and the pipeline are all pointing in three directions at once with no one committed. / The three-product structure, QuVault, QuSettle, and QuFi Verify, still holds as the shape of what you are building, and none of the three has a path for a visitor to take a next step, which matters even at pre-launch because the people in that 200-plus pipeline will land on those pages.",
+      "You are saying that for a pre-launch protocol, the first win is not the biggest contract or the most prestigious name. It is the one buyer who lets you run QuFi in their production environment so you can say 'we did it here' to every buyer after them. The reference story is the asset, not the deal size or the terms. / This corrects how I was reading the tension around your unnamed pipeline. I had framed the absence of live proof as a site problem, a credibility gap you needed to close with better copy or a demo flow. You are telling me it is a sequencing decision: you go get one real production integration first, even a smaller one, and that integration becomes the thing that unlocks the next ten. The commercial terms of that first deal matter far less than the fact that it happened and you can point to it. / The core tension around speaking to enterprise compliance teams, blockchain developers and node operators all at once on the same pages still holds. Once you have that first production reference, you will need to tell each of those three audiences a different version of the same story, because the person who reads 'we did it here' at a mid-size institution reads it very differently from a developer standing up a node.",
+      "You have a mid-tier European bank already in conversation with you, and they have told you exactly what they need to move forward: a security audit of the protocol, a testnet they can run themselves, and one named engineer on your side they can call directly. You are treating this reference as more valuable than three faster but thinner integrations. / This corrects the picture I had of an unnamed, unproven pipeline. You are not hunting for your first institutional conversation, you are managing a specific bank with specific technical requirements. That shifts the priority away from fixing the site for broad audiences and toward delivering those three things for this one bank first, because a named reference from them changes how every future conversation starts. / The tension around your site showing no live network activity still holds. When that bank's engineers go looking for proof that QuFi runs in the real world, they will land on architecture diagrams, and that gap will slow the audit and testnet conversations down before your named engineer even picks up the phone.",
+      "The testnet is what you are actually racing to finish. The audit runs alongside it and the engineer is already assigned. The testnet is not ready for anyone outside your team to touch, and that is the one thing that has to move before anything else in the next 60 days. / I had read the audit and the engineer as the forward pressure on your timeline. That was wrong. The real constraint is the testnet reaching a state where an external user can run a verification on it. That shifts how I read the site gap too: showing architecture diagrams instead of a live network is not just a messaging choice, it reflects where the product actually is right now. / The three products, QuVault, QuSettle and QuFi Verify, are still real and distinct, and the core bet still stands: a verification layer that sits between intent and settlement without touching existing infrastructure.",
+      "The mid-tier European bank is not a cold prospect or a logo on a slide. Their security team has already sat with yours, the relationship is warm, and a second EU bank in the same regulatory circle is lined up behind them. The testnet going live is the specific gate that moves both of them forward. / I had read your pipeline as unnamed and unanchored, which made the site's lack of live proof feel like a foundational gap. This correction tells me the pipeline is real and sequenced. The pressure now shifts: the site's missing demo or sign-up matters less than getting the testnet live, because that is the concrete thing two warm banks are waiting on before they move. / The testnet being the gate confirms what still holds: you are selling a live verification network, and until the network is visibly running, even a warm relationship can only go so far. The security teams have met, but a bank's compliance process will need to see the system work, not just the architecture.",
+      "The testnet has one job right now: survive a bank's security team running it hard for 60 days. That is the real deliverable, not a public launch or a developer sign-up flow. / This shifts how I read the site tension I flagged. The missing demo request or sign-up step is not the gap to close first. The gap that matters is whether the testnet holds up under a professional adversarial review, and everything else waits behind that. / The three-audience problem still stands. A bank's security team landing on the site today reads the same pages as a node operator or a developer, and nothing on those pages tells them they are the person you built this for first."
+    ],
+    "conversation": [
+      "BB: I have read everything you gave me on QuFi Network. One thing stands out before we talk: you have built a complete institutional narrative, a technical architecture, and three named products, but the site gives no visitor anywhere to go next.\nThe 200+ pipeline claim is your strongest social proof, yet not one name or outcome appears anywhere.\nQuVault, QuSettle and QuFi Verify each have an 'Explore' page but no price, no demo request, and no next step, so the site reads as a whitepaper, not a product.\nYou are speaking to enterprise compliance teams, blockchain developers and node operators in the same breath, which means none of them feels like the person you are building this for first.\nWhether any part of the network is live today, or everything is still pre-launch.\nWhat is actually running right now?",
+      "FOUNDER: The bank's security team will run an end-to-end verification of a real \ntransaction flow: they submit a transaction, our node verifies it, and \nthey receive a signed proof they can validate independently. If they \ncan reproduce that on their own infrastructure without our engineers \non the call, we've passed.",
+      "BB: That test is a smart line to draw: if they can reproduce the proof without you on the call, it is genuinely independent verification, not a demo. The 60-day clock makes this concrete. What I still cannot see from the site is which of the three products, QuVault, QuSettle or QuFi Verify, is actually what the bank is testing against, because the site presents all three as peers.\n\nWhich of the three is the bank running against, and is that the one you consider your primary commercial product right now?",
+      "FOUNDER: API references exist. QPL onboarding is partial — a developer can read \nit but needs our team for the first setup. Environment setup is \nmanual today. All three would need to be tightened before a bank's \nteam can run solo. That's the real work of the next 60 days.",
+      "BB: So the 60-day goal is not 'build the product' but 'remove yourself from the setup process', that is a meaningfully different problem. The bank cannot validate independence if your engineers are still required to get the environment running. That also tells me the three products are not really separate commercial choices right now: they are one integrated flow, and the bottleneck is the onboarding layer sitting in front of all three.\n\nHere is what I still need to understand: is this bank already inside the 200+ pipeline you mention on the site, or is it a separate, more advanced relationship that is ahead of everything else?",
+      "FOUNDER: Both. Two of the warm contacts are actively waiting for the testnet \ndate — they've asked us twice. The rest are warm introductions that \nwent quiet. The 60-day clock is real for the two active ones; for the \nrest, we need the testnet live before they re-engage."
+    ],
+    "goal": {
+      "offered": "(none offered: asked cold)",
+      "confirmed": "Signed pilot with the bank in 60 days."
+    },
+    "mirror": {
+      "founderWords": "Tighten API references, QPL onboarding and environment setup so a bank's security team can run solo across all three products within 60 days.",
+      "against": "API references exist but QPL onboarding is partial and environment setup is manual today, a developer can read the docs but needs the team for first setup.",
+      "tension": "You need the bank's team to run solo, but right now no one gets through first setup without you on the call."
+    },
+    "strategy": {
+      "bet": "Make the testnet runnable solo by a bank's security team before you do anything else",
+      "over": "Reaching new institutions or expanding the pipeline",
+      "horizon": "60 days",
+      "tradeOffs": [
+        "The two contacts who asked twice are the fastest path to a signed pilot. Reaching new people before the testnet works solo means everyone hits the same wall.",
+        "A guided demo does not give a security team what they need to sign off internally. They need to break it themselves and trust what they find.",
+        "The site and the pipeline are not what is blocking the pilot. The manual setup step is. Fix the thing that is actually in the way."
+      ],
+      "notNow": [
+        "Leave the quiet pipeline alone for now. They said they will re-engage when the testnet is live, so the testnet being live is the only thing that moves them.",
+        "Set the site aside for 60 days. The two contacts who matter already know you, and fixing the copy does not get them to a signed pilot any faster.",
+        "You have three products and none of them has a working self-serve path yet. Adding more before the first one is testable solo makes the problem bigger, not smaller."
+      ],
+      "reconsider": [
+        "If either warm contact goes cold or says they are no longer waiting, the bet shifts and you need to decide whether to accelerate outreach to the quiet pipeline or find a different first bank.",
+        "If the QPL onboarding and environment setup gaps turn out to need more than 60 days to close, the timeline breaks and you need to negotiate a new date with the two contacts before they lose patience.",
+        "If the bank's security team runs the test solo and does not move toward a pilot, the assumption that a self-serve test is enough to trigger an internal recommendation needs to be revisited."
+      ],
+      "proposalId": "01M4QZV1SNNS0BY1YXHGMCJ67S",
+      "assumedGoal": null,
+      "adoptable": true
+    },
+    "week": {
+      "planVersionId": "01M4QZWRWS7BTWY76RPS6PPMFM",
+      "context": "Week 1 of your 60-day push to sign a pilot with the first bank.",
+      "statement": "This week you find exactly where solo setup breaks.",
+      "whyNow": "Your two warm contacts have already asked twice for a testnet date. You cannot give them one until you know precisely which steps stop a bank security engineer cold.",
+      "chapters": [
+        {
+          "title": "Map every step that breaks without you",
+          "why": "You cannot fix a gap you have not named, and engineering should not guess where to start."
+        },
+        {
+          "title": "Close each gap so the bank runs it alone",
+          "why": "The testnet brief and the outreach date are both blocked until the full flow completes without a QuFi team member present."
+        },
+        {
+          "title": "Write the brief the security team will actually follow",
+          "why": "This one short document replaces every deck and goes out the moment the environment works solo."
+        }
+      ],
+      "today": {
+        "move": "Walk the QPL onboarding flow and write down every step that requires your team.",
+        "detail": "Go through the current environment setup as if you are a bank security engineer working alone. Write down each point where that person would stop and need help, and note why it breaks without someone from QuFi present."
+      },
+      "doneLooksLike": "A written list of every step that currently requires a team member, each with a note on why it breaks without help."
+    },
+    "email": {
+      "subject": "Testnet date and what your team will run",
+      "body": "Hi [Name],\n\nWe are getting the testnet environment ready for your security team to run solo, no hand-holding from us required.\n\nBefore we send you the date and the runbook, we want to make sure we have mapped every step your engineers will actually hit. That means the QPL onboarding flow, the environment setup, and anything in between where someone would normally have to call us.\n\nCan you tell us: when your security engineers set up a new network environment, where do they usually get stuck? A config step, a credential handoff, a missing dependency, anything like that.\n\nThat is the only thing we need from you right now. Once we have it, we will close those gaps, and we will send you the testnet date and a full runbook your team can follow start to finish on their own. You will get a clear proof of what the network does, no sales call attached.\n\nReply here and we will take it from there.\n\n[Your name]"
+    },
+    "container": [
+      {
+        "labelKey": "arc.container.lbl.offer",
+        "statement": "You sell a post-quantum cryptographic verification layer to institutions and developers who need to verify transactions before settlement, without changing existing infrastructure.",
+        "provenance": "observed"
+      },
+      {
+        "labelKey": "arc.container.lbl.positioning",
+        "statement": "You are betting on being the dedicated verification layer that sits between intent and settlement across every existing network.",
+        "provenance": "observed"
+      },
+      {
+        "labelKey": "arc.container.lbl.audience",
+        "statement": "Institutions (enterprise, regulation and audit), Developers (APIs and SDKs), Organisations joining the network as verifier nodes, Finance, supply chain and digital identity sectors",
+        "provenance": "observed"
+      },
+      {
+        "labelKey": "arc.container.lbl.goal",
+        "statement": "Signed pilot with the bank in 60 days.",
+        "provenance": "declared"
+      },
+      {
+        "labelKey": "arc.container.lbl.told",
+        "statement": "You are prioritising a mid-tier European bank as your first paying customer, with a second EU bank in the same regulatory circle as the follow-on.",
+        "provenance": "declared"
+      },
+      {
+        "labelKey": "arc.container.lbl.told",
+        "statement": "Everything is pre-launch: no production network, no signed customers, and the testnet is in development but not yet ready for external use.",
+        "provenance": "declared"
+      },
+      {
+        "labelKey": "arc.container.lbl.told",
+        "statement": "A bank contacts your team directly via a named engineer, runs a testnet integration themselves after a security audit, and the goal is a signed pilot within 60 days, though you have not stated a price.",
+        "provenance": "declared"
+      },
+      {
+        "labelKey": "arc.container.lbl.constraint",
+        "statement": "API references exist but QPL onboarding is partial and environment setup is manual today — a developer can read the docs but needs the team for first setup.",
+        "provenance": "declared"
+      },
+      {
+        "labelKey": "arc.container.lbl.constraint",
+        "statement": "The rest of the pipeline went quiet after warm introductions and will not re-engage until the testnet is live.",
+        "provenance": "declared"
+      }
+    ],
+    "today (home)": {
+      "context": {
+        "name": "QuFi Network",
+        "day": 1,
+        "bet": "Make the testnet runnable solo by a bank's security team before you do anything else"
+      },
+      "lines": [
+        {
+          "key": "home.line.bet",
+          "vars": {
+            "bet": "Make the testnet runnable solo by a bank's security team before you do anything else."
+          }
+        },
+        {
+          "key": "home.line.today",
+          "vars": {
+            "move": "Walk the QPL onboarding flow and write down every step that requires your team."
+          }
+        },
+        {
+          "key": "home.line.canWork"
+        },
+        {
+          "key": "home.line.ask"
+        }
+      ]
+    },
+    "today (page)": [
+      {
+        "what": "Map every manual step in the current QPL onboarding and environment setup that requires team intervention, specifically the steps a bank security engineer would hit and get stuck on.",
+        "whyNow": "You cannot close a gap you have not precisely located. This surfaces exactly which steps block solo operation before engineering spends time on the wrong things.",
+        "doneLooksLike": "A written list exists of every step that currently requires a team member to unblock, with a note on why each one breaks without help."
+      }
+    ]
+  }
+}

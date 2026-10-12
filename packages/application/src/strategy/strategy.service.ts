@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isHeldGoal } from '../conversation/goal-candidate';
 import { generateId } from '@bb/shared';
 import { NotFoundError, ValidationError } from '@bb/shared';
 import type { IUnderstandingSnapshotRepository, GovernedUnderstanding, IAhaRepository } from '../bi/index';
@@ -64,7 +65,9 @@ export class StrategyService {
     // active rows are read, so a superseded correction is never injected as current truth (M3.5).
     const allActive = await this.deps.state.listActive(businessId);
     const stateItems = allActive.filter((s) => s.kind !== 'business_correction');
-    const founderState = stateItems.map((s, i) => ({ ref: `F${i + 1}`, kind: s.kind, statement: s.statement }));
+    // A goal row the classifier filed that is not an OUTCOME (a milestone or a condition) goes in as an intention, so
+    // the strategy never builds on it as the goal (2026-10-12); no held goal ⇒ the assumed-goal path flags it.
+    const founderState = stateItems.map((s, i) => ({ ref: `F${i + 1}`, kind: s.kind === 'goal' && !isHeldGoal(s) ? 'intention' as const : s.kind, statement: s.statement }));
     const businessCorrections = allActive
       .filter((s) => s.kind === 'business_correction')
       .map((s, i) => ({ ref: `C${i + 1}`, subject: s.scope ?? '', statement: s.statement }));

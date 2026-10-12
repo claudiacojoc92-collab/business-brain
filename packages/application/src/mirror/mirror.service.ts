@@ -68,6 +68,19 @@ function projectSelf(items: FounderStateItem[]): MirrorLaneItem[] {
 
 const MAX_CONTRASTS = 6;
 
+/**
+ * The site is one channel, not the business (operator, 2026-10-12: QuFi's mirror held "a signed pilot in 60 days"
+ * against "no contact form, no sign-up, no enquiry path", but the buyer is a bank already in conversation). A
+ * contrast against a MISSING site path is dropped when the founder's own words show a relationship-led sale.
+ */
+const SITE_PATH_GAP = /\b(contact form|sign[- ]?up|waitlist|wait list|enquir|inquir|booking|book a call|demo request|request a demo|pricing page|no (?:visible )?(?:way|path|route) (?:to|for)|no (?:clear )?(?:call to action|cta)|landing page)\b/i;
+const RELATIONSHIP_SALE = /\b(relationship|warm|introduc|already met|in conversation|conversations? with|pipeline|referr|network of|asked (?:us )?twice|waiting (?:on|for)|named buyer|mid-tier|security team|procurement|pilot discussions?|directly)\b/i;
+export const isQuestion = (x: string): boolean => /\?\s*['"”’]?\s*$/.test((x ?? '').trim()) || /^(?:which|what|who|whether|how|why|when|where|is|are|does|do)\b/i.test((x ?? '').trim());
+
+export function siteGapIrrelevant(against: string, founderBusinessWords: readonly string[]): boolean {
+  return SITE_PATH_GAP.test(against ?? '') && founderBusinessWords.some((w) => RELATIONSHIP_SALE.test(w ?? ''));
+}
+
 export class MirrorService {
   constructor(private readonly deps: MirrorDeps) {}
 
@@ -109,6 +122,10 @@ export class MirrorService {
         // vs "specialise Decebal on medical" — two business facts about different locations that do not conflict).
         // Reject those; every legitimate cross-lane tension (incl. told-vs-observed) survives.
         .filter((m) => m.founderLane !== m.againstLane)
+        // A question is never evidence: an open unknown cannot be the "I saw" side of a contrast (2026-10-12).
+        .filter((m) => !isQuestion(m.against))
+        // The site is one channel: no 'missing site path' contrast when the founder sells through relationships.
+        .filter((m) => !(m.againstLane === 'observed' && siteGapIrrelevant(`${m.against} ${m.tension}`, [...business, ...self].map((i) => i.statement))))
         .slice(0, MAX_CONTRASTS);
     }
 

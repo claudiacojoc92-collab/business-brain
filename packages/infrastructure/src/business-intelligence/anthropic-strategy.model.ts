@@ -1,4 +1,5 @@
 import { createAnthropicClient } from '../llm/anthropic-client';
+import { VOICE_RULES } from '@bb/application';
 import type {
   IStrategyModelPort,
   StrategyModelInput,
@@ -41,7 +42,7 @@ const SHAPE = `{
   "decisions": [{ "key": "short-slug", "title": "", "rationale": "", "sourceRefs": ["B1"], "founderRefs": ["F1"], "claimStrength": "evidenced|bounded|assumption", "assumption": null, "reconsiderTrigger": null }]
 }`;
 
-function rules(l: string): string {
+function rulesBase(l: string): string {
   return [
     `You are Business Brain, a marketing strategist. LANGUAGE — write EVERYTHING in ${l}: this business's content language, decided once for the business, whatever language the founder's words, corrections or sources below are in. Every field and every sentence in ${l}; NEVER mix languages, and never let other-language content in this prompt leak into the output. Return ONLY valid JSON`,
     'in EXACTLY this shape (no prose around it):',
@@ -122,6 +123,11 @@ function rules(l: string): string {
     '  supersedes any conflicting B*), F* = founder state, O* = observation. Every material decision cites at',
     '  least one real ref. Never invent refs. Never put ref tokens in founder-facing prose.',
   ].join('\n');
+}
+
+/** The founder-facing prompt + the ONE shared voice block (spoken-voice.ts), same on every surface. */
+function rules(l: string): string {
+  return `${rulesBase(l)}\n\n${VOICE_RULES}`;
 }
 
 function userBlock(input: StrategyModelInput): string {

@@ -626,7 +626,12 @@
 /* The pour-in's closing decision — the moment that triggers the whole arc. A separate, prominent block (32px
    above so it reads as its own decision, not part of the source list): a centered count line + a full-width
    solid-clay CTA with white text. This is the visual focal point of the pour-in bottom. */
+/* A link styled as the primary button ("Open in Gmail"): same look, no underline. */
+a.s0-btn { text-decoration: none; }
 .s0-pourin-cta { margin-top: 32px; display: flex; flex-direction: column; gap: 12px; }
+/* Discoverable without hunting (operator, 2026-10-12): once a source is in, the start button stays pinned to the
+   bottom of the screen instead of sitting below every source card. */
+.s0-pourin-cta { position: sticky; bottom: 0; z-index: 5; padding: 14px 0 16px; background: var(--s0-bg); box-shadow: 0 -20px 24px var(--s0-bg); }
 .s0-pourin-cta-line { margin: 0; text-align: center; color: var(--s0-ink-2); font-size: 15px; line-height: 1.45; }
 .s0-pourin-done {
   width: 100%; box-sizing: border-box;

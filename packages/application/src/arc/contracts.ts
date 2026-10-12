@@ -130,7 +130,10 @@ export interface IWeekStoryModel {
 }
 export interface ArcEmail { readonly subject: string; readonly body: string }
 export interface ArcContainerItem { readonly labelKey: string; readonly statement: string; readonly provenance: 'observed' | 'declared' | 'inferred' | 'unknown' }
-export interface ArcContainer { readonly items: ArcContainerItem[] }
+export interface ArcContainer { readonly items: ArcContainerItem[];
+  /** Which unknowns the founder already answered (model-judged, guarded) and the fingerprint they were judged on.
+   * The route persists these (founder_event arc_container_built) so a view never re-judges unchanged input. */
+  readonly answered?: { readonly index: number; readonly answer: string }[]; readonly answeredKey?: string }
 
 /**
  * A per-moment error that must NOT fail the whole arc surface. `generation` = a model call for this moment

@@ -5,11 +5,13 @@ import { agendaUnknowns, isHousekeeping, critiquesWording, factOnly, restatesNot
 import type { GoalCandidate } from '../conversation/index';
 import { computeArcMoment } from './moment';
 import type {
-  ArcFlags, ArcView, ArcTurn, ArcEmail, ArcMirror, IEmailModelPort, ArcContainerItem, ArcSource,
+  ArcFlags, ArcView, ArcTurn, ArcEmail, ArcMirror, IEmailModelPort, ArcSource,
   ArcUnderstanding, CorrectionReflection, ICorrectionReflectionModel, ArcWeekStory, IWeekStoryModel,
 } from './contracts';
 import { guardWeekStory, weekStoryInput, storyJargon } from './week-story';
 import { unbackedClaims, softenUnbackedClaims } from './email-claims';
+import { projectContainer, guardAnswers, containerKey, type FounderSaid, type IContainerAnswerModel } from './container';
+import { spokenView } from './spoken-view';
 
 /** Narrow ports onto the existing engines — the arc REUSES them, it does not reimplement them. */
 export interface ArcDeps {
@@ -38,6 +40,10 @@ export interface ArcDeps {
   reflect: ICorrectionReflectionModel;
   /** Re-tells the week as a strategist's chapter. Absent (tests) ⇒ the plan's own wording in the same shape. */
   weekStory?: IWeekStoryModel;
+  /** Everything the founder SAID (founder_state, any status but deleted): the container's "what you told me" lane
+   * and the evidence for which unknowns are answered. Absent (tests) ⇒ nothing said. */
+  founderSaid?: (businessId: string) => Promise<FounderSaid[]>;
+  containerAnswers?: IContainerAnswerModel;
   /** Structured arc telemetry (mirrors the carousel). Absent ⇒ silent (tests). Every per-moment failure and the
    * reflect-back both log here, so a production arc failure is never invisible. */
   log?: (e: { type: string; detail?: string }) => void;
@@ -65,7 +71,12 @@ export class ArcService {
   constructor(private readonly deps: ArcDeps) {}
 
   /** Compose the whole-arc view for the current moment — durable flags + typed sources + igConnected + savedEmail from the route. */
-  async view(businessId: string, businessName: string, language: string, flags: ArcFlags, sources: ArcSource[], savedEmail: ArcEmail | null, igConnected = false, savedMirror: ArcMirror | null = null, savedWeekStory: ArcWeekStory | null = null): Promise<ArcView> {
+  async view(businessId: string, businessName: string, language: string, flags: ArcFlags, sources: ArcSource[], savedEmail: ArcEmail | null, igConnected = false, savedMirror: ArcMirror | null = null, savedWeekStory: ArcWeekStory | null = null, savedContainer: { answered: { index: number; answer: string }[]; answeredKey: string } | null = null): Promise<ArcView> {
+    // ONE voice on every BB-written field (operator, 2026-10-12); founder words are never rewritten.
+    return spokenView(await this.viewRaw(businessId, businessName, language, flags, sources, savedEmail, igConnected, savedMirror, savedWeekStory, savedContainer));
+  }
+
+  private async viewRaw(businessId: string, businessName: string, language: string, flags: ArcFlags, sources: ArcSource[], savedEmail: ArcEmail | null, igConnected: boolean, savedMirror: ArcMirror | null, savedWeekStory: ArcWeekStory | null, savedContainer: { answered: { index: number; answer: string }[]; answeredKey: string } | null): Promise<ArcView> {
     const snap = await this.deps.understanding.latest(businessId);
     const status = await this.deps.conversation.status(businessId);
     const current = await this.deps.strategy.getCurrent(businessId);
@@ -190,7 +201,7 @@ export class ArcService {
 
       case 'container':
       case 'done':
-        return { ...base, container: { items: this.projectContainer(u) } };
+        return { ...base, container: await this.container(businessId, u, contentLanguage, savedContainer) };
     }
   }
 
@@ -371,14 +382,22 @@ export class ArcService {
     });
   }
 
-  private projectContainer(u: GovernedUnderstanding | null): ArcContainerItem[] {
-    const items: ArcContainerItem[] = [];
-    if (u?.offer?.summary?.trim()) items.push({ labelKey: 'arc.container.lbl.offer', statement: u.offer.summary.trim(), provenance: 'observed' });
-    if (u?.positioning?.summary?.trim()) items.push({ labelKey: 'arc.container.lbl.positioning', statement: u.positioning.summary.trim(), provenance: clean(u.positioning.evidenceBacked).length ? 'observed' : 'inferred' });
-    const aud = clean(u?.audience?.addressed);
-    if (aud.length) items.push({ labelKey: 'arc.container.lbl.audience', statement: aud.join(' · '), provenance: 'observed' });
-    for (const x of clean(u?.unknowns).slice(0, 4)) items.push({ labelKey: 'arc.container.lbl.unknown', statement: x, provenance: 'unknown' });
-    return items;
+  /** Moment 9 — what BB observed, what the founder told it, and only the unknowns nothing they said answers. */
+  private async container(businessId: string, u: GovernedUnderstanding | null, language: string, saved: { answered: { index: number; answer: string }[]; answeredKey: string } | null) {
+    const said = (await this.deps.founderSaid?.(businessId)) ?? [];
+    const turns = await this.deps.conversation.turns(businessId).catch(() => [] as ArcTurn[]);
+    const saidTexts = [...said.map((s) => s.statement), ...turns.filter((t) => t.role === 'founder').map((t) => t.content)].map((x) => (x ?? '').trim()).filter(Boolean);
+    const questions = clean(u?.unknowns).slice(0, 4);
+    const answeredKey = containerKey(questions, saidTexts);
+    let answered = saved && saved.answeredKey === answeredKey ? saved.answered : null;
+    if (!answered) {
+      answered = [];
+      if (questions.length && saidTexts.length && this.deps.containerAnswers) {
+        try { answered = guardAnswers(await this.deps.containerAnswers.answered({ language, questions, founderSaid: saidTexts }), questions, saidTexts); }
+        catch (e) { this.deps.log?.({ type: 'arc_moment_threw', detail: JSON.stringify({ businessId, moment: 'container', err: errText(e) }) }); }
+      }
+    }
+    return { items: projectContainer(u, said, questions, answered), answered, answeredKey };
   }
 
   /** Moment 8 — draft the first work item (an email), grounded in the held strategy + voice + today's move. */

@@ -78,7 +78,7 @@ export class PgInformationNeedRepository implements IInformationNeedRepository {
 }
 
 function toState(r: any): FounderStateItem {
-  return { id: r.id, kind: r.kind, statement: r.statement, scope: r.scope ?? null, temporary: r.temporary, status: r.status };
+  return { id: r.id, kind: r.kind, statement: r.statement, scope: r.scope ?? null, temporary: r.temporary, status: r.status, sourceTurnId: r.source_turn_id ?? null };
 }
 export class PgFounderStateRepository implements IFounderStateRepository {
   constructor(private readonly db: KyselyDB) {}
@@ -90,6 +90,12 @@ export class PgFounderStateRepository implements IFounderStateRepository {
   }
   async listActive(businessId: string): Promise<FounderStateItem[]> {
     const rows = await (this.db as any).selectFrom('workspace.founder_state').selectAll().where('business_id', '=', businessId).where('status', '=', 'active').orderBy('created_at', 'asc').execute();
+    return rows.map(toState);
+  }
+  /** Everything the founder SAID, superseded corrections included (not deleted): the container's "what you told
+   * me" evidence. Read-only; the port interface stays as is. */
+  async listSaid(businessId: string): Promise<FounderStateItem[]> {
+    const rows = await (this.db as any).selectFrom('workspace.founder_state').selectAll().where('business_id', '=', businessId).where('status', '!=', 'deleted').orderBy('created_at', 'asc').execute();
     return rows.map(toState);
   }
   async setStatus(businessId: string, id: string, status: 'superseded' | 'deleted'): Promise<FounderStateItem | null> {
