@@ -1,6 +1,6 @@
 # Week + Today as a strategist's chapter
 
-**Status:** in-build (local, not committed, not deployed — operator reviews first)
+**Status:** in-build (deployed 2026-10-12, awaiting prod walk)
 **Date:** 2026-10-12 · Operator request
 
 ## Intent

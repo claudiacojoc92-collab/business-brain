@@ -2,6 +2,7 @@ import type { PlanVersion } from '../plan/index';
 import type { StrategyVersionRecord } from '../strategy/index';
 import { claimTermsIn, firstSentence } from '../bi/index';
 import { withoutQuestions } from '../conversation/index';
+import { spoken } from './spoken-voice';
 import type { ArcWeekStory, WeekStoryInput } from './contracts';
 
 /**
@@ -69,7 +70,7 @@ export function sourceText(i: WeekStoryInput): string {
 
 /** One model field → the surviving text, or '' when it fails a gate (the caller falls back). */
 export function admit(raw: unknown, cap: number, source: string, opts: { opener?: boolean } = {}): string {
-  const t = withoutQuestions(typeof raw === 'string' ? raw : '').trim();
+  const t = spoken(withoutQuestions(typeof raw === 'string' ? raw : '')).trim();
   if (!t) return '';
   if (opts.opener && GENERIC_OPENER.test(t)) return '';
   const src = source.toLowerCase();
