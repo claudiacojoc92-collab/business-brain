@@ -12,7 +12,8 @@
 const LEGAL_PAGE = /\b(privacy policy|terms of service|terms and conditions|data deletion|cookie policy|legal (page|document)s?|last[- ]updated)\b/i;
 const Q = `['"\\u2018\\u201c\\u201e][^'"\\u2019\\u201d]{3,120}['"\\u2019\\u201d]`;
 // A quoted phrase that is the SUBJECT of a reading ("'X' signals / frames / implies …").
-const QUOTED_PHRASE_READ = new RegExp(`${Q}\\s*,?\\s*(?:\\w+\\s+){0,3}(signals|signall?ing|frames|framing|impl(?:y|ies|ying|ied)|hints?|hinting|suggests?|suggesting|reads as|sounds|positions?)\\b`, 'i');
+// Separators between the quote and the reading may be a comma, dash or colon ("'live' — implying …").
+const QUOTED_PHRASE_READ = new RegExp(`${Q}[\\s,:\\u2014\\u2013-]*(?:\\w+[\\s,:\\u2014\\u2013-]+){0,3}(signals|signall?ing|frames|framing|impl(?:y|ies|ying|ied)|hints?|hinting|suggests?|suggesting|reads as|sounds|positions?)\\b`, 'i');
 // A quoted phrase that "nothing explains" ("'X' … no page names / describes / defines …").
 const QUOTED_PHRASE_UNEXPLAINED = new RegExp(`${Q}[^.]{0,100}\\b(no|nothing|nowhere|never)\\b[^.]{0,40}\\b(names?|describes?|explains?|defines?|elaborates?|says|specif\\w*|supports?|develops?|backs?)\\b`, 'i');
 // What a quoted phrase "means" ("What does 'X' mean", "'X' means in practice").
@@ -25,6 +26,13 @@ const UNSUPPORTED_FRAMING = /\b(nothing|no (page|post|source)s?|none of the (pag
 // A phrase read as hinting at future scope / a roadmap ("implies future areas", "suggests expansion beyond …").
 const FUTURE_SCOPE = /\b(impl\w+|hint\w*|suggest\w*|signal\w*|fram\w+)\b[^.]{0,60}\b(future|roadmap|expansion|expand|beyond (marketing|this|that|the current)|other (areas|domains|verticals))\b/i;
 const OTHER_AREA = /\b(second|next|other|future)\s+(area|domain|vertical)s?\b/i;
+
+/** A critique of the site's WORDING (any housekeeping except a mere legal-page mention). For evidence lines, which may
+ * legitimately cite the Terms ("the Terms say features may change during the pilot"). */
+export function critiquesWording(text: string): boolean {
+  return [QUOTED_PHRASE_READ, QUOTED_PHRASE_UNEXPLAINED, QUOTED_PHRASE_MEANING, WORDING_AS_OBJECT, UNSUPPORTED_FRAMING, FUTURE_SCOPE, OTHER_AREA]
+    .some((re) => re.test(text));
+}
 
 export function isHousekeeping(text: string): boolean {
   return [LEGAL_PAGE, QUOTED_PHRASE_READ, QUOTED_PHRASE_UNEXPLAINED, QUOTED_PHRASE_MEANING, WORDING_AS_OBJECT, UNSUPPORTED_FRAMING, FUTURE_SCOPE, OTHER_AREA]
@@ -40,6 +48,28 @@ const SHOWS_NOTHING = /\b(show|shows|shown|showing|demonstrates?)\s+(nothing|no|
 const NO_CONTENT_ABOUT = /\b(no|zero|nothing|none)\b[^.]{0,30}\b(content|posts?|mention\w*)\b[^.]{0,20}\babout\b/i;
 export function restatesNotShown(text: string): boolean {
   return NOT_SHOWN.test(text) || SHOWS_NOTHING.test(text) || NO_CONTENT_ABOUT.test(text);
+}
+
+/**
+ * A constraint phrased as what is VISIBLE instead of the fact (operator, 2026-10-12): "you have not (yet) shown /
+ * demonstrated …", "visibly completed", "a result you can point to", "nothing to show" — and the same in Romanian
+ * ("publicat pe site", "vizibil", "nu ai arătat") and Italian. The constraint is the fact.
+ */
+const VISIBILITY = /(?:(?:\bnot|n['\u2019]t|\bnever|\bno longer)\s+(?:yet\s+)?(?:been\s+)?(?:shown|show|showing|demonstrated|demonstrate|displayed|made\s+visible|visible|made\s+public)\b|\bvisibly\b|\byou\s+can\s+point\s+to\b|\bto\s+show\b|\bpublicat[ăe]?\s+pe\s+site\b|\bvizibil[ăe]?\b|\bnu\s+(?:ai\s+)?(?:arătat|aratat|demonstrat|arăți|arati)\b|\bnu\s+se\s+vede\b|\bpe\s+care\s+s[ăa]-?l?\s+po[țt]i\s+ar[ăa]ta\b|\bnon\s+(?:hai\s+)?(?:ancora\s+)?(?:mostrato|dimostrato)\b|\bvisibil[ei]\b|\bpubblicat[oa]\s+sul\s+sito\b)/iu;
+export function visibilityPhrased(text: string): boolean {
+  return VISIBILITY.test(text);
+}
+
+/**
+ * The constraint as the FACT only (operator, 2026-10-12): the consequence tail ("…, so …") is cut (consequences belong in
+ * sub-texts), and visibility adverbs ("visibly", "you can point to") are stripped.
+ */
+export function factOnly(statement: string): string {
+  const [cause] = statement.split(/,?\s+(?=so\b|which means\b|and so\b|deci\b|așa că\b|quindi\b|così\b)/i);
+  let out = (cause ?? statement).trim();
+  out = out.replace(/\s+visibly\b/gi, '').replace(/\s+(?:that\s+)?you\s+can\s+point\s+to\b/gi, '').replace(/\s{2,}/g, ' ').trim();
+  out = out.replace(/[\s,;:\u2014\u2013-]+$/, ''); // a dash or comma left where the tail was cut
+  return /[.!?]$/.test(out) ? out : `${out}.`;
 }
 
 const STOP = new Set(['about', 'after', 'again', 'also', 'because', 'being', 'business', 'does', 'doesn', 'every', 'from', 'have', 'into',

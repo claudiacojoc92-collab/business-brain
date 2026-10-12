@@ -82,7 +82,34 @@ function ArcInput({ ph, onSend, cta, t, text, setText, busy, act, workingKey, au
 // card (the field the tension names) without stacking three sentences.
 // Ranked, not listed: the first tension is THE primary insight (the server orders them: a capability gap first,
 // otherwise the model's ranking), shown large; the rest sit under "Also" as secondary.
-function TensionCard({ label, items, whyLabel, alsoLabel }: { label: string; items: { tension: string; grounding: string; sourceRefs: string[] }[]; whyLabel: string; alsoLabel: string }) {
+/** Strategic Depth W1 — the strategist's read, first: the named constraint (or an honest "not enough evidence") and the
+ * stage with its evidence + what that stage implies. Rendered only for understandings that carry these fields. */
+function ConstraintCard({ u, t }: { u: NonNullable<ArcView['understanding']>; t: T }) {
+  if (!u.constraint && !u.stage) return null;
+  const st = u.stage;
+  return (
+    <div className="s0-u-card s0-u-card--primary s0-u-card--constraint">
+      {u.constraint?.decided ? (<>
+        <div className="s0-u-card-label"><span className="s0-u-ic" aria-hidden="true">◆</span>{t('arc.understanding.constraint')}</div>
+        <p className="s0-u-primary">{u.constraint.text} <span className="s0-u-constraint-tail">{t('arc.understanding.constraint.tail')}</span></p>
+      </>) : u.constraint ? <p className="s0-u-card-lead">{t('arc.understanding.constraint.none')}</p> : null}
+      {st ? (
+        <p className="s0-u-stage">
+          {st.stage === 'undetermined' ? t('arc.understanding.stage.undetermined') : (<>
+            <strong>{st.secondary
+              ? t('arc.understanding.stage.split', { stage: t(`arc.understanding.stage.${st.stage}`), secondary: t(`arc.understanding.stage.${st.secondary.stage}`), area: st.secondary.area })
+              : t('arc.understanding.stage', { stage: t(`arc.understanding.stage.${st.stage}`) })}</strong>{' '}
+            {t('arc.understanding.stage.why', { why: st.evidence.join('; ') })}
+            <span className="s0-u-stage-means">{t(`arc.understanding.stage.means.${st.stage}`)}</span>
+            {st.secondary ? <span className="s0-u-stage-means">{t(`arc.understanding.stage.means.area.${st.secondary.stage}`, { area: st.secondary.area })}</span> : null}
+          </>)}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function TensionCard({ label, items, whyLabel, alsoLabel, flat = false }: { label: string; items: { tension: string; grounding: string; sourceRefs: string[] }[]; whyLabel: string; alsoLabel: string; flat?: boolean }) {
   const rows = items.filter((x) => (x.tension ?? '').trim());
   if (!rows.length) return null; // zero tensions → the card is omitted silently (never narrate an absence)
   const row = (x: { tension: string; grounding: string; sourceRefs: string[] }) => (
@@ -97,6 +124,13 @@ function TensionCard({ label, items, whyLabel, alsoLabel }: { label: string; ite
         </details>
       ) : null}
     </>
+  );
+  // Under a named constraint the tensions are its symptoms: one plain list, no "primary".
+  if (flat) return (
+    <div className="s0-u-card">
+      <div className="s0-u-card-label">{label}</div>
+      <ul className="s0-u-list">{rows.map((x, i) => <li key={i}>{row(x)}</li>)}</ul>
+    </div>
   );
   const [primary, ...rest] = rows;
   return (
@@ -441,7 +475,10 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
               {u.serves ? <p className="s0-u-card-lead s0-u-serves">{t('arc.understanding.servesLead', { who: u.serves })}</p> : null}
             </div>
             {/* 2 — What stood out: ≤3 tensions, sharpest first, each grounded + proof on demand. Omitted if none. */}
-            <TensionCard label={t('arc.understanding.stoodout')} items={u.tensions} whyLabel={t('arc.understanding.why')} alsoLabel={t('arc.understanding.also')} />
+            {/* 2 — The strategist's read (Strategic Depth W1): ONE constraint + stage, before the tensions. */}
+            <ConstraintCard u={u} t={t} />
+            {/* 3 — The tensions: symptoms ("Also on my mind") under a named constraint; otherwise "What stood out". */}
+            <TensionCard label={t(u.constraint?.decided ? 'arc.understanding.alsoOnMind' : 'arc.understanding.stoodout')} items={u.tensions} whyLabel={t('arc.understanding.why')} alsoLabel={t('arc.understanding.also')} flat={Boolean(u.constraint?.decided)} />
             {/* 3 — What I'll ask about: the site's unknowns, framed forward as the agenda for the conversation next. */}
             {u.unanswered.length ? (
               <div className="s0-u-card s0-u-card--question">
