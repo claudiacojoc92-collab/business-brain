@@ -60,7 +60,27 @@ export interface GovernedUnderstanding {
    * not left to the model's ordering). Optional: older snapshots have none.
    */
   readonly capabilityCheck?: { sells: string; shown: boolean; insight: string; soWhat: string; sourceRefs: string[] };
+  /**
+   * Strategic Depth W1: the ONE constraint behind the contradictions (they are its symptoms). `decided: false` = the
+   * model could not name one honestly (the card then says so). Optional: older snapshots have none.
+   */
+  readonly constraint?: {
+    decided: boolean; statement: string; why: string; sourceRefs: string[];
+    /** The root-cause level the model stopped at, and its own yes/no answer per level (users → target → offer). */
+    level?: ConstraintLevel;
+    levelCheck?: Partial<Record<'users' | 'target' | 'offer', { passed: boolean; evidence: string }>>;
+    /** set when the first one was re-asked (restated a tension, visibility framing, or an inconsistent level) */
+    retried?: boolean;
+  };
+  /** Strategic Depth W1: the business's stage, from cited evidence only. Optional: older snapshots have none. */
+  readonly stage?: {
+    stage: BusinessStage; evidence: string[]; sourceRefs: string[];
+    /** One named part at a different stage than the core (e.g. a new channel still validating). Optional. */
+    secondary?: { stage: BusinessStage; area: string; evidence: string[] } | null;
+  };
 }
+export type BusinessStage = 'validating' | 'growth' | 'plateau' | 'undetermined';
+export type ConstraintLevel = 'users' | 'target' | 'offer' | 'time';
 
 // Narrow on purpose: "what is your priority: users, validation or a paid launch?" is a goal question and stays.
 const COMMERCIAL_TOPIC = /\b(pric\w*|cost\w*|charg\w*|monetis\w*|monetiz\w*|subscription\w*|paid (model|plan|tier|version)|(move|path|transition) to paid)\b/i;
@@ -85,6 +105,7 @@ export function agendaUnknowns(u: GovernedUnderstanding | null): string[] {
     const v = (x ?? '').trim();
     const k = v.toLowerCase();
     if (!v || seen.has(k) || isHousekeeping(v) || reopens(v) || shown.some((t) => sameInsight(v, t, 0.4))) continue;
+    if (out.some((q) => sameInsight(v, q, 0.6))) continue; // the same question twice, worded differently
     seen.add(k); out.push(v);
   }
   return out.slice(0, 3);

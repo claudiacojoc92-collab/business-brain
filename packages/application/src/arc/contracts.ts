@@ -55,6 +55,17 @@ export interface ArcUnderstanding {
   readonly confident: string[]; // still projected (BusinessPage + provenance); NOT rendered in the arc understanding moment
   readonly inferring: string[]; // still projected; NOT rendered in the arc understanding moment
   readonly unanswered: string[];
+  /**
+   * Strategic Depth W1 — the strategist's read, shown FIRST. `constraint`: the named constraint ({decided:true,text})
+   * or an honest "not enough evidence" ({decided:false}); null = an older snapshot without one (card unchanged).
+   * `stage`: the stage with its evidence, or undetermined; null = older snapshot.
+   */
+  readonly constraint: { readonly decided: true; readonly text: string } | { readonly decided: false } | null;
+  readonly stage: {
+    readonly stage: 'validating' | 'growth' | 'plateau'; readonly evidence: string[];
+    /** A named part of the business at a different stage than the core (e.g. "the medical channel": validating). */
+    readonly secondary: { readonly stage: 'validating' | 'growth' | 'plateau'; readonly area: string } | null;
+  } | { readonly stage: 'undetermined' } | null;
 }
 
 /** Moment 3 — the strategist's SUBSTANTIVE reply to a founder correction (grounded in real state, not "✓ Got it"). */

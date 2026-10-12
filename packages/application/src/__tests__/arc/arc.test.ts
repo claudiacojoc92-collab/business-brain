@@ -278,6 +278,56 @@ describe('ArcService.view — what stood out with a capability check', () => {
     expect(u.tensions.map((t) => t.tension)).not.toContain('Nobody can trust a product with no named customer.');
   });
 
+  it('Strategic Depth W1: a named constraint leads; a tension restating it leaves "also"; the stage needs 2+ cited observations', async () => {
+    const u = await view({ contradictions: [
+      { kind: 'channel_mismatch', statementA: 'a', statementB: 'b', tension: 'Your Instagram never mentions what you sell.', soWhat: 's', sourceRefs: [] },
+      { kind: 'other', statementA: 'a', statementB: 'b', tension: 'You have not decided whether you are a café or a wholesale supplier.', soWhat: 's', sourceRefs: [] },
+    ], constraint: { decided: true, statement: 'You have not decided whether you are a café or a wholesale supplier. More text here.', why: 'w', sourceRefs: ['Home'] },
+    stage: { stage: 'validating', evidence: ['no named customer', 'opened in 2026'], sourceRefs: ['Home'] } });
+    expect(u.constraint).toEqual({ decided: true, text: 'You have not decided whether you are a café or a wholesale supplier.' });
+    expect(u.tensions.map((t) => t.tension)).toEqual(['Your Instagram never mentions what you sell.']);
+    expect(u.stage).toEqual({ stage: 'validating', evidence: ['no named customer', 'opened in 2026'], secondary: null });
+  });
+
+  it('Strategic Depth W1: a core stage may carry ONE named secondary area at a different stage; a same-stage or empty one is dropped', async () => {
+    const st = (secondary: unknown) => ({ stage: 'growth', evidence: ['two locations', '12 named staff'], sourceRefs: ['Home'], secondary });
+    const u = await view({ contradictions: [], stage: st({ stage: 'validating', area: 'the medical and corporate channels', evidence: ['brochure only'] }) });
+    expect(u.stage).toEqual({ stage: 'growth', evidence: ['two locations', '12 named staff'], secondary: { stage: 'validating', area: 'the medical and corporate channels' } });
+    // the area sits inside an English sentence: first letter lowercased, acronyms kept
+    expect((await view({ contradictions: [], stage: st({ stage: 'validating', area: 'Parteneriatul pentru cadre medicale', evidence: ['y'] }) })).stage)
+      .toMatchObject({ secondary: { area: 'parteneriatul pentru cadre medicale' } });
+    expect((await view({ contradictions: [], stage: st({ stage: 'validating', area: 'B2B corporate', evidence: ['y'] }) })).stage)
+      .toMatchObject({ secondary: { area: 'B2B corporate' } });
+    expect((await view({ contradictions: [], stage: st({ stage: 'growth', area: 'x', evidence: ['y'] }) })).stage).toMatchObject({ secondary: null });
+    expect((await view({ contradictions: [], stage: st({ stage: 'validating', area: '', evidence: ['y'] }) })).stage).toMatchObject({ secondary: null });
+    expect((await view({ contradictions: [], stage: st(null) })).stage).toMatchObject({ secondary: null });
+  });
+
+  it('Strategic Depth W1: stage evidence citing the Terms page counts; a wording critique does not', async () => {
+    const u = await view({ contradictions: [], stage: { stage: 'validating', sourceRefs: ['Terms'], evidence: [
+      'Terms of Service state features may change during the pilot', 'No named paying customer anywhere', "The homepage phrase 'first area' signals the scope is not fixed"] } });
+    expect(u.stage).toEqual({ stage: 'validating', evidence: ['Terms of Service state features may change during the pilot', 'No named paying customer anywhere'], secondary: null });
+  });
+
+  it('Strategic Depth W1: when only the consequence clause trips the gate, the cause is kept as the constraint', async () => {
+    const u = await view({ contradictions: [], constraint: { decided: true, statement: 'You have not yet shown the product working on a real business, so every gap compounds into a trust deficit and lost conversion.', why: '', sourceRefs: [] } });
+    expect(u.constraint).toEqual({ decided: true, text: 'You have not yet shown the product working on a real business.' });
+  });
+
+  it('Strategic Depth W1: undecided / gated constraint → {decided:false}; thin or uncited stage → undetermined; old snapshot → null', async () => {
+    const gated = await view({ contradictions: [], constraint: { decided: true, statement: 'Your credibility is the problem.', why: '', sourceRefs: [] },
+      stage: { stage: 'growth', evidence: ['three locations'], sourceRefs: ['Home'] } });
+    expect(gated.constraint).toEqual({ decided: false });
+    expect(gated.stage).toEqual({ stage: 'undetermined' });
+    const uncited = await view({ contradictions: [], constraint: { decided: false, statement: '', why: '', sourceRefs: [] },
+      stage: { stage: 'plateau', evidence: ['same menu since 2015', 'last post 2022'], sourceRefs: [] } });
+    expect(uncited.constraint).toEqual({ decided: false });
+    expect(uncited.stage).toEqual({ stage: 'undetermined' });
+    const old = await view({ contradictions: [] });
+    expect(old.constraint).toBeNull();
+    expect(old.stage).toBeNull();
+  });
+
   it('an item whose statements merely CITE a legal page as a source is not housekeeping', async () => {
     const u = await view({ capabilityCheck: cc, contradictions: [
       { kind: 'commercial_path', statementA: 'Free during the pilot — stated on the Homepage, Terms of Service and Privacy Policy', statementB: 'No page states a price',

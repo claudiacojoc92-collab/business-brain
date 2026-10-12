@@ -486,7 +486,10 @@ export interface ArcView {
   strategyChange?: { because: string } | null; // Moment 6 — transient "the bet changed because…" note
   sources?: ArcSourceItem[];
   igConnected?: boolean;
-  understanding?: { does: string; serves: string; standsOut: string; tensions: { tension: string; grounding: string; sourceRefs: string[] }[]; confident: string[]; inferring: string[]; unanswered: string[] };
+  understanding?: { does: string; serves: string; standsOut: string; tensions: { tension: string; grounding: string; sourceRefs: string[] }[]; confident: string[]; inferring: string[]; unanswered: string[];
+    // Strategic Depth W1 — null on understandings made before it existed.
+    constraint?: { decided: true; text: string } | { decided: false } | null;
+    stage?: { stage: 'validating' | 'growth' | 'plateau'; evidence: string[]; secondary?: { stage: 'validating' | 'growth' | 'plateau'; area: string } | null } | { stage: 'undetermined' } | null };
   correctionReflection?: { reflection: string; changes: string; holds: string; ask: string };
   turns?: ArcTurn[];
   coverage?: { key: string; covered: boolean }[]; // conversation — quiet progress map

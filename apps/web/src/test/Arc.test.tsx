@@ -177,6 +177,52 @@ describe('ArcSurface — one surface, eight moments', () => {
     expect(screen.queryByText('arc.strategy.adopt →')).toBeNull();                 // no strategy before Moment 3/4
   });
 
+  it('Strategic Depth W1: the named constraint + stage come first; the tensions follow as "also on my mind"', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: {
+      does: 'Physio memberships', serves: 'post-op patients', standsOut: '',
+      tensions: [{ tension: 'Your posts never show a programme.', grounding: 'This means …', sourceRefs: [] }],
+      confident: [], inferring: [], unanswered: [],
+      constraint: { decided: true, text: 'You have not decided whether you are a clinic or a gym.' },
+      stage: { stage: 'validating', evidence: ['no named member', 'opened this year'] },
+    } }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    expect(await screen.findByText('arc.understanding.constraint')).toBeInTheDocument();
+    expect(screen.getByText(/You have not decided whether you are a clinic or a gym\./)).toBeInTheDocument();
+    expect(screen.getByText('arc.understanding.stage.means.validating')).toBeInTheDocument();
+    expect(screen.getByText('arc.understanding.alsoOnMind')).toBeInTheDocument();
+    expect(screen.queryByText('arc.understanding.stoodout')).toBeNull();
+    // the constraint card is rendered BEFORE the tensions
+    const order = screen.getByText('arc.understanding.constraint').compareDocumentPosition(screen.getByText('Your posts never show a programme.'));
+    expect(order & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('Strategic Depth W1: a split stage names the core and the one area at a different stage, each with its implication', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: {
+      does: 'X', serves: '', standsOut: '', tensions: [], confident: [], inferring: [], unanswered: [],
+      constraint: { decided: true, text: 'C.' },
+      stage: { stage: 'growth', evidence: ['two locations', '12 staff'], secondary: { stage: 'validating', area: 'the medical channel' } },
+    } }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    expect(await screen.findByText(/^arc\.understanding\.stage\.split:.*the medical channel$/)).toBeInTheDocument();
+    expect(screen.getByText('arc.understanding.stage.means.growth')).toBeInTheDocument();
+    expect(screen.getByText('arc.understanding.stage.means.area.validating:the medical channel')).toBeInTheDocument();
+  });
+
+  it('Strategic Depth W1: undecided says so honestly; an older snapshot (no fields) renders as before', async () => {
+    const base = { does: 'X', serves: '', standsOut: '', tensions: [{ tension: 'T1', grounding: '', sourceRefs: [] }], confident: [], inferring: [], unanswered: [] };
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: { ...base, constraint: { decided: false }, stage: { stage: 'undetermined' } } }));
+    const r = render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    expect(await screen.findByText('arc.understanding.constraint.none')).toBeInTheDocument();
+    expect(screen.getByText('arc.understanding.stage.undetermined')).toBeInTheDocument();
+    expect(screen.getByText('arc.understanding.stoodout')).toBeInTheDocument();
+    r.unmount();
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: base }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    expect(await screen.findByText('arc.understanding.stoodout')).toBeInTheDocument();
+    expect(screen.queryByText('arc.understanding.constraint')).toBeNull();
+    expect(screen.queryByText('arc.understanding.constraint.none')).toBeNull();
+  });
+
   it('Moment 3: a correction gets a SUBSTANTIVE grounded reply (reflection/changes/holds/ask), not "✓ Got it"', async () => {
     const u = { does: 'Physio memberships', serves: 'post-op patients', standsOut: 'recovery-led', tensions: [], confident: [], inferring: [], unanswered: [] };
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: u }));

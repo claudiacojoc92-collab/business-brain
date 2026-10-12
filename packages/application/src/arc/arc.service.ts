@@ -1,7 +1,7 @@
 import type { StrategyVersionRecord } from '../strategy/index';
 import type { PlanVersion } from '../plan/index';
 import type { GovernedUnderstanding } from '../bi/index';
-import { agendaUnknowns, isHousekeeping, restatesNotShown, makesUnlicensedClaim, makesUnlicensedSoWhatClaim, sameInsight, firstSentence } from '../bi/index';
+import { agendaUnknowns, isHousekeeping, critiquesWording, factOnly, restatesNotShown, makesUnlicensedClaim, makesUnlicensedSoWhatClaim, sameInsight, firstSentence } from '../bi/index';
 import type { GoalCandidate } from '../conversation/index';
 import { computeArcMoment } from './moment';
 import type {
@@ -52,6 +52,9 @@ const STRATEGY_JARGON: [RegExp, string][] = [
   [/\bflux b2b structurat\b/gi, 'un sistem prin care medicii îți trimit pacienți constant'],
   [/\bun flux b2b\b/gi, 'un sistem prin care medicii îți trimit pacienți'],
 ];
+// The secondary stage area sits mid-sentence ("validating in <area>"): lowercase its first letter, unless it is an
+// acronym ("B2B", "HR").
+const lowerFirst = (s: string): string => (/^\p{Lu}\p{Ll}/u.test(s) ? s[0]!.toLowerCase() + s.slice(1) : s);
 const scrubJargon = (s: string): string => STRATEGY_JARGON.reduce((acc, [re, rep]) => acc.replace(re, rep), s);
 
 export class ArcService {
@@ -247,7 +250,36 @@ export class ArcService {
       if (r.kind && r.kind !== 'other' && kept.some((k) => k.kind === r.kind)) continue;
       kept.push(r);
     }
-    const tensions: TensionRow[] = kept.slice(0, 4).map(({ tension, grounding, sourceRefs }) => ({ tension, grounding, sourceRefs }));
+
+    // Strategic Depth W1 — ONE constraint, shown first; the tensions become what's "also on my mind". A constraint that
+    // fails the gates (housekeeping, claim type) is treated as undecided: the card says so honestly, never a weak one.
+    // The statement is usually "<cause>, so <consequence>". When only the consequence trips a gate, the cause alone is
+    // still the named constraint ("You have not shown it working on a real business."), so it is kept.
+    const rawC = u?.constraint;
+    const passes = (x: string): boolean => Boolean(x) && !isHousekeeping(x) && !makesUnlicensedClaim(x);
+    // The constraint is the fact, not its visibility: a visibility tail and "visibly" / "you can point to" are stripped.
+    const stated = firstSentence(rawC?.statement ?? '');
+    const full = stated ? factOnly(stated) : '';
+    const cause = full.split(/,\s*(?:so|which|and so|deci|așa că|quindi|così)\b|\s[—–]\s/i)[0]!.trim().replace(/[,;:]$/, '');
+    const cText = passes(full) ? full : cause.split(/\s+/).length >= 6 && passes(cause) ? `${cause.replace(/[.!?]$/, '')}.` : '';
+    const constraint: ArcUnderstanding['constraint'] = !rawC ? null : rawC.decided && cText ? { decided: true, text: cText } : { decided: false };
+    // A tension that only restates the named constraint doesn't take an "also" slot.
+    const also = constraint?.decided ? kept.filter((k) => !sameInsight(k.tension, constraint.text)) : kept;
+    const tensions: TensionRow[] = also.slice(0, 4).map(({ tension, grounding, sourceRefs }) => ({ tension, grounding, sourceRefs }));
+
+    // Stage: named only with evidence (at least two cited observations that pass the gates); otherwise undetermined.
+    // The stage is the CORE's; one named part may sit at a different stage (shown, never replacing the core).
+    const rawS = u?.stage;
+    const named = (x: string | undefined): x is 'validating' | 'growth' | 'plateau' => x === 'validating' || x === 'growth' || x === 'plateau';
+    // Evidence may cite the Terms page ("features may change during the pilot"); only wording critiques are dropped.
+    const evidence = clean(rawS?.evidence).filter((e) => !critiquesWording(e) && !makesUnlicensedClaim(e)).slice(0, 4);
+    const sec = rawS?.secondary;
+    const secArea = (sec?.area ?? '').trim();
+    const secondary = sec && named(sec.stage) && sec.stage !== rawS?.stage && secArea && !makesUnlicensedClaim(secArea)
+      && clean(sec.evidence).length > 0 ? { stage: sec.stage, area: lowerFirst(secArea) } : null;
+    const stage: ArcUnderstanding['stage'] = !rawS ? null
+      : named(rawS.stage) && evidence.length >= 2 && clean(rawS.sourceRefs).length > 0
+        ? { stage: rawS.stage, evidence, secondary } : { stage: 'undetermined' };
 
     // Confident = anchored in the evidence: the grounded Aha findings + what the offer states explicitly +
     // positioning the site actually backs up. Inferring = read from PATTERN (implied positioning, who the
@@ -276,6 +308,8 @@ export class ArcService {
       confident,
       inferring,
       unanswered,
+      constraint,
+      stage,
     };
   }
 

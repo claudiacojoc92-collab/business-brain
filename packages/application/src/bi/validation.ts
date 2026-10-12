@@ -42,7 +42,7 @@ const UNLICENSED_CLAIM_TERMS = [
   'differentiat', 'competitor', 'competitive', 'stand out', 'stands out', 'set apart', 'sets apart',
   'category-leading', 'market-leading', 'best-in-class', 'best in class', 'edge over', 'advantage over',
   'unlike competitors', 'unlike other', 'rare', 'unique', 'superior', 'outperform',
-  'diferenția', 'diferentia', 'concurenț', 'concurent', 'avantaj fața', 'avantaj fata', 'unic', 'superior',
+  'diferențiator', 'diferentiator', 'se diferențiaz', 'se diferentiaz', 'concurenț', 'concurent', 'avantaj fața', 'avantaj fata', 'unic', 'superior',
   'differenzia', 'concorren', 'vantaggio rispetto', 'unico', 'raro', 'si distingue',
   // trust / credibility (needs audience/behavior evidence)
   'trust', 'credibility', 'credible', 'reputation', 'reassur',
@@ -55,9 +55,9 @@ const UNLICENSED_CLAIM_TERMS = [
   // conversion / purchase / behavioral response
   'conversion', 'converts better', 'will convert', 'purchase decision', 'buying decision',
   'more likely to', 'likely to buy', 'drive sales', 'boost sales', 'increase revenue', 'revenue',
-  'leave money', 'engagement', 'resonate', 'resonance', 'appeal to', 'appeals to', 'attract',
+  'leave money', 'engagement rate', 'drive engagement', 'more engagement', 'boost engagement', 'increase engagement', 'higher engagement', 'resonate', 'resonance', 'appeal to', 'appeals to', 'attract',
   'inbound lead', 'targeted lead', 'more leads', 'proven to', 'guarantee',
-  'conversie', 'conversii', 'venit', 'vânzăr', 'vanzar', 'mai probabil să', 'mai probabil sa',
+  'conversie', 'conversii', 'venit', 'crește vânzările', 'creste vanzarile', 'crești vânzările', 'cresti vanzarile', 'mai multe vânzări', 'mai multe vanzari', 'mai probabil să', 'mai probabil sa',
   'rezon', 'atrage client', 'atrage lead',
   'conversione', 'convertir', 'ricav', 'vendite', 'più propensi', 'piu propensi', 'risuon', 'attrarre',
   // emotional / psychological / perception outcomes
@@ -77,9 +77,18 @@ export { isHousekeeping, restatesNotShown } from './insight-text';
 import { isHousekeeping } from './insight-text';
 
 /** True when the text makes a claim whose TYPE website-only evidence cannot license. */
+/**
+ * A term matches only at the START of a word (Unicode-aware): "rare" must not fire inside the Romanian "recuperare",
+ * nor "unic" inside "comunicare" (both silently dropped Romanian lines before 2026-10-12). Prefix terms such as
+ * "differentiat" or "credibilit" still match their inflections.
+ */
+const startsWord = (t: string, term: string): boolean => {
+  for (let i = t.indexOf(term); i !== -1; i = t.indexOf(term, i + 1)) if (i === 0 || !/[\p{L}\p{N}]/u.test(t[i - 1]!)) return true;
+  return false;
+};
 export function makesUnlicensedClaim(text: string): boolean {
   const t = text.toLowerCase();
-  return UNLICENSED_CLAIM_TERMS.some((p) => t.includes(p));
+  return UNLICENSED_CLAIM_TERMS.some((p) => startsWord(t, p));
 }
 
 /**
@@ -91,7 +100,7 @@ export function makesUnlicensedClaim(text: string): boolean {
 const TRUST_TERMS = ['trust', 'încredere', 'incredere', 'fiducia'];
 export function makesUnlicensedSoWhatClaim(text: string): boolean {
   const t = text.toLowerCase();
-  return UNLICENSED_CLAIM_TERMS.some((p) => !TRUST_TERMS.includes(p) && t.includes(p));
+  return UNLICENSED_CLAIM_TERMS.some((p) => !TRUST_TERMS.includes(p) && startsWord(t, p));
 }
 
 export interface ValidatedFinding {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { isHousekeeping, restatesNotShown } from '../../bi/validation';
-import { sameInsight, firstSentence } from '../../bi/insight-text';
+import { isHousekeeping, restatesNotShown, makesUnlicensedClaim } from '../../bi/validation';
+import { sameInsight, firstSentence, visibilityPhrased, factOnly } from '../../bi/insight-text';
 import { agendaUnknowns } from '../../bi/contracts';
 
 // Real items from the Business Brain dogfood runs (2026-10-09): what the understanding must NOT surface as insight,
@@ -18,6 +18,7 @@ describe('isHousekeeping — website housekeeping is not business insight', () =
     "What 'marketing' specifically covers — the site says marketing is 'the first area Business Brain works on', implying future areas, but none are named",
     'Nothing in the sources supports or develops this framing.',
     "What 'a move for today' looks like in practice — no example is shown",
+    "Instagram integration is described as 'live' — implying other integrations may not be at the same level",
     'You call marketing your first area, which hints at a wider roadmap.',
   ])('flags: %s', (t) => expect(isHousekeeping(t)).toBe(true));
 
@@ -81,6 +82,16 @@ describe('agendaUnknowns — no wording critiques, no restated observations', ()
     contradictions: [{ kind: 'commercial_path' as const, statementA: '', statementB: '', tension: 'You are free during the pilot. You show no path to paid after the pilot.', sourceRefs: [] },
       { kind: 'channel_mismatch' as const, statementA: '', statementB: '', tension: 'Your most active public channel never mentions what you sell.', sourceRefs: [] }],
   });
+  it('keeps one of two questions that ask the same thing in different words', () => {
+    expect(agendaUnknowns(u([
+      'Whether the four moments are all fully live in the product today or some are still being built — the homepage describes them as a complete system',
+      'Whether the four moments (Understanding, Conversation, Strategy, Plan) are all live or some are still being built',
+      'What is the one goal you want from the next 90 days?',
+    ]))).toEqual([
+      'Whether the four moments are all fully live in the product today or some are still being built — the homepage describes them as a complete system',
+      'What is the one goal you want from the next 90 days?',
+    ]);
+  });
   it('drops housekeeping and questions that restate a shown tension', () => {
     expect(agendaUnknowns(u([
       "What does 'the first area' mean in practice?",
@@ -89,5 +100,53 @@ describe('agendaUnknowns — no wording critiques, no restated observations', ()
       'Is @someone the intended public channel for the product?',
       'What is the one goal you want from the next 90 days?',
     ]))).toEqual(['What is the one goal you want from the next 90 days?']);
+  });
+});
+
+describe('makesUnlicensedClaim — terms match at word start only (Romanian false positives, 2026-10-12)', () => {
+  it.each([
+    'Nu ai decis dacă ești un studio de fitness cu servicii de recuperare sau un centru medical.',
+    'Două locații cu servicii diferențiate pe locație.',
+    'Un plan de comunicare pentru fiecare segment.',
+    'Ofertă de programare online.',
+    'Deci toată greutatea vânzării cade pe pliant și pe conversația directă.',
+    'A company considering an interim HR mandate cannot see a single completed engagement.',
+    'The free call carries the cost of the engagement.',
+  ])('keeps: %s', (t) => expect(makesUnlicensedClaim(t)).toBe(false));
+  it.each([
+    'A rare offer in this city.',
+    'Un serviciu unic în Cluj.',
+    'Abordarea integrată te diferențiază? — este un diferențiator clar.',
+    'This erodes credibility.',
+    'It differentiates you from competitors.',
+    'Un site mai clar ar crește vânzările.',
+    'More posts would drive engagement.',
+    'Your engagement rate is low.',
+  ])('flags: %s', (t) => expect(makesUnlicensedClaim(t)).toBe(true));
+});
+
+describe('constraint = the fact, not its visibility (operator, 2026-10-12)', () => {
+  it.each([
+    'You have not yet shown that a founder can go through the flow.',
+    "You haven't demonstrated the method.",
+    'No founder has visibly completed the flow and got a result.',
+    'No founder has completed the flow and got a result you can point to.',
+    'So you are selling a promise with nothing to show yet.',
+    'Nu ai niciun rezultat concret al unui membru publicat pe site.',
+    'Niciun membru nu are un rezultat vizibil.',
+    'Nu ai arătat încă un client care a terminat programul.',
+    'Non hai ancora mostrato un cliente che ha finito il programma.',
+  ])('flags visibility framing: %s', (t) => expect(visibilityPhrased(t)).toBe(true));
+  it.each(['No founder has completed the flow and got a result.', 'You have not chosen who it is for.',
+    'Nu ai ales pentru cine este clubul.', 'Niciun client nu a terminat programul și nu a obținut un rezultat.'])('keeps facts: %s', (t) => expect(visibilityPhrased(t)).toBe(false));
+
+  it('keeps the fact only: cuts the consequence tail, strips visibility adverbs', () => {
+    expect(factOnly('No founder has visibly completed the flow and got a result you can point to, so every claim about the output rests on description alone.'))
+      .toBe('No founder has completed the flow and got a result.');
+    expect(factOnly('No founder has visibly completed the full flow and got a result you can point to, so you are selling a promise with nothing to show yet.'))
+      .toBe('No founder has completed the full flow and got a result.');
+    expect(factOnly('You have not chosen who it is for, so each channel speaks to someone else.')).toBe('You have not chosen who it is for.');
+    expect(factOnly('No client has completed the programme and got a result.')).toBe('No client has completed the programme and got a result.');
+    expect(factOnly('You have not chosen which of your four services is the core — so your effort is spread across all four.')).toBe('You have not chosen which of your four services is the core.');
   });
 });
