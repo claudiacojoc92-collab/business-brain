@@ -7,7 +7,7 @@ import { VOICE_RULES, spoken, plainSubject, type IEmailModelPort, type EmailDraf
  * it must reflect this business's bet and sound like this founder. Concise (fits the arc's durable store).
  * Fails SAFE — on any error / missing key it returns a clearly-grounded, honest fallback, never throws.
  */
-const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian' };
+const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian', de: 'German' };
 
 function rulesBase(l: string): string {
   return [
@@ -70,7 +70,7 @@ export class AnthropicEmailModel implements IEmailModelPort {
 
   async draft(input: EmailDraftInput, rewrite?: string[]): Promise<ArcEmail> {
     // Fail-safe fallback in the CONTENT language (never an English template dropped onto a Romanian business).
-    const key: 'en' | 'ro' | 'it' = input.interfaceLanguage === 'ro' ? 'ro' : input.interfaceLanguage === 'it' ? 'it' : 'en';
+    const key: 'en' | 'ro' | 'it' | 'de' = input.interfaceLanguage === 'ro' ? 'ro' : input.interfaceLanguage === 'it' ? 'it' : input.interfaceLanguage === 'de' ? 'de' : 'en';
     const fallback = FALLBACK[key](input);
     if (!this.apiKey) return fallback;
     try {
@@ -94,8 +94,9 @@ export class AnthropicEmailModel implements IEmailModelPort {
 }
 
 /** Fail-safe fallback email per language — so a failed generation never leaks an English template. */
-const FALLBACK: Record<'en' | 'ro' | 'it', (i: EmailDraftInput) => ArcEmail> = {
+const FALLBACK: Record<'en' | 'ro' | 'it' | 'de', (i: EmailDraftInput) => ArcEmail> = {
   en: (i) => ({ subject: `About ${i.businessName}`, body: `Hi,\n\nI'm reaching out from ${i.businessName}. ${i.todaysMove || 'I’d love to tell you a little about what we do and see if it’s a fit.'}\n\nWould you be open to a short conversation?\n\nThanks,\n` }),
   ro: (i) => ({ subject: `Despre ${i.businessName}`, body: `Bună ziua,\n\nVă scriu din partea ${i.businessName}. ${i.todaysMove || 'Aș vrea să vă povestesc pe scurt ce facem și să văd dacă se potrivește.'}\n\nAți fi deschis/ă la o scurtă discuție?\n\nCu respect,\n` }),
   it: (i) => ({ subject: `A proposito di ${i.businessName}`, body: `Buongiorno,\n\nLe scrivo da ${i.businessName}. ${i.todaysMove || 'Vorrei raccontarle brevemente cosa facciamo e capire se può interessare.'}\n\nSarebbe disponibile per una breve conversazione?\n\nCordiali saluti,\n` }),
+  de: (i) => ({ subject: `Über ${i.businessName}`, body: `Guten Tag,\n\nich melde mich von ${i.businessName}. ${i.todaysMove || 'Ich würde Ihnen gern kurz erzählen, was wir tun, und sehen, ob es passt.'}\n\nWären Sie offen für ein kurzes Gespräch?\n\nMit freundlichen Grüßen,\n` }),
 };

@@ -17,7 +17,7 @@ import { VOICE_RULES,
  * validates + grounds the result deterministically.
  */
 
-const LANG_NAME: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian' };
+const LANG_NAME: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian', de: 'German' };
 const PER_PAGE_CHARS = 3500;
 const INSTAGRAM_SUMMARY_CHARS = 8000; // the one Instagram source carries up to 50 posts
 const MAX_WEBSITE_PAGES_ALONE = 10;  // website-only: unchanged
@@ -165,8 +165,8 @@ function systemPromptBase(lang: string): string {
     '  implication entirely if you cannot stay within the allowed claim types.',
     '- "distinctive/distinct" is allowed ONLY to mean distinct WITHIN this business\'s own offer — never',
     '  "different from competitors".',
-    '- Romanian/Italian must preserve the bounded meaning (poate/pare, può/sembra) and obey the same',
-    '  claim-type limits — never strengthen into dovedește/demonstrează or dimostra/prova.',
+    '- Romanian/Italian/German must preserve the bounded meaning (poate/pare, può/sembra, kann/scheint) and obey',
+    '  the same claim-type limits — never strengthen into dovedește/demonstrează, dimostra/prova or beweist/zeigt.',
     '',
     'STRATEGIC LENS — you are reading a BUSINESS, not auditing a website. This decides what goes in contradictions',
     'and aha.findings:',

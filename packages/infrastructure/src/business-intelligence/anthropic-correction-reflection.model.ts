@@ -10,7 +10,7 @@ import { VOICE_RULES, withoutQuestions, type ICorrectionReflectionModel, type Co
  * understanding (what stands out, the tensions, what BB was confident about) so the change/holds are specific,
  * not generic. Fails SAFE — on any error / missing key it returns a plain but honest, non-empty reflection.
  */
-const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian' };
+const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian', de: 'German' };
 
 function rulesBase(l: string): string {
   return [

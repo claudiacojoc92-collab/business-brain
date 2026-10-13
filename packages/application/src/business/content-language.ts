@@ -57,6 +57,7 @@ const STOP: Record<SupportedLocale, ReadonlySet<string>> = {
   ro: new Set(['si', 'sa', 'este', 'pentru', 'care', 'nu', 'cu', 'la', 'de', 'in', 'din', 'mai', 'am', 'sunt', 'ce', 'un', 'o', 'ca', 'pe', 'noi', 'meu', 'mea', 'avem', 'vreau', 'cum', 'acum', 'asta', 'clientii', 'clienti']),
   it: new Set(['e', 'il', 'la', 'che', 'di', 'per', 'non', 'sono', 'con', 'una', 'gli', 'del', 'della', 'nel', 'ho', 'abbiamo', 'voglio', 'come', 'questo', 'clienti', 'anche', 'ma', 'piu']),
   en: new Set(['the', 'and', 'is', 'for', 'that', 'not', 'with', 'are', 'we', 'our', 'i', 'my', 'have', 'want', 'how', 'this', 'to', 'of', 'a', 'it', 'you', 'clients', 'customers', 'but', 'more']),
+  de: new Set(['und', 'der', 'die', 'das', 'ist', 'fur', 'nicht', 'mit', 'wir', 'unser', 'unsere', 'ich', 'mein', 'meine', 'haben', 'will', 'wie', 'dies', 'diese', 'zu', 'von', 'ein', 'eine', 'es', 'du', 'sie', 'auch', 'oder', 'kunden', 'auf', 'den', 'dem', 'im', 'aber', 'mehr', 'sind', 'werden']),
 };
 
 /** The language of a piece of the founder's OWN writing, or null when it is too short or not clear. Used only as
@@ -66,9 +67,10 @@ export function detectTextLanguage(text: string): SupportedLocale | null {
   const t = text.trim();
   if (t.length < 40) return null;
   const words = fold(t).split(/[^a-z']+/).filter(Boolean);
-  const score: Record<SupportedLocale, number> = { ro: 0, it: 0, en: 0 };
-  for (const w of words) for (const l of ['ro', 'it', 'en'] as const) if (STOP[l].has(w)) score[l]++;
+  const score: Record<SupportedLocale, number> = { ro: 0, it: 0, en: 0, de: 0 };
+  for (const w of words) for (const l of ['ro', 'it', 'en', 'de'] as const) if (STOP[l].has(w)) score[l]++;
   if (/[ăâîșşțţ]/i.test(t)) score.ro += 3;                      // Romanian-only letters
+  if (/[äöüß]/i.test(t)) score.de += 2;                         // German-specific letters (ß is German-only)
   const ranked = (Object.entries(score) as [SupportedLocale, number][]).sort((a, b) => b[1] - a[1]);
   const [[top, a], [, b]] = ranked as [[SupportedLocale, number], [SupportedLocale, number]];
   return a >= 3 && a >= 2 * b ? top : null;                     // a clear winner, or nothing
@@ -83,6 +85,9 @@ const SWITCH: { re: RegExp; to: SupportedLocale }[] = [
   { re: /\b(rispondi|rispondete|scrivi|scrivete|parla|continua|passa)\b[^.?!]{0,20}\bin\s+(inglese)\b/, to: 'en' },
   { re: /\b(rispondi|rispondete|scrivi|scrivete|parla|continua|passa)\b[^.?!]{0,20}\bin\s+(rumeno)\b/, to: 'ro' },
   { re: /\b(rispondi|rispondete|scrivi|scrivete|parla|continua|passa)\b[^.?!]{0,20}\bin\s+(italiano)\b/, to: 'it' },
+  { re: /\b(reply|answer|respond|write|talk|speak|continue|switch)\b[^.?!]{0,20}\b(in|to)\s+german\b|\bauf deutsch\b/, to: 'de' },      // "reply in German" / "auf Deutsch"
+  { re: /\b(raspunde|raspundeti|scrie|scrieti|vorbeste|continua|treci)\b[^.?!]{0,20}\bin\s+(germana)\b/, to: 'de' },                     // "răspunde în germană" (folded)
+  { re: /\b(rispondi|rispondete|scrivi|scrivete|parla|continua|passa)\b[^.?!]{0,20}\bin\s+(tedesco)\b/, to: 'de' },                      // "rispondi in tedesco"
 ];
 
 /** A DELIBERATE request to change the content language ("reply in English", "răspunde în română",

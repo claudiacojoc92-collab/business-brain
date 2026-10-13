@@ -6,7 +6,7 @@ import type { IAha2ModelPort, Aha2Input, Aha2Output, Aha2RepairInput } from '@bb
  * a grounded strategic implication. Propose-only; the application layer enforces cross-source +
  * claim-type + psychology gates. This is NOT strategy — it names an implication, not a plan.
  */
-const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian' };
+const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian', de: 'German' };
 
 function systemPrompt(lang: string): string {
   const l = LANG[lang] ?? 'English';

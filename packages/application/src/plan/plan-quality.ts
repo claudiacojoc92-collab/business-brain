@@ -15,11 +15,11 @@ const words = (s: string): string[] => (s.toLowerCase().match(/[a-z][a-z-]{3,}/g
 const tokenSet = (parts: string[]): Set<string> => new Set(parts.flatMap(words));
 
 // The "week" concept in the plan's OWN language — EN week(s), RO săptămână/săptămâni (with or without
-// diacritics), IT settimana/settimane. A time band is authored in the plan's language (the LANGUAGE rule), so
+// diacritics), IT settimana/settimane, DE Woche/Wochen. A time band is authored in the plan's language (the LANGUAGE rule), so
 // demanding the literal English "week" would force English into one field and burn repair attempts. No /g on
 // WEEK_WORD so .test() is stateless.
-const WEEK_WORD = /(weeks?|s[ăa]pt[ăa]m[âaăî]ni?|settimane?)/i;
-const WEEK_BAND = /\b(?:weeks?|s[ăa]pt[ăa]m[âaăî]ni?|settimane?)\s+\d(?:\s*[-–—]\s*\d)?\b/gi;
+const WEEK_WORD = /(weeks?|s[ăa]pt[ăa]m[âaăî]ni?|settimane?|wochen?)/i;
+const WEEK_BAND = /\b(?:weeks?|s[ăa]pt[ăa]m[âaăî]ni?|settimane?|wochen?)\s+\d(?:\s*[-–—]\s*\d)?\b/gi;
 // No trailing \b: "30%-burn" must still detect "30%" (a hyphen after % is not a word boundary).
 const NUMERIC = /\b\d[\d.,]*\s?%?/g;
 const DATE = /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}\b/gi;

@@ -67,7 +67,7 @@ describe('FounderAccountService', () => {
 
   it('validates interface locale updates', async () => {
     const a = await svc.register({ email: 'l@x.com', name: 'L', passwordHash: 'h' });
-    await expect(svc.setInterfaceLocale(a.founderId, 'de')).rejects.toBeInstanceOf(ValidationError);
+    await expect(svc.setInterfaceLocale(a.founderId, 'fr')).rejects.toBeInstanceOf(ValidationError); // 'de' is now supported; 'fr' is not
     await expect(svc.setInterfaceLocale(a.founderId, 'ro')).resolves.toBe('ro');
     expect((await svc.getById(a.founderId))?.interfaceLocale).toBe('ro');
   });
