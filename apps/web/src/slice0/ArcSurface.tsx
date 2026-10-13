@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
 import { translate, isLocale } from '../i18n/messages';
+import { withContentLanguage } from '../i18n/content';
 import { isNotFound } from './errors';
 import { parseOpenerTurn, type ArcOpener } from './parse-briefing';
 import {
@@ -357,8 +358,11 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
 
   // Arc CHROME (labels, buttons, the question tag, provenance, error copy) is UI, so it is ENGLISH like the rest of
   // the product (operator rule 2026-10-07). What BB writes (the understanding, questions, strategy, email) arrives
-  // from the server already in the business's content language and is rendered as-is.
-  const t: T = useCallback((key: string, vars?: Record<string, string>) => translate(isLocale(locale) ? locale : 'en', key, vars), [locale]);
+  // from the server already in the business's content language and is rendered as-is. The fixed strings that read as
+  // part of BB's sentence about the business (CONTENT_KEYS) follow the business's stored content language (2026-10-13).
+  const contentLanguage = view?.contentLanguage ?? null;
+  const uiT: T = useCallback((key: string, vars?: Record<string, string>) => translate(isLocale(locale) ? locale : 'en', key, vars), [locale]);
+  const t: T = useMemo(() => withContentLanguage(uiT, contentLanguage), [uiT, contentLanguage]);
 
   // Track the arc-content moments (understanding onward) in history so the founder can go back read-only. pour_in
   // and reading-style transients are not tracked (nothing to re-read there). Same moment = refresh in place.

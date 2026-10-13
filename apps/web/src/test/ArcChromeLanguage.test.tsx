@@ -37,6 +37,15 @@ describe('arc chrome is English UI; the content stays in the business language (
     expect(screen.getByText(/canalul de recomandări/)).toBeInTheDocument();                  // content as BB wrote it
   });
 
+  it('a German business: the strategy line follows German (statt / Der Zeitrahmen), buttons stay English (2026-10-13)', async () => {
+    vi.mocked(api.getArc).mockResolvedValue({ ...strat, contentLanguage: 'de', strategy: { ...strat.strategy!, bet: 'Empfehlungen', over: 'Werbung', horizon: '6 Monate' } } as ArcView);
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    expect(await screen.findByText(/statt Werbung/)).toBeInTheDocument();
+    expect(screen.getByText(/Der Zeitrahmen: 6 Monate\./)).toBeInTheDocument();
+    expect(screen.queryByText(/over Werbung/)).toBeNull();
+    expect(screen.getByText(/what I think you should do/i)).toBeInTheDocument();   // English chrome
+  });
+
   it('no content language yet: still English', async () => {
     vi.mocked(api.getArc).mockResolvedValue({ ...strat, contentLanguage: null });
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);

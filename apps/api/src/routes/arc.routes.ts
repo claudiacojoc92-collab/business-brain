@@ -249,6 +249,9 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
       await reply.status(200).send({ ...view, error: { kind: 'pourin_empty' } });
       return;
     }
+    // The FIRST understanding decides and stores the content language, so resolve it again: the one resolved before
+    // the bridge ran was only the account-locale fallback.
+    const storedLanguage = (await requireBusiness(request)).language;
     // Back from a later moment with changed sources: this is a RE-READ. The new understanding needs the founder's
     // review again (progress is kept: conversation answers, an adopted strategy and the plan all stay), and an
     // adopted strategy is checked against it by the existing impact evaluator (never re-adopted automatically).
@@ -258,8 +261,8 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
     } else {
       await recordFounderEventAwaited(deps.db, { accountId: founderId, businessId: business.id, eventType: 'arc_pour_in_done', surface: 'arc' });
     }
-    const view = await viewFor(business.id, business.name, language, founderId);
-    if (before.pourInDone) void checkStrategyAgainstNewSources(founderId, business.id, business.name, language, view);
+    const view = await viewFor(business.id, business.name, storedLanguage, founderId);
+    if (before.pourInDone) void checkStrategyAgainstNewSources(founderId, business.id, business.name, storedLanguage, view);
     await reply.status(200).send(view);
   });
 

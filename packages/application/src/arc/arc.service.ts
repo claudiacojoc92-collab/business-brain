@@ -91,9 +91,10 @@ export class ArcService {
       planActive: Boolean(active),
     });
 
-    // The content language = the language BB read the business in (falls back to the request language before any
-    // understanding exists). The UI localizes its chrome to this so labels never mismatch the content.
-    const contentLanguage = (snap?.sourceLanguage ?? '').trim() || language;
+    // The content language = the business's STORED content language (`language`, resolved by the route through
+    // resolveContentLanguage), never the snapshot's detected source language: the two can disagree (a business whose
+    // language was decided before its own language was supported). The web renders its content-language strings in it.
+    const contentLanguage = language;
     const base: ArcView = { moment, businessName, contentLanguage };
     const u = snap?.understanding ?? null;
 

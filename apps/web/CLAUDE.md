@@ -15,6 +15,9 @@ React + Vite SPA. In prod it's a static build served by nginx (`Dockerfile.web`,
   `src/i18n/messages.ts` (flat keys, `{var}` interpolation) with an `en` entry; `ro`/`it` tables are kept but unused.
   Content the model wrote (understanding, strategy, plan, conversation, pages) arrives from the API already in the
   business's content language: render it as-is, never translate or re-localize it.
+- Amendment (2026-10-13): fixed strings that read as part of BB's sentence about the business (`CONTENT_KEYS` in
+  `src/i18n/content.ts`) render through `contentT(contentLanguage, key, …)` in the business's STORED content language
+  (the API sends it as `contentLanguage`); German exists only there. Headings, buttons and chips stay English.
 - Lint uses this app's own `.eslintrc.cjs` (`root: true`). The repo-root `npm run lint` skips `apps/web`.
   Run `npm run lint --workspace @business-brain/web`.
 - Build-time env goes in `apps/web/.env` (Vite): `VITE_GOOGLE_CLIENT_ID`, `VITE_GOOGLE_PICKER_API_KEY`.
