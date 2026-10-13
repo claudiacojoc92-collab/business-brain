@@ -469,6 +469,7 @@ mapping are new each time.
   unit test. Body Move itself has no local data; its walk is the prod verification after deploy. Gate: type-check 0
   · `npm test` 1878 pass / 4 skip · web type-check 0 · web lint 0 · backend changed files eslint 0.
 
+- 2026-10-07: done — C1–C6 merged to main (PR #4, merge 939d5b9; commits 0aabde3/58e19b0/b89ad65) and DEPLOYED (V084 via founder-mvp-migrate 2131b6fe, api e982e369 12:58 UTC, web ccb29836 12:59 UTC; live bundle index-DYYWc9-_.js). / next — operator walks Body Move in prod: new plan via console (UI has no rebuild before cycle close → BUS-51), Today → "See what BB wrote" → landing, screenshots → close BUS-5/7–12. / blockers — none on our side (BUS-5, BUS-7..12, BUS-51)
 ## Security incident — 2026-10-06: prod DB connection string exposed in a session transcript
 
 **What happened.** While confirming the live Flyway schema before deploy, a schema read was attempted as

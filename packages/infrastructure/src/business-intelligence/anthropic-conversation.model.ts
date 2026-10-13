@@ -8,7 +8,7 @@ import type { IConversationModelPort, ConversationStepInput, ConversationStepOut
  * the next PIVOTAL question (or readiness), and update information needs. Propose-only — the
  * application layer persists, promotes observations, and gates.
  */
-const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian' };
+const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian', de: 'German' };
 
 function systemPromptBase(lang: string): string {
   const l = LANG[lang] ?? 'English';

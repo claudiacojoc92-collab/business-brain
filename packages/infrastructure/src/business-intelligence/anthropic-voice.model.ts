@@ -16,7 +16,7 @@ import type {
  * adjective tags). Voice decides HOW an allowable claim reads — the application layer enforces claim
  * safety, negative-space, boundaries, CTA survival, and anti-parroting. Propose-only JSON.
  */
-const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian' };
+const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian', de: 'German' };
 
 function extractJson(text: string): unknown {
   const s = text.indexOf('{'); const e = text.lastIndexOf('}');

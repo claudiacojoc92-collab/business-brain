@@ -6,7 +6,7 @@
  * per-business default conversation language.
  */
 
-export const SUPPORTED_LOCALES = ['ro', 'en', 'it'] as const;
+export const SUPPORTED_LOCALES = ['ro', 'en', 'it', 'de'] as const;
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
 export function isSupportedLocale(value: unknown): value is SupportedLocale {

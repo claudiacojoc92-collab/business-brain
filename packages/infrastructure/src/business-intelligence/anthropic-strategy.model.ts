@@ -16,7 +16,7 @@ import type {
  * business-specific (fails transplant). Propose-only JSON; the application layer runs the M1 gate
  * stack, repairs failed components, and fails closed. Also exposes repair() and judge().
  */
-const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian' };
+const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian', de: 'German' };
 
 const SHAPE = `{
   "core": {

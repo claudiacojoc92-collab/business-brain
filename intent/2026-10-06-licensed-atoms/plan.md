@@ -428,3 +428,4 @@ founder action unblocks the whole move. NOT a re-strategizing effort.
   `stop_reason === 'max_tokens'` or unparseable output THROWS, so the service logs `atoms_extract_threw` and keeps
   the last good set. Live after the fix: 43/43 licensed, persisted. Tests: `atom-model-truncation.c4.test.ts` (4).
   Prod Body Move (2 pages, ~23 atoms) was below the overflow point, which is why it never showed there.
+- 2026-10-07: done — BUS-16 fixes + atom truncation fix merged (PR #4) and deployed in api e982e369. / next — prod walk on Body Move (BUS-16/BUS-18); footer contact gap is BUS-53. / blockers — none (BUS-15, BUS-16, BUS-53)

@@ -34,7 +34,8 @@ describe('content language — a property of the business, separate from the (En
   it('material language = the majority of the founder\'s material', () => {
     expect(detectMaterialLanguage(['ro', 'ro', 'en'])).toBe('ro');
     expect(detectMaterialLanguage(['it', null, 'it-IT', 'en'])).toBe('it');
-    expect(detectMaterialLanguage([null, undefined, 'de'])).toBeNull();
+    expect(detectMaterialLanguage([null, undefined, 'de', 'de-DE'])).toBe('de'); // German now supported
+    expect(detectMaterialLanguage([null, undefined, 'fr'])).toBeNull();          // a still-unsupported locale
   });
 
   it('a short reply or a borrowed word never decides the language', () => {
@@ -43,6 +44,7 @@ describe('content language — a property of the business, separate from the (En
     expect(detectTextLanguage('Vreau să fac un landing page pentru clienții care vin la recuperare cu noi.')).toBe('ro');
     expect(detectTextLanguage('We want more patients for recovery after an injury, and we have two locations.')).toBe('en');
     expect(detectTextLanguage('Voglio più clienti per il recupero dopo il parto, e abbiamo uno studio a Milano.')).toBe('it');
+    expect(detectTextLanguage('Wir wollen mehr Kunden für die Erholung nach der Geburt, und wir haben ein Studio in Berlin.')).toBe('de');
   });
 
   it('only a DELIBERATE request switches it', () => {
@@ -52,6 +54,10 @@ describe('content language — a property of the business, separate from the (En
     expect(detectLanguageSwitchRequest('switch to Italian')).toBe('it');
     expect(detectLanguageSwitchRequest('Rispondi in inglese')).toBe('en');
     expect(detectLanguageSwitchRequest('Scrie în română')).toBe('ro');
+    expect(detectLanguageSwitchRequest('Please reply in German from now on')).toBe('de');
+    expect(detectLanguageSwitchRequest('Kannst du auf Deutsch antworten?')).toBe('de');
+    expect(detectLanguageSwitchRequest('Răspunde în germană, te rog.')).toBe('de');
+    expect(detectLanguageSwitchRequest('Rispondi in tedesco')).toBe('de');
     expect(detectLanguageSwitchRequest('Avem clienți care vorbesc engleza și româna.')).toBeNull(); // mentions, not a request
     expect(detectLanguageSwitchRequest('ok')).toBeNull();
   });

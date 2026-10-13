@@ -9,7 +9,7 @@ import type { IMirrorModelPort, MirrorContrastInput, MirrorContrastOutput, Mirro
  * another declared fact, or the strategy) on the other. It never fabricates: if nothing genuinely conflicts it
  * returns none. It fails SAFE — any error or missing key returns { mismatches: [] } (never an invented contrast).
  */
-const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian' };
+const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian', de: 'German' };
 
 const SHAPE = `{
   "mismatches": [{

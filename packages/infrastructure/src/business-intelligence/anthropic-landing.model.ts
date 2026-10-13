@@ -7,7 +7,7 @@ import { routeFacts, type ILandingModelPort, type LandingGenInput, type LandingR
  * kernel + judge by MoveDraftService. The prompt forbids the three regulated classes up front, but the prompt
  * is NOT the gate — the deterministic layers are. Fails SAFE to a thin, licensed-only draft (still gated).
  */
-const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian' };
+const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian', de: 'German' };
 const ROLES: LandingSectionRole[] = ['hero_headline', 'hero_subhead', 'what', 'who', 'proof', 'how_it_works', 'cta'];
 
 function rules(l: string): string {
