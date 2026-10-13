@@ -4,6 +4,7 @@ import { AppShell } from './AppShell';
 import { useTalk } from './TalkDrawer';
 import { ArcSurface } from './ArcSurface';
 import { useLocale } from '../i18n/LocaleContext';
+import { withContentLanguage } from '../i18n/content';
 import { getArc, getHomeBriefing, evaluateImpact, ApiError, type HomeBriefing, type HomeAction, type ImpactResult } from '../api/client';
 import { VerdictSurface } from './VerdictSurface';
 import { ArcWorking } from './ArcWorking';
@@ -24,6 +25,8 @@ export function HomePage(): React.ReactElement {
 
   const [mode, setMode] = useState<'loading' | 'arc' | 'briefing' | 'fail'>('loading');
   const [briefing, setBriefing] = useState<HomeBriefing | null>(null);
+  // Briefing lines are BB's sentences about the business: they follow its stored content language (2026-10-13).
+  const tc = withContentLanguage(t, briefing?.contentLanguage);
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // Month two — the cycle-close answer + the verdict it produces (rendered on the home surface itself).
@@ -89,7 +92,7 @@ export function HomePage(): React.ReactElement {
     if (verdict) {
       return (
         <AppShell home>
-          <VerdictSurface businessId={id} result={verdict}
+          <VerdictSurface businessId={id} result={verdict} contentLanguage={briefing.contentLanguage}
             onDismiss={() => { setVerdict(null); setCloseText(''); void load(); }}
             onAdopted={() => navigate(`${base}/today`)} />
         </AppShell>
@@ -100,7 +103,7 @@ export function HomePage(): React.ReactElement {
         <div className="s0-strat">
           <div className="s0-strat-ctx">{contextLine(briefing)}</div>
           <div className="s0-strat-msg">
-            {briefing.lines.map((l, i) => <p key={i} className="s0-strat-msg-line">{t(l.key, l.vars)}</p>)}
+            {briefing.lines.map((l, i) => <p key={i} className="s0-strat-msg-line">{tc(l.key, l.vars)}</p>)}
           </div>
           {closeBusy ? (
             <ArcWorking t={t} messageKey="arc.working.thinking" />
@@ -137,7 +140,7 @@ export function HomePage(): React.ReactElement {
           <>
             <div className="s0-strat-ctx">{contextLine(briefing)}</div>
             <div className="s0-strat-msg">
-              {briefing.lines.map((l, i) => <p key={i} className="s0-strat-msg-line">{t(l.key, l.vars)}</p>)}
+              {briefing.lines.map((l, i) => <p key={i} className="s0-strat-msg-line">{tc(l.key, l.vars)}</p>)}
             </div>
             <div className="s0-strat-actions">
               {briefing.actions.map((a, i) => (

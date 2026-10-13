@@ -84,6 +84,9 @@ Gotchas:
   `source_language` → account locale → `en`), never per message; only an explicit "reply in X" changes it. Every
   model call resolves it through `resolveContentLanguage` / `contentLanguageFor`, never the UI locale. UI strings
   live in `apps/web/src/i18n/messages.ts` (EN is the one used). Canonical state is language-independent.
+  **Amendment (2026-10-13):** a UI string that reads as part of BB's sentence about the business (e.g. "Everything
+  else is a symptom.", "For: {who}.", "Stage: {stage}.", "Your bet: {bet}") follows the business's STORED
+  `content_language`, not the UI locale; headings, buttons and provenance chips stay English.
 - ESLint: `no-console` is an error, `no-explicit-any` is an error, `import/no-cycle`, and unused args must
   be prefixed `_`.
 - Tests live next to the code (`*.test.ts`) or in `__tests__/`. Integration specs are

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocale } from '../i18n/LocaleContext';
+import { withContentLanguage } from '../i18n/content';
 import { adoptStrategy, respondToStrategy, proposePlan, adoptPlan, type ImpactResult } from '../api/client';
 import { ArcWorking } from './ArcWorking';
 
@@ -42,9 +43,13 @@ export function VerdictSurface(props: {
   result: ImpactResult;
   onDismiss: () => void;
   onAdopted?: () => void;
+  /** The business's STORED content language: the verdict's reason sentences follow it (rule amendment 2026-10-13);
+   *  buttons and labels stay English. Omitted → English. */
+  contentLanguage?: string | null;
 }) {
-  const { businessId, result, onDismiss, onAdopted } = props;
-  const { t } = useLocale() as { t: T };
+  const { businessId, result, onDismiss, onAdopted, contentLanguage } = props;
+  const { t: uiT } = useLocale() as { t: T };
+  const t: T = useMemo(() => withContentLanguage(uiT, contentLanguage), [uiT, contentLanguage]);
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState<'view' | 'challenging' | 'adopted' | 'challenged'>('view');

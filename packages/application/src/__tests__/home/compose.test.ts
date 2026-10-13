@@ -82,6 +82,15 @@ describe('composeHomeBriefing — the strategist speaks first, from held state',
     expect(b.actions[0]!.labelKey).toBe('home.close.answer');
   });
 
+  it('cycle_close: a done move that ends in a full stop loses it, so "You saw through {a}." never renders ".."', () => {
+    const b = composeHomeBriefing({
+      ...base,
+      strategy: { bet: 'Referrals', adoptedAt: '2026-08-16T12:00:00.000Z' },
+      cycleClose: { bet: 'Referrals', did: ['Send the email to 5 clients.', 'Post the reel!'], doneCount: 2, totalCount: 2 },
+    });
+    expect(b.lines.find((l) => l.key === 'home.close.did2')?.vars).toEqual({ a: 'Send the email to 5 clients', b: 'Post the reel' });
+  });
+
   it('cycle_close degrades gracefully when few actions were completed (still one question, never a nag)', () => {
     const b = composeHomeBriefing({
       ...base,

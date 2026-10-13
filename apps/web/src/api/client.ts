@@ -464,6 +464,7 @@ export interface HomeBriefing {
   context: { name: string; day: number | null; bet: string | null };
   lines: HomeLine[];
   actions: HomeAction[];
+  contentLanguage?: string | null; // the business's STORED content language — the briefing lines follow it
 }
 export function getHomeBriefing(businessId: string): Promise<HomeBriefing> {
   return request<HomeBriefing>(`v1/businesses/${encodeURIComponent(businessId)}/home`);
@@ -482,7 +483,7 @@ export interface ArcView {
   // per-moment status — never the whole surface. `need_goal` is a positive confirm step (goalCandidate = the
   // founder's own words to reflect back, verbatim, or null to ask cold); `detail` explains a strategy_insufficient.
   error?: { kind: 'generation' | 'pourin_empty' | 'pourin_failed' | 'need_goal' | 'need_understanding' | 'strategy_insufficient'; goalCandidate?: { stateId: string | null; statement: string } | null; detail?: string | null } | null;
-  contentLanguage?: string | null; // the source/founder language — arc chrome localizes to this
+  contentLanguage?: string | null; // the business's STORED content language — content-language strings (i18n/content.ts) follow it
   strategyChange?: { because: string } | null; // Moment 6 — transient "the bet changed because…" note
   sources?: ArcSourceItem[];
   igConnected?: boolean;

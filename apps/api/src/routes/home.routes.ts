@@ -3,6 +3,7 @@ import type { ServerDeps } from '../server';
 import { AuthenticationError, NotFoundError } from '@bb/shared';
 import { composeHomeBriefing, type HomeBriefingInput, type HomeLine } from '@bb/application';
 import { readTodayNote, readArcWeekStory } from '../telemetry/founder-events';
+import { contentLanguageFor } from './content-language';
 
 interface AuthedUser { sub: string; role: string }
 function founderOf(request: FastifyRequest): string {
@@ -83,6 +84,10 @@ export function registerHomeRoutes(server: FastifyInstance, deps: ServerDeps): v
         : null,
     };
 
-    await reply.status(200).send(composeHomeBriefing(input));
+    // The briefing lines are fixed strings that read as BB's sentence about the business, so the web renders them in
+    // the business's STORED content language (rule amendment 2026-10-13), never the UI locale.
+    const account = await deps.founderAccountService.getById(founderId);
+    const contentLanguage = await contentLanguageFor(deps.contentLanguageStore, business.id, account?.interfaceLocale);
+    await reply.status(200).send({ ...composeHomeBriefing(input), contentLanguage });
   });
 }
