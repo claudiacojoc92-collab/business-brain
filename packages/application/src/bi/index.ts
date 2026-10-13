@@ -10,3 +10,4 @@ export {
   type LearnBusinessParams,
   type LearnBusinessResult,
 } from './learn-business.use-case';
+export * from './evidence-anchor';

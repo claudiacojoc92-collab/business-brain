@@ -43,7 +43,7 @@ function buildFolded(raw: string): { f: string; starts: number[]; ends: number[]
  *   2. FOLDED — whitespace-insensitive + diacritic-folded, for when the proposal differs in case/diacritics
  *      (e.g. "Postnatală" vs the page's "Postnatala") or spans lines; the span found is stored AS WRITTEN.
  */
-function locate(raw: string, needle: string): { start: number; end: number } | null {
+export function locate(raw: string, needle: string): { start: number; end: number } | null {
   const trimmed = needle.trim();
   if (trimmed) { const ex = raw.indexOf(trimmed); if (ex !== -1) return { start: ex, end: ex + trimmed.length }; }
   const N = normalizeNeedle(needle);
@@ -55,7 +55,7 @@ function locate(raw: string, needle: string): { start: number; end: number } | n
 }
 
 /** Normalize a sourceRef for LENIENT resolution: fold case + diacritics, strip a trailing parenthetical. */
-function normRef(s: string): string {
+export function normRef(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s*\([^)]*\)\s*$/, '').trim();
 }
 

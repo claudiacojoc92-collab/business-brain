@@ -1,6 +1,7 @@
 import type { StrategyVersionRecord } from '../strategy/index';
 import type { PlanVersion } from '../plan/index';
-import type { GovernedUnderstanding } from '../bi/index';
+import type { GovernedUnderstanding, ClaimEvidence } from '../bi/index';
+import { clipQuote } from '../bi/evidence-anchor';
 import { agendaUnknowns, isHousekeeping, critiquesWording, factOnly, restatesNotShown, makesUnlicensedClaim, makesUnlicensedSoWhatClaim, sameInsight, firstSentence } from '../bi/index';
 import type { GoalCandidate } from '../conversation/index';
 import { computeArcMoment } from './moment';
@@ -226,7 +227,12 @@ export class ArcService {
     // dangled. Carry the MORE CONCRETE statement (a quote/number names the referent), drop the softer half.
     const concreteScore = (s: string): number => (/[„“"'”]/.test(s) ? 2 : 0) + (/\d/.test(s) ? 1 : 0);
     const grounded = (a: string, b: string): string => (!b ? a : !a ? b : concreteScore(b) > concreteScore(a) ? b : a);
-    type TensionRow = { tension: string; grounding: string; sourceRefs: string[] };
+    type TensionRow = { tension: string; grounding: string; sourceRefs: string[]; evidence: { page: string; quote: string }[] };
+    // BUS-73 — NO QUOTE, NO CLAIM: a tension is shown only with the verified source sentences behind it (anchored at
+    // synthesis). An older snapshot or a claim the model could not quote has none, so it is dropped: not shown, not
+    // explained, not substituted.
+    const quotes = (ev: ClaimEvidence[] | undefined): { page: string; quote: string }[] =>
+      (ev ?? []).filter((e) => (e?.quote ?? '').trim()).map((e) => ({ page: (e.page ?? e.ref ?? '').trim(), quote: clipQuote(e.quote) }));
     // PRIMARY, decided in code: when the model's capability check says the business never shows what it sells, that
     // gap (stated across all sources) leads "What stood out". The model's own ordering of contradictions proved
     // unstable for this, so it only supplies the signal.
@@ -236,13 +242,14 @@ export class ArcService {
     const licensed = (x: string | undefined): string => { const v = (x ?? '').trim(); return v && !makesUnlicensedSoWhatClaim(v) ? v : ''; };
     const cc = u?.capabilityCheck;
     const primaryGap: TensionRow | null = cc && cc.shown === false && (cc.insight ?? '').trim()
-      && !makesUnlicensedClaim(cc.insight)
-      ? { tension: cc.insight.trim(), grounding: licensed(cc.soWhat), sourceRefs: clean(cc.sourceRefs) }
+      && !makesUnlicensedClaim(cc.insight) && quotes(cc.evidence).length > 0
+      ? { tension: cc.insight.trim(), grounding: licensed(cc.soWhat), sourceRefs: clean(cc.sourceRefs), evidence: quotes(cc.evidence) }
       : null;
     const rows = (u?.contradictions ?? [])
       // Website housekeeping (legal pages, any critique of a quoted phrase or of the wording) is never business insight.
       // Judged on what the item SAYS (tension + so-what), not on its statements, which may cite a legal page as a source.
       .filter((c) => !isHousekeeping(`${c.tension ?? ''} ${c.soWhat ?? ''}`) && !makesUnlicensedClaim(c.tension ?? ''))
+      .filter((c) => quotes(c.evidence).length > 0)
       // With the capability gap as primary, a second capability_gap item is the same insight.
       .filter((c) => !primaryGap || c.kind !== 'capability_gap')
       // Without a capability check, at most ONE capability gap is shown, first.
@@ -255,12 +262,13 @@ export class ArcService {
         const b = (c.statementB ?? '').trim();
         const soWhat = licensed(c.soWhat);
         const sourceRefs = clean(c.sourceRefs);
+        const evidence = quotes(c.evidence);
         if (!tension && !a && !b) return null;
-        if (!tension) return { tension: a && b ? `${a} — yet ${b}` : a || b, grounding: soWhat, sourceRefs, kind: c.kind };
+        if (!tension) return { tension: a && b ? `${a} — yet ${b}` : a || b, grounding: soWhat, sourceRefs, evidence, kind: c.kind };
         // The line under the tension is its SO-WHAT (the consequence for the business) when the model gave one;
         // older snapshots (no soWhat at all) fall back to the more concrete of the two statements. A so-what blanked by
         // the claim-type gate stays blank: a source quote under the tension is not a consequence.
-        return { tension, grounding: (c.soWhat ?? '').trim() ? soWhat : grounded(a, b), sourceRefs, kind: c.kind };
+        return { tension, grounding: (c.soWhat ?? '').trim() ? soWhat : grounded(a, b), sourceRefs, evidence, kind: c.kind };
       })
       .filter((x): x is TensionRow & { kind?: string } => Boolean(x));
     // "What stood out" is 3-4 DIFFERENT tensions: one slot per insight. An item is dropped when it makes the same
@@ -289,7 +297,7 @@ export class ArcService {
     const constraint: ArcUnderstanding['constraint'] = !rawC ? null : rawC.decided && cText ? { decided: true, text: cText } : { decided: false };
     // A tension that only restates the named constraint doesn't take an "also" slot.
     const also = constraint?.decided ? kept.filter((k) => !sameInsight(k.tension, constraint.text)) : kept;
-    const tensions: TensionRow[] = also.slice(0, 4).map(({ tension, grounding, sourceRefs }) => ({ tension, grounding, sourceRefs }));
+    const tensions: TensionRow[] = also.slice(0, 4).map(({ tension, grounding, sourceRefs, evidence }) => ({ tension, grounding, sourceRefs, evidence }));
 
     // Stage: named only with evidence (at least two cited observations that pass the gates); otherwise undetermined.
     // The stage is the CORE's; one named part may sit at a different stage (shown, never replacing the core).

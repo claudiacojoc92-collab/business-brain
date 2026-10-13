@@ -33,11 +33,58 @@ function clean(s: string): string {
   return decodeEntities(s).replace(/\s+/g, ' ').trim();
 }
 
+// ── Readable text with block boundaries (BUS-73, operator 2026-10-13) ────────────────────────────────────────────
+// node-html-parser's `.text` concatenates text nodes with NOTHING between block elements, so a list read as
+// "Expand network participationIntegrate with additional blockchains" and every quote of it looked broken. The walk
+// below marks where a block starts or ends, then joins the runs: list items in the same list get " · " (unless the
+// first already ends in punctuation), every other boundary gets a space, and text that already has punctuation or a
+// space at the join is left as is. Text running into an inline element never gets a separator ("Qu<b>Fi</b>" stays
+// "QuFi"); two inline elements that touch do. Used for the page text AND every block, so blocks stay substrings of
+// the page text.
+const BOUNDARY_TAGS = new Set([...'h1,h2,h3,h4,h5,h6,p,li,blockquote,figcaption,dd,dt,th,td,div,section,article,summary,caption,ul,ol,dl,table,tr,thead,tbody,main,details,figure,pre,address,hr,br,button,label,option'.split(',')]);
+const LI_END = '\uE001';
+const BREAK = '\uE002';
+const LI_START = '\uE003';
+
+function walk(node: HTMLElement, out: string[]): void {
+  let prevElement = false; // the previous child was an INLINE element (a block adds its own boundary)
+  for (const c of node.childNodes) {
+    const nt = (c as { nodeType?: number }).nodeType;
+    if (nt === 3) { out.push(c.text ?? ''); prevElement = false; continue; }
+    if (nt !== 1) continue;
+    const tag = ((c as { rawTagName?: string }).rawTagName ?? '').toLowerCase();
+    // Two inline elements touching ("<b>Digital identity</b><span>Portable credentials</span>", styled as a label and
+    // its line) are two runs, not one word. Text running into an element inside a word ("Qu<b>Fi</b>") stays joined.
+    const boundary = BOUNDARY_TAGS.has(tag);
+    if (prevElement && !boundary) out.push(BREAK);
+    prevElement = !boundary;
+    if (boundary) out.push(tag === 'li' ? LI_START : BREAK);
+    walk(c as HTMLElement, out);
+    if (boundary) out.push(tag === 'li' ? LI_END : BREAK);
+  }
+}
+
+/** Join the runs; `[\uE001-\uE003\s]+` between two runs is ONE boundary, resolved by what sits on either side. */
+export function blockText(el: HTMLElement): string {
+  const parts: string[] = [];
+  walk(el, parts);
+  const raw = decodeEntities(parts.join('')).replace(/\s+/g, ' ');
+  return raw.replace(/[ ]*[\uE001-\uE003][\uE001-\uE003 ]*/g, (sep, offset: number, whole: string) => {
+    const before = whole.slice(0, offset);
+    const after = whole.slice(offset + sep.length);
+    if (!before.trim() || !after.trim()) return ' ';
+    // Two items of one list: an item's end directly followed by the next item's start (nothing else between).
+    const listJoin = /\uE001[ ]*\uE003/.test(sep);
+    if (/[.!?…:;,·|–—-]\s*$/.test(before)) return ' ';
+    return listJoin ? ' · ' : ' ';
+  }).replace(/\s+/g, ' ').trim();
+}
+
 export function extractReadableText(html: string): string {
   const root = parse(html, { comment: false });
   root.querySelectorAll(BOILERPLATE).forEach((el) => el.remove());
   const body = root.querySelector('body') ?? root;
-  return clean(body.text);
+  return blockText(body);
 }
 
 export interface Block { text: string; blockType: string }
@@ -85,7 +132,7 @@ export function extractBlocks(html: string): Block[] {
   };
   for (const el of body.querySelectorAll(BLOCK_SEL)) {
     if (out.length >= MAX_BLOCKS_PER_PAGE) break;
-    const t = clean(el.text);
+    const t = blockText(el);
     if (!el.querySelector(BLOCK_SEL)) {
       push(t, (el.rawTagName ?? 'block').toLowerCase()); // leaf
     } else if (hasDirectBlockChild(el) && t.length <= GROUP_MAX_CHARS) {
@@ -140,7 +187,7 @@ export function extractPage(url: string, html: string): Extracted {
   const jsonld = extractJsonLd(root);
   root.querySelectorAll(BOILERPLATE).forEach((el) => el.remove());
   const body = root.querySelector('body') ?? root;
-  const text = clean(body.text);
+  const text = blockText(body);
   const empty = text.length < MIN_MEANINGFUL_CHARS && !description && Object.keys(og).length === 0;
   return { title, description, og, jsonld, text, lang, pageType: classifyPageType(url, title), empty };
 }

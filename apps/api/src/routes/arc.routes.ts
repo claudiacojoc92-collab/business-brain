@@ -228,6 +228,14 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
     // The bridge can THROW (synthesis malformed / model error) or return EMPTY (no readable text anywhere). In
     // BOTH cases the arc must NOT advance into a hollow understanding — stay at pour-in and tell the founder to
     // fix/retry their sources. The flag is marked ONLY on a real snapshot.
+    // A RE-READ ("Update my understanding") reads every website source live again first, so the understanding is
+    // built from the site as it is now and with the current reader (BUS-73: block boundaries); the bridge keeps the
+    // newest read per page. A site that can't be reached right now just keeps its stored pages.
+    if ((await readArcFlags(deps.db, business.id, founderId)).pourInDone) {
+      const websites = (await readArcSources(deps.db, business.id, founderId)).filter((x) => x.type === 'website');
+      await Promise.all(websites.map((w) => deps.learnBusinessService.ingestWebsiteForPourIn({ businessId: business.id, founderId, url: w.url })
+        .catch((e: unknown) => { server.log.warn({ err: e instanceof Error ? e.message : 'refetch failed', url: w.url }, 'arc re-read website refetch'); })));
+    }
     let result;
     try {
       result = await deps.learnBusinessService.bridgePourIn({ businessId: business.id, founderId, businessName: business.name, interfaceLanguage: language });

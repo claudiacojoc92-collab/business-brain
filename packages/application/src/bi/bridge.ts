@@ -111,7 +111,18 @@ function toPageObservations(items: PageItem[]): PageObservation[] {
  */
 export function bridgeFragmentsToObservations(fragments: EvidenceFragment[], websiteHost: string): PageObservation[] {
   const items: PageItem[] = [];
+  // A page read twice (a re-read, or the reader improved) has two immutable fragments for one URL: only the NEWEST
+  // is used (before, the store's row order decided, at random). Page order is otherwise kept as read (the homepage
+  // first), since the synthesis caps how many website pages it reads.
+  const newest = new Map<string, EvidenceFragment>();
   for (const f of fragments) {
+    const payload = (f.payload ?? {}) as Record<string, unknown>;
+    if (f.source !== 'website' || payload['kind'] === 'block' || !f.sourceUrl) continue;
+    const cur = newest.get(f.sourceUrl);
+    if (!cur || new Date(f.capturedAt).getTime() > new Date(cur.capturedAt).getTime()) newest.set(f.sourceUrl, f);
+  }
+  for (const f of fragments) {
+    if (f.sourceUrl && newest.has(f.sourceUrl) && newest.get(f.sourceUrl) !== f) continue;
     if (f.source !== 'website') continue;
     const payload = (f.payload ?? {}) as Record<string, unknown>;
     if (payload['kind'] === 'block') continue; // page fragments only

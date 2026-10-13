@@ -39,6 +39,16 @@ const PLAN: any = { planVersionId: 'p1', priorities: [
   { order: 2, title: 'First outreach', actions: [] },
 ] };
 
+const Q = { ref: 'Homepage', page: 'Homepage', quote: 'The sentence on the page this claim is about.' };
+function quoted(snap: any): any {
+  const u = snap?.understanding;
+  if (!u) return snap;
+  return { ...snap, understanding: { ...u,
+    contradictions: (u.contradictions ?? []).map((c: any) => ('evidence' in c ? c : { ...c, evidence: [Q] })),
+    ...(u.capabilityCheck ? { capabilityCheck: 'evidence' in u.capabilityCheck ? u.capabilityCheck : { ...u.capabilityCheck, evidence: [Q] } } : {}),
+  } };
+}
+
 function makeDeps(over: any = {}) {
   const emailCalls: any[] = [];
   const deps: any = {
@@ -61,6 +71,10 @@ function makeDeps(over: any = {}) {
     reflect: { reflect: async (i: any) => ({ reflection: `Noted: ${i.correction}`, changes: 'that shifts what to lead with', holds: 'the referral direction still holds' }) },
     ...over,
   };
+  // BUS-73: a tension is shown only with a verified quote. Fixtures that predate it get one per claim, unless a test
+  // sets `evidence` itself (e.g. [] to prove the drop).
+  const latest = deps.understanding.latest;
+  deps.understanding = { ...deps.understanding, latest: async (...a: any[]) => quoted(await latest(...a)) };
   return { deps, emailCalls };
 }
 
@@ -93,7 +107,7 @@ describe('ArcService.view — each moment composes from the reused engines', () 
     // The diagnostic core: the engine's contradiction is now SURFACED as a tension (it used to be discarded).
     // FIX 2c — tensions carry a grounding line (the concrete statement) so the referent resolves in the card.
     // ONE voice (2026-10-12): the shared cleanup turns BB's dash into a comma at the view's exit point.
-    expect(v.understanding?.tensions).toContainEqual({ tension: 'kinetotherapy may be the real business, or the site is out of sync with the offer', grounding: 'the site gives six categories equal weight', sourceRefs: [] });
+    expect(v.understanding?.tensions).toContainEqual({ tension: 'kinetotherapy may be the real business, or the site is out of sync with the offer', grounding: 'the site gives six categories equal weight', sourceRefs: [], evidence: [{ page: 'Homepage', quote: 'The sentence on the page this claim is about.' }] });
     // Confident = from evidence (Aha1 + explicit offer + evidence-backed positioning); inferring = from pattern.
     expect(v.understanding?.confident).toContain('Referrals already drive most new members.');
     expect(v.understanding?.confident).toContain('physio memberships');
@@ -422,3 +436,28 @@ describe('ArcService.view — what stood out with a capability check', () => {
     expect(u.confident).toEqual(['The reading step is described in far more depth than strategy and plan.']);
   });
 });
+
+describe('ArcService.view — NO QUOTE, NO CLAIM (BUS-73)', () => {
+  const base = { offer: { summary: 'x', explicit: [], unclear: [] }, positioning: { summary: 'y', evidenceBacked: [], implied: [] },
+    audience: { addressed: [], appearsTargeted: [], unknown: [] }, messaging: { recurringThemes: [] }, unknowns: [] };
+  const view = async (u: any) => (await new ArcService(makeDeps({ conversation: { status: async () => null, turns: async () => [] },
+    understanding: { latest: async () => ({ understanding: { ...base, ...u } }) } }).deps).view('B', 'QuFi', 'en', flags({ pourInDone: true }), [], null)).understanding!;
+  it('a tension without a verified quote is dropped; one with a quote shows page → quote', async () => {
+    const u = await view({ contradictions: [
+      { kind: 'customer_proof', tension: 'You name no customer.', soWhat: '', statementA: '', statementB: '', sourceRefs: ['Homepage'], evidence: [] },
+      { kind: 'commercial_path', tension: 'You show no price.', soWhat: '', statementA: '', statementB: '', sourceRefs: ['Products'],
+        evidence: [{ ref: 'Products', page: 'Products', quote: 'QuSettle checks conditions before settlement.' }] },
+    ] });
+    expect(u.tensions.map((t) => t.tension)).toEqual(['You show no price.']);
+    expect(u.tensions[0]!.evidence).toEqual([{ page: 'Products', quote: 'QuSettle checks conditions before settlement.' }]);
+  });
+  it('the capability gap needs a quote too, and a long quote is cut cleanly at 200 characters', async () => {
+    const long = 'Over 200 organisations are in our pipeline across more than 50 countries. ' + 'We verify every transaction before settlement without changing a single rail, ledger or contract anywhere in the world today, for every institution.';
+    const noQuote = await view({ contradictions: [], capabilityCheck: { sells: 'v', shown: false, insight: 'You sell verification. You never show one.', soWhat: '', sourceRefs: [], evidence: [] } });
+    expect(noQuote.tensions).toEqual([]);
+    const u = await view({ contradictions: [], capabilityCheck: { sells: 'v', shown: false, insight: 'You sell verification. You never show one.', soWhat: '', sourceRefs: [],
+      evidence: [{ ref: 'Homepage', page: 'Homepage', quote: long }] } });
+    expect(u.tensions[0]!.evidence[0]!.quote).toBe('Over 200 organisations are in our pipeline across more than 50 countries...');
+  });
+});
+

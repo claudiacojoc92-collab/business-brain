@@ -482,6 +482,9 @@
 .s0-u-why > summary::-webkit-details-marker { display: none; }
 .s0-u-why > summary::before { content: '›'; display: inline-block; margin-right: 6px; transition: transform .15s ease; }
 .s0-u-why[open] > summary::before { transform: rotate(90deg); }
+.s0-u-why-list li { margin-top: 6px; line-height: 1.45; }
+.s0-u-why-page { color: var(--s0-ink-2); font-size: 13px; }
+.s0-u-why-quote { font-style: italic; }
 .s0-u-why-list { margin: 6px 0 0 18px; padding: 0; color: var(--s0-ink-2); font-size: 13px; line-height: 1.5; }
 
 /* ── Surface Correction — the pour-in (empty state): connectors first, website primary ── */

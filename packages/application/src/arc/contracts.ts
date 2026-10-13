@@ -51,7 +51,9 @@ export interface ArcUnderstanding {
   readonly standsOut: string;
   // FIX 2c — each tension carries ONE grounding line so its referent resolves in the card (never three sentences).
   // sourceRefs back the tension behind a collapsed "why I'm saying this" disclosure (the proof, on demand).
-  readonly tensions: { readonly tension: string; readonly grounding: string; readonly sourceRefs: string[] }[];
+  /** `evidence`: the exact source sentences behind the tension ("Why I'm saying this"), each cut to 200 chars at a
+   *  clean boundary. Never empty: a tension without a verified quote is not shown (BUS-73). */
+  readonly tensions: { readonly tension: string; readonly grounding: string; readonly sourceRefs: string[]; readonly evidence: { readonly page: string; readonly quote: string }[] }[];
   readonly confident: string[]; // still projected (BusinessPage + provenance); NOT rendered in the arc understanding moment
   readonly inferring: string[]; // still projected; NOT rendered in the arc understanding moment
   readonly unanswered: string[];
