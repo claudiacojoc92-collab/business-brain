@@ -151,7 +151,7 @@ describe('ArcSurface — one surface, eight moments', () => {
   it('Moment 3: understanding is THREE cards — what I read, what stood out (grounded, proof on demand), what I’ll ask; confident/inferring dropped', async () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: {
       does: 'Physio memberships', serves: 'post-op patients', standsOut: 'recovery-led',
-      tensions: [{ tension: 'The unfilled field contradicts the expertise message', grounding: 'The site shows "Years of experience: 0+"', sourceRefs: ['Homepage', 'About'] }],
+      tensions: [{ tension: 'The unfilled field contradicts the expertise message', grounding: 'The site shows "Years of experience: 0+"', sourceRefs: ['Homepage', 'About'], evidence: [{ page: 'Homepage', quote: 'Years of experience: 0+' }] }],
       confident: ['Referrals drive members'], inferring: ['Aimed at athletes, not just patients'],
       unanswered: ['What do customers actually value most?'],
     } }));
@@ -180,7 +180,7 @@ describe('ArcSurface — one surface, eight moments', () => {
   it('Strategic Depth W1: the named constraint + stage come first; the tensions follow as "also on my mind"', async () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: {
       does: 'Physio memberships', serves: 'post-op patients', standsOut: '',
-      tensions: [{ tension: 'Your posts never show a programme.', grounding: 'This means …', sourceRefs: [] }],
+      tensions: [{ tension: 'Your posts never show a programme.', grounding: 'This means …', sourceRefs: [], evidence: [{ page: 'Homepage', quote: 'Years of experience: 0+' }] }],
       confident: [], inferring: [], unanswered: [],
       constraint: { decided: true, text: 'You have not decided whether you are a clinic or a gym.' },
       stage: { stage: 'validating', evidence: ['no named member', 'opened this year'] },
@@ -233,7 +233,7 @@ describe('ArcSurface — one surface, eight moments', () => {
   });
 
   it('Strategic Depth W1: undecided says so honestly; an older snapshot (no fields) renders as before', async () => {
-    const base = { does: 'X', serves: '', standsOut: '', tensions: [{ tension: 'T1', grounding: '', sourceRefs: [] }], confident: [], inferring: [], unanswered: [] };
+    const base = { does: 'X', serves: '', standsOut: '', tensions: [{ tension: 'T1', grounding: '', sourceRefs: [], evidence: [{ page: 'Homepage', quote: 'Years of experience: 0+' }] }], confident: [], inferring: [], unanswered: [] };
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: { ...base, constraint: { decided: false }, stage: { stage: 'undetermined' } } }));
     const r = render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
     expect(await screen.findByText('arc.understanding.constraint.none')).toBeInTheDocument();
@@ -605,12 +605,29 @@ describe('ArcSurface — one surface, eight moments', () => {
 
   it('Understanding: the first tension is the primary insight; the rest sit under "Also"', async () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: { does: 'X', serves: 'Y', standsOut: '', confident: [], inferring: [], unanswered: [],
-      tensions: [{ tension: 'PRIMARY gap', grounding: '', sourceRefs: [] }, { tension: 'second', grounding: '', sourceRefs: [] }, { tension: 'third', grounding: '', sourceRefs: [] }] } }));
+      tensions: [{ tension: 'PRIMARY gap', grounding: '', sourceRefs: [], evidence: [{ page: 'Homepage', quote: 'q' }] }, { tension: 'second', grounding: '', sourceRefs: [], evidence: [{ page: 'Homepage', quote: 'q' }] }, { tension: 'third', grounding: '', sourceRefs: [], evidence: [{ page: 'Homepage', quote: 'q' }] }] } }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
     const primary = await screen.findByText('PRIMARY gap');
     expect(primary.closest('.s0-u-primary')).not.toBeNull();
     expect(screen.getByText('arc.understanding.also')).toBeInTheDocument();
     expect(screen.getByText('second').closest('.s0-u-list')).not.toBeNull();
+  });
+});
+
+describe('Why I\u2019m saying this (BUS-73)', () => {
+  afterEach(() => cleanup());
+  it('shows page → the exact quote, never a bare page title; a tension without a quote is not shown', async () => {
+    vi.mocked(api.getArc).mockResolvedValue({ moment: 'understanding', businessName: 'QuFi Network', contentLanguage: 'en', understanding: { does: 'X', serves: '', standsOut: '', confident: [], inferring: [], unanswered: [],
+      tensions: [
+        { tension: 'You show no price.', grounding: '', sourceRefs: ['Products'], evidence: [{ page: 'How verification works', quote: 'QuSettle checks conditions before settlement.' }] },
+        { tension: 'Unquoted claim.', grounding: '', sourceRefs: ['Homepage'], evidence: [] },
+      ] } } as never);
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    await screen.findByText('You show no price.');
+    expect(screen.queryByText('Unquoted claim.')).toBeNull();
+    const li = document.querySelector('.s0-u-why-list li')!;
+    expect(li.textContent).toBe('How verification works → QuSettle checks conditions before settlement.');
+    expect(li.querySelector('q')?.textContent).toBe('QuSettle checks conditions before settlement.');
   });
 });
 

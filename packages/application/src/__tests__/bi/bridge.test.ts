@@ -19,6 +19,12 @@ function frag(over: Partial<EvidenceFragment> & { payload: Record<string, unknow
 }
 
 describe('bridgeFragmentsToObservations', () => {
+  it('a page read twice: the NEWEST read wins, whatever order the store returns (BUS-73 re-read)', () => {
+    const old = frag({ sourceUrl: 'https://acme.com/', capturedAt: new Date('2026-10-01'), payload: { text: 'Expand network participationIntegrate', pageType: 'home' } });
+    const fresh = frag({ sourceUrl: 'https://acme.com/', capturedAt: new Date('2026-10-13'), payload: { text: 'Expand network participation · Integrate', pageType: 'home' } });
+    expect(bridgeFragmentsToObservations([old, fresh], 'acme.com').map((o) => o.text)).toEqual(['Expand network participation · Integrate']);
+    expect(bridgeFragmentsToObservations([fresh, old], 'acme.com').map((o) => o.text)).toEqual(['Expand network participation · Integrate']);
+  });
   it('projects PAGE fragments into observations and skips BLOCK fragments', () => {
     const frags = [
       frag({ sourceUrl: 'https://acme.com/', payload: { text: 'Home text here', pageType: 'home', title: 'Acme' } }),

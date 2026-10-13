@@ -123,20 +123,22 @@ function ConstraintCard({ u, t }: { u: NonNullable<ArcView['understanding']>; t:
   );
 }
 
-function TensionCard({ label, items, whyLabel, alsoLabel, flat = false }: { label: string; items: { tension: string; grounding: string; sourceRefs: string[] }[]; whyLabel: string; alsoLabel: string; flat?: boolean }) {
-  const rows = items.filter((x) => (x.tension ?? '').trim());
+type TensionItem = { tension: string; grounding: string; sourceRefs: string[]; evidence?: { page: string; quote: string }[] };
+function TensionCard({ label, items, whyLabel, alsoLabel, flat = false }: { label: string; items: TensionItem[]; whyLabel: string; alsoLabel: string; flat?: boolean }) {
+  // NO QUOTE, NO CLAIM (BUS-73): the server only sends tensions with verified quotes; an item without one is not shown.
+  const rows = items.filter((x) => (x.tension ?? '').trim() && (x.evidence ?? []).length > 0);
   if (!rows.length) return null; // zero tensions → the card is omitted silently (never narrate an absence)
-  const row = (x: { tension: string; grounding: string; sourceRefs: string[] }) => (
+  const row = (x: TensionItem) => (
     <>
       {x.tension}
       {x.grounding ? <span className="s0-u-grounding">{x.grounding}</span> : null}
-      {/* proof on demand: collapsed by default — the grounding already carries the concrete fact. */}
-      {x.sourceRefs.length ? (
-        <details className="s0-u-why">
-          <summary>{whyLabel}</summary>
-          <ul className="s0-u-why-list">{x.sourceRefs.map((s, j) => <li key={j}>{s}</li>)}</ul>
-        </details>
-      ) : null}
+      {/* proof on demand: WHAT BB read, not where: page name → "the exact sentence from that page". */}
+      <details className="s0-u-why">
+        <summary>{whyLabel}</summary>
+        <ul className="s0-u-why-list">{(x.evidence ?? []).map((e, j) => (
+          <li key={j}><span className="s0-u-why-page">{e.page}</span>{' → '}<q className="s0-u-why-quote">{e.quote}</q></li>
+        ))}</ul>
+      </details>
     </>
   );
   // Under a named constraint the tensions are its symptoms: one plain list, no "primary".

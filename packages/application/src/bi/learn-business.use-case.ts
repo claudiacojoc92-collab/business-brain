@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { anchorUnderstandingEvidence } from './evidence-anchor';
 import { generateId } from '@bb/shared';
 import { detectMaterialLanguage, detectTextLanguage, toLocale, type IContentLanguageStore } from '../business/content-language';
 import {
@@ -344,7 +345,8 @@ export class LearnBusinessService {
       contentHash,
       sourceRefCount: observations.length,
       sourceLanguage: out.sourceLanguage ?? observations[0]?.lang ?? null,
-      understanding: out.understanding,
+      // BUS-73: every claim keeps only the source sentences that anchor verbatim in what was read.
+      understanding: anchorUnderstandingEvidence(out.understanding, observations),
       modelId,
     });
 

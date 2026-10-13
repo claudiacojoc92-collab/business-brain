@@ -41,6 +41,13 @@ export interface SourceRef {
   readonly url: string;
 }
 
+/**
+ * The exact source sentence behind a claim (BUS-73, operator 2026-10-13: "Why I'm saying this" shows WHAT BB read,
+ * not WHERE). The model proposes {ref, quote}; synthesis keeps only quotes that anchor verbatim in that ref's stored
+ * text, stores the span AS WRITTEN on the page, and adds the page's display name. A claim with none is never shown.
+ */
+export interface ClaimEvidence { readonly ref: string; readonly quote: string; readonly page?: string }
+
 export interface GovernedUnderstanding {
   readonly offer: { summary: string; explicit: string[]; unclear: string[]; sourceRefs: string[] };
   readonly positioning: { summary: string; evidenceBacked: string[]; implied: string[]; sourceRefs: string[] };
@@ -52,14 +59,14 @@ export interface GovernedUnderstanding {
    * projection uses it deterministically: a `capability_gap` (sells X, never shows X) is always shown first.
    * Optional: snapshots written before it existed have none.
    */
-  readonly contradictions: { statementA: string; statementB: string; tension: string; sourceRefs: string[]; kind?: ContradictionKind; soWhat?: string }[];
+  readonly contradictions: { statementA: string; statementB: string; tension: string; sourceRefs: string[]; kind?: ContradictionKind; soWhat?: string; evidence?: ClaimEvidence[] }[];
   readonly unknowns: string[];
   /**
    * The model's answer to the CAPABILITY CHECK: what the business sells and whether its own sources ever show it.
    * When `shown` is false, the arc projection makes `insight` the primary "What stood out" item (decided in code,
    * not left to the model's ordering). Optional: older snapshots have none.
    */
-  readonly capabilityCheck?: { sells: string; shown: boolean; insight: string; soWhat: string; sourceRefs: string[] };
+  readonly capabilityCheck?: { sells: string; shown: boolean; insight: string; soWhat: string; sourceRefs: string[]; evidence?: ClaimEvidence[] };
   /**
    * Strategic Depth W1: the ONE constraint behind the contradictions (they are its symptoms). `decided: false` = the
    * model could not name one honestly (the card then says so). Optional: older snapshots have none.

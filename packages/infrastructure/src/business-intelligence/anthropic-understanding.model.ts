@@ -41,7 +41,8 @@ export function buildSourcesBlock(observations: PageObservation[]): string {
   return selectSources(observations)
     .map((o) => {
       const max = o.sourceKind === 'instagram' ? INSTAGRAM_SUMMARY_CHARS : PER_PAGE_CHARS;
-      const text = o.text.length > max ? o.text.slice(0, max) : o.text;
+      // Cut at a word, never inside one: a quote copied from the end of a cut page must still be whole words.
+      const text = o.text.length > max ? o.text.slice(0, max).replace(/\s+\S*$/, '') : o.text;
       if (o.sourceKind === 'instagram') {
         return `### OBSERVED-INSTAGRAM ref="${o.ref}" url="${o.url}"\n${text}`;
       }
@@ -97,7 +98,7 @@ function systemPromptBase(lang: string): string {
     '',
     `LANGUAGE — two halves, each internally consistent. The FOUNDER'S LANGUAGE is ${langName} (the language they read the app in). The dividing axis is PROSE YOU COMPOSE vs ITEMS YOU LIFT.`,
     `(a) PROSE YOU COMPOSE — your own sentences, written FOR the founder, in whatever section they appear: offer.summary, positioning.summary, offer.unclear, positioning.implied, audience.appearsTargeted, audience.unknown, understanding.unknowns, contradictions[].tension, contradictions[].soWhat, capabilityCheck.insight, constraint.statement, constraint.why, stage.evidence, stage.secondary.area, stage.secondary.evidence, and every aha.findings[].finding and aha.findings[].implication. Write ALL of these in ${langName}, whatever language the site is in.`,
-    '(b) ITEMS YOU LIFT — material taken from the source so the founder recognises it on their own site: offer.explicit, positioning.evidenceBacked, audience.addressed, messaging.recurringThemes, acquisition.visiblePaths, and contradictions[].statementA / contradictions[].statementB. Keep these in the LANGUAGE OF THE SOURCE they come from.',
+    '(b) ITEMS YOU LIFT — material taken from the source so the founder recognises it on their own site: offer.explicit, positioning.evidenceBacked, audience.addressed, messaging.recurringThemes, acquisition.visiblePaths, contradictions[].statementA / contradictions[].statementB, and every evidence[].quote (copied exactly, never translated). Keep these in the LANGUAGE OF THE SOURCE they come from.',
     `Business, brand, product and service names — and any specific page or service you cite — stay in their ORIGINAL language in BOTH halves. A ${langName} summary or tension still names "ghișeu unic" / "Atelier Automasaj" exactly as the site writes it.`,
     `MIXED-LANGUAGE SOURCE — the blocks may be in different languages (e.g. a Romanian website plus English founder-supplied answers). This does NOT change the rule. A lifted item keeps the language of the block it came from; when you compose prose drawing across blocks of different languages, write it in ${langName} and keep the foreign terms verbatim. Half (a) is ALWAYS ${langName}, regardless of the source mix.`,
     `NO DRIFT within each half: every lifted item is one consistent source language; every composed field is entirely ${langName}. Never mix languages inside a single field except for the preserved proper nouns above.`,
@@ -111,9 +112,9 @@ function systemPromptBase(lang: string): string {
     '    "audience": {"addressed": [], "appearsTargeted": [], "unknown": [], "sourceRefs": []},',
     '    "messaging": {"recurringThemes": [], "sourceRefs": []},',
     '    "acquisition": {"visiblePaths": [], "sourceRefs": []},',
-    '    "contradictions": [{"kind": "", "statementA": "", "statementB": "", "tension": "", "soWhat": "", "sourceRefs": []}],',
+    '    "contradictions": [{"kind": "", "statementA": "", "statementB": "", "tension": "", "soWhat": "", "sourceRefs": [], "evidence": [{"ref": "", "quote": ""}]}],',
     '    "unknowns": [],',
-    '    "capabilityCheck": {"sells": "", "shown": true, "insight": "", "soWhat": "", "sourceRefs": []},',
+    '    "capabilityCheck": {"sells": "", "shown": true, "insight": "", "soWhat": "", "sourceRefs": [], "evidence": [{"ref": "", "quote": ""}]},',
     '    "constraint": {"decided": true, "level": "users|target|offer|time", "levelCheck": {"users": {"passed": true, "evidence": ""}, "target": {"passed": true, "evidence": ""}, "offer": {"passed": true, "evidence": ""}}, "statement": "", "why": "", "sourceRefs": []},',
     '    "stage": {"stage": "validating|growth|plateau|undetermined", "evidence": [], "sourceRefs": [], "secondary": {"stage": "", "area": "", "evidence": []}}',
     '  },',
@@ -242,6 +243,13 @@ function systemPromptBase(lang: string): string {
     '  and once for the posts), are ONE item: keep the more general one. Different dimensions are different items even',
     '  when both are about something missing: "you never show your output" (capability), "no customer result is shown"',
     '  (customer proof) and "your most active channel never mentions the offer" (channel) are three items.',
+    '- EVIDENCE — NO QUOTE, NO CLAIM. Every contradiction and the capabilityCheck carries "evidence": 1 to 3 items,',
+    '  each {"ref": the exact ref of the block, "quote": ONE sentence copied from that block character for character}.',
+    '  The quote is the sentence on the page that your claim is about: the number, the promise, the product line. For a',
+    '  claim about something MISSING ("no price on any page"), quote what the page says instead (the product paragraph',
+    '  that has no price). Never paraphrase, summarise, translate, fix typos, join two sentences, or cut with "..."; a',
+    '  quote that is not on the page word for word is discarded, and a claim left without a quote is never shown. If',
+    '  you cannot copy an exact sentence that supports a claim, do NOT make the claim. No "essentially", no "implies".',
     '- RANK, do not list: contradictions[0] is the single biggest, the one that most changes how the founder sees their',
     '  own business and that they are least likely to have noticed. Then two or three more, in descending severity.',
     '',
