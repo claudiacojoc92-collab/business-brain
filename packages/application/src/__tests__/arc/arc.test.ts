@@ -76,6 +76,14 @@ describe('ArcService.view — each moment composes from the reused engines', () 
     expect(v.igConnected).toBe(true);
   });
 
+  it('the audience line is a label item without its own closing mark (the card renders "For: <who>.")', async () => {
+    const base = await makeDeps().deps.understanding.latest();
+    const { deps } = makeDeps({ conversation: { status: async () => null, turns: async () => [] },
+      understanding: { latest: async () => ({ understanding: { ...base.understanding, audience: { addressed: ['Institutions (enterprise, regulation and audit).'], appearsTargeted: [], unknown: [] } } }) } });
+    const v = await new ArcService(deps).view('B', 'QuFi', 'en', flags({ pourInDone: true }), [], null);
+    expect(v.understanding?.serves).toBe('Institutions (enterprise, regulation and audit)');
+  });
+
   it('understanding is DIAGNOSTIC: surfaces tensions + confident-from-evidence vs inferred + what sources can\'t answer', async () => {
     const { deps } = makeDeps({ conversation: { status: async () => null, turns: async () => [] } });
     const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true }), [], null);

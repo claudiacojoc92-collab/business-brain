@@ -326,7 +326,8 @@ export class ArcService {
     const oneLine = (x?: string): string => { const v = firstSentence(x ?? ''); return v && !isHousekeeping(v) ? v : ''; };
     return {
       does: oneLine(u?.offer?.summary),
-      serves: clean(u?.audience?.addressed).slice(0, 1).join(''),
+      // A label, not a sentence: the card shows "For: <who>." (the mirror and container label it too), so no closing mark.
+      serves: clean(u?.audience?.addressed).slice(0, 1).join('').replace(/[.;,:]+$/, ''),
       standsOut: oneLine(u?.positioning?.summary),
       tensions,
       confident,
