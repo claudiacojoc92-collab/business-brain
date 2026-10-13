@@ -182,6 +182,9 @@ Section 3 is enforced mechanically by `.claude/hooks/` (wired in `.claude/settin
 - A request to commit ("commit the changes", `approve commit`) opens `commit` + `push` + `merge` (the ship
   flow, §2.6). Hypotheticals and negations ("if I say commit…", "don't commit") open nothing.
   `approve push` / `approve merge` alone open only that gate.
+- Approvals last until the NEXT message, and a background-task notification or a system "say what you're doing"
+  nudge counts as one. A flow that needs an approval (ship flow, deploy, rules edits) must run start to finish in
+  the foreground in the same turn; never put a long scan or build in the background in the middle of it.
 - Every deny/approval is logged to `.claude/state/hook-log.jsonl` (git-ignored). Review it when growing
   the rules: repeated false positives → tighten the rule; repeated near-misses → add one.
 - If `guard.mjs` crashes it fails closed (blocks). Fix with `node --test '.claude/hooks/*.test.mjs'`.
@@ -196,6 +199,18 @@ in the changelog below. Editing hook files needs `approve rules`.
   Prefer a committed script or `railway run`.
 - Mixing `bb_mvp` and `businessbrain` DB names in one investigation.
 - Claiming a fix works from tests alone when the change is visible in the UI. Verify live.
+- `railway up` from the working tree: it uploads uncommitted and untracked files (the repo usually has some). Deploy
+  from a clean worktree of the commit: `git worktree add .worktrees/deploy-<sha> <sha>` → `npm ci && npx tsc -b
+  --force && npm test` there → `bash tools/preflight-env-key.sh &&` + `railway up <worktree path> --path-as-root
+  --service api --detach` (same for `web`). Removing old worktrees needs `approve destructive-git`.
+- Trusting Linear's "Done" after a PR merge: the GitHub integration auto-completes linked issues on merge, which
+  breaks the Definition of Done (§3.2). After every merge, set the issue back to In Progress + `Awaiting prod`.
+- Verifying the service you suspect instead of the route the founder took ("works locally, fails in prod", twice by
+  2026-10-12). For any "BB keeps asking / loops / doesn't advance" report: first read prod read-only
+  (`app.founder_event` for the business, `workspace.conversation_sessions/turns`, `workspace.founder_state`) to see
+  which route the messages went through, then test THAT route in arc order through the local api (real routes + DB +
+  models, a local test founder with a locally minted token), not by calling the service directly. Example: QuFi's
+  "endless conversation" was 6 understanding corrections; there was no conversation session at all.
 
 ## How this grows
 When a command or procedure is used repeatedly, or a mistake happens twice:
@@ -207,6 +222,7 @@ When a command or procedure is used repeatedly, or a mistake happens twice:
 
 ## Changelog
 - 2026-09-30: created from transcript analysis (82 files).
+- 2026-10-09: §4 adds deploy-from-clean-worktree and Linear auto-Done-on-merge.
 - 2026-09-30: enforcement hooks added (`.claude/hooks/`, 24 rules, 71 tests).
 - 2026-09-30: narrowed hook self-protection to actual writes (reads/mentions of `.claude/hooks`,
   `.claude/state` allowed so the log can be reviewed). 25 rules, 79 tests.

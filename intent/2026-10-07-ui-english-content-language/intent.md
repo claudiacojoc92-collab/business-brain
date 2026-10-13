@@ -1,6 +1,6 @@
 # UI in English, content in the founder's language
 
-**Status:** in-build (2026-10-07). Operator rule, decided in session; design choice "per business, detected" made by
+**Status:** deployed, awaiting prod walk (2026-10-07). Operator rule, decided in session; design choice "per business, detected" made by
 the operator.
 
 ## The rule
@@ -22,3 +22,6 @@ instruction (now neutral English; the generator writes in the content language).
 
 ## Needs before deploy
 V084 (`workspace.businesses.content_language`), behind `approve migration`.
+
+## Status log
+- 2026-10-07: done — built, V084 approved + applied locally, live-verified in the browser (English UI, Romanian content, explicit switch, no flip on short replies; 5 prompts fixed that chased the message language), merged (PR #4) and deployed (V084 2131b6fe, api e982e369, web ccb29836). / next — confirm in prod during the Body Move walk. / blockers — none (BUS-50)

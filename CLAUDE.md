@@ -133,6 +133,8 @@ build → verify → ship → handoff): `docs/operations/operator-cheatsheet.md`
 line here and the detail to the SOP.
 
 - Orient first: `git status --short && git log --oneline -5`, then read the task's `plan.md` status log.
+- Prod bug "works locally, fails in prod": read prod data first to see which route the founder's messages took, then
+  test that route through the local api in arc order, not the service you suspect (happened twice by 2026-10-12). SOP §4.
 - Specify before building: new features/integrations/data/prod changes need `intent.md` → `spec.md` (product,
   technical, flow, design, data) → `plan.md`. Interview the operator for answers; never guess them.
 - Verify narrowest-first: `npx vitest run <path>` → `npx tsc --noEmit -p <project>` → `npx eslint <paths>
@@ -141,7 +143,14 @@ line here and the detail to the SOP.
   prod writes, `rm -r` outside the scratchpad, new migrations, edits to frozen slices.
 - Local DB queries: confirm the DB name first (`businessbrain` vs the override's name).
 - Don't poll with `sleep`; use background tasks or Monitor.
+- Run multi-step approved flows (ship flow, deploy) in the FOREGROUND, in one turn: a background-task notification
+  or system nudge counts as a new message and resets the `approve` gates mid-flow (happened twice 2026-10-07).
 - Sub-agents own disjoint files and never commit or push. Re-check anything destructive they recommend.
+- Deploy only committed code: `git worktree add .worktrees/deploy-<sha> <sha>`, run `npm ci && npx tsc -b --force
+  && npm test` there, then the preflight and `railway up <worktree> --path-as-root --service api|web --detach`. A
+  plain `railway up` from the repo uploads uncommitted/untracked files. SOP §4.
+- Linear's GitHub integration moves an issue to Done when its PR merges. Merged ≠ Done: move it back to In
+  Progress + `Awaiting prod` right after every merge (happened 4× on 2026-10-09). SOP §4.
 - Sessions: `/session-start` (briefing from handoff + Linear + git + active intents) and `/session-end` (Linear
   issue states + progress comments + project status updates, plan status log, handoff in
   `~/.claude/handoffs/<project>/latest.md`, memory, resume prompt). See `docs/operations/session-continuity.md`.
@@ -161,8 +170,9 @@ add it to `rules.mjs` + a case in `guard.test.mjs`, run `node --test '.claude/ho
 ## Git
 
 - Remote is SSH (`git@github.com:claudiacojoc92-collab/business-brain.git`). Don't switch to HTTPS.
-- Main dev branch: `feature/business-brain-v1`. Other long-lived branches: `feature/public-site` (root
-  static HTML for getbusinessbrain.com, Cloudflare-fronted, deploy is external to this repo) and
-  `meta/reviewer-shell`.
+- Main dev line: `feature/reel-studio` (contains all of `feature/business-brain-v1`; prod deploys from it), merged
+  into `main` via PRs (first: #4, 2026-10-07). `main`'s repo ROOT holds the public website files (index.html,
+  about.html, … `.nojekyll`; GitHub Pages + Cloudflare): never let a merge delete them. Other long-lived
+  branches: `feature/public-site` and `meta/reviewer-shell`.
 - Work on another branch with `git worktree add .worktrees/<name> <branch>` (git-ignored). Don't make
   separate Desktop copies.

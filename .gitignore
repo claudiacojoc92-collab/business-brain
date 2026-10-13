@@ -64,3 +64,12 @@ services/reel-studio/workspace/
 services/reel-studio/.tools/
 services/reel-studio/node_modules/
 tools/acceptance/out/
+
+# Local-only scratch: diagnostics, validation harnesses, and the internal bb-review server. Kept on disk,
+# never tracked — they are not wired into any build (verified 2026-10-13) and must not land on main.
+tools/diag/
+tools/m15-validation/
+tools/bb-review-server.ts
+apps/web/bb-review.html
+apps/web/src/businessbrain/review-entry.tsx
+apps/api/src/routes/meta-dev.routes.ts
