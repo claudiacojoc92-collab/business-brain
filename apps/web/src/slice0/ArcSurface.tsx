@@ -82,6 +82,20 @@ function ArcInput({ ph, onSend, cta, t, text, setText, busy, act, workingKey, au
 // card (the field the tension names) without stacking three sentences.
 // Ranked, not listed: the first tension is THE primary insight (the server orders them: a capability gap first,
 // otherwise the model's ranking), shown large; the rest sit under "Also" as secondary.
+/** Evidence fragments become one "Why: a; b." sentence: drop each fragment's own closing punctuation, then collapse
+ * any doubled marks (".;", "..", ",."), so the template's final period is the only one. An ellipsis stays. A fragment
+ * after the first continues the sentence, so a common opening word is lowercased ("; No named" → "; no named"); a name
+ * ("QuVault") never is. Mirrors spoken() on the server (lowerAfterSemicolon). */
+const OPENERS = new Set(('a an the no none not this that these those there it its each every all any some one two three our your ' +
+  'their they we you he she his her nothing only most many few both neither either but and or so yet ' +
+  'un o nu niciun nicio cele cei acest această aceste există il lo la le gli uno una non nessun nessuna questo questa').split(' '));
+export function joinWhy(evidence: readonly string[]): string {
+  return evidence.map((e) => e.trim().replace(/[.;,:]+$/, '')).filter(Boolean)
+    .map((e, i) => (i === 0 ? e : e.replace(/^(\p{Lu}\p{Ll}*)(?=[\s,.;:!?)]|$)/u, (w) => (OPENERS.has(w.toLowerCase()) ? w.toLowerCase() : w))))
+    .join('; ')
+    .replace(/(?<!\.)\.\.(?!\.)/g, '.').replace(/[.,]+\s*;/g, ';').replace(/[,;:]+\s*\./g, '.');
+}
+
 /** Strategic Depth W1 — the strategist's read, first: the named constraint (or an honest "not enough evidence") and the
  * stage with its evidence + what that stage implies. Rendered only for understandings that carry these fields. */
 function ConstraintCard({ u, t }: { u: NonNullable<ArcView['understanding']>; t: T }) {
@@ -99,7 +113,7 @@ function ConstraintCard({ u, t }: { u: NonNullable<ArcView['understanding']>; t:
             <strong>{st.secondary
               ? t('arc.understanding.stage.split', { stage: t(`arc.understanding.stage.${st.stage}`), secondary: t(`arc.understanding.stage.${st.secondary.stage}`), area: st.secondary.area })
               : t('arc.understanding.stage', { stage: t(`arc.understanding.stage.${st.stage}`) })}</strong>{' '}
-            {t('arc.understanding.stage.why', { why: st.evidence.join('; ') })}
+            {t('arc.understanding.stage.why', { why: joinWhy(st.evidence) })}
             <span className="s0-u-stage-means">{t(`arc.understanding.stage.means.${st.stage}`)}</span>
             {st.secondary ? <span className="s0-u-stage-means">{t(`arc.understanding.stage.means.area.${st.secondary.stage}`, { area: st.secondary.area })}</span> : null}
           </>)}

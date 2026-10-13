@@ -33,6 +33,8 @@ export function spokenView(v: ArcView): ArcView {
       tensions: u.tensions.map((t) => ({ ...t, tension: s(t.tension), grounding: s(t.grounding) })),
       confident: ss(u.confident)!, inferring: ss(u.inferring)!, unanswered: ss(u.unanswered)!,
       constraint: u.constraint && 'text' in u.constraint ? { ...u.constraint, text: s(u.constraint.text) } : u.constraint,
+      // Stage evidence lines are fragments joined into one "Why: a; b." sentence: no closing punctuation of their own.
+      stage: u.stage && 'evidence' in u.stage ? { ...u.stage, evidence: u.stage.evidence.map((e) => s(e).trim().replace(/[.;,:]+$/, '')) } : u.stage,
     } } : {}),
     ...(v.turns ? { turns: v.turns.map((t) => (t.role === 'bb' ? { ...t, content: bbTurn(t.content) } : t)) } : {}),
     ...(v.mirror ? { mirror: { ...v.mirror, against: s(v.mirror.against), tension: s(v.mirror.tension) } } : {}),

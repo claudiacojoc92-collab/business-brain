@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { spoken, plainSubject, VOICE_RULES } from '../../arc/spoken-voice';
+import { spokenView } from '../../arc/spoken-view';
+import type { ArcView } from '../../arc/contracts';
 
 describe('spoken voice cleanup (shared by week story + email)', () => {
   it('turns dashes between words into commas', () => {
@@ -33,5 +35,24 @@ describe('spoken voice cleanup (shared by week story + email)', () => {
   it('the shared prompt block names the rules and no real business', () => {
     expect(VOICE_RULES).toMatch(/NO DASHES/);
     expect(VOICE_RULES).not.toMatch(/qufi|testnet|body move|bank/i);
+  });
+  it('collapses punctuation doubled where fragments were joined (".;", "..", ",."); an ellipsis stays', () => {
+    expect(spoken('Your numbers are targets and goals, not actuals.; no bank has signed')).toBe('Your numbers are targets and goals, not actuals; no bank has signed');
+    expect(spoken('Pilots are planned, confirming these have not yet happened..')).toBe('Pilots are planned, confirming these have not yet happened.');
+    expect(spoken('one bank, two pilots,.')).toBe('one bank, two pilots.');
+    expect(spoken('Wait for it...')).toBe('Wait for it...');
+  });
+  it('lowercases a common opening word after a semicolon; a name stays as written', () => {
+    expect(spoken('targets, not actuals; No named customer; The three products')).toBe('targets, not actuals; no named customer; the three products');
+    expect(spoken('no pricing; QuVault has no page; Bucharest is next')).toBe('no pricing; QuVault has no page; Bucharest is next');
+    expect(spoken('one pilot; I asked twice')).toBe('one pilot; I asked twice');
+  });
+  it('stage evidence goes through the cleaner and loses its own closing punctuation (the card joins it into one sentence)', () => {
+    const v = spokenView({ understanding: { does: '', serves: '', standsOut: '', tensions: [], confident: [], inferring: [], unanswered: [],
+      constraint: { decided: true, text: 'No bank has signed yet..' },
+      stage: { stage: 'validating', evidence: ['targets and goals, not actuals.', 'these have not yet happened..'], secondary: null } } } as unknown as ArcView);
+    const st = v.understanding!.stage as { evidence: string[] };
+    expect(st.evidence).toEqual(['targets and goals, not actuals', 'these have not yet happened']);
+    expect((v.understanding!.constraint as { text: string }).text).toBe('No bank has signed yet.');
   });
 });

@@ -9,7 +9,9 @@
  *       · bullets stay bullets ("- item" lines are never collapsed),
  *       · a placeholder is one short phrase: "[specific date — to be confirmed by Friday]" → "[specific date]",
  *       · manager verbs become plain ones (identify → find, ensure → make sure, align on → go over, leverage → use),
- *       · text inside quotation marks is never touched: a quote of the founder's own words or of their site stays exact.
+ *       · text inside quotation marks is never touched: a quote of the founder's own words or of their site stays exact,
+ *       · doubled punctuation from joined fragments is collapsed: ".;" → ";", ".." → ".", ",." → "." (an ellipsis stays),
+ *       · a common opening word right after a semicolon is lowercased ("; No named" → "; no named"); names never are.
  * spoken() is for BB-AUTHORED text only. Founder words (a goal candidate, a mirror's "you said") are never rewritten.
  */
 const AND: Record<string, string> = { en: 'and', ro: 'și', it: 'e' };
@@ -78,7 +80,25 @@ export function plainSubject(s: string, language: string): string {
   return plainVerbs(withoutDashes((s ?? '').replace(/\s*\+\s*/g, ` ${AND[language] ?? 'and'} `))).replace(/\s{2,}/g, ' ').trim();
 }
 
+/** Common words a clause opens with (EN/RO/IT). After a semicolon only these are lowercased: a name stays as written. */
+const OPENERS = new Set(('a an the no none not this that these those there it its each every all any some one two three our your ' +
+  'their they we you he she his her nothing only most many few both neither either but and or so yet ' +
+  'un o nu niciun nicio cele cei acest această aceste există il lo la le gli uno una non nessun nessuna questo questa').split(' '));
+export function lowerAfterSemicolon(s: string): string {
+  return (s ?? '').replace(/;([ \t]+)(\p{Lu}\p{Ll}*)(?=[\s,.;:!?)]|$)/gu, (whole, sp: string, w: string) =>
+    (OPENERS.has(w.toLowerCase()) ? `;${sp}${w.toLowerCase()}` : whole));
+}
+
+/** Collapse punctuation doubled where fragments were joined ("actuals.; ", "happened..", "too,."). "..." stays. */
+export function tidyPunctuation(s: string): string {
+  return (s ?? '')
+    .replace(/(?<!\.)\.\.(?!\.)/g, '.')                        // ".." → "." (never an ellipsis)
+    .replace(/[.,]+[ \t]*;/g, ';')                                // ".;" ",;" → ";"
+    .replace(/[,;:]+[ \t]*\./g, '.')                              // ",." ";." ":." → "."
+    .replace(/\.[ \t]*,/g, ',');                                  // ".," → ","
+}
+
 /** BB-authored text: placeholders first (so their inner dash is cut, not turned into a comma), then dashes, then verbs. */
 export function spoken(s: string): string {
-  return plainVerbs(withoutDashes(simplePlaceholders(s)));
+  return lowerAfterSemicolon(tidyPunctuation(plainVerbs(withoutDashes(simplePlaceholders(s)))));
 }
