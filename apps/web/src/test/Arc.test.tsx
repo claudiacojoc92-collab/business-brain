@@ -24,7 +24,7 @@ vi.mock('../api/client', () => ({
 }));
 
 import * as api from '../api/client';
-import { ArcSurface } from '../slice0/ArcSurface';
+import { ArcSurface, joinWhy } from '../slice0/ArcSurface';
 
 const v = (over: Partial<ArcView>): ArcView => ({ moment: 'pour_in', businessName: 'Body Move', ...over } as ArcView);
 const noTabs = () => { expect(document.querySelector('.s0-nav')).toBeNull(); expect(document.querySelector('.s0-tabbar')).toBeNull(); };
@@ -614,3 +614,11 @@ describe('ArcSurface — one surface, eight moments', () => {
   });
 });
 
+describe('joinWhy (stage evidence → one "Why: a; b." sentence)', () => {
+  it('never shows ".;", "..", or ",." between or after fragments', () => {
+    const why = joinWhy(['Targets and goals, not actuals.', 'No named customer.', 'The three products.', 'QuVault has no page.', 'one pilot,']);
+    expect(why).toBe('Targets and goals, not actuals; no named customer; the three products; QuVault has no page; one pilot');
+    expect(why).not.toMatch(/; (No|The) /);
+    expect(`Why: ${why}.`).not.toMatch(/\.;|\.\.|,\./);
+  });
+});
