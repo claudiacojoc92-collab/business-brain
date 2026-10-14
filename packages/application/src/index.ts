@@ -90,3 +90,6 @@ export * from './arc/index';
 
 // The move arrives written — a produced artifact attached to a plan move (landing-page copy first).
 export * from './move-draft/index';
+
+// Strategic Moves — the one place BB looks outside the founder's material (web research port).
+export * from './moves/index';
