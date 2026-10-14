@@ -208,6 +208,7 @@ export { AnthropicVoiceModel } from './business-intelligence/anthropic-voice.mod
 export { AnthropicPlanModel, PLAN_SYSTEM } from './business-intelligence/anthropic-plan.model';
 export { AnthropicCarouselModel } from './business-intelligence/anthropic-carousel.model';
 export { AnthropicProofModel } from './business-intelligence/anthropic-proof.model';
+export { AnthropicWebResearchAdapter, parseSearchResponse, parseFetchResponse } from './business-intelligence/anthropic-web-research.adapter';
 export { AnthropicObservationModel, AnthropicOpportunityModel } from './business-intelligence/anthropic-photoled.model';
 export { AnthropicVideoObservationModel, AnthropicReelOpportunityModel } from './business-intelligence/anthropic-reel.model';
 export { AnthropicConceptPlanModel } from './business-intelligence/anthropic-shoot.model';
