@@ -54,8 +54,9 @@ export function projectContainer(u: GovernedUnderstanding | null, said: readonly
   // What BB observed.
   if (u?.offer?.summary?.trim()) items.push({ labelKey: 'arc.container.lbl.offer', statement: u.offer.summary.trim(), provenance: 'observed' });
   if (u?.positioning?.summary?.trim()) items.push({ labelKey: 'arc.container.lbl.positioning', statement: u.positioning.summary.trim(), provenance: clean(u.positioning.evidenceBacked).length ? 'observed' : 'inferred' });
-  const aud = clean(u?.audience?.addressed);
-  if (aud.length) items.push({ labelKey: 'arc.container.lbl.audience', statement: aud.join(', '), provenance: 'observed' });
+  // The composed summary (content language) first; the lifted `addressed` (source language) for older understandings.
+  const aud = u?.audience?.summary?.trim() || clean(u?.audience?.addressed).join(', ');
+  if (aud) items.push({ labelKey: 'arc.container.lbl.audience', statement: aud, provenance: 'observed' });
   // What the founder told BB.
   const active = said.filter((s) => s.status === 'active');
   const goal = [...active].reverse().find((s) => isHeldGoal(s));

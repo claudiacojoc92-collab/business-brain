@@ -85,3 +85,15 @@ describe('one voice at the arc exit point (item 2)', () => {
     expect(v.mirror).toEqual({ founderWords: 'Signed pilot — 60 days', against: 'The site, no path', tension: 'You want a pilot, the site has no path.' });
   });
 });
+
+describe('container audience line (2026-10-14)', () => {
+  const u = (audience: Record<string, unknown>) => ({ offer: { summary: '' }, positioning: { summary: '' }, audience } as unknown as Parameters<typeof projectContainer>[0]);
+  it('uses the composed audience.summary (content language) when present', () => {
+    const items = projectContainer(u({ summary: 'Privatpersonen ohne Trading-Erfahrung', addressed: ['People with no trading experience'] }), [], [], []);
+    expect(items.find((x) => x.labelKey === 'arc.container.lbl.audience')?.statement).toBe('Privatpersonen ohne Trading-Erfahrung');
+  });
+  it('falls back to the lifted addressed lines for an older understanding', () => {
+    const items = projectContainer(u({ addressed: ['Post-op patients', 'Athletes'] }), [], [], []);
+    expect(items.find((x) => x.labelKey === 'arc.container.lbl.audience')?.statement).toBe('Post-op patients, Athletes');
+  });
+});

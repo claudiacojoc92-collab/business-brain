@@ -43,6 +43,15 @@ describe('understanding systemPrompt — compose-vs-lift language split', () => 
     expect(lineB).not.toContain('positioning.summary');
   });
 
+  it('audience.summary is COMPOSED (founder language); audience.addressed stays LIFTED (2026-10-14)', () => {
+    expect(lineA).toContain('audience.summary');
+    expect(lineB).not.toContain('audience.summary');
+    expect(lineB).toContain('audience.addressed');
+    expect(lineA).not.toMatch(/audience\.addressed/);
+    expect(systemPrompt('de')).toMatch(/audience\.summary = a short LABEL in German/);
+    expect(p).toContain('"audience": {"summary": ""');
+  });
+
   it('names the founder language, and keeps proper-noun / mixed-source / no-drift rules', () => {
     expect(systemPrompt('ro')).toContain('Romanian');
     expect(systemPrompt('en')).toContain('English');
