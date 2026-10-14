@@ -51,7 +51,9 @@ export interface ClaimEvidence { readonly ref: string; readonly quote: string; r
 export interface GovernedUnderstanding {
   readonly offer: { summary: string; explicit: string[]; unclear: string[]; sourceRefs: string[] };
   readonly positioning: { summary: string; evidenceBacked: string[]; implied: string[]; sourceRefs: string[] };
-  readonly audience: { addressed: string[]; appearsTargeted: string[]; unknown: string[]; sourceRefs: string[] };
+  /** `summary` (composed, content language) is who the business serves, as a label; `addressed` is the LIFTED source
+   *  wording (source language). Understandings stored before `summary` existed have only `addressed`. */
+  readonly audience: { summary?: string; addressed: string[]; appearsTargeted: string[]; unknown: string[]; sourceRefs: string[] };
   readonly messaging: { recurringThemes: string[]; sourceRefs: string[] };
   readonly acquisition: { visiblePaths: string[]; sourceRefs: string[] };
   /**

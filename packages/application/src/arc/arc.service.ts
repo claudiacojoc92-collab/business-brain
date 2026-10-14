@@ -336,7 +336,9 @@ export class ArcService {
     return {
       does: oneLine(u?.offer?.summary),
       // A label, not a sentence: the card shows "For: <who>." (the mirror and container label it too), so no closing mark.
-      serves: clean(u?.audience?.addressed).slice(0, 1).join('').replace(/[.;,:]+$/, ''),
+      // The composed summary is in the content language; the lifted `addressed` (source language) is the fallback for
+      // understandings stored before the summary existed.
+      serves: (u?.audience?.summary?.trim() || clean(u?.audience?.addressed)[0] || '').replace(/[.;,:]+$/, ''),
       standsOut: oneLine(u?.positioning?.summary),
       tensions,
       confident,

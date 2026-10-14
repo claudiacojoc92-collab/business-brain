@@ -98,6 +98,22 @@ describe('ArcService.view — each moment composes from the reused engines', () 
     expect(v.understanding?.serves).toBe('Institutions (enterprise, regulation and audit)');
   });
 
+  it('the audience line uses the COMPOSED audience.summary (content language), not the lifted source wording', async () => {
+    const base = await makeDeps().deps.understanding.latest();
+    const { deps } = makeDeps({ conversation: { status: async () => null, turns: async () => [] },
+      understanding: { latest: async () => ({ understanding: { ...base.understanding, audience: { summary: 'Privatpersonen ohne Trading-Erfahrung.', addressed: ['People with no trading experience ("0 trading experience needed")'], appearsTargeted: [], unknown: [] } } }) } });
+    const v = await new ArcService(deps).view('B', 'LFG Gold', 'de', flags({ pourInDone: true }), [], null);
+    expect(v.understanding?.serves).toBe('Privatpersonen ohne Trading-Erfahrung');
+  });
+
+  it('an understanding stored before audience.summary existed falls back to the first lifted audience line', async () => {
+    const base = await makeDeps().deps.understanding.latest();
+    const { deps } = makeDeps({ conversation: { status: async () => null, turns: async () => [] },
+      understanding: { latest: async () => ({ understanding: { ...base.understanding, audience: { summary: '  ', addressed: ['Post-op patients.', 'Athletes'], appearsTargeted: [], unknown: [] } } }) } });
+    const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true }), [], null);
+    expect(v.understanding?.serves).toBe('Post-op patients');
+  });
+
   it('understanding is DIAGNOSTIC: surfaces tensions + confident-from-evidence vs inferred + what sources can\'t answer', async () => {
     const { deps } = makeDeps({ conversation: { status: async () => null, turns: async () => [] } });
     const v = await new ArcService(deps).view('B', 'Body Move', 'en', flags({ pourInDone: true }), [], null);
