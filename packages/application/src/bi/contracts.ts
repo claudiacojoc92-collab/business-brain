@@ -99,7 +99,9 @@ export interface GovernedUnderstanding {
   readonly stage?: {
     stage: BusinessStage; evidence: string[]; sourceRefs: string[];
     /** One named part at a different stage than the core (e.g. a new channel still validating). Optional. */
-    secondary?: { stage: BusinessStage; area: string; evidence: string[] } | null;
+    secondary?: { stage: BusinessStage; area: string; evidence: string[]; numbers?: NumberClaim[]; calculations?: Calculation[] } | null;
+    /** Grounding for any number in the stage evidence (numeric grounding applies to stage lines too). */
+    numbers?: NumberClaim[]; calculations?: Calculation[];
   };
   /** v2 (2026-10-15): the business-model read, epistemics and earned diagnosis. Absent on older snapshots. */
   readonly read?: UnderstandingRead;

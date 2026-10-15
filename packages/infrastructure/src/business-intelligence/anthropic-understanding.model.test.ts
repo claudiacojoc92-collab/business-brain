@@ -145,6 +145,10 @@ describe('understanding systemPrompt — the reasoning contract (2026-10-15: a s
     expect(p).toMatch(/NUMBERS — every digit you write[\s\S]*qualifier[\s\S]*"calculations"[\s\S]*Never pair a number with a neighbouring offer or package/);
     expect(p).toMatch(/"matters" must be about THIS business[\s\S]*would fit thousands of businesses[\s\S]*session duration, trainer time, utilisation/);
   });
+  it('stage evidence and the secondary\'s evidence are explicit JSON lists, and their numbers are grounded', () => {
+    expect(p).toMatch(/stage\.evidence = a LIST \(JSON array\) of 2 to 4[\s\S]*stage\.secondary\.evidence = a LIST[\s\S]*1 to 2 observations, never a single string/);
+    expect(p).toContain('"secondary": {"stage": "", "area": "", "evidence": ["<observation>"]');
+  });
   it('metrics that can diverge stay separate answers', () => {
     expect(p).toMatch(/two metrics can DIVERGE[\s\S]*"a\) … b\) …"[\s\S]*"parts"/);
     expect(p).toContain('"parts": []');

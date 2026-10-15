@@ -3,6 +3,7 @@ import type { Action, DueMoveRef, PlanVersion, TodayMove, TodayResult } from '..
 import { canonicalTodayMove, deriveAllReadiness, selectToday, todayPlanAction } from '../plan/index';
 import type { GovernedUnderstanding, ClaimEvidence } from '../bi/index';
 import { clipQuote } from '../bi/evidence-anchor';
+import { normalizeUnderstandingShapes, stringList } from '../bi/model-shapes';
 import { agendaUnknowns, isHousekeeping, critiquesWording, factOnly, restatesNotShown, makesUnlicensedClaim, makesUnlicensedSoWhatClaim, sameInsight, firstSentence } from '../bi/index';
 import type { GoalCandidate } from '../conversation/index';
 import { computeArcMoment } from './moment';
@@ -58,7 +59,8 @@ export interface ArcDeps {
 }
 
 const errText = (e: unknown): string => { const x = e as Error; return `${x?.message ?? String(e)}${x?.stack ? ' | ' + x.stack.split('\n').slice(1, 3).map((l) => l.trim()).join(' ') : ''}`.slice(0, 300); };
-const clean = (xs?: (string | null | undefined)[]): string[] => (xs ?? []).map((x) => (x ?? '').trim()).filter(Boolean);
+// Tolerant on purpose (prod 2026-10-15): a stored model list may be a lone string; it is one item, never mapped per char.
+const clean = (xs?: unknown): string[] => stringList(xs);
 const first = (...xs: (string | undefined)[]): string => { for (const x of xs) if (x?.trim()) return x.trim(); return ''; };
 const dedupe = (xs: string[]): string[] => { const seen = new Set<string>(); const out: string[] = []; for (const x of xs) { const v = (x ?? '').trim(); if (v && !seen.has(v)) { seen.add(v); out.push(v); } } return out; };
 // Founder-human GUARANTEE: the strategy prompt asks for plain language, but the model stubbornly reproduces a few
@@ -232,7 +234,9 @@ export class ArcService {
     return { ...base, error: { kind: 'need_goal', goalCandidate: cand ? { stateId: cand.stateId, statement: cand.statement } : null } };
   }
 
-  private projectUnderstanding(u: GovernedUnderstanding | null, aha1: { finding: string }[]): ArcUnderstanding {
+  private projectUnderstanding(stored: GovernedUnderstanding | null, aha1: { finding: string }[]): ArcUnderstanding {
+    // Snapshots already stored may carry a malformed model list (a lone string): read them in their proper shape.
+    const u = stored ? normalizeUnderstandingShapes(stored) : null;
     // FIX 2c — a tension line + ONE grounding line (never three). The model writes tensions with definite referents
     // ("the unfilled field") assuming both statements are visible; the card only showed the tension, so the referent
     // dangled. Carry the MORE CONCRETE statement (a quote/number names the referent), drop the softer half.

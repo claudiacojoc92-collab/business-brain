@@ -4,6 +4,7 @@ import { isHousekeeping, sameInsight } from './insight-text';
 import { isWebsiteHygiene, trustByRef } from './source-trust';
 import { groundNumbers, numbersIn } from './numeric-grounding';
 import { anchorClaimEvidence } from './evidence-anchor';
+import { normalizeUnderstandingShapes } from './model-shapes';
 import { makesUnlicensedClaim } from './validation';
 
 /**
@@ -84,8 +85,10 @@ const INFERENCE = /(?<!\p{L})(which (means|suggests|implies|indicates|shows|disc
 const clean = (xs: unknown): string[] => (Array.isArray(xs) ? xs : []).map((x) => (typeof x === 'string' ? x.trim() : '')).filter(Boolean);
 const BASES: readonly EvidenceBasis[] = ['observed', 'declared', 'inferred', 'contradicted'];
 
-export function governUnderstanding(u: GovernedUnderstanding, observations: readonly PageObservation[]): GovernedUnderstanding {
-  if (!u?.read) return u;
+export function governUnderstanding(raw: GovernedUnderstanding, observations: readonly PageObservation[]): GovernedUnderstanding {
+  if (!raw?.read) return raw;
+  // Every model list in its proper shape first (a lone string is a one-item list): nothing downstream assumes otherwise.
+  const u = normalizeUnderstandingShapes(raw) as GovernedUnderstanding & { read: UnderstandingRead }; // read survives normalisation
   const trust = trustByRef(observations);
   const hasDeclared = observations.some((o) => o.provenance === 'declared');
   const untrusted: UnderstandingRead['untrusted'][number][] = [];
@@ -146,7 +149,8 @@ export function governUnderstanding(u: GovernedUnderstanding, observations: read
   const audience = { ...u.audience, unknown: clean(u.audience?.unknown).filter((x) => !isWebsiteHygiene(x)) };
 
   // Stage evidence from the sitemap or hygiene is not evidence of the business's stage.
-  const stage = u.stage ? governStage(u.stage, trustedRefs) : u.stage;
+  const stage = u.stage ? governStage(u.stage, trustedRefs, (line, numbers, calcs) => !numbersIn(line).length
+    || groundNumbers([line], numbers, calcs, observations, entities, (r) => trust(r).trusted).ok) : u.stage;
 
   // The business model: each known claim rests on a trusted source; "declared" needs the founder to have said it.
   // A booking-mechanics line the model filed under acquisition belongs to conversion.
@@ -283,13 +287,23 @@ function isLiftedText(text: string, observations: readonly PageObservation[]): b
   return t.split(' ').length >= 6 && observations.some((o) => squash(o.text).includes(t));
 }
 
-function governStage(s: NonNullable<GovernedUnderstanding['stage']>, trustedRefs: (r: string[]) => string[]): NonNullable<GovernedUnderstanding['stage']> {
-  const evidence = clean(s.evidence).filter((e) => !SITEMAP.test(e) && !isWebsiteHygiene(e));
+/**
+ * Stage evidence from the sitemap or hygiene is not evidence of the business's stage, and a stage line with a number
+ * stays only when that number is grounded (tied to its entity in the source, or an explicit calculation): "over 25
+ * services" or "8 named specialists" with no grounding is dropped. Fewer than two lines left → undetermined.
+ */
+function governStage(
+  s: NonNullable<GovernedUnderstanding['stage']>,
+  trustedRefs: (r: string[]) => string[],
+  grounded: (line: string, numbers: NonNullable<GovernedUnderstanding['stage']>['numbers'], calcs: NonNullable<GovernedUnderstanding['stage']>['calculations']) => boolean,
+): NonNullable<GovernedUnderstanding['stage']> {
+  const evidence = clean(s.evidence).filter((e) => !SITEMAP.test(e) && !isWebsiteHygiene(e) && grounded(e, s.numbers, s.calculations));
   const refs = trustedRefs(clean(s.sourceRefs));
   const sec = s.secondary;
-  const secOk = sec && !SITEMAP.test(`${sec.area} ${clean(sec.evidence).join(' ')}`) && !isWebsiteHygiene(`${sec.area} ${clean(sec.evidence).join(' ')}`);
+  const secEvidence = sec ? clean(sec.evidence).filter((e) => grounded(e, sec.numbers ?? s.numbers, sec.calculations ?? s.calculations)) : [];
+  const secOk = sec && secEvidence.length > 0 && !SITEMAP.test(`${sec.area} ${secEvidence.join(' ')}`) && !isWebsiteHygiene(`${sec.area} ${secEvidence.join(' ')}`);
   if (!refs.length || evidence.length < 2) return { stage: 'undetermined', evidence, sourceRefs: refs, secondary: null };
-  return { ...s, evidence, sourceRefs: refs, secondary: secOk ? sec : null };
+  return { ...s, evidence, sourceRefs: refs, secondary: secOk ? { ...sec, evidence: secEvidence } : null };
 }
 
 /**

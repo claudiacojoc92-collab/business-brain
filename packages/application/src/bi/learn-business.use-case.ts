@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { anchorUnderstandingEvidence } from './evidence-anchor';
 import { businessEntities, governFindingsDetailed, governUnderstanding } from './understanding-governance';
+import { normalizeUnderstandingShapes } from './model-shapes';
 import { generateId } from '@bb/shared';
 import { detectMaterialLanguage, detectTextLanguage, toLocale, type IContentLanguageStore } from '../business/content-language';
 import {
@@ -351,7 +352,7 @@ export class LearnBusinessService {
       sourceLanguage: out.sourceLanguage ?? observations[0]?.lang ?? null,
       // BUS-73: every claim keeps only the source sentences that anchor verbatim in what was read. Then governance
       // (2026-10-15): untrusted sources, website hygiene, absence-as-fact and an unearned constraint are lowered in code.
-      understanding: withObservations(governUnderstanding(anchorUnderstandingEvidence(out.understanding, observations), observations), ahaGov.demoted),
+      understanding: withObservations(governUnderstanding(anchorUnderstandingEvidence(normalizeUnderstandingShapes(out.understanding), observations), observations), ahaGov.demoted),
       modelId,
     });
 
