@@ -1,0 +1,1405 @@
+{
+ "raw": {
+  "offer": {
+   "summary": "Vinzi clase de grup, antrenament personal, kinetoterapie, programe prenatale/postpartum și masaj, în două locații din Cluj-Napoca.",
+   "explicit": [
+    "Pilates – 1 ședință 90 lei, Abon. 4 240 lei, Abon. 8 350 lei, Abon. 12 500 lei",
+    "Functional Training – 1 ședință 90 lei, Abon. 4 240 lei, Abon. 8 350 lei, Abon. 12 500 lei",
+    "Aerial Yoga – 1 ședință 120 lei, Abon. 4 360 lei, Abon. 8 600 lei",
+    "Balet Adulți – 1 ședință 90 lei, Abon. 4 200 lei, Abon. 8 300 lei",
+    "Balet & Dans Copii – 1 ședință 90 lei, Abon. 4 200 lei, Abon. 8 300 lei",
+    "Personal Training – 1 ședință 150 lei, Abon. 8 800 lei, Abon. 12 1000 lei",
+    "Group Training (max. 4 persoane) – 1 ședință 90 lei, Abon. 8 600 lei, Abon. 12 700 lei",
+    "Kinetoterapie",
+    "Gimnastică Prenatală & Recuperare Postpartum",
+    "Masaj"
+   ],
+   "unclear": [
+    "Prețurile pentru kinetoterapie, masaj și programele prenatale/postpartum nu sunt vizibile în paginile citite.",
+    "Nu este clar dacă kinetoterapia și masajul sunt disponibile în ambele locații sau doar într-una.",
+    "Nu se știe dacă abonamentele sunt legate de o locație specifică sau sunt valabile în ambele."
+   ],
+   "sourceRefs": [
+    "Homepage",
+    "Servicii - Body Move Studio",
+    "Clase & Personal Training - Body Move St"
+   ]
+  },
+  "positioning": {
+   "summary": "Site-ul prezintă studioul ca un spațiu integrat de sănătate prin mișcare, recuperare și prevenție, cu abordare personalizată.",
+   "evidenceBacked": [
+    "Mișcare cu sens. Grijă pentru oameni. Rezultate care contează.",
+    "Nu tratăm simptome. Ne concentrăm pe cauze, prevenție și rezultate pe termen lung.",
+    "Două locații moderne în Cluj-Napoca.",
+    "Echipă multidisciplinară – instructori, kinetoterapeuți și terapeuți care colaborează.",
+    "Servicii pentru toate etapele vieții – de la copii și adolescenți până la adulți, viitoare mame și persoane aflate în recuperare."
+   ],
+   "implied": [
+    "Paginile citite poziționează studioul mai aproape de un centru de sănătate și recuperare decât de o sală de fitness clasică.",
+    "Accentul pe personalizare și abordare multidisciplinară sugerează că prețul nu este argumentul principal de vânzare."
+   ],
+   "sourceRefs": [
+    "Homepage",
+    "Despre noi - Body Move Studio",
+    "Servicii - Body Move Studio"
+   ]
+  },
+  "audience": {
+   "summary": "Adulți activi sau în recuperare, mame gravide sau postpartum, copii, din Cluj-Napoca.",
+   "addressed": [
+    "persoane care vor să îmbunătățească mobilitatea, postura și condiția fizică",
+    "persoane cu dureri, limitări de mișcare sau afecțiuni care necesită recuperare",
+    "femei însărcinate care caută programe sigure de mișcare",
+    "femei în perioada postpartum care au nevoie de recuperare specializată",
+    "copii aflați la începutul dezvoltării",
+    "persoane care vor să reducă tensiunile acumulate"
+   ],
+   "appearsTargeted": [
+    "Adulți din Cluj-Napoca cu interes pentru sănătate preventivă și mișcare conștientă, nu performanță sportivă.",
+    "Mame (gravide și postpartum) ca segment distinct cu programe dedicate.",
+    "Copii prin Balet & Dans Copii, ceea ce implică și părinți ca decidenți de cumpărare."
+   ],
+   "unknown": [
+    "Care segment aduce cel mai mare volum de clienți activi azi.",
+    "Dacă există clienți corporativi sau trimiteri din partea medicilor/clinicilor.",
+    "Distribuția vârstelor și a genului în baza actuală de clienți."
+   ],
+   "sourceRefs": [
+    "Homepage",
+    "Despre noi - Body Move Studio",
+    "Servicii - Body Move Studio"
+   ]
+  },
+  "messaging": {
+   "recurringThemes": [
+    "Mișcare cu sens. Grijă pentru oameni. Rezultate care contează.",
+    "abordare personalizată, adaptată nevoilor fiecărui client",
+    "prevenție și rezultate pe termen lung, nu soluții rapide",
+    "echipă multidisciplinară care colaborează",
+    "comunitate bazată pe respect, profesionalism și grijă autentică"
+   ],
+   "sourceRefs": [
+    "Homepage",
+    "Despre noi - Body Move Studio",
+    "Servicii - Body Move Studio"
+   ]
+  },
+  "acquisition": {
+   "visiblePaths": [
+    "Programare online prin aplicația Evo Beauty",
+    "Contactarea recepției (menționată în FAQ)"
+   ],
+   "sourceRefs": [
+    "Homepage"
+   ]
+  },
+  "read": {
+   "model": [
+    {
+     "dimension": "offer",
+     "known": [
+      {
+       "text": "Șapte tipuri de clase și antrenamente cu prețuri publicate: Pilates, Functional Training, Aerial Yoga, Balet Adulți, Balet & Dans Copii, Personal Training, Group Training.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Clase & Personal Training - Body Move St"
+       ],
+       "numbers": [
+        {
+         "value": 90,
+         "entity": "Pilates",
+         "qualifier": "1 ședință",
+         "ref": "Clase & Personal Training - Body Move St",
+         "quote": "1 ședință 90 lei"
+        },
+        {
+         "value": 240,
+         "entity": "Pilates",
+         "qualifier": "Abon. 4",
+         "ref": "Clase & Personal Training - Body Move St",
+         "quote": "Abon. 4 240 lei"
+        },
+        {
+         "value": 350,
+         "entity": "Pilates",
+         "qualifier": "Abon. 8",
+         "ref": "Clase & Personal Training - Body Move St",
+         "quote": "Abon. 8 350 lei"
+        },
+        {
+         "value": 500,
+         "entity": "Pilates",
+         "qualifier": "Abon. 12",
+         "ref": "Clase & Personal Training - Body Move St",
+         "quote": "Abon. 12 500 lei"
+        },
+        {
+         "value": 120,
+         "entity": "Aerial Yoga",
+         "qualifier": "1 ședință",
+         "ref": "Clase & Personal Training - Body Move St",
+         "quote": "1 ședință 120 lei"
+        },
+        {
+         "value": 360,
+         "entity": "Aerial Yoga",
+         "qualifier": "Abon. 4",
+         "ref": "Clase & Personal Training - Body Move St",
+         "quote": "Abon. 4 360 lei"
+        },
+        {
+         "value": 600,
+         "entity": "Aerial Yoga",
+         "qualifier": "Abon. 8",
+         "ref": "Clase & Personal Training - Body Move St",
+         "quote": "Abon. 8 600 lei"
+        },
+        {
+         "value": 150,
+         "entity": "Personal Training",
+         "qualifier": "1 ședință",
+         "ref": "Clase & Personal Training - Body Move St",
+         "quote": "1 ședință 150 lei"
+        },
+        {
+         "value": 800,
+         "entity": "Personal Training",
+         "qualifier": "Abon. 8",
+         "ref": "Clase & Personal Training - Body Move St",
+         "quote": "Abon. 8 800 lei"
+        },
+        {
+         "value": 1000,
+         "entity": "Personal Training",
+         "qualifier": "Abon. 12",
+         "ref": "Clase & Personal Training - Body Move St",
+         "quote": "Abon. 12 1000 lei"
+        },
+        {
+         "value": 90,
+         "entity": "Group Training",
+         "qualifier": "1 ședință",
+         "ref": "Clase & Personal Training - Body Move St",
+         "quote": "1 ședință 90 lei"
+        },
+        {
+         "value": 600,
+         "entity": "Group Training",
+         "qualifier": "Abon. 8",
+         "ref": "Clase & Personal Training - Body Move St",
+         "quote": "Abon. 8 600 lei"
+        },
+        {
+         "value": 700,
+         "entity": "Group Training",
+         "qualifier": "Abon. 12",
+         "ref": "Clase & Personal Training - Body Move St",
+         "quote": "Abon. 12 700 lei"
+        }
+       ],
+       "calculations": []
+      },
+      {
+       "text": "Kinetoterapie, Gimnastică Prenatală și Recuperare Postpartum, și Masaj sunt menționate ca servicii distincte, fără prețuri vizibile în paginile citite.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Servicii - Body Move Studio",
+        "Homepage"
+       ],
+       "numbers": [],
+       "calculations": []
+      },
+      {
+       "text": "Studioul operează în două locații în Cluj-Napoca: Body Move Studio Bună Ziua și Body Move Studio Decebal.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Homepage"
+       ],
+       "numbers": [],
+       "calculations": []
+      }
+     ],
+     "unknown": [
+      "Prețurile pentru kinetoterapie, masaj și programele prenatale/postpartum.",
+      "Care servicii sunt disponibile în fiecare locație.",
+      "Dacă abonamentele sunt valabile în ambele locații."
+     ]
+    },
+    {
+     "dimension": "customer",
+     "known": [
+      {
+       "text": "Site-ul adresează explicit adulți cu obiective de fitness și mobilitate, persoane în recuperare, femei gravide și postpartum, și copii.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Homepage",
+        "Despre noi - Body Move Studio"
+       ],
+       "numbers": [],
+       "calculations": []
+      }
+     ],
+     "unknown": [
+      "Care segment reprezintă cel mai mare volum de clienți activi azi.",
+      "Câți clienți activi are studioul în total.",
+      "Rata de retenție și comportamentul de reînnoire a abonamentelor."
+     ]
+    },
+    {
+     "dimension": "acquisition",
+     "known": [
+      {
+       "text": "Programarea se face prin aplicația Evo Beauty sau prin recepție, conform FAQ-ului de pe site.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Homepage"
+       ],
+       "numbers": [],
+       "calculations": []
+      }
+     ],
+     "unknown": [
+      "De unde vin clienții noi: căutare organică, social media, recomandări, trimiteri medicale sau altceva.",
+      "Dacă există campanii plătite sau parteneriate active.",
+      "Ce canal aduce cel mai mare volum de clienți noi."
+     ]
+    },
+    {
+     "dimension": "conversion",
+     "known": [
+      {
+       "text": "Există un buton de programare online pe homepage și pe paginile de servicii, legat de aplicația Evo Beauty.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Homepage"
+       ],
+       "numbers": [],
+       "calculations": []
+      },
+      {
+       "text": "FAQ-ul menționează că ședințele neanulate cu minimum 8 ore înainte sunt considerate efectuate și se scad din abonament.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Homepage"
+       ],
+       "numbers": [],
+       "calculations": []
+      }
+     ],
+     "unknown": [
+      "Dacă există o consultație inițială gratuită sau o evaluare înainte de prima ședință.",
+      "Rata de conversie de la vizitator la programare."
+     ]
+    },
+    {
+     "dimension": "retention",
+     "known": [
+      {
+       "text": "Structura de abonamente (4, 8, 12 ședințe) este vizibilă pentru clasele de grup și antrenamentul personal, ceea ce creează un mecanism de retenție pe termen scurt.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Clase & Personal Training - Body Move St"
+       ],
+       "numbers": [],
+       "calculations": []
+      }
+     ],
+     "unknown": [
+      "Rata de reînnoire a abonamentelor.",
+      "Dacă există abonamente lunare sau anuale cu plată recurentă.",
+      "Câți clienți combină mai multe servicii (de exemplu, clase plus kinetoterapie)."
+     ]
+    },
+    {
+     "dimension": "capacity",
+     "known": [
+      {
+       "text": "Două locații fizice în Cluj-Napoca: Bună Ziua și Decebal.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Homepage"
+       ],
+       "numbers": [],
+       "calculations": []
+      },
+      {
+       "text": "Group Training este limitat la maximum 4 persoane per sesiune.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Clase & Personal Training - Body Move St"
+       ],
+       "numbers": [
+        {
+         "value": 4,
+         "entity": "Group Training",
+         "qualifier": "max.",
+         "ref": "Clase & Personal Training - Body Move St",
+         "quote": "(max. 4 persoane)"
+        }
+       ],
+       "calculations": []
+      },
+      {
+       "text": "Echipa include cel puțin Raluca Bratan (antrenor fitness) și Giulia Pes (antrenor Balet Adulți), plus alți membri menționați parțial.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Despre noi - Body Move Studio"
+       ],
+       "numbers": [],
+       "calculations": []
+      }
+     ],
+     "unknown": [
+      "Numărul total de membri ai echipei și specializările lor.",
+      "Capacitatea sălilor și numărul de locuri per clasă.",
+      "Orarul complet și gradul de ocupare actual."
+     ]
+    },
+    {
+     "dimension": "economics",
+     "known": [
+      {
+       "text": "Personal Training are cel mai mare preț per ședință individuală dintre serviciile cu prețuri publicate: 150 lei per ședință.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Clase & Personal Training - Body Move St"
+       ],
+       "numbers": [
+        {
+         "value": 150,
+         "entity": "Personal Training",
+         "qualifier": "1 ședință",
+         "ref": "Clase & Personal Training - Body Move St",
+         "quote": "1 ședință 150 lei"
+        }
+       ],
+       "calculations": []
+      },
+      {
+       "text": "Aerial Yoga are cel mai mare preț per ședință dintre clasele de grup: 120 lei per ședință.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Clase & Personal Training - Body Move St"
+       ],
+       "numbers": [
+        {
+         "value": 120,
+         "entity": "Aerial Yoga",
+         "qualifier": "1 ședință",
+         "ref": "Clase & Personal Training - Body Move St",
+         "quote": "1 ședință 120 lei"
+        }
+       ],
+       "calculations": []
+      }
+     ],
+     "unknown": [
+      "Marja de profit per serviciu sau per locație.",
+      "Care serviciu aduce cel mai mare venit total.",
+      "Costurile fixe și variabile ale studioului.",
+      "Prețurile pentru kinetoterapie, masaj și programele prenatale/postpartum.",
+      "Valoarea medie per client pe durata relației."
+     ]
+    },
+    {
+     "dimension": "performance",
+     "known": [],
+     "unknown": [
+      "Care servicii sunt cele mai solicitate și care au locuri libere.",
+      "Evoluția numărului de clienți activi în timp.",
+      "Dacă una dintre locații performează mai bine decât cealaltă.",
+      "Ce a funcționat sau nu a funcționat din ce s-a încercat până acum."
+     ]
+    },
+    {
+     "dimension": "intent",
+     "known": [],
+     "unknown": [
+      "Ce vrei să crești în următoarele 6-12 luni: volum de clienți, un anumit serviciu, o locație nouă sau altceva.",
+      "Dacă există constrângeri de capacitate, echipă sau spațiu care limitează creșterea.",
+      "Ce ai încercat deja pentru a atrage clienți noi."
+     ]
+    }
+   ],
+   "notConcluding": [
+    {
+     "claim": "Care serviciu este motorul principal al veniturilor.",
+     "why": "Site-ul listează opt tipuri de servicii cu prețuri publicate și alte trei fără prețuri, fără nicio informație despre volum, ocupare sau venit per serviciu."
+    },
+    {
+     "claim": "De unde vin clienții noi.",
+     "why": "Nicio sursă citită nu menționează canalele de achiziție: nu există date despre trafic, campanii, recomandări sau parteneriate."
+    },
+    {
+     "claim": "Dacă studioul este în creștere, pe platou sau în scădere.",
+     "why": "Nu există date despre evoluția numărului de clienți, ocuparea claselor sau veniturile în timp."
+    }
+   ],
+   "untrusted": [],
+   "websiteNotes": [
+    "Contorul 'Ani de experiență 0 +' apare pe homepage și pe pagina Despre noi și pare un widget nefinalizat sau cu o valoare necompletată.",
+    "Pagina de servicii listează Kinetoterapie, Gimnastică Prenatală și Masaj fără prețuri vizibile, spre deosebire de pagina de clase unde prețurile sunt detaliate.",
+    "Lista echipei din pagina Despre noi este tăiată după 'Minodora', ceea ce sugerează că nu am văzut toți membrii echipei."
+   ],
+   "questions": [
+    {
+     "question": "Care sunt primele trei servicii după numărul de clienți activi azi și care sunt primele trei după venit lunar?",
+     "dimension": "performance",
+     "fills": [
+      "performance",
+      "economics"
+     ],
+     "changes": [
+      "bet",
+      "offer",
+      "resources",
+      "sequencing"
+     ],
+     "why": "Dacă serviciul cu cel mai mare volum nu este același cu cel mai profitabil, prioritățile de creștere și alocarea echipei se schimbă complet.",
+     "parts": [
+      "a) top 3 servicii după număr de clienți activi",
+      "b) top 3 servicii după venit lunar"
+     ]
+    },
+    {
+     "question": "De unde vin clienții noi azi: recomandări de la alți clienți, căutare pe Google, social media, trimiteri de la medici sau altceva?",
+     "dimension": "acquisition",
+     "fills": [
+      "acquisition"
+     ],
+     "changes": [
+      "channel",
+      "resources",
+      "bet"
+     ],
+     "why": "Dacă majoritatea clienților vin din recomandări, investiția în publicitate plătită are o logică diferită față de situația în care vin din căutare organică.",
+     "parts": []
+    },
+    {
+     "question": "Ce vrei să crești în următoarele 6-12 luni: mai mulți clienți pentru un anumit serviciu, o locație mai ocupată, un segment nou sau altceva?",
+     "dimension": "intent",
+     "fills": [
+      "intent"
+     ],
+     "changes": [
+      "segment",
+      "bet",
+      "channel",
+      "offer",
+      "sequencing"
+     ],
+     "why": "Fără să știm ce vrei să crești, nu putem spune care dintre tensiunile existente contează cu adevărat.",
+     "parts": []
+    },
+    {
+     "question": "Câți clienți activi ai în total azi și câți dintre ei reînnoiesc abonamentul după primul ciclu?",
+     "dimension": "retention",
+     "fills": [
+      "retention",
+      "economics"
+     ],
+     "changes": [
+      "retention",
+      "offer",
+      "resources"
+     ],
+     "why": "O rată mică de reînnoire schimbă complet prioritatea: mai întâi reții ce ai, abia apoi aduci clienți noi.",
+     "parts": [
+      "a) număr total de clienți activi",
+      "b) rata de reînnoire după primul abonament"
+     ]
+    },
+    {
+     "question": "Serviciile de kinetoterapie, masaj și programele prenatale/postpartum sunt disponibile în ambele locații sau doar într-una?",
+     "dimension": "capacity",
+     "fills": [
+      "capacity",
+      "offer"
+     ],
+     "changes": [
+      "segment",
+      "offer",
+      "capacity"
+     ],
+     "why": "Dacă aceste servicii sunt concentrate într-o singură locație, segmentele pe care le deservesc sunt limitate geografic, ceea ce schimbă cum comunici și unde investești.",
+     "parts": []
+    }
+   ],
+   "diagnosis": {
+    "state": "not_ready",
+    "statement": "",
+    "checks": {
+     "exists": {
+      "pass": false,
+      "note": "Nu există date despre performanță, achiziție sau intenția fondatorului care să permită identificarea unui blocaj real."
+     },
+     "causal": {
+      "pass": false,
+      "note": "Fără intenția declarată a fondatorului, nu putem lega nicio condiție observată de un obiectiv specific."
+     },
+     "blocks": {
+      "pass": false,
+      "note": "Nu știm ce anume blochează creșterea pentru că nu știm ce vrea să crească."
+     },
+     "alternativesWeaker": {
+      "pass": false,
+      "note": "Nu există suficiente date pentru a compara explicații alternative."
+     },
+     "evidenceSufficient": {
+      "pass": false,
+      "note": "Sursele disponibile sunt exclusiv paginile site-ului, fără date de performanță, achiziție sau intenție."
+     }
+    },
+    "sourceRefs": []
+   }
+  },
+  "contradictions": [
+   {
+    "kind": "audience_mismatch",
+    "statementA": "Servicii pentru toate etapele vieții – de la copii și adolescenți până la adulți, viitoare mame și persoane aflate în recuperare.",
+    "statementB": "Clasele & Personal Training sunt prezentate ca programe pentru persoane care vor să îmbunătățească condiția fizică, postura și mobilitatea.",
+    "tension": "Paginile citite prezintă studioul ca un spațiu pentru toate etapele vieții, de la copii la persoane în recuperare. Pagina de clase vorbește în principal cu adulți activi care vor să se miște mai bine, nu cu părinți care caută activități pentru copii sau cu persoane care au nevoie de recuperare.",
+    "soWhat": "Segmentul copii și segmentul recuperare ajung pe pagini care nu le vorbesc direct, ceea ce face mai greu de înțeles dacă oferta li se potrivește.",
+    "basis": "observed",
+    "absence": false,
+    "sourceRefs": [
+     "Despre noi - Body Move Studio",
+     "Clase & Personal Training - Body Move St"
+    ],
+    "evidence": [
+     {
+      "ref": "Despre noi - Body Move Studio",
+      "quote": "Servicii pentru toate etapele vieții – de la copii și adolescenți până la adulți, viitoare mame și persoane aflate în recuperare."
+     },
+     {
+      "ref": "Clase & Personal Training - Body Move St",
+      "quote": "Indiferent dacă îți dorești să îți îmbunătățești condiția fizică, să îți crești mobilitatea, să îți corectezi postura sau să îți construiești o rutină sănătoasă de mișcare, la Body Move Studio găsești programe adaptate nivelului și obiectivelor tale."
+     }
+    ]
+   }
+  ],
+  "unknowns": [
+   "Care serviciu aduce cel mai mare volum de clienți activi azi.",
+   "Care serviciu generează cel mai mare venit lunar.",
+   "De unde vin clienții noi: recomandări, căutare organică, social media, trimiteri medicale.",
+   "Rata de reînnoire a abonamentelor după primul ciclu.",
+   "Prețurile pentru kinetoterapie, masaj și programele prenatale/postpartum.",
+   "Distribuția serviciilor pe cele două locații.",
+   "Numărul total de membri ai echipei și specializările complete.",
+   "Ce vrea fondatorul să crească în următoarele 6-12 luni.",
+   "Gradul de ocupare actual al claselor și al locațiilor."
+  ],
+  "stage": {
+   "stage": "undetermined",
+   "evidence": [
+    "Studioul operează în două locații fizice distincte în Cluj-Napoca, ceea ce indică o prezență stabilă, nu o fază de validare.",
+    "Există o structură de prețuri și abonamente publicată pentru opt tipuri de servicii, semn că oferta este definită și vândută.",
+    "Nu există date despre evoluția numărului de clienți, ocuparea claselor sau venituri care să permită distincția între creștere și platou."
+   ],
+   "sourceRefs": [
+    "Homepage",
+    "Clase & Personal Training - Body Move St"
+   ],
+   "secondary": null
+  }
+ },
+ "rawAha": {
+  "findings": [
+   {
+    "finding": "Personal Training costă 150 lei per ședință individual, față de 90 lei per ședință pentru clasele de grup. Abonamentul de 12 ședințe de Personal Training ajunge la 1000 lei, față de 500 lei pentru Pilates sau Functional Training cu același număr de ședințe.",
+    "matters": "Personal Training generează de două ori mai mult venit per ședință față de clasele de grup cu același număr de ședințe. Dacă capacitatea de trainer este limitată, fiecare oră alocată Personal Training valorează dublu față de o oră de clasă de grup.",
+    "changes": [
+     "bet",
+     "resources",
+     "offer"
+    ],
+    "implication": "Nu știm câți clienți de Personal Training ai azi față de clase de grup. Dacă Personal Training este subocupat, există un potențial de venit nefolosit fără costuri suplimentare de spațiu sau echipă.",
+    "sourceRefs": [
+     "Clase & Personal Training - Body Move St"
+    ],
+    "evidence": [
+     {
+      "ref": "Clase & Personal Training - Body Move St",
+      "quote": "Personal Training Antrenamente individuale construite în funcție de obiectivele, nivelul și particularitățile fiecărei persoane. 1 ședință 150 lei Abon. 8 800 lei Abon. 12 1000 lei"
+     },
+     {
+      "ref": "Clase & Personal Training - Body Move St",
+      "quote": "Pilates Control, stabilitate și mobilitate prin exerciții care dezvoltă corpul într-un mod echilibrat și conștient. 1 ședință 90 lei Abon. 4 240 lei Abon. 8 350 lei Abon. 12 500 lei"
+     }
+    ],
+    "numbers": [
+     {
+      "value": 150,
+      "entity": "Personal Training",
+      "qualifier": "1 ședință",
+      "ref": "Clase & Personal Training - Body Move St",
+      "quote": "1 ședință 150 lei"
+     },
+     {
+      "value": 90,
+      "entity": "Pilates",
+      "qualifier": "1 ședință",
+      "ref": "Clase & Personal Training - Body Move St",
+      "quote": "1 ședință 90 lei"
+     },
+     {
+      "value": 1000,
+      "entity": "Personal Training",
+      "qualifier": "Abon. 12",
+      "ref": "Clase & Personal Training - Body Move St",
+      "quote": "Abon. 12 1000 lei"
+     },
+     {
+      "value": 500,
+      "entity": "Pilates",
+      "qualifier": "Abon. 12",
+      "ref": "Clase & Personal Training - Body Move St",
+      "quote": "Abon. 12 500 lei"
+     }
+    ],
+    "calculations": [
+     {
+      "operation": "divide",
+      "operands": [
+       150,
+       90
+      ],
+      "result": 1.67
+     },
+     {
+      "operation": "divide",
+      "operands": [
+       1000,
+       500
+      ],
+      "result": 2
+     }
+    ]
+   },
+   {
+    "finding": "Studioul operează cu patru familii de servicii distincte: clase și antrenament, kinetoterapie, programe prenatale/postpartum și masaj. Trei dintre cele patru familii nu au prețuri publicate pe site.",
+    "matters": "Un vizitator care vine pentru kinetoterapie, masaj sau recuperare postpartum nu poate evalua costul fără să contacteze studioul. Asta înseamnă că decizia de programare pentru aceste servicii trece obligatoriu printr-un pas de contact, spre deosebire de clasele de grup unde prețul este imediat vizibil.",
+    "changes": [
+     "offer",
+     "channel",
+     "segment"
+    ],
+    "implication": "Nu știm dacă absența prețurilor pentru aceste servicii este o alegere deliberată sau o lipsă. Dacă aceste servicii aduc un volum semnificativ de clienți, pasul suplimentar de contact poate reduce numărul de programări față de un flux complet online.",
+    "sourceRefs": [
+     "Servicii - Body Move Studio",
+     "Clase & Personal Training - Body Move St"
+    ],
+    "evidence": [
+     {
+      "ref": "Servicii - Body Move Studio",
+      "quote": "Kinetoterapie Servicii dedicate persoanelor care se confruntă cu dureri, limitări de mișcare, afecțiuni musculo-scheletale sau care au nevoie de recuperare și reabilitare fizică."
+     },
+     {
+      "ref": "Clase & Personal Training - Body Move St",
+      "quote": "Pilates Control, stabilitate și mobilitate prin exerciții care dezvoltă corpul într-un mod echilibrat și conștient. 1 ședință 90 lei Abon. 4 240 lei Abon. 8 350 lei Abon. 12 500 lei"
+     }
+    ],
+    "numbers": [],
+    "calculations": []
+   }
+  ]
+ },
+ "ahaAudit": [
+  {
+   "finding": "Personal Training costă 150 lei per ședință individual, față de 90 lei per ședință pentru clasele de grup. Abonamentul de 12 ședințe de Personal Training ajunge la 1000 lei, față de 500 lei pentru Pilates sau Functional Training cu același număr de ședințe.",
+   "matters": "Personal Training generează de două ori mai mult venit per ședință față de clasele de grup cu același număr de ședințe. Dacă capacitatea de trainer este limitată, fiecare oră alocată Personal Training valorează dublu față de o oră de clasă de grup.",
+   "changes": [
+    "bet",
+    "resources",
+    "offer"
+   ],
+   "verdict": "demoted",
+   "reason": "why it matters speculates or claims behaviour / economics",
+   "grounding": {
+    "numbers": [
+     {
+      "value": 150,
+      "entity": "Personal Training",
+      "qualifier": "1 ședință",
+      "ref": "Clase & Personal Training - Body Move St"
+     },
+     {
+      "value": 90,
+      "entity": "Pilates",
+      "qualifier": "1 ședință",
+      "ref": "Clase & Personal Training - Body Move St"
+     },
+     {
+      "value": 1000,
+      "entity": "Personal Training",
+      "qualifier": "Abon. 12",
+      "ref": "Clase & Personal Training - Body Move St"
+     },
+     {
+      "value": 500,
+      "entity": "Pilates",
+      "qualifier": "Abon. 12",
+      "ref": "Clase & Personal Training - Body Move St"
+     }
+    ],
+    "calculations": [
+     {
+      "operation": "divide",
+      "operands": [
+       150,
+       90
+      ],
+      "result": 1.67,
+      "ok": true
+     },
+     {
+      "operation": "divide",
+      "operands": [
+       1000,
+       500
+      ],
+      "result": 2,
+      "ok": true
+     }
+    ]
+   }
+  },
+  {
+   "finding": "Studioul operează cu patru familii de servicii distincte: clase și antrenament, kinetoterapie, programe prenatale/postpartum și masaj. Trei dintre cele patru familii nu au prețuri publicate pe site.",
+   "matters": "Un vizitator care vine pentru kinetoterapie, masaj sau recuperare postpartum nu poate evalua costul fără să contacteze studioul. Asta înseamnă că decizia de programare pentru aceste servicii trece obligatoriu printr-un pas de contact, spre deosebire de clasele de grup unde prețul este imediat vizibil.",
+   "changes": [
+    "offer",
+    "channel",
+    "segment"
+   ],
+   "verdict": "dropped",
+   "reason": "an absence, before the founder's goal is known",
+   "grounding": {
+    "numbers": [],
+    "calculations": []
+   }
+  }
+ ],
+ "governed": {
+  "offer": {
+   "summary": "Vinzi clase de grup, antrenament personal, kinetoterapie, programe prenatale/postpartum și masaj, în două locații din Cluj-Napoca.",
+   "explicit": [
+    "Pilates – 1 ședință 90 lei, Abon. 4 240 lei, Abon. 8 350 lei, Abon. 12 500 lei",
+    "Functional Training – 1 ședință 90 lei, Abon. 4 240 lei, Abon. 8 350 lei, Abon. 12 500 lei",
+    "Aerial Yoga – 1 ședință 120 lei, Abon. 4 360 lei, Abon. 8 600 lei",
+    "Balet Adulți – 1 ședință 90 lei, Abon. 4 200 lei, Abon. 8 300 lei",
+    "Balet & Dans Copii – 1 ședință 90 lei, Abon. 4 200 lei, Abon. 8 300 lei",
+    "Personal Training – 1 ședință 150 lei, Abon. 8 800 lei, Abon. 12 1000 lei",
+    "Group Training (max. 4 persoane) – 1 ședință 90 lei, Abon. 8 600 lei, Abon. 12 700 lei",
+    "Kinetoterapie",
+    "Gimnastică Prenatală & Recuperare Postpartum",
+    "Masaj"
+   ],
+   "unclear": [
+    "Prețurile pentru kinetoterapie, masaj și programele prenatale/postpartum nu sunt vizibile în paginile citite.",
+    "Nu este clar dacă kinetoterapia și masajul sunt disponibile în ambele locații sau doar într-una.",
+    "Nu se știe dacă abonamentele sunt legate de o locație specifică sau sunt valabile în ambele."
+   ],
+   "sourceRefs": [
+    "Homepage",
+    "Servicii - Body Move Studio",
+    "Clase & Personal Training - Body Move St"
+   ]
+  },
+  "positioning": {
+   "summary": "Site-ul prezintă studioul ca un spațiu integrat de sănătate prin mișcare, recuperare și prevenție, cu abordare personalizată.",
+   "evidenceBacked": [
+    "Mișcare cu sens. Grijă pentru oameni. Rezultate care contează.",
+    "Nu tratăm simptome. Ne concentrăm pe cauze, prevenție și rezultate pe termen lung.",
+    "Două locații moderne în Cluj-Napoca.",
+    "Echipă multidisciplinară – instructori, kinetoterapeuți și terapeuți care colaborează.",
+    "Servicii pentru toate etapele vieții – de la copii și adolescenți până la adulți, viitoare mame și persoane aflate în recuperare."
+   ],
+   "implied": [
+    "Paginile citite poziționează studioul mai aproape de un centru de sănătate și recuperare decât de o sală de fitness clasică.",
+    "Accentul pe personalizare și abordare multidisciplinară sugerează că prețul nu este argumentul principal de vânzare."
+   ],
+   "sourceRefs": [
+    "Homepage",
+    "Despre noi - Body Move Studio",
+    "Servicii - Body Move Studio"
+   ]
+  },
+  "audience": {
+   "summary": "Adulți activi sau în recuperare, mame gravide sau postpartum, copii, din Cluj-Napoca.",
+   "addressed": [
+    "persoane care vor să îmbunătățească mobilitatea, postura și condiția fizică",
+    "persoane cu dureri, limitări de mișcare sau afecțiuni care necesită recuperare",
+    "femei însărcinate care caută programe sigure de mișcare",
+    "femei în perioada postpartum care au nevoie de recuperare specializată",
+    "copii aflați la începutul dezvoltării",
+    "persoane care vor să reducă tensiunile acumulate"
+   ],
+   "appearsTargeted": [
+    "Adulți din Cluj-Napoca cu interes pentru sănătate preventivă și mișcare conștientă, nu performanță sportivă.",
+    "Mame (gravide și postpartum) ca segment distinct cu programe dedicate.",
+    "Copii prin Balet & Dans Copii, ceea ce implică și părinți ca decidenți de cumpărare."
+   ],
+   "unknown": [
+    "Care segment aduce cel mai mare volum de clienți activi azi.",
+    "Dacă există clienți corporativi sau trimiteri din partea medicilor/clinicilor.",
+    "Distribuția vârstelor și a genului în baza actuală de clienți."
+   ],
+   "sourceRefs": [
+    "Homepage",
+    "Despre noi - Body Move Studio",
+    "Servicii - Body Move Studio"
+   ]
+  },
+  "messaging": {
+   "recurringThemes": [
+    "Mișcare cu sens. Grijă pentru oameni. Rezultate care contează.",
+    "abordare personalizată, adaptată nevoilor fiecărui client",
+    "prevenție și rezultate pe termen lung, nu soluții rapide",
+    "echipă multidisciplinară care colaborează",
+    "comunitate bazată pe respect, profesionalism și grijă autentică"
+   ],
+   "sourceRefs": [
+    "Homepage",
+    "Despre noi - Body Move Studio",
+    "Servicii - Body Move Studio"
+   ]
+  },
+  "acquisition": {
+   "visiblePaths": [
+    "Programare online prin aplicația Evo Beauty",
+    "Contactarea recepției (menționată în FAQ)"
+   ],
+   "sourceRefs": [
+    "Homepage"
+   ]
+  },
+  "read": {
+   "model": [
+    {
+     "dimension": "offer",
+     "known": [
+      {
+       "text": "Șapte tipuri de clase și antrenamente cu prețuri publicate: Pilates, Functional Training, Aerial Yoga, Balet Adulți, Balet & Dans Copii, Personal Training, Group Training.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Clase & Personal Training - Body Move St"
+       ]
+      },
+      {
+       "text": "Kinetoterapie, Gimnastică Prenatală și Recuperare Postpartum, și Masaj sunt menționate ca servicii distincte, fără prețuri vizibile în paginile citite.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Servicii - Body Move Studio",
+        "Homepage"
+       ]
+      },
+      {
+       "text": "Studioul operează în două locații în Cluj-Napoca: Body Move Studio Bună Ziua și Body Move Studio Decebal.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Homepage"
+       ]
+      }
+     ],
+     "unknown": [
+      "Prețurile pentru kinetoterapie, masaj și programele prenatale/postpartum.",
+      "Care servicii sunt disponibile în fiecare locație.",
+      "Dacă abonamentele sunt valabile în ambele locații."
+     ]
+    },
+    {
+     "dimension": "customer",
+     "known": [
+      {
+       "text": "Site-ul adresează explicit adulți cu obiective de fitness și mobilitate, persoane în recuperare, femei gravide și postpartum, și copii.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Homepage",
+        "Despre noi - Body Move Studio"
+       ]
+      }
+     ],
+     "unknown": [
+      "Care segment reprezintă cel mai mare volum de clienți activi azi.",
+      "Câți clienți activi are studioul în total.",
+      "Rata de retenție și comportamentul de reînnoire a abonamentelor."
+     ]
+    },
+    {
+     "dimension": "acquisition",
+     "known": [],
+     "unknown": [
+      "De unde vin clienții noi: căutare organică, social media, recomandări, trimiteri medicale sau altceva.",
+      "Dacă există campanii plătite sau parteneriate active.",
+      "Ce canal aduce cel mai mare volum de clienți noi."
+     ]
+    },
+    {
+     "dimension": "conversion",
+     "known": [
+      {
+       "text": "Există un buton de programare online pe homepage și pe paginile de servicii, legat de aplicația Evo Beauty.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Homepage"
+       ]
+      },
+      {
+       "text": "Programarea se face prin aplicația Evo Beauty sau prin recepție, conform FAQ-ului de pe site.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Homepage"
+       ]
+      }
+     ],
+     "unknown": [
+      "Dacă există o consultație inițială gratuită sau o evaluare înainte de prima ședință.",
+      "Rata de conversie de la vizitator la programare."
+     ]
+    },
+    {
+     "dimension": "retention",
+     "known": [],
+     "unknown": [
+      "Rata de reînnoire a abonamentelor.",
+      "Dacă există abonamente lunare sau anuale cu plată recurentă.",
+      "Câți clienți combină mai multe servicii (de exemplu, clase plus kinetoterapie)."
+     ]
+    },
+    {
+     "dimension": "capacity",
+     "known": [
+      {
+       "text": "Două locații fizice în Cluj-Napoca: Bună Ziua și Decebal.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Homepage"
+       ]
+      },
+      {
+       "text": "Group Training este limitat la maximum 4 persoane per sesiune.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Clase & Personal Training - Body Move St"
+       ]
+      },
+      {
+       "text": "Echipa include cel puțin Raluca Bratan (antrenor fitness) și Giulia Pes (antrenor Balet Adulți), plus alți membri menționați parțial.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Despre noi - Body Move Studio"
+       ]
+      }
+     ],
+     "unknown": [
+      "Numărul total de membri ai echipei și specializările lor.",
+      "Capacitatea sălilor și numărul de locuri per clasă.",
+      "Orarul complet și gradul de ocupare actual."
+     ]
+    },
+    {
+     "dimension": "economics",
+     "known": [
+      {
+       "text": "Personal Training are cel mai mare preț per ședință individuală dintre serviciile cu prețuri publicate: 150 lei per ședință.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Clase & Personal Training - Body Move St"
+       ]
+      },
+      {
+       "text": "Aerial Yoga are cel mai mare preț per ședință dintre clasele de grup: 120 lei per ședință.",
+       "basis": "observed",
+       "sourceRefs": [
+        "Clase & Personal Training - Body Move St"
+       ]
+      }
+     ],
+     "unknown": [
+      "Marja de profit per serviciu sau per locație.",
+      "Care serviciu aduce cel mai mare venit total.",
+      "Costurile fixe și variabile ale studioului.",
+      "Prețurile pentru kinetoterapie, masaj și programele prenatale/postpartum.",
+      "Valoarea medie per client pe durata relației."
+     ]
+    },
+    {
+     "dimension": "performance",
+     "known": [],
+     "unknown": [
+      "Care servicii sunt cele mai solicitate și care au locuri libere.",
+      "Evoluția numărului de clienți activi în timp.",
+      "Dacă una dintre locații performează mai bine decât cealaltă.",
+      "Ce a funcționat sau nu a funcționat din ce s-a încercat până acum."
+     ]
+    },
+    {
+     "dimension": "intent",
+     "known": [],
+     "unknown": [
+      "Ce vrei să crești în următoarele 6-12 luni: volum de clienți, un anumit serviciu, o locație nouă sau altceva.",
+      "Dacă există constrângeri de capacitate, echipă sau spațiu care limitează creșterea.",
+      "Ce ai încercat deja pentru a atrage clienți noi."
+     ]
+    }
+   ],
+   "notConcluding": [
+    {
+     "claim": "Care serviciu este motorul principal al veniturilor.",
+     "why": "Site-ul listează opt tipuri de servicii cu prețuri publicate și alte trei fără prețuri, fără nicio informație despre volum, ocupare sau venit per serviciu."
+    },
+    {
+     "claim": "De unde vin clienții noi.",
+     "why": "Nicio sursă citită nu menționează canalele de achiziție: nu există date despre trafic, campanii, recomandări sau parteneriate."
+    },
+    {
+     "claim": "Dacă studioul este în creștere, pe platou sau în scădere.",
+     "why": "Nu există date despre evoluția numărului de clienți, ocuparea claselor sau veniturile în timp."
+    },
+    {
+     "claim": "FAQ-ul menționează că ședințele neanulate cu minimum 8 ore înainte sunt considerate efectuate și se scad din abonament.",
+     "why": "",
+     "reason": "unsupported"
+    },
+    {
+     "claim": "Structura de abonamente (4, 8, 12 ședințe) este vizibilă pentru clasele de grup și antrenamentul personal, ceea ce creează un mecanism de retenție pe termen scurt.",
+     "why": "",
+     "reason": "unsupported"
+    }
+   ],
+   "questions": [
+    {
+     "question": "Ce vrei să crești în următoarele 6-12 luni: mai mulți clienți pentru un anumit serviciu, o locație mai ocupată, un segment nou sau altceva?",
+     "dimension": "intent",
+     "changes": [
+      "segment",
+      "bet",
+      "channel",
+      "offer",
+      "sequencing"
+     ],
+     "why": "Fără să știm ce vrei să crești, nu putem spune care dintre tensiunile existente contează cu adevărat.",
+     "fills": [
+      "intent"
+     ]
+    },
+    {
+     "question": "Care sunt primele trei servicii după numărul de clienți activi azi și care sunt primele trei după venit lunar?",
+     "dimension": "performance",
+     "changes": [
+      "bet",
+      "offer",
+      "resources",
+      "sequencing"
+     ],
+     "why": "Dacă serviciul cu cel mai mare volum nu este același cu cel mai profitabil, prioritățile de creștere și alocarea echipei se schimbă complet.",
+     "parts": [
+      "top 3 servicii după număr de clienți activi",
+      "top 3 servicii după venit lunar"
+     ],
+     "fills": [
+      "performance",
+      "economics"
+     ]
+    },
+    {
+     "question": "De unde vin clienții noi azi: recomandări de la alți clienți, căutare pe Google, social media, trimiteri de la medici sau altceva?",
+     "dimension": "acquisition",
+     "changes": [
+      "channel",
+      "resources",
+      "bet"
+     ],
+     "why": "Dacă majoritatea clienților vin din recomandări, investiția în publicitate plătită are o logică diferită față de situația în care vin din căutare organică.",
+     "fills": [
+      "acquisition"
+     ]
+    },
+    {
+     "question": "Câți clienți activi ai în total azi și câți dintre ei reînnoiesc abonamentul după primul ciclu?",
+     "dimension": "retention",
+     "changes": [
+      "retention",
+      "offer",
+      "resources"
+     ],
+     "why": "O rată mică de reînnoire schimbă complet prioritatea: mai întâi reții ce ai, abia apoi aduci clienți noi.",
+     "parts": [
+      "număr total de clienți activi",
+      "rata de reînnoire după primul abonament"
+     ],
+     "fills": [
+      "retention",
+      "economics"
+     ]
+    },
+    {
+     "question": "Serviciile de kinetoterapie, masaj și programele prenatale/postpartum sunt disponibile în ambele locații sau doar într-una?",
+     "dimension": "capacity",
+     "changes": [
+      "segment",
+      "offer",
+      "capacity"
+     ],
+     "why": "Dacă aceste servicii sunt concentrate într-o singură locație, segmentele pe care le deservesc sunt limitate geografic, ceea ce schimbă cum comunici și unde investești.",
+     "fills": [
+      "capacity",
+      "offer"
+     ]
+    }
+   ],
+   "diagnosis": {
+    "state": "not_ready",
+    "statement": "",
+    "checks": {
+     "exists": {
+      "pass": false,
+      "note": "Nu există date despre performanță, achiziție sau intenția fondatorului care să permită identificarea unui blocaj real."
+     },
+     "causal": {
+      "pass": false,
+      "note": "Fără intenția declarată a fondatorului, nu putem lega nicio condiție observată de un obiectiv specific."
+     },
+     "blocks": {
+      "pass": false,
+      "note": "Nu știm ce anume blochează creșterea pentru că nu știm ce vrea să crească."
+     },
+     "alternativesWeaker": {
+      "pass": false,
+      "note": "Nu există suficiente date pentru a compara explicații alternative."
+     },
+     "evidenceSufficient": {
+      "pass": false,
+      "note": "Sursele disponibile sunt exclusiv paginile site-ului, fără date de performanță, achiziție sau intenție."
+     }
+    },
+    "sourceRefs": []
+   },
+   "strategyReadiness": {
+    "state": "not_ready",
+    "missing": [
+     "intent",
+     "performance",
+     "acquisition"
+    ]
+   },
+   "untrusted": [],
+   "websiteNotes": [
+    "Contorul 'Ani de experiență 0 +' apare pe homepage și pe pagina Despre noi și pare un widget nefinalizat sau cu o valoare necompletată.",
+    "Pagina de servicii listează Kinetoterapie, Gimnastică Prenatală și Masaj fără prețuri vizibile, spre deosebire de pagina de clase unde prețurile sunt detaliate.",
+    "Lista echipei din pagina Despre noi este tăiată după 'Minodora', ceea ce sugerează că nu am văzut toți membrii echipei."
+   ],
+   "observations": [
+    {
+     "text": "Personal Training costă 150 lei per ședință individual, față de 90 lei per ședință pentru clasele de grup. Abonamentul de 12 ședințe de Personal Training ajunge la 1000 lei, față de 500 lei pentru Pilates sau Functional Training cu același număr de ședințe.",
+     "sourceRefs": [
+      "Clase & Personal Training - Body Move St"
+     ],
+     "reason": "why it matters speculates or claims behaviour / economics"
+    }
+   ]
+  },
+  "contradictions": [
+   {
+    "kind": "audience_mismatch",
+    "statementA": "Servicii pentru toate etapele vieții – de la copii și adolescenți până la adulți, viitoare mame și persoane aflate în recuperare.",
+    "statementB": "Clasele & Personal Training sunt prezentate ca programe pentru persoane care vor să îmbunătățească condiția fizică, postura și mobilitatea.",
+    "tension": "Paginile citite prezintă studioul ca un spațiu pentru toate etapele vieții, de la copii la persoane în recuperare. Pagina de clase vorbește în principal cu adulți activi care vor să se miște mai bine, nu cu părinți care caută activități pentru copii sau cu persoane care au nevoie de recuperare.",
+    "soWhat": "Segmentul copii și segmentul recuperare ajung pe pagini care nu le vorbesc direct, ceea ce face mai greu de înțeles dacă oferta li se potrivește.",
+    "basis": "observed",
+    "absence": false,
+    "sourceRefs": [
+     "Despre noi - Body Move Studio",
+     "Clase & Personal Training - Body Move St"
+    ],
+    "evidence": [
+     {
+      "ref": "Clase & Personal Training - Body Move St",
+      "page": "Clase & Personal Training",
+      "quote": "Indiferent dacă îți dorești să îți îmbunătățești condiția fizică, să îți crești mobilitatea, să îți corectezi postura sau să îți construiești o rutină sănătoasă de mișcare, la Body Move Studio găsești programe adaptate nivelului și obiectivelor tale."
+     }
+    ]
+   }
+  ],
+  "unknowns": [
+   "Care sunt primele trei servicii după numărul de clienți activi azi și care sunt primele trei după venit lunar?",
+   "De unde vin clienții noi azi: recomandări de la alți clienți, căutare pe Google, social media, trimiteri de la medici sau altceva?",
+   "Câți clienți activi ai în total azi și câți dintre ei reînnoiesc abonamentul după primul ciclu?",
+   "Serviciile de kinetoterapie, masaj și programele prenatale/postpartum sunt disponibile în ambele locații sau doar într-una?"
+  ],
+  "stage": {
+   "stage": "undetermined",
+   "evidence": [
+    "Studioul operează în două locații fizice distincte în Cluj-Napoca, ceea ce indică o prezență stabilă, nu o fază de validare.",
+    "Există o structură de prețuri și abonamente publicată pentru opt tipuri de servicii, semn că oferta este definită și vândută.",
+    "Nu există date despre evoluția numărului de clienți, ocuparea claselor sau venituri care să permită distincția între creștere și platou."
+   ],
+   "sourceRefs": [
+    "Homepage",
+    "Clase & Personal Training - Body Move St"
+   ],
+   "secondary": null
+  },
+  "constraint": {
+   "decided": false,
+   "statement": "",
+   "why": "",
+   "sourceRefs": []
+  }
+ },
+ "aha": {
+  "status": "insufficient",
+  "findings": []
+ },
+ "card": {
+  "does": "Vinzi clase de grup, antrenament personal, kinetoterapie, programe prenatale/postpartum și masaj, în două locații din Cluj-Napoca.",
+  "serves": "Adulți activi sau în recuperare, mame gravide sau postpartum, copii, din Cluj-Napoca",
+  "standsOut": "Site-ul prezintă studioul ca un spațiu integrat de sănătate prin mișcare, recuperare și prevenție, cu abordare personalizată.",
+  "tensions": [
+   {
+    "tension": "Paginile citite prezintă studioul ca un spațiu pentru toate etapele vieții, de la copii la persoane în recuperare. Pagina de clase vorbește în principal cu adulți activi care vor să se miște mai bine, nu cu părinți care caută activități pentru copii sau cu persoane care au nevoie de recuperare.",
+    "grounding": "Segmentul copii și segmentul recuperare ajung pe pagini care nu le vorbesc direct, ceea ce face mai greu de înțeles dacă oferta li se potrivește.",
+    "sourceRefs": [
+     "Despre noi - Body Move Studio",
+     "Clase & Personal Training - Body Move St"
+    ],
+    "evidence": [
+     {
+      "page": "Clase & Personal Training",
+      "quote": "Indiferent dacă îți dorești să îți îmbunătățești condiția fizică, să îți crești mobilitatea, să îți corectezi postura sau să îți construiești o rutină sănătoasă de mișcare..."
+     }
+    ]
+   }
+  ],
+  "confident": [
+   "Pilates, 1 ședință 90 lei, Abon. 4 240 lei, Abon. 8 350 lei, Abon. 12 500 lei",
+   "Functional Training, 1 ședință 90 lei, Abon. 4 240 lei, Abon. 8 350 lei, Abon. 12 500 lei",
+   "Aerial Yoga, 1 ședință 120 lei, Abon. 4 360 lei, Abon. 8 600 lei",
+   "Balet Adulți, 1 ședință 90 lei, Abon. 4 200 lei, Abon. 8 300 lei",
+   "Balet & Dans Copii, 1 ședință 90 lei, Abon. 4 200 lei, Abon. 8 300 lei"
+  ],
+  "inferring": [
+   "Paginile citite poziționează studioul mai aproape de un centru de sănătate și recuperare decât de o sală de fitness clasică.",
+   "Accentul pe personalizare și abordare multidisciplinară sugerează că prețul nu este argumentul principal de vânzare.",
+   "Adulți din Cluj-Napoca cu interes pentru sănătate preventivă și mișcare conștientă, nu performanță sportivă.",
+   "Mame (gravide și postpartum) ca segment distinct cu programe dedicate."
+  ],
+  "unanswered": [
+   "Care sunt primele trei servicii după numărul de clienți activi azi și care sunt primele trei după venit lunar?",
+   "De unde vin clienții noi azi: recomandări de la alți clienți, căutare pe Google, social media, trimiteri de la medici sau altceva?",
+   "Câți clienți activi ai în total azi și câți dintre ei reînnoiesc abonamentul după primul ciclu?"
+  ],
+  "constraint": {
+   "decided": false
+  },
+  "diagnosis": null,
+  "stage": {
+   "stage": "undetermined"
+  },
+  "read": {
+   "model": [
+    {
+     "dimension": "offer",
+     "lines": [
+      {
+       "text": "Șapte tipuri de clase și antrenamente cu prețuri publicate: Pilates, Functional Training, Aerial Yoga, Balet Adulți, Balet & Dans Copii, Personal Training, Group Training.",
+       "basis": "observed"
+      },
+      {
+       "text": "Kinetoterapie, Gimnastică Prenatală și Recuperare Postpartum, și Masaj sunt menționate ca servicii distincte, fără prețuri vizibile în paginile citite.",
+       "basis": "observed"
+      }
+     ]
+    },
+    {
+     "dimension": "customer",
+     "lines": [
+      {
+       "text": "Site-ul adresează explicit adulți cu obiective de fitness și mobilitate, persoane în recuperare, femei gravide și postpartum, și copii.",
+       "basis": "observed"
+      }
+     ]
+    },
+    {
+     "dimension": "conversion",
+     "lines": [
+      {
+       "text": "Există un buton de programare online pe homepage și pe paginile de servicii, legat de aplicația Evo Beauty.",
+       "basis": "observed"
+      },
+      {
+       "text": "Programarea se face prin aplicația Evo Beauty sau prin recepție, conform FAQ-ului de pe site.",
+       "basis": "observed"
+      }
+     ]
+    },
+    {
+     "dimension": "capacity",
+     "lines": [
+      {
+       "text": "Două locații fizice în Cluj-Napoca: Bună Ziua și Decebal.",
+       "basis": "observed"
+      },
+      {
+       "text": "Group Training este limitat la maximum 4 persoane per sesiune.",
+       "basis": "observed"
+      }
+     ]
+    },
+    {
+     "dimension": "economics",
+     "lines": [
+      {
+       "text": "Personal Training are cel mai mare preț per ședință individuală dintre serviciile cu prețuri publicate: 150 lei per ședință.",
+       "basis": "observed"
+      },
+      {
+       "text": "Aerial Yoga are cel mai mare preț per ședință dintre clasele de grup: 120 lei per ședință.",
+       "basis": "observed"
+      }
+     ]
+    }
+   ],
+   "unknownDimensions": [
+    "acquisition",
+    "retention",
+    "performance",
+    "intent"
+   ],
+   "notConcluding": [
+    {
+     "claim": "De unde vin clienții noi.",
+     "why": "Nicio sursă citită nu menționează canalele de achiziție: nu există date despre trafic, campanii, recomandări sau parteneriate."
+    },
+    {
+     "claim": "Dacă studioul este în creștere, pe platou sau în scădere.",
+     "why": "Nu există date despre evoluția numărului de clienți, ocuparea claselor sau veniturile în timp."
+    }
+   ],
+   "untrusted": [],
+   "asks": [
+    {
+     "question": "Care sunt primele trei servicii după numărul de clienți activi azi și care sunt primele trei după venit lunar?",
+     "why": "Dacă serviciul cu cel mai mare volum nu este același cu cel mai profitabil, prioritățile de creștere și alocarea echipei se schimbă complet.",
+     "parts": [
+      "top 3 servicii după număr de clienți activi",
+      "top 3 servicii după venit lunar"
+     ]
+    },
+    {
+     "question": "De unde vin clienții noi azi: recomandări de la alți clienți, căutare pe Google, social media, trimiteri de la medici sau altceva?",
+     "why": "Dacă majoritatea clienților vin din recomandări, investiția în publicitate plătită are o logică diferită față de situația în care vin din căutare organică."
+    },
+    {
+     "question": "Câți clienți activi ai în total azi și câți dintre ei reînnoiesc abonamentul după primul ciclu?",
+     "why": "O rată mică de reînnoire schimbă complet prioritatea: mai întâi reții ce ai, abia apoi aduci clienți noi.",
+     "parts": [
+      "număr total de clienți activi",
+      "rata de reînnoire după primul abonament"
+     ]
+    }
+   ]
+  }
+ }
+}

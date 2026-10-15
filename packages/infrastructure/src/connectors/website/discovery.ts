@@ -1,8 +1,9 @@
 /**
- * Key-page discovery, in priority order (M2.1 §6):
- *   1. sitemap.xml  2. primary nav links (same-origin)  3. common-path fallback
+ * Key-page discovery, in trust order (2026-10-15; was sitemap-first, M2.1 §6):
+ *   1. links on the entry page (same-origin)  2. sitemap.xml entries  3. common-path fallback
  * Bounded to a small budget; same-origin only (never third-party).
  */
+import { isTechnicalUrl } from '@bb/application';
 import { isSameOrigin } from './url';
 
 export const COMMON_PATHS = ['/about', '/services', '/products', '/pricing', '/blog', '/contact'];
@@ -38,30 +39,42 @@ export function commonPathUrls(origin: string): string[] {
   return COMMON_PATHS.map((p) => `${origin}${p}`);
 }
 
+export type PageDiscovery = 'entry' | 'link' | 'sitemap' | 'common';
+export interface DiscoveredPage { url: string; via: PageDiscovery }
+
 /**
- * Compose the bounded key-page set. Entry first, then sitemap, then nav, then common
- * paths; deduped, same-origin, capped to budget.
+ * Compose the bounded key-page set, in TRUST order (2026-10-15): the entry page, then the pages it links to (what the
+ * business actually shows its visitors), then sitemap-only pages (possibly stale or orphaned), then common paths.
+ * Sitemap XML documents (a sitemap index lists sub-sitemaps) and technical pages (maintenance, cart, checkout, account)
+ * are never read as business pages. Deduped, same-origin, capped to budget. Each page says how it was found.
  */
+export function discoverKeyPagesWithSource(
+  args: { entryUrl: string; origin: string; entryHtml: string; sitemapXml?: string | null },
+  budget: number = DEFAULT_PAGE_BUDGET,
+): DiscoveredPage[] {
+  const ordered: DiscoveredPage[] = [{ url: args.entryUrl, via: 'entry' }];
+  const push = (u: string, via: PageDiscovery) => {
+    const clean = u.split('#')[0];
+    if (clean && isSameOrigin(clean, args.entryUrl) && !isTechnicalUrl(clean)) ordered.push({ url: clean, via });
+  };
+  extractLinks(args.entryUrl, args.entryHtml).forEach((u) => push(u, 'link'));
+  if (args.sitemapXml) parseSitemapUrls(args.sitemapXml).forEach((u) => push(u, 'sitemap'));
+  commonPathUrls(args.origin).forEach((u) => push(u, 'common'));
+
+  const deduped: DiscoveredPage[] = [];
+  const seen = new Set<string>();
+  for (const p of ordered) {
+    const key = p.url.replace(/\/$/, '');
+    if (!seen.has(key)) { seen.add(key); deduped.push(p); }
+    if (deduped.length >= budget) break;
+  }
+  return deduped;
+}
+
+/** The URLs only (callers that do not need provenance). */
 export function discoverKeyPages(
   args: { entryUrl: string; origin: string; entryHtml: string; sitemapXml?: string | null },
   budget: number = DEFAULT_PAGE_BUDGET,
 ): string[] {
-  const ordered: string[] = [args.entryUrl];
-  const push = (u: string) => {
-    const clean = u.split('#')[0];
-    if (clean && isSameOrigin(clean, args.entryUrl)) ordered.push(clean);
-  };
-
-  if (args.sitemapXml) parseSitemapUrls(args.sitemapXml).forEach(push);
-  extractLinks(args.entryUrl, args.entryHtml).forEach(push);
-  commonPathUrls(args.origin).forEach(push);
-
-  const deduped: string[] = [];
-  const seen = new Set<string>();
-  for (const u of ordered) {
-    const key = u.replace(/\/$/, '');
-    if (!seen.has(key)) { seen.add(key); deduped.push(u); }
-    if (deduped.length >= budget) break;
-  }
-  return deduped;
+  return discoverKeyPagesWithSource(args, budget).map((p) => p.url);
 }

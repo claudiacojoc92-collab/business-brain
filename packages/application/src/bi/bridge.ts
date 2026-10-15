@@ -1,5 +1,5 @@
 import type { EvidenceFragment, WebObservation } from '@bb/domain';
-import type { PageObservation } from './contracts';
+import type { PageDiscovery, PageObservation } from './contracts';
 
 /** Stable, sanitized URI for one piece of founder-supplied material (never a fetched page). */
 export const suppliedUri = (n: number): string => `founder://supplied/${n}`;
@@ -84,6 +84,8 @@ interface PageItem {
   text: string;
   pageType: string;
   lang: string | null;
+  discoveredVia?: PageDiscovery;
+  capturedAt?: string;
 }
 
 /** Shared: dedupe by url, drop empty text, assign unique founder-readable refs. */
@@ -94,7 +96,8 @@ function toPageObservations(items: PageItem[]): PageObservation[] {
     if (!it.url || seen.has(it.url)) continue;
     if (it.text.trim().length === 0) continue;
     seen.add(it.url);
-    obs.push({ ref: labelFor(it.pageType, it.url, it.title), url: it.url, pageType: it.pageType, title: it.title, text: it.text, lang: it.lang, provenance: 'observed' });
+    obs.push({ ref: labelFor(it.pageType, it.url, it.title), url: it.url, pageType: it.pageType, title: it.title, text: it.text, lang: it.lang, provenance: 'observed',
+      ...(it.discoveredVia ? { discoveredVia: it.discoveredVia } : {}), ...(it.capturedAt ? { capturedAt: it.capturedAt } : {}) });
   }
   const counts = new Map<string, number>();
   return obs.map((o) => {
@@ -135,10 +138,17 @@ export function bridgeFragmentsToObservations(fragments: EvidenceFragment[], web
       text,
       pageType: typeof payload['pageType'] === 'string' ? (payload['pageType'] as string) : 'page',
       lang: typeof payload['lang'] === 'string' ? (payload['lang'] as string) : null,
+      // How the crawl found the page (entry / a link on it / sitemap only / a guessed path): a sitemap-only page may be
+      // stale or orphaned, so synthesis treats it as unverified. Absent on fragments read before 2026-10-15.
+      ...(isDiscovery(payload['discoveredVia']) ? { discoveredVia: payload['discoveredVia'] } : {}),
+      ...(isValidDate(f.capturedAt) ? { capturedAt: new Date(f.capturedAt).toISOString() } : {}),
     });
   }
   return toPageObservations(items);
 }
+
+const isValidDate = (v: unknown): boolean => v != null && !Number.isNaN(new Date(v as string).getTime());
+const isDiscovery = (v: unknown): v is PageDiscovery => v === 'entry' || v === 'link' || v === 'sitemap' || v === 'common';
 
 /**
  * The bridge, step 2: re-project canonical ledger web observations back into page observations for

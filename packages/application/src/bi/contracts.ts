@@ -1,4 +1,5 @@
 import { isHousekeeping, restatesNotShown, sameInsight } from './insight-text';
+import type { Calculation, NumberClaim } from './numeric-grounding';
 
 /**
  * Slice 1 "BB learned my business" — contracts.
@@ -32,7 +33,15 @@ export interface PageObservation {
    * counts as non-website and an observed one as a website page.
    */
   readonly sourceKind?: ObservationSourceKind;
+  /**
+   * How a website page was found (2026-10-15): the entry page itself, a link on it, ONLY a sitemap entry (nothing on
+   * the homepage links to it: possibly stale or orphaned), or a guessed common path. Absent on older fragments.
+   */
+  readonly discoveredVia?: PageDiscovery;
+  /** When the page was read (ISO). */
+  readonly capturedAt?: string;
 }
+export type PageDiscovery = 'entry' | 'link' | 'sitemap' | 'common';
 export type ObservationSourceKind = 'website' | 'supplied' | 'instagram';
 export type ContradictionKind = 'capability_gap' | 'customer_proof' | 'channel_mismatch' | 'commercial_path' | 'priority_vs_effort' | 'story_vs_reality' | 'audience_mismatch' | 'other';
 
@@ -61,7 +70,12 @@ export interface GovernedUnderstanding {
    * projection uses it deterministically: a `capability_gap` (sells X, never shows X) is always shown first.
    * Optional: snapshots written before it existed have none.
    */
-  readonly contradictions: { statementA: string; statementB: string; tension: string; sourceRefs: string[]; kind?: ContradictionKind; soWhat?: string; evidence?: ClaimEvidence[] }[];
+  readonly contradictions: {
+    statementA: string; statementB: string; tension: string; sourceRefs: string[]; kind?: ContradictionKind; soWhat?: string; evidence?: ClaimEvidence[];
+    /** Epistemic basis (2026-10-15). `absence` = it is about something NOT visible in the sources read: an observation
+     *  about the sources ("I could not see X"), never a fact about the business ("X does not exist"). */
+    basis?: EvidenceBasis; absence?: boolean;
+  }[];
   readonly unknowns: string[];
   /**
    * The model's answer to the CAPABILITY CHECK: what the business sells and whether its own sources ever show it.
@@ -87,8 +101,69 @@ export interface GovernedUnderstanding {
     /** One named part at a different stage than the core (e.g. a new channel still validating). Optional. */
     secondary?: { stage: BusinessStage; area: string; evidence: string[] } | null;
   };
+  /** v2 (2026-10-15): the business-model read, epistemics and earned diagnosis. Absent on older snapshots. */
+  readonly read?: UnderstandingRead;
 }
 export type BusinessStage = 'validating' | 'growth' | 'plateau' | 'undetermined';
+
+// ── Understanding read v2 (2026-10-15): a business-model representation BEFORE any diagnosis ──
+
+/**
+ * Where an assertion comes from (the provenance lanes of ConfidenceKind, plus contradiction): observed = in what BB read
+ * (the site, Instagram); declared = the founder said or supplied it; inferred = BB's reading of a pattern;
+ * contradicted = the sources disagree. Unknowns are kept apart, as unknowns.
+ */
+export type EvidenceBasis = 'observed' | 'declared' | 'inferred' | 'contradicted';
+/** The business model BB reasons over, dimension by dimension. Not every dimension has to be known. */
+export type ModelDimension = 'offer' | 'customer' | 'acquisition' | 'conversion' | 'retention' | 'capacity' | 'economics' | 'performance' | 'intent';
+export const MODEL_DIMENSIONS: readonly ModelDimension[] = ['offer', 'customer', 'acquisition', 'conversion', 'retention', 'capacity', 'economics', 'performance', 'intent'];
+/** The strategic decisions an answer can change: what makes a question worth one of the few slots. */
+export type StrategicDecision = 'segment' | 'bet' | 'channel' | 'offer' | 'capacity' | 'retention' | 'resources' | 'sequencing';
+export const STRATEGIC_DECISIONS: readonly StrategicDecision[] = ['segment', 'bet', 'channel', 'offer', 'capacity', 'retention', 'resources', 'sequencing'];
+export interface ModelClaim { readonly text: string; readonly basis: EvidenceBasis; readonly sourceRefs: string[]; readonly numbers?: NumberClaim[]; readonly calculations?: Calculation[] }
+/** The five things a constraint must establish before BB may call it one. */
+export type DiagnosisCheck = 'exists' | 'causal' | 'blocks' | 'alternativesWeaker' | 'evidenceSufficient';
+export const DIAGNOSIS_CHECKS: readonly DiagnosisCheck[] = ['exists', 'causal', 'blocks', 'alternativesWeaker', 'evidenceSufficient'];
+
+/** Why code did not trust a finding (rendered in the business's content language; `why` then stays empty). */
+export type UntrustedReason = 'sitemap' | 'technical' | 'sitemap_only' | 'unread';
+/** Why code lowered a proposed constraint to a hypothesis. */
+export type NotConcludingReason = 'no_goal' | 'not_established' | 'unsupported';
+
+export interface UnderstandingRead {
+  /** What BB knows and does not know, per dimension. */
+  readonly model: { readonly dimension: ModelDimension; readonly known: ModelClaim[]; readonly unknown: string[] }[];
+  /** Conclusions BB deliberately did NOT draw, and why (e.g. "which segment drives revenue: the site cannot say"). */
+  readonly notConcluding: { readonly claim: string; readonly why: string; readonly reason?: NotConcludingReason }[];
+  /** Findings BB saw but does not trust as business facts (sitemap-only pages, maintenance/test content, stale or
+   *  contradictory material), with why. Never used as strategic evidence. */
+  readonly untrusted: { readonly finding: string; readonly refs: string[]; readonly why: string; readonly reason?: UntrustedReason }[];
+  /** Website hygiene (counters, indexing, broken pages): kept, but never a tension or a question unless material. */
+  readonly websiteNotes: string[];
+  /** Candidate questions, each with the strategic decisions its answer could change. Ranked in code. */
+  /** `parts`: answers that must stay separate inside one question (e.g. clients vs revenue, which can diverge).
+   *  `fills`: the business-model dimensions the answer would fill (how strategy-critical unknowns get covered). */
+  readonly questions: { readonly question: string; readonly dimension: ModelDimension; readonly changes: StrategicDecision[]; readonly why: string; readonly parts?: string[]; readonly fills?: ModelDimension[] }[];
+  /** Facts the model offered as insights that change no decision yet (demoted from Aha): kept, never called an insight. */
+  readonly observations?: { readonly text: string; readonly sourceRefs: string[]; readonly reason?: string }[];
+  /**
+   * Is there enough to make the NEXT strategic decision responsibly? `missing` = strategy-critical dimensions still
+   * unknown (they reserve the first question slots). Not every dimension has to be known. Complements the diagnosis.
+   */
+  readonly strategyReadiness?: { readonly state: 'not_ready' | 'ready_enough_for_strategy'; readonly missing: ModelDimension[] };
+  /**
+   * The diagnosis, EARNED: `constraint` only when every check passes (in code, not on the model's word); else a
+   * `hypothesis` worth testing, or `not_ready`. `demotedBecause` says why code lowered what the model proposed.
+   */
+  readonly diagnosis: {
+    readonly state: 'not_ready' | 'hypothesis' | 'constraint';
+    readonly statement: string;
+    readonly checks: Partial<Record<DiagnosisCheck, { readonly pass: boolean; readonly note: string }>>;
+    readonly sourceRefs: string[];
+    readonly demotedBecause?: string;
+    readonly demotion?: NotConcludingReason;
+  };
+}
 export type ConstraintLevel = 'users' | 'target' | 'offer' | 'time';
 
 // Narrow on purpose: "what is your priority: users, validation or a paid launch?" is a goal question and stays.
@@ -110,7 +185,10 @@ export function agendaUnknowns(u: GovernedUnderstanding | null): string[] {
     || (u.capabilityCheck?.shown === false && restatesNotShown(q));
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const x of [...(u.unknowns ?? []), ...(u.offer?.unclear ?? []), ...(u.audience?.unknown ?? [])]) {
+  // A v2 read: `unknowns` IS the ranked question list (governance ranks by the decisions an answer changes), so the
+  // offer/audience "unclear" lists (often website details) never take a question slot.
+  const pool = u.read ? (u.unknowns ?? []) : [...(u.unknowns ?? []), ...(u.offer?.unclear ?? []), ...(u.audience?.unknown ?? [])];
+  for (const x of pool) {
     const v = (x ?? '').trim();
     const k = v.toLowerCase();
     if (!v || seen.has(k) || isHousekeeping(v) || reopens(v) || shown.some((t) => sameInsight(v, t, 0.4))) continue;
@@ -124,6 +202,15 @@ export interface AhaFinding {
   readonly finding: string;
   readonly implication?: string;
   readonly sourceRefs: string[]; // page refs (validated → resolvable)
+  /** 2026-10-15 — a fact is not an insight: why it matters, and which strategic decisions it could change. A finding
+   *  without both is an observation, not an Aha (governance demotes it). */
+  readonly matters?: string;
+  readonly changes?: StrategicDecision[];
+  /** Verbatim source sentences, every source number tied to its entity/qualifier, and every derived number's calculation
+   *  (numeric grounding: a number not grounded this way is never shown). */
+  readonly evidence?: { readonly ref: string; readonly quote: string }[];
+  readonly numbers?: NumberClaim[];
+  readonly calculations?: Calculation[];
 }
 
 export interface AhaResult {

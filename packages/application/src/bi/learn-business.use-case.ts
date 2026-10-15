@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { anchorUnderstandingEvidence } from './evidence-anchor';
+import { businessEntities, governFindingsDetailed, governUnderstanding } from './understanding-governance';
 import { generateId } from '@bb/shared';
 import { detectMaterialLanguage, detectTextLanguage, toLocale, type IContentLanguageStore } from '../business/content-language';
 import {
@@ -32,6 +33,7 @@ import {
   type IBusinessWebsiteRepository,
   type DiscoveredProfile,
   type PageObservation,
+  type GovernedUnderstanding,
   type ObservationProvenance,
   type WebsiteIngestionResult,
   type LearnFromMaterialParams,
@@ -338,6 +340,8 @@ export class LearnBusinessService {
     const modelId = out.modelId ?? 'anthropic';
     const contentHash = sha256(JSON.stringify(observations.map((o) => ({ ref: o.ref, url: o.url, text: o.text }))));
 
+    // Aha governance first: what it demotes (true facts that change no decision) is kept as observations in the read.
+    const ahaGov = governFindingsDetailed(out.aha, observations, { requireDecision: Boolean(out.understanding?.read), entities: businessEntities(out.understanding) });
     const snap = await this.deps.understanding.save({
       id: generateId(),
       businessId,
@@ -345,12 +349,13 @@ export class LearnBusinessService {
       contentHash,
       sourceRefCount: observations.length,
       sourceLanguage: out.sourceLanguage ?? observations[0]?.lang ?? null,
-      // BUS-73: every claim keeps only the source sentences that anchor verbatim in what was read.
-      understanding: anchorUnderstandingEvidence(out.understanding, observations),
+      // BUS-73: every claim keeps only the source sentences that anchor verbatim in what was read. Then governance
+      // (2026-10-15): untrusted sources, website hygiene, absence-as-fact and an unearned constraint are lowered in code.
+      understanding: withObservations(governUnderstanding(anchorUnderstandingEvidence(out.understanding, observations), observations), ahaGov.demoted),
       modelId,
     });
 
-    const validated = validateAha(out.aha, observations);
+    const validated = validateAha(ahaGov.aha, observations);
     const ahaRec = await this.deps.aha.save({
       id: generateId(),
       businessId,
@@ -401,4 +406,10 @@ function uniqueRefs(obs: PageObservation[]): PageObservation[] {
     counts.set(o.ref, n);
     return n === 1 ? o : { ...o, ref: `${o.ref} (${n})` };
   });
+}
+
+/** Demoted Aha (facts, not insights) are kept as observations in a v2 read, never shown as insights. */
+function withObservations(u: GovernedUnderstanding, demoted: { text: string; sourceRefs: string[]; reason: string }[]): GovernedUnderstanding {
+  if (!u.read || !demoted.length) return u;
+  return { ...u, read: { ...u.read, observations: [...(u.read.observations ?? []), ...demoted] } };
 }

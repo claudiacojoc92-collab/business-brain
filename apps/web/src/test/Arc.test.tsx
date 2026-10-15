@@ -196,6 +196,34 @@ describe('ArcSurface — one surface, eight moments', () => {
     expect(order & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it('2026-10-15 v2 understanding: four parts; a hypothesis is never labelled the constraint; absence stays an absence; questions say why', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: {
+      does: 'You sell classes and physio in two studios.', serves: 'adults in recovery', standsOut: '',
+      tensions: [{ tension: 'No price is visible for physio.', grounding: '', sourceRefs: [], evidence: [{ page: 'Services', quote: 'Kinetoterapie individual și grup' }], absence: true }],
+      confident: [], inferring: [], unanswered: ['Where do new clients come from today?'],
+      constraint: { decided: false },
+      diagnosis: { state: 'hypothesis', text: 'You serve several segments with equal weight.' },
+      stage: { stage: 'undetermined' },
+      read: {
+        model: [{ dimension: 'offer', lines: [{ text: 'Seven class types with published prices.', basis: 'observed' }] }],
+        unknownDimensions: ['acquisition', 'performance'],
+        notConcluding: [{ claim: 'You serve several segments with equal weight.', why: '', reason: 'no_goal' }],
+        untrusted: [{ finding: 'Eight services hidden from the menu.', why: '', reason: 'sitemap' }],
+        asks: [{ question: 'Where do new clients come from today?', why: 'It decides the channel.' }],
+      },
+    } }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    for (const k of ['arc.u2.understand', 'arc.u2.matters', 'arc.u2.notReady', 'arc.u2.need']) expect(await screen.findByText(k)).toBeInTheDocument();
+    expect(screen.getByText('arc.u2.hypothesis')).toBeInTheDocument();
+    expect(screen.queryByText('arc.understanding.constraint')).toBeNull();
+    expect(screen.getByText('arc.u2.absence')).toBeInTheDocument();
+    expect(screen.getByText('arc.u2.untrusted')).toBeInTheDocument();
+    expect(screen.getByText(/arc\.u2\.reason\.sitemap/)).toBeInTheDocument();
+    expect(screen.getByText(/arc\.u2\.whyAsk:It decides the channel\./)).toBeInTheDocument();
+    expect(screen.getByText(/arc\.u2\.unknownDims:/)).toBeInTheDocument();
+    expect(screen.getByText(/\(arc\.u2\.basis\.observed\)/)).toBeInTheDocument();
+  });
+
   it('Strategic Depth W1: a split stage names the core and the one area at a different stage, each with its implication', async () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: {
       does: 'X', serves: '', standsOut: '', tensions: [], confident: [], inferring: [], unanswered: [],

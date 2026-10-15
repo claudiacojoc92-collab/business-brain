@@ -491,9 +491,19 @@ export interface ArcView {
   strategyChange?: { because: string } | null; // Moment 6 — transient "the bet changed because…" note
   sources?: ArcSourceItem[];
   igConnected?: boolean;
-  understanding?: { does: string; serves: string; standsOut: string; tensions: { tension: string; grounding: string; sourceRefs: string[]; evidence?: { page: string; quote: string }[] }[]; confident: string[]; inferring: string[]; unanswered: string[];
+  understanding?: { does: string; serves: string; standsOut: string; tensions: { tension: string; grounding: string; sourceRefs: string[]; evidence?: { page: string; quote: string }[]; absence?: boolean }[]; confident: string[]; inferring: string[]; unanswered: string[];
     // Strategic Depth W1 — null on understandings made before it existed.
     constraint?: { decided: true; text: string } | { decided: false } | null;
+    /** 2026-10-15: the diagnosis as earned (a constraint only when established; else a hypothesis worth testing). */
+    diagnosis?: { state: 'hypothesis' | 'constraint'; text: string } | null;
+    /** v2 read: the business model by dimension, what BB won't conclude or doesn't trust, and why each question matters. */
+    read?: {
+      model: { dimension: string; lines: { text: string; basis: 'observed' | 'declared' | 'inferred' | 'contradicted' }[] }[];
+      unknownDimensions: string[];
+      notConcluding: { claim: string; why: string; reason?: 'no_goal' | 'not_established' }[];
+      untrusted: { finding: string; why: string; reason?: 'sitemap' | 'technical' | 'sitemap_only' | 'unread' }[];
+      asks: { question: string; why: string; parts?: string[] }[];
+    };
     stage?: { stage: 'validating' | 'growth' | 'plateau'; evidence: string[]; secondary?: { stage: 'validating' | 'growth' | 'plateau'; area: string } | null } | { stage: 'undetermined' } | null };
   correctionReflection?: { reflection: string; changes: string; holds: string };
   turns?: ArcTurn[];

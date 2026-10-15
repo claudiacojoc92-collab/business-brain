@@ -48,7 +48,8 @@ const GROUNDED_SYNTH: SynthesisOutput = {
   },
   aha: {
     status: 'produced',
-    findings: [{ finding: 'The homepage leads with custom builds but never shows a price.', sourceRefs: ['Homepage'] }],
+    // An observed finding: an absence ("never shows a price") is not an insight before the founder's goal is known (2026-10-15).
+    findings: [{ finding: 'The homepage leads with custom builds and names a six-week lead time.', sourceRefs: ['Homepage'], matters: 'A six-week wait shapes which buyers the offer fits.', changes: ['offer', 'sequencing'] }],
   },
 };
 

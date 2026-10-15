@@ -394,13 +394,14 @@ describe('ArcService.view — what stood out with a capability check', () => {
     expect(u.tensions.map((t) => t.tension)).not.toContain('Nobody can trust a product with no named customer.');
   });
 
-  it('Strategic Depth W1: a named constraint leads; a tension restating it leaves "also"; the stage needs 2+ cited observations', async () => {
+  it('2026-10-15: an older snapshot\'s "decided" constraint was never earned: it is a hypothesis, never "the constraint"; a tension restating it leaves; the stage needs 2+ cited observations', async () => {
     const u = await view({ contradictions: [
       { kind: 'channel_mismatch', statementA: 'a', statementB: 'b', tension: 'Your Instagram never mentions what you sell.', soWhat: 's', sourceRefs: [] },
       { kind: 'other', statementA: 'a', statementB: 'b', tension: 'You have not decided whether you are a café or a wholesale supplier.', soWhat: 's', sourceRefs: [] },
     ], constraint: { decided: true, statement: 'You have not decided whether you are a café or a wholesale supplier. More text here.', why: 'w', sourceRefs: ['Home'] },
     stage: { stage: 'validating', evidence: ['no named customer', 'opened in 2026'], sourceRefs: ['Home'] } });
-    expect(u.constraint).toEqual({ decided: true, text: 'You have not decided whether you are a café or a wholesale supplier.' });
+    expect(u.constraint).toEqual({ decided: false });
+    expect(u.diagnosis).toEqual({ state: 'hypothesis', text: 'You have not decided whether you are a café or a wholesale supplier.' });
     expect(u.tensions.map((t) => t.tension)).toEqual(['Your Instagram never mentions what you sell.']);
     expect(u.stage).toEqual({ stage: 'validating', evidence: ['no named customer', 'opened in 2026'], secondary: null });
   });
@@ -425,9 +426,10 @@ describe('ArcService.view — what stood out with a capability check', () => {
     expect(u.stage).toEqual({ stage: 'validating', evidence: ['Terms of Service state features may change during the pilot', 'No named paying customer anywhere'], secondary: null });
   });
 
-  it('Strategic Depth W1: when only the consequence clause trips the gate, the cause is kept as the constraint', async () => {
+  it('when only the consequence clause trips the gate, the cause is kept (as a hypothesis for an older snapshot)', async () => {
     const u = await view({ contradictions: [], constraint: { decided: true, statement: 'You have not yet shown the product working on a real business, so every gap compounds into a trust deficit and lost conversion.', why: '', sourceRefs: [] } });
-    expect(u.constraint).toEqual({ decided: true, text: 'You have not yet shown the product working on a real business.' });
+    expect(u.diagnosis).toEqual({ state: 'hypothesis', text: 'You have not yet shown the product working on a real business.' });
+    expect(u.constraint).toEqual({ decided: false });
   });
 
   it('Strategic Depth W1: undecided / gated constraint → {decided:false}; thin or uncited stage → undetermined; old snapshot → null', async () => {
@@ -468,6 +470,40 @@ describe('ArcService.view — NO QUOTE, NO CLAIM (BUS-73)', () => {
     audience: { addressed: [], appearsTargeted: [], unknown: [] }, messaging: { recurringThemes: [] }, unknowns: [] };
   const view = async (u: any) => (await new ArcService(makeDeps({ conversation: { status: async () => null, turns: async () => [] },
     understanding: { latest: async () => ({ understanding: { ...base, ...u } }) } }).deps).view('B', 'QuFi', 'en', flags({ pourInDone: true }), [], null)).understanding!;
+  it('2026-10-15 v2 read: absence stays an absence, the diagnosis is a hypothesis, and each question carries why it matters', async () => {
+    const u = await view({
+      contradictions: [
+        { kind: 'customer_proof', tension: 'You name no client anywhere.', soWhat: '', statementA: '', statementB: '', sourceRefs: ['Homepage'], absence: true, basis: 'observed',
+          evidence: [{ ref: 'Homepage', page: 'Homepage', quote: 'QuSettle checks conditions before settlement.' }] },
+      ],
+      unknowns: ['Where do your first customers come from today?'],
+      read: {
+        model: [
+          { dimension: 'offer', known: [{ text: 'You sell settlement checks to banks.', basis: 'observed', sourceRefs: ['Homepage'] }], unknown: [] },
+          { dimension: 'acquisition', known: [], unknown: ['how customers arrive'] },
+        ],
+        notConcluding: [{ claim: 'You have not chosen your segment.', why: '', reason: 'no_goal' }, { claim: 'Parents will move on.', why: '', reason: 'unsupported' }],
+        untrusted: [{ finding: 'Eight services are hidden.', refs: ['Page-sitemap.xml'], why: '', reason: 'sitemap' }],
+        websiteNotes: ['The counter shows 0 +.'],
+        questions: [{ question: 'Where do your first customers come from today?', dimension: 'acquisition', changes: ['channel', 'bet'], why: 'It decides the channel.', parts: ['new clients', 'returning clients'] }],
+        diagnosis: { state: 'hypothesis', statement: 'You have not chosen your segment.', checks: {}, sourceRefs: ['Homepage'], demotion: 'no_goal' },
+      },
+    });
+    expect(u.tensions[0]).toMatchObject({ tension: 'You name no client anywhere.', grounding: '', absence: true });
+    // v2: an emptied consequence stays empty; the source statement never takes its place
+    const v2b = await view({ contradictions: [{ kind: 'audience_mismatch', tension: 'The pages address four segments.', soWhat: '', statementA: 'Services for every stage of life, from children to adults.', statementB: 'b', sourceRefs: ['Homepage'],
+      evidence: [{ ref: 'Homepage', page: 'Homepage', quote: 'QuSettle checks conditions before settlement.' }] }], read: { model: [], notConcluding: [], untrusted: [], websiteNotes: [], questions: [], diagnosis: { state: 'not_ready', statement: '', checks: {}, sourceRefs: [] } } });
+    expect(v2b.tensions[0]!.grounding).toBe('');
+    expect(u.diagnosis).toEqual({ state: 'hypothesis', text: 'You have not chosen your segment.' });
+    expect(u.constraint).toEqual({ decided: false });
+    expect(u.read!.model).toEqual([{ dimension: 'offer', lines: [{ text: 'You sell settlement checks to banks.', basis: 'observed' }] }]);
+    expect(u.read!.unknownDimensions).toEqual(['acquisition']);
+    expect(u.read!.untrusted).toEqual([{ finding: 'Eight services are hidden.', why: '', reason: 'sitemap' }]);
+    expect(u.read!.asks).toEqual([{ question: 'Where do your first customers come from today?', why: 'It decides the channel.', parts: ['new clients', 'returning clients'] }]);
+    expect(u.read!.notConcluding.map((n) => n.claim)).toEqual(['You have not chosen your segment.']); // unsupported claims stay off the card
+    expect(JSON.stringify(u)).not.toMatch(/0 \+/); // website notes never reach the card
+  });
+
   it('a tension without a verified quote is dropped; one with a quote shows page → quote', async () => {
     const u = await view({ contradictions: [
       { kind: 'customer_proof', tension: 'You name no customer.', soWhat: '', statementA: '', statementB: '', sourceRefs: ['Homepage'], evidence: [] },

@@ -238,7 +238,7 @@ export class ArcService {
     // dangled. Carry the MORE CONCRETE statement (a quote/number names the referent), drop the softer half.
     const concreteScore = (s: string): number => (/[„“"'”]/.test(s) ? 2 : 0) + (/\d/.test(s) ? 1 : 0);
     const grounded = (a: string, b: string): string => (!b ? a : !a ? b : concreteScore(b) > concreteScore(a) ? b : a);
-    type TensionRow = { tension: string; grounding: string; sourceRefs: string[]; evidence: { page: string; quote: string }[] };
+    type TensionRow = { tension: string; grounding: string; sourceRefs: string[]; evidence: { page: string; quote: string }[]; absence?: boolean };
     // BUS-73 — NO QUOTE, NO CLAIM: a tension is shown only with the verified source sentences behind it (anchored at
     // synthesis). An older snapshot or a claim the model could not quote has none, so it is dropped: not shown, not
     // explained, not substituted.
@@ -275,10 +275,14 @@ export class ArcService {
         const sourceRefs = clean(c.sourceRefs);
         const evidence = quotes(c.evidence);
         if (!tension && !a && !b) return null;
+        // Absence (2026-10-15): about what the sources did not show; governance already removed its consequence.
+        if (c.absence) return { tension: tension || b || a, grounding: '', sourceRefs, evidence, kind: c.kind, absence: true };
         if (!tension) return { tension: a && b ? `${a} — yet ${b}` : a || b, grounding: soWhat, sourceRefs, evidence, kind: c.kind };
         // The line under the tension is its SO-WHAT (the consequence for the business) when the model gave one;
         // older snapshots (no soWhat at all) fall back to the more concrete of the two statements. A so-what blanked by
         // the claim-type gate stays blank: a source quote under the tension is not a consequence.
+        // A v2 read: governance decided the consequence; an emptied one stays empty (no source line in its place).
+        if (u?.read) return { tension, grounding: soWhat, sourceRefs, evidence, kind: c.kind };
         return { tension, grounding: (c.soWhat ?? '').trim() ? soWhat : grounded(a, b), sourceRefs, evidence, kind: c.kind };
       })
       .filter((x): x is TensionRow & { kind?: string } => Boolean(x));
@@ -300,15 +304,21 @@ export class ArcService {
     // still the named constraint ("You have not shown it working on a real business."), so it is kept.
     const rawC = u?.constraint;
     const passes = (x: string): boolean => Boolean(x) && !isHousekeeping(x) && !makesUnlicensedClaim(x);
+    // 2026-10-15: a v2 read carries the EARNED diagnosis (governance); the legacy field follows it. An older snapshot's
+    // "decided" constraint was never earned, so it is offered as a hypothesis, not as "the constraint".
+    const dx = u?.read?.diagnosis;
     // The constraint is the fact, not its visibility: a visibility tail and "visibly" / "you can point to" are stripped.
-    const stated = firstSentence(rawC?.statement ?? '');
+    const stated = firstSentence((dx ? dx.statement : rawC?.statement) ?? '');
     const full = stated ? factOnly(stated) : '';
     const cause = full.split(/,\s*(?:so|which|and so|deci|așa că|quindi|così)\b|\s[—–]\s/i)[0]!.trim().replace(/[,;:]$/, '');
     const cText = passes(full) ? full : cause.split(/\s+/).length >= 6 && passes(cause) ? `${cause.replace(/[.!?]$/, '')}.` : '';
-    const constraint: ArcUnderstanding['constraint'] = !rawC ? null : rawC.decided && cText ? { decided: true, text: cText } : { decided: false };
-    // A tension that only restates the named constraint doesn't take an "also" slot.
-    const also = constraint?.decided ? kept.filter((k) => !sameInsight(k.tension, constraint.text)) : kept;
-    const tensions: TensionRow[] = also.slice(0, 4).map(({ tension, grounding, sourceRefs, evidence }) => ({ tension, grounding, sourceRefs, evidence }));
+    const diagnosis: ArcUnderstanding['diagnosis'] = !cText ? null
+      : dx ? (dx.state === 'constraint' ? { state: 'constraint', text: cText } : dx.state === 'hypothesis' ? { state: 'hypothesis', text: cText } : null)
+        : rawC?.decided ? { state: 'hypothesis', text: cText } : null;
+    const constraint: ArcUnderstanding['constraint'] = !rawC && !dx ? null : diagnosis?.state === 'constraint' ? { decided: true, text: diagnosis.text } : { decided: false };
+    // A tension that only restates the diagnosis doesn't take a second slot.
+    const also = diagnosis ? kept.filter((k) => !sameInsight(k.tension, diagnosis.text)) : kept;
+    const tensions: TensionRow[] = also.slice(0, 4).map(({ tension, grounding, sourceRefs, evidence, absence }) => ({ tension, grounding, sourceRefs, evidence, ...(absence ? { absence } : {}) }));
 
     // Stage: named only with evidence (at least two cited observations that pass the gates); otherwise undetermined.
     // The stage is the CORE's; one named part may sit at a different stage (shown, never replacing the core).
@@ -340,6 +350,7 @@ export class ArcService {
     ]).slice(0, 4);
     // Card 3 "What I'll ask you about" — the SAME ≤3 unknowns the conversation seeds as its opening agenda.
     const unanswered = agendaUnknowns(u);
+    const read = u?.read ? projectRead(u.read, unanswered) : undefined;
 
     // "What I read" stays 3-4 lines: one sentence on what you sell, one on what you're betting on, one audience line.
     const oneLine = (x?: string): string => { const v = firstSentence(x ?? ''); return v && !isHousekeeping(v) ? v : ''; };
@@ -355,7 +366,9 @@ export class ArcService {
       inferring,
       unanswered,
       constraint,
+      diagnosis,
       stage,
+      ...(read ? { read } : {}),
     };
   }
 
@@ -464,4 +477,29 @@ export class ArcService {
     }
     return email;
   }
+}
+
+/**
+ * The v2 read for the card (2026-10-15): at most two known lines per dimension (each with its basis), the dimensions BB
+ * knows nothing about, what it will not conclude, what it found but does not trust, and why each question is asked.
+ */
+function projectRead(r: NonNullable<GovernedUnderstanding['read']>, asked: string[]): NonNullable<ArcUnderstanding['read']> {
+  const ok = (x: string): boolean => Boolean(x.trim()) && !isHousekeeping(x) && !makesUnlicensedClaim(x);
+  const model = r.model
+    .map((d) => ({ dimension: d.dimension, lines: d.known.filter((k) => ok(k.text)).slice(0, 2).map((k) => ({ text: firstSentence(k.text), basis: k.basis })) }))
+    .filter((d) => d.lines.length > 0);
+  const unknownDimensions = r.model.filter((d) => !d.known.some((k) => ok(k.text))).map((d) => d.dimension);
+  const find = (q: string) => r.questions.find((x) => x.question.trim().toLowerCase() === q.trim().toLowerCase());
+  const whyOf = (q: string): string => find(q)?.why ?? '';
+  const partsOf = (q: string): string[] => find(q)?.parts ?? [];
+  return {
+    model,
+    unknownDimensions,
+    // Claims governance found unsupported (behaviour predictions, unit economics) stay in the stored read for audit,
+    // never on the card: they add no strategic value until evidence exists.
+    notConcluding: r.notConcluding.filter((n) => ok(n.claim) && n.reason !== 'unsupported').slice(0, 4)
+      .map(({ claim, why, reason }) => ({ claim, why, ...(reason === 'no_goal' || reason === 'not_established' ? { reason } : {}) })),
+    untrusted: r.untrusted.filter((x) => x.finding.trim()).slice(0, 3).map(({ finding, why, reason }) => ({ finding, why, ...(reason ? { reason } : {}) })),
+    asks: asked.map((question) => ({ question, why: whyOf(question), ...(partsOf(question).length ? { parts: partsOf(question) } : {}) })),
+  };
 }
