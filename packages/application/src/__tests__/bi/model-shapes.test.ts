@@ -13,6 +13,10 @@ const STORED = (JSON.parse(readFileSync(join(__dirname, 'fixtures', 'body-move-b
 const SECONDARY_TEXT = (STORED.stage!.secondary as any).evidence as string;
 const page = (ref: string): PageObservation => ({ ref, url: `https://bodymovestudio.ro/${encodeURIComponent(ref)}/`, pageType: 'page', title: null, text: '', lang: 'ro', provenance: 'observed', sourceKind: 'website', discoveredVia: 'link' });
 const OBS = ['Locatii - Body Move Studio', 'Programari - Body Move Studio', 'Body Move Studio Bună Ziua - Body Move S', 'Homepage', 'Servicii - Body Move Studio'].map(page);
+// The same snapshot once the founder has said how the business is performing: only then can a stage be earned.
+const SAID = 'Clasele de dimineață sunt pline de trei luni.';
+const OBS_SAID: PageObservation[] = [...OBS, { ...page('Founder note'), provenance: 'declared', sourceKind: 'supplied', text: SAID }];
+const PERFORMING = { ...STORED, read: { ...STORED.read!, model: STORED.read!.model.map((d) => (d.dimension === 'performance' ? { ...d, known: [{ text: SAID, basis: 'declared' as const, sourceRefs: ['Founder note'] }] } : d)) } } as GovernedUnderstanding;
 
 describe('model list shapes: the exact production failure', () => {
   it('the fixture really is the malformed shape (a string where a list belongs)', () => {
@@ -20,7 +24,7 @@ describe('model list shapes: the exact production failure', () => {
   });
 
   it('A: governance normalises it before storage: the string becomes a one-item list', () => {
-    const g = governUnderstanding(STORED, OBS);
+    const g = governUnderstanding(PERFORMING, OBS_SAID);
     expect(g.stage!.secondary!.evidence).toEqual([SECONDARY_TEXT]);
   });
 
@@ -28,8 +32,10 @@ describe('model list shapes: the exact production failure', () => {
     const arc = new ArcService({} as any) as any;
     let card: any;
     expect(() => { card = arc.projectUnderstanding(STORED, []); }).not.toThrow();
-    expect(card.stage).toMatchObject({ stage: 'growth', secondary: { stage: 'validating', area: 'terapia Schroth' } });
+    // Footprint is not stage evidence: the stored "growth" (two locations, a timetable, a team) is not shown.
+    expect(card.stage).toEqual({ stage: 'undetermined' });
     expect(card.read.asks.length).toBeGreaterThan(0);
+    expect(card.read.structure).toBeUndefined(); // stored before the structure existed: the card keeps the inventory view
   });
 
   it('D: the evidence appears once, as the whole sentence, never character by character', () => {
@@ -55,7 +61,7 @@ describe('model list shapes: the exact production failure', () => {
 
 describe('stage evidence obeys numeric grounding (prod: "over 25 services", "8 named specialists")', () => {
   it('ungrounded numeric stage lines are dropped; lines without numbers stay; the stored counts do not survive governance', () => {
-    const g = governUnderstanding(STORED, OBS);
+    const g = governUnderstanding(PERFORMING, OBS_SAID);
     const lines = g.stage!.evidence;
     expect(lines.join(' ')).not.toMatch(/25 de servicii|8 speciali/);
     expect(lines.every((l) => !/\d/.test(l))).toBe(true);

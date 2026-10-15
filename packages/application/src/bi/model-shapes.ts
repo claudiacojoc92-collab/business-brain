@@ -1,4 +1,4 @@
-import type { GovernedUnderstanding } from './contracts';
+import type { BusinessStructure, CountClaim, GovernedUnderstanding, StructuralHypothesis } from './contracts';
 
 /**
  * MODEL LIST SHAPES (2026-10-15, prod bug "(xs ?? []).map is not a function"). A model sometimes returns a list field as
@@ -19,6 +19,37 @@ export function objectList<T>(x: unknown): T[] {
 }
 
 const obj = <T extends object>(x: unknown): T | undefined => (x !== null && typeof x === 'object' && !Array.isArray(x) ? (x as T) : undefined);
+
+const text = (x: unknown): string => (typeof x === 'string' ? x : '');
+
+/** The structural synthesis with every list in its shape; a missing or malformed one is an empty structure. */
+function normalizeStructure(x: unknown): BusinessStructure {
+  const s = obj<Record<string, unknown>>(x) ?? {};
+  return {
+    synthesis: text(s['synthesis']),
+    ...(s['synthesisNumbers'] !== undefined ? { synthesisNumbers: objectList(s['synthesisNumbers']) } : {}),
+    hypotheses: objectList<Record<string, unknown>>(s['hypotheses']).map((h) => {
+      const d = obj<Record<string, unknown>>(h['discriminator']) ?? {};
+      return {
+        ...(h as unknown as StructuralHypothesis),
+        pattern: text(h['pattern']), interpretation: text(h['interpretation']), whyItMatters: text(h['whyItMatters']),
+        alternative: text(h['alternative']), reversal: text(h['reversal']),
+        relationship: text(h['relationship']) as StructuralHypothesis['relationship'],
+        between: stringList(h['between']),
+        dimensions: stringList(h['dimensions']) as StructuralHypothesis['dimensions'],
+        changes: stringList(h['changes']) as StructuralHypothesis['changes'],
+        discriminator: { unknown: text(d['unknown']), question: text(d['question']), ...(typeof d['why'] === 'string' ? { why: d['why'] } : {}) },
+        evidence: objectList(h['evidence']),
+        ...(h['compares'] !== undefined ? { compares: stringList(h['compares']) as NonNullable<StructuralHypothesis['compares']> } : {}),
+        ...(h['counts'] !== undefined ? { counts: objectList<Record<string, unknown>>(h['counts']).map((c) => ({ ...(c as unknown as CountClaim), items: objectList(c['items']) })) } : {}),
+        ...(h['numbers'] !== undefined ? { numbers: objectList(h['numbers']) } : {}),
+        ...(h['calculations'] !== undefined ? { calculations: objectList(h['calculations']) } : {}),
+      };
+    }),
+    ...(s['audit'] !== undefined ? { audit: objectList(s['audit']) } : {}),
+    ...(s['mechanisms'] !== undefined ? { mechanisms: objectList(s['mechanisms']) } : {}),
+  };
+}
 
 /** The understanding with every model-generated list in its proper shape (pure; never throws on a malformed field). */
 export function normalizeUnderstandingShapes(u: GovernedUnderstanding): GovernedUnderstanding {
@@ -63,6 +94,9 @@ export function normalizeUnderstandingShapes(u: GovernedUnderstanding): Governed
       })),
       diagnosis: { ...(obj<NonNullable<GovernedUnderstanding['read']>['diagnosis']>(read.diagnosis) ?? { state: 'not_ready', statement: '', checks: {} }), sourceRefs: stringList(obj<{ sourceRefs?: unknown }>(read.diagnosis)?.sourceRefs) },
       ...(read.observations !== undefined ? { observations: objectList(read.observations) } : {}),
+      ...(read.structure !== undefined ? { structure: normalizeStructure(read.structure) } : {}),
+      ...(read.questionTiers !== undefined ? { questionTiers: objectList(read.questionTiers) } : {}),
+      ...(read.structureAudit !== undefined ? { structureAudit: objectList(read.structureAudit) } : {}),
     } } : {}),
   };
 }

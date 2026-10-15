@@ -140,18 +140,119 @@ function UnderstandingReadView({ u, t }: { u: NonNullable<ArcView['understanding
   const r = u.read!;
   const st = u.stage;
   const basis = (b: string): string => t(`arc.u2.basis.${b}`);
+  const diagnosis = u.diagnosis ? (
+    <div className="s0-u-diagnosis">
+      <div className="s0-u-card-sublabel">{t(u.diagnosis.state === 'constraint' ? 'arc.u2.constraint' : 'arc.u2.hypothesis')}</div>
+      <p className="s0-u-card-lead">{u.diagnosis.text}</p>
+    </div>
+  ) : null;
+  const tensions = (label: string) => (
+    <TensionCard label={label} items={u.tensions.map((x) => (x.absence ? { ...x, grounding: t('arc.u2.absence') } : x))}
+      whyLabel={t('arc.understanding.why')} alsoLabel={t('arc.understanding.also')} flat embedded />
+  );
+  const lead = [u.does, u.standsOut].filter(Boolean).length ? <p className="s0-u-card-lead">{[u.does, u.standsOut].filter(Boolean).join(' ')}</p> : null;
+  const serves = u.serves ? <p className="s0-u-card-lead s0-u-serves">{t('arc.understanding.servesLead', { who: u.serves })}</p> : null;
+  const model = r.model.length ? (
+    <ul className="s0-u-list s0-u-model" data-understanding-model="">
+      {r.model.map((d) => d.lines.map((l, i) => (
+        <li key={`${d.dimension}-${i}`}><strong>{t(`arc.u2.dim.${d.dimension}`)}:</strong> {l.text} <span className="s0-talk-note">({basis(l.basis)})</span></li>
+      )))}
+    </ul>
+  ) : null;
+  const notReady = (<>
+    {r.unknownDimensions.length ? <p className="s0-u-card-lead">{t('arc.u2.unknownDims', { list: r.unknownDimensions.map((d) => t(`arc.u2.dimLower.${d}`)).join(', ') })}</p> : null}
+    {r.notConcluding.length ? (
+      <ul className="s0-u-list">{r.notConcluding.map((n, i) => <li key={i}>{n.claim}{(n.reason || n.why) ? <span className="s0-talk-note"> — {n.reason ? t(`arc.u2.reason.${n.reason}`) : n.why}</span> : null}</li>)}</ul>
+    ) : null}
+    {r.untrusted.length ? (<>
+      <div className="s0-u-card-sublabel">{t('arc.u2.untrusted')}</div>
+      <ul className="s0-u-list">{r.untrusted.map((x, i) => <li key={i}>{x.finding}{(x.reason || x.why) ? <span className="s0-talk-note"> — {x.reason ? t(`arc.u2.reason.${x.reason}`) : x.why}</span> : null}</li>)}</ul>
+    </>) : null}
+  </>);
+  const asks = r.asks.length ? (
+    <div className="s0-u-card s0-u-card--question">
+      <div className="s0-u-card-label"><span className="s0-u-ic" aria-hidden="true">→</span>{t('arc.u2.need')}</div>
+      <ul className="s0-u-list">{r.asks.slice(0, 3).map((a, i) => (
+        <li key={i}>{a.question}
+          {/* Metrics that can diverge stay separate answers (clients vs revenue): one line each. */}
+          {a.parts && a.parts.length > 1 ? <ol className="s0-u-ask-parts" type="a">{a.parts.map((p, j) => <li key={j}>{p}</li>)}</ol> : null}
+          {a.why ? <span className="s0-talk-note s0-u-ask-why"> {t('arc.u2.whyAsk', { why: a.why })}</span> : null}
+        </li>
+      ))}</ul>
+    </div>
+  ) : null;
+
+  // Structural synthesis (2026-10-15): the founder sees what BB thinks the business IS, what it noticed (reversible
+  // hypotheses with their alternative), what would change its read, and at most three questions. The business-model
+  // inventory BB reasoned over stays one click away, under "What I read".
+  if (r.structure) {
+    const s = r.structure;
+    const hyps = s.hypotheses;
+    return (<>
+      <div className="s0-u-card s0-u-card--read" data-understanding-synthesis="">
+        <div className="s0-u-card-label">{t('arc.u2.whatItIs')}</div>
+        {s.synthesis ? <p className="s0-u-card-lead">{s.synthesis}</p>
+          // The synthesis did not stand: a conservative read from verified mechanisms only, or an honest "not ready yet".
+          // Never the inventory (that stays under "What I read").
+          : (s.fallback?.mechanisms.length ?? 0) >= 2 ? (<>
+            <p className="s0-u-card-lead" data-understanding-fallback="">{t('arc.u2.fallback.lead')}</p>
+            <ul className="s0-u-list">{s.fallback!.mechanisms.map((m) => <li key={m}>{t(`arc.u2.mech.${m}`)}</li>)}</ul>
+          </>)
+            : <p className="s0-u-card-lead" data-understanding-fallback="">{t('arc.u2.fallback.notReady')}</p>}
+      </div>
+
+      {hyps.length || diagnosis || (!hyps.length && u.tensions.length) ? (
+        <div className="s0-u-card" data-understanding-noticed="">
+          <div className="s0-u-card-label">{t('arc.u2.noticed')}</div>
+          {diagnosis}
+          {hyps.length ? (
+            <ul className="s0-u-list s0-u-hyps">{hyps.map((h, i) => (
+              <li key={i} data-understanding-hypothesis="">
+                <strong>{h.interpretation}</strong> {h.pattern}
+                <span className="s0-talk-note s0-u-hyp-alt"> {t('arc.u2.alt', { alt: h.alternative })}</span>
+                {h.evidence.length ? (
+                  <details className="s0-u-why">
+                    <summary>{t('arc.understanding.why')}</summary>
+                    <ul className="s0-u-why-list">{h.evidence.map((e, j) => (
+                      <li key={j}><span className="s0-u-why-page">{e.page}</span>{' → '}<q className="s0-u-why-quote">{e.quote}</q></li>
+                    ))}</ul>
+                  </details>
+                ) : null}
+              </li>
+            ))}</ul>
+          ) : tensions(diagnosis ? t('arc.u2.tensions') : '')}
+        </div>
+      ) : null}
+
+      {hyps.length || s.stageNotNamed ? (
+        <div className="s0-u-card" data-understanding-could-change="">
+          <div className="s0-u-card-label">{t('arc.u2.couldChange')}</div>
+          <ul className="s0-u-list">
+            {hyps.map((h, i) => (h.reversal ? <li key={i}>{h.reversal}</li> : null))}
+            {s.stageNotNamed ? <li>{t('arc.u2.stageNotNamed')}</li> : null}
+          </ul>
+        </div>
+      ) : null}
+
+      {asks}
+
+      <details className="s0-u-card s0-u-whatiread" data-understanding-what-i-read="">
+        <summary className="s0-u-card-label">{t('arc.u2.whatIRead')}</summary>
+        {lead}
+        {serves}
+        {model}
+        {hyps.length ? tensions(t('arc.u2.tensions')) : null}
+        {notReady}
+      </details>
+    </>);
+  }
+
   return (<>
     <div className="s0-u-card s0-u-card--read">
       <div className="s0-u-card-label">{t('arc.u2.understand')}</div>
-      {[u.does, u.standsOut].filter(Boolean).length ? <p className="s0-u-card-lead">{[u.does, u.standsOut].filter(Boolean).join(' ')}</p> : null}
-      {u.serves ? <p className="s0-u-card-lead s0-u-serves">{t('arc.understanding.servesLead', { who: u.serves })}</p> : null}
-      {r.model.length ? (
-        <ul className="s0-u-list s0-u-model" data-understanding-model="">
-          {r.model.map((d) => d.lines.map((l, i) => (
-            <li key={`${d.dimension}-${i}`}><strong>{t(`arc.u2.dim.${d.dimension}`)}:</strong> {l.text} <span className="s0-talk-note">({basis(l.basis)})</span></li>
-          )))}
-        </ul>
-      ) : null}
+      {lead}
+      {serves}
+      {model}
       {st && st.stage !== 'undetermined' ? (
         <p className="s0-u-stage"><strong>{t('arc.understanding.stage', { stage: t(`arc.understanding.stage.${st.stage}`) })}</strong> {t('arc.understanding.stage.why', { why: joinWhy(st.evidence) })}</p>
       ) : null}
@@ -160,43 +261,19 @@ function UnderstandingReadView({ u, t }: { u: NonNullable<ArcView['understanding
     {u.diagnosis || u.tensions.length ? (
       <div className="s0-u-card" data-understanding-matters="">
         <div className="s0-u-card-label">{t('arc.u2.matters')}</div>
-        {u.diagnosis ? (
-          <div className="s0-u-diagnosis">
-            <div className="s0-u-card-sublabel">{t(u.diagnosis.state === 'constraint' ? 'arc.u2.constraint' : 'arc.u2.hypothesis')}</div>
-            <p className="s0-u-card-lead">{u.diagnosis.text}</p>
-          </div>
-        ) : null}
-        <TensionCard label={u.diagnosis ? t('arc.u2.tensions') : ''} items={u.tensions.map((x) => (x.absence ? { ...x, grounding: t('arc.u2.absence') } : x))}
-          whyLabel={t('arc.understanding.why')} alsoLabel={t('arc.understanding.also')} flat embedded />
+        {diagnosis}
+        {tensions(u.diagnosis ? t('arc.u2.tensions') : '')}
       </div>
     ) : null}
 
     {r.notConcluding.length || r.unknownDimensions.length || r.untrusted.length ? (
       <div className="s0-u-card" data-understanding-not-ready="">
         <div className="s0-u-card-label">{t('arc.u2.notReady')}</div>
-        {r.unknownDimensions.length ? <p className="s0-u-card-lead">{t('arc.u2.unknownDims', { list: r.unknownDimensions.map((d) => t(`arc.u2.dimLower.${d}`)).join(', ') })}</p> : null}
-        {r.notConcluding.length ? (
-          <ul className="s0-u-list">{r.notConcluding.map((n, i) => <li key={i}>{n.claim}{(n.reason || n.why) ? <span className="s0-talk-note"> — {n.reason ? t(`arc.u2.reason.${n.reason}`) : n.why}</span> : null}</li>)}</ul>
-        ) : null}
-        {r.untrusted.length ? (<>
-          <div className="s0-u-card-sublabel">{t('arc.u2.untrusted')}</div>
-          <ul className="s0-u-list">{r.untrusted.map((x, i) => <li key={i}>{x.finding}{(x.reason || x.why) ? <span className="s0-talk-note"> — {x.reason ? t(`arc.u2.reason.${x.reason}`) : x.why}</span> : null}</li>)}</ul>
-        </>) : null}
+        {notReady}
       </div>
     ) : null}
 
-    {r.asks.length ? (
-      <div className="s0-u-card s0-u-card--question">
-        <div className="s0-u-card-label"><span className="s0-u-ic" aria-hidden="true">→</span>{t('arc.u2.need')}</div>
-        <ul className="s0-u-list">{r.asks.map((a, i) => (
-          <li key={i}>{a.question}
-            {/* Metrics that can diverge stay separate answers (clients vs revenue): one line each. */}
-            {a.parts && a.parts.length > 1 ? <ol className="s0-u-ask-parts" type="a">{a.parts.map((p, j) => <li key={j}>{p}</li>)}</ol> : null}
-            {a.why ? <span className="s0-talk-note s0-u-ask-why"> {t('arc.u2.whyAsk', { why: a.why })}</span> : null}
-          </li>
-        ))}</ul>
-      </div>
-    ) : null}
+    {asks}
   </>);
 }
 function TensionCard({ label, items, whyLabel, alsoLabel, flat = false, embedded = false }: { label: string; items: TensionItem[]; whyLabel: string; alsoLabel: string; flat?: boolean; embedded?: boolean }) {

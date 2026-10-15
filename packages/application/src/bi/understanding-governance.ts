@@ -1,8 +1,8 @@
-import type { AhaResult, DiagnosisCheck, EvidenceBasis, GovernedUnderstanding, ModelClaim, ModelDimension, PageObservation, StrategicDecision, UnderstandingRead, UntrustedReason } from './contracts';
-import { DIAGNOSIS_CHECKS, MODEL_DIMENSIONS, STRATEGIC_DECISIONS } from './contracts';
+import type { AhaResult, BusinessStructure, ClaimEvidence, DiagnosisCheck, EvidenceBasis, GovernedUnderstanding, ModelClaim, ModelDimension, PageObservation, QuestionTier, StrategicDecision, StructuralHypothesis, UnderstandingRead, UntrustedReason } from './contracts';
+import { DIAGNOSIS_CHECKS, EVIDENCE_SURFACES, MODEL_DIMENSIONS, STRATEGIC_DECISIONS, STRUCTURE_RELATIONSHIPS } from './contracts';
 import { isHousekeeping, sameInsight } from './insight-text';
 import { isWebsiteHygiene, trustByRef } from './source-trust';
-import { groundNumbers, numbersIn } from './numeric-grounding';
+import { groundCounts, groundNumbers, numbersIn } from './numeric-grounding';
 import { anchorClaimEvidence } from './evidence-anchor';
 import { normalizeUnderstandingShapes } from './model-shapes';
 import { makesUnlicensedClaim } from './validation';
@@ -85,6 +85,578 @@ const INFERENCE = /(?<!\p{L})(which (means|suggests|implies|indicates|shows|disc
 const clean = (xs: unknown): string[] => (Array.isArray(xs) ? xs : []).map((x) => (typeof x === 'string' ? x.trim() : '')).filter(Boolean);
 const BASES: readonly EvidenceBasis[] = ['observed', 'declared', 'inferred', 'contradicted'];
 
+/**
+ * What one page does NOT show, read as a fact about how the business is built ("therapy is invisible", "not in any
+ * timetable"): a timetable that lists classes says nothing about appointments. Category confusion, never structure.
+ */
+const VISIBILITY = /(?<!\p{L})(invizibil\p{L}*|invisible|nu (se )?(vede|v[ăa]d|apare|apar)|nu (este|e|sunt) (listat|afi[șs]at|vizibil)\p{L}*|not (visible|shown|listed|displayed)|does(n't| not) (appear|show)|absent from|missing from|lipse[șs]te din|lipsesc din|în niciun(ul)? (orar|program)|in no (timetable|schedule)|not in any|nicio pagin\p{L}*|no page|non (appare|compare)|nicht (sichtbar|aufgef[üu]hrt)|nu (con[țt]in\p{L}*|includ\p{L}*|listeaz[ăa]|men[țt]ioneaz[ăa]|cuprind\p{L}*)|nici(o|un)(?!\p{L})|does(n'?t| not) (include|contain|list|mention)|contains? no|includes? no|lists? no|no other|non (include|contiene)|enth[äa]lt kein)(?!\p{L})/iu;
+/** A trait of the customers (when they are free, what they prefer) read from a schedule or a service list: unsupported. */
+const CUSTOMER_TRAIT = /(?<!\p{L})(segment\p{L}*|clien[țt]\p{L}*|mame|mamele|mothers|parents|p[ăa]rin[țt]i\p{L}*|people|oamenii|customers?|clients?)[^.!?;]{0,50}(disponibil\p{L}*|available|free in the|preferin[țt]\p{L}*|prefer\p{L}*|program fix|fixed schedule|lucreaz\p{L}*|working hours)(?!\p{L})/iu;
+/** Demand, volume, occupancy or success read from footprint (a timetable, a team, a service list): never structure. */
+const FOOTPRINT_INFERENCE = /(?<!\p{L})(cerere\p{L}*|cereri|demand|volum\p{L}*|volume|ocupa(re|t)\p{L}*|occupancy|plin\p{L}*|full|popular\p{L}*|succes\p{L}*|successful|aglomerat\p{L}*|busy|domanda|richiesta|nachfrage|ausgelastet)(?!\p{L})/iu;
+/** A synthesis that overstates the structure ("three businesses under one name", "is really…"). */
+const OVERCLAIM = /(?<!\p{L})((dou[ăa]|trei|patru|cinci|two|three|four|five|due|tre|quattro|zwei|drei|vier|\d+) (afaceri|business(es)?|business-uri|companii|firme|aziende|imprese|unternehmen|gesch[äa]fte)|de fapt|în realitate|in realitate|is really|are really|is actually|are actually|in realt[àa]|in wirklichkeit)(?!\p{L})/iu;
+/** Strategy truths that fit thousands of businesses: never a structural reading unless tied to this business's own things. */
+const GENERIC = /(?<!\p{L})(different (audiences|segments|customers) have different needs|segmente\p{L}* diferite (au|cu) nevoi diferite|pricing matters|pre[țt]ul conteaz[ăa]|retention (is|matters)|reten[țt]ia (este|e|conteaz)\p{L}*|focus (is|matters)|focusul (este|e|conteaz)\p{L}*|social proof|dovad[ăa] social[ăa]|multiple locations (add|create)|mai multe loca[țt]ii (adaug|creeaz|complic)\p{L}*|recurring revenue|venit\p{L}* recurent\p{L}*)(?!\p{L})/iu;
+/**
+ * A predicted state of the business, or a recommendation, from a hypothetical answer ("if most pay per session, revenue
+ * is unpredictable and pricing deserves reconsideration"): a question's "why" says which decision the answer informs,
+ * never what the answer would mean.
+ */
+const CONSEQUENCE = /(?<!\p{L})((venit\p{L}*|cash-?flow|revenue|income|fatturato|umsatz)[^.!?]{0,40}(impredictibil\p{L}*|unpredictable|instabil\p{L}*|unstable|volatil\p{L}*)|devin\p{L}* (principala )?prioritat\p{L}*|becomes? the (main |top )?priority|diventa la priorit\p{L}*|merit[ăa] (reconsiderat\p{L}*|regândit\p{L}*|schimbat\p{L}*)|deserves? (reconsideration|rethinking)|should be (reconsidered|changed|rethought)|se schimb[ăa] complet|change(s)? completely|ar trebui|you should|trebuie s[ăa] (schimbi|reconsideri|regânde[șs]ti)|dovresti|solltest)(?!\p{L})/iu;
+/**
+ * Kinds of explanation a structural alternative or a discriminating question can name (generic, EN / RO / IT / DE). Used
+ * to keep an alternative from collapsing a multi-cause uncertainty into one cause, and to check that a question offers the
+ * fork it is meant to settle. Negated mentions ("…, not a deliberate decision") do not count.
+ */
+const EXPLANATION_KINDS: [string, RegExp][] = [
+  ['space', /(?<!\p{L})(spa[țt]i\p{L}*|sal[ăa]|s[ăa]li\p{L}*|camer\p{L}*|rooms?|space|premises|amenaj\p{L}*|configura\p{L}*|r[äa]um\p{L}*)(?!\p{L})/iu],
+  ['equipment', /(?<!\p{L})(echipament\p{L}*|dot[ăa]r\p{L}*|aparat\p{L}*|equipment|tools?|devices?|attrezzatur\p{L}*|ausstattung|ger[äa]te?)(?!\p{L})/iu],
+  ['staffing', /(?<!\p{L})(personal(ul|ului)?|echip(?!ament)\p{L}*|membr\p{L}*|specialist\p{L}*|terapeu\p{L}*|kinetoterapeu\p{L}*|instructor\p{L}*|antrenor\p{L}*|angaja\p{L}*|disponibilitat\p{L}*|staff\p{L}*|team|people|personnel|availability|hir(e|ing)|therapists?|trainers?|coach\p{L}*|personale|mitarbeiter\p{L}*)(?!\p{L})/iu],
+  ['deliberate', /(?<!\p{L})(deliberat\p{L}*|inten[țt]ionat\p{L}*|alegere|alegeri|ales\p{L}*|decizi\p{L}*|pozi[țt]ion\p{L}*|strategi\p{L}*|specializ\p{L}*|specialis\p{L}*|choices?|chosen|chose|deliberate\p{L}*|intentional\p{L}*|positioning|decisions?|by design|scelta|entscheid\p{L}*|bewusst)(?!\p{L})/iu],
+  ['timing', /(?<!\p{L})(temporar\p{L}*|istoric\p{L}*|recent\p{L}*|nou[ăa]?|test\p{L}*|pilot\p{L}*|lansa\p{L}*|temporary|historical|history|legacy|newly|trial|launch\p{L}*)(?!\p{L})/iu],
+  ['representation', /(?<!\p{L})(nelistat\p{L}*|neafi[șs]at\p{L}*|programare individual\p{L}*|la cerere|by appointment|on request|unlisted|incomplet\p{L}*|nepublicat\p{L}*|not (yet )?published)(?!\p{L})/iu],
+  ['demand', /(?<!\p{L})(cerer\p{L}*|demand|interes\p{L}*|segment\p{L}*|nevoi\p{L}*|needs|domanda|nachfrage)(?!\p{L})/iu],
+];
+const NEGATED = /(?<!\p{L})(nu|not|non|rather than|instead of|mai degrab[ăa] dec[âa]t|în loc de|statt)(?!\p{L})[^.,;:!?]*/giu;
+/** The explanation kinds a text names, ignoring negated mentions and the business's own named things. */
+function kindsOf(text: string, names: readonly string[] = []): Set<string> {
+  let t = ` ${text ?? ''} `.replace(NEGATED, ' ');
+  for (const n of names) if (n.trim().length >= 3) t = t.replace(new RegExp(n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'giu'), ' ');
+  return new Set(EXPLANATION_KINDS.filter(([, re]) => re.test(t)).map(([k]) => k));
+}
+/**
+ * A question that presupposes a future the founder never asked for (expanding, adding, fixing, improving, removing,
+ * introducing, "what would have to change"): it steers instead of telling two readings apart.
+ */
+const PRESUPPOSES = /(?<!\p{L})(ce ar trebui|ce trebuie s[ăa] se schimbe|what would (it take|have to change)|what needs to change|extinde\p{L}*|extinz\p{L}*|extinder\p{L}*|extins\p{L}*|extended|expand\p{L}*|expansion|ad[ăa]ug\p{L}*|\badd(ing)?\b|introduc\p{L}*|îmbun[ăa]t[ăa][țt]\p{L}*|imbunatat\p{L}*|improv\p{L}*|repar\p{L}*|\bfix(ing)?\b|elimin\p{L}*|remov\p{L}*|planuri (s[ăa]|de)|plans? to|inten[țt]ia de a|ar trebui|should|ampliar\p{L}*|aggiung\p{L}*|erweiter\p{L}*)(?!\p{L})/iu;
+/**
+ * A reversal condition about what the PAGES show ("if X appeared in the timetable / on the team page"). BB has already
+ * read those pages: such a condition is either already true (then it contradicts the reading) or a change to the website,
+ * not new evidence about the business. A reversal must be something the founder can answer or the business can show.
+ */
+const SOURCE_CONDITION = /(?<!\p{L})(apare|apar|ap[ăa]rea|ar ap[ăa]rea|appear\p{L}*|listat\p{L}*|listed|afi[șs]at\p{L}*|publicat\p{L}*|published|displayed|shown on|men[țt]ionat\p{L}*|mentioned on|inclus\p{L}* (în|pe)|included (in|on))(?!\p{L})/iu;
+/** A presence condition: something exists / works / is available somewhere. */
+const PRESENCE = /(?<!\p{L})(exist\p{L}*|exists?|there (is|are)|lucreaz\p{L}* (la|și la|si la)|works? at|is (also )?at|este (și )?la|e la|disponibil\p{L}* (și )?la|available at|are (un|o|și)|has an?|includ\p{L}*|includes?)(?!\p{L})/iu;
+const NEGATED_APPEARANCE = /(?<!\p{L})(nu|not|n't|never|niciodat[ăa]|nicht)\s+(\p{L}+\s+)?(apar\p{L}*|ap[ăa]rea|appear\p{L}*|listat\p{L}*|listed|afi[șs]at\p{L}*|publicat\p{L}*|published|displayed|men[țt]ionat\p{L}*|inclus\p{L}*|included)(?!\p{L})/giu;
+/**
+ * An evaluative judgement about how the business performs (under-utilised, below potential, strong / weak demand, higher
+ * value, better economics). Unsupported without performance evidence: it may not live in ANY stored field, shown or not.
+ */
+const JUDGEMENT = /(?<!\p{L})(sub-?utiliz\p{L}*|subutiliz\p{L}*|under-?utili[sz]\p{L}*|underused|supra-?utiliz\p{L}*|over-?utili[sz]\p{L}*|over-?perform\p{L}*|under-?perform\p{L}*|supra-?perform\p{L}*|sub-?perform\p{L}*|poten[țt]ial\p{L}*|potential|below potential|untapped|neexploatat\p{L}*|nevalorificat\p{L}*|cerere (mare|mic[ăa]|slab[ăa]|puternic[ăa]|ridicat[ăa]|sc[ăa]zut[ăa]|nesatisf[ăa]cut[ăa])|(strong|weak|high|low|unmet) demand|valoare (mai )?(mare|mic[ăa]|ridicat[ăa])|higher[- ]value|lower[- ]value|(better|worse|stronger|weaker) economics|economie (mai )?(bun[ăa]|slab[ăa])|mai profitabil\p{L}*|less profitable|mai rentabil\p{L}*|performeaz[ăa] (mai )?(bine|slab|prost)|performs? (better|worse|poorly|well))(?!\p{L})/iu;
+/** A catch-all option ("or something else", "another operational decision"): it names no explanation. */
+const CATCH_ALL = /(?<!\p{L})(alt\p{L}* (decizi\p{L}*|motiv\p{L}*|constr[âa]ng\p{L}*|factor\p{L}*|cauz\p{L}*|limit\p{L}*)( operațional\p{L}*| operational\p{L}*)?|altceva|alt ceva|something else|another (\p{L}+ )?(reason|decision|factor|constraint)|other (\p{L}+ )?(reasons?|factors?|constraints?)|qualcos'altro|altro motivo|etwas anderes|anderer grund)(?!\p{L})/giu;
+/** Mechanism attributes a synthesis may attach to a group of offers; each needs evidence for EVERY member it covers. */
+const ATTRIBUTES: { name: string; claim: RegExp; evidence: RegExp }[] = [
+  { name: 'evaluation first', claim: /(?<!\p{L})(evaluar\p{L}*|evaluation|assessment|consulta[țt]i\p{L}*|consultation|valutazion\p{L}*|bewertung|erstgespr[äa]ch)(?!\p{L})/iu, evidence: /(?<!\p{L})(evaluar\p{L}*|evaluation|assessment|consulta[țt]i\p{L}*|consultation|valutazion\p{L}*|bewertung|erstgespr[äa]ch)(?!\p{L})/iu },
+  { name: 'packages', claim: /(?<!\p{L})(abonament\p{L}*|pachet\p{L}*|packages?|subscriptions?|memberships?|abbonament\p{L}*|pacchett\p{L}*|abo\p{L}*)(?!\p{L})/iu, evidence: /(?<!\p{L})(abon\.|abonament\p{L}*|pachet\p{L}*|packages?|subscriptions?|memberships?|abbonament\p{L}*|pacchett\p{L}*|abo\p{L}*)/iu },
+  { name: 'single sessions', claim: /(?<!\p{L})(per ședin[țt][ăa]|ședin[țt][ăa] unic[ăa]|single sessions?|per session|drop-?in|singola sessione|einzelstunde)(?!\p{L})/iu, evidence: /(1 ședin[țt][ăa]|single session|per session|drop-?in|singola|einzel)/iu },
+  { name: 'timetable', claim: /(?<!\p{L})(orar\p{L}*|timetable|schedule\p{L}*|calendario|stundenplan)(?!\p{L})/iu, evidence: /(?<!\p{L})(orar\p{L}*|timetable|schedule\p{L}*|calendario|stundenplan)(?!\p{L})/iu },
+];
+/** Delivery / purchase mechanisms the fallback may name: only when a trusted page shows them. */
+export type MechanismKind = 'group_timetable' | 'one_to_one' | 'paid_first_step' | 'packages';
+const MECHANISMS: { kind: MechanismKind; test: (text: string) => boolean }[] = [
+  { kind: 'group_timetable', test: (t) => (t.match(CLOCK) ?? []).length >= 3 && /(?<!\p{L})(grup\p{L}*|group|clas[ăae]\p{L}*|class\p{L}*|gruppo|gruppe|kurs\p{L}*)(?!\p{L})/iu.test(t) },
+  { kind: 'one_to_one', test: (t) => /(?<!\p{L})(individual\p{L}*|one-to-one|1:1|unu-la-unu|personal training|private sessions?|privat\p{L}*|einzel\p{L}*)(?!\p{L})/iu.test(t) },
+  { kind: 'paid_first_step', test: (t) => /(evaluar\p{L}*|evaluation|assessment|consulta[țt]i\p{L}*|consultation|valutazion\p{L}*|erstgespr[äa]ch)[\s\S]{0,250}?\d+\s*(lei|ron|eur|euro|€|\$|£|chf)/iu.test(t) },
+  { kind: 'packages', test: (t) => /(?<!\p{L})(abon\.|abonament\p{L}*|pachet\p{L}*|packages?|memberships?|abbonament\p{L}*|pacchett\p{L}*)/iu.test(t) },
+];
+/** Function words and condition words that say nothing about the business (never evidence of "already true"). */
+const REVERSAL_STOP = new Set(['dacă', 'daca', 'atunci', 'acest', 'aceasta', 'această', 'acolo', 'pentru', 'dintre', 'fiecare', 'ambele', 'locatie', 'locația', 'locatia', 'locatii', 'locațiile', 'locatiile', 'ipoteza', 'ipoteza', 'would', 'there', 'their', 'these', 'those', 'which', 'where', 'about', 'other', 'every', 'location', 'locations', 'reading', 'again', 'still', 'servicii', 'serviciu', 'services', 'service']);
+/** An "operating model" named by audience or life stage, not by how it is sold, delivered, booked or priced. */
+const AUDIENCE_MODEL = /(?<!\p{L})((programe|activit[ăa][țt]i|servicii|clase|linii?)\s+(specializate\s+|dedicate\s+)?(pentru|dedicate)\s+(mame|mamele|copii|copiilor|femei|gravide|seniori|adolescen\p{L}*|familii|v[âa]rstnici)|etape de via[țt][ăa]|life[- ]stages?|(programs?|activities|services|classes)\s+(dedicated\s+)?for\s+(mothers|children|kids|women|seniors|teens|families)|children'?s activities|activit[ăa][țt]i pentru copii|(program\p{L}*|linie|linia|segment\p{L}*)\s+(perinatal\p{L}*|prenatal\p{L}*|postnatal\p{L}*|postpartum|de maternitate|matern\p{L}*)|(perinatal|prenatal|postnatal|postpartum|maternity)\s+(programs?|lines?|segments?)|per (mamme|bambini)|f[üu]r (m[üu]tter|kinder))(?!\p{L})/iu;
+
+/** How many items a sentence lists ("A, B, C and D" → 4). Six or more is a transcription of a page, not a relationship. */
+const listItems = (t: string): number => (t ?? '').split(/,|·|•|\s(?:și|si|and|e|ed|und)\s/u).filter((x) => x.trim()).length;
+const sentencesOf = (t: string): string[] => (t ?? '').split(/(?<=[.!?;])\s+/).map((x) => x.trim()).filter(Boolean);
+const wordsOf = (s: string): string[] => fold(s).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+/**
+ * Does a text mention a name? Word by word, allowing an inflected ending ("Kinetoterapie" is mentioned by "Kinetoterapia",
+ * "kinetoterapiei"): each word of the name starts a word of the text, its last letter or two free.
+ */
+function mentions(text: string, name: string): boolean {
+  const ws = wordsOf(text);
+  return wordsOf(name).every((w) => {
+    const stem = w.length > 6 ? w.slice(0, -2) : w.length > 4 ? w.slice(0, -1) : w;
+    return ws.some((x) => x.startsWith(stem) && x.length <= w.length + 3);
+  });
+}
+/** A sentence that states what BB does not know yet (an unknown, not a claim). */
+const NOT_KNOWING = /(?<!\p{L})(nu [șs]tiu|nu [șs]tim|înc[ăa] nu ([șs]tiu|[șs]tim)|i do(n'?t| not) (yet )?know|we do(n'?t| not) (yet )?know|not yet clear|non (lo )?so|non sappiamo|wei[ßs] (ich )?(noch )?nicht)(?!\p{L})/iu;
+/**
+ * Count words are numbers too ("four slots" claims a count exactly like "4 slots"). Two to twelve in RO / EN / IT / DE;
+ * never "one"/"un"/"una" (articles), "nouă" (also "new"), "sei" or "due" (an Italian verb, an English word).
+ */
+const NUMBER_WORDS: Record<string, number> = {
+  doi: 2, două: 2, doua: 2, trei: 3, patru: 4, cinci: 5, șase: 6, sase: 6, șapte: 7, sapte: 7, opt: 8, zece: 10, unsprezece: 11, doisprezece: 12, douăsprezece: 12,
+  two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
+  tre: 3, quattro: 4, cinque: 5, sette: 7, otto: 8, nove: 9, dieci: 10, undici: 11, dodici: 12,
+  zwei: 2, drei: 3, vier: 4, fünf: 5, sechs: 6, sieben: 7, acht: 8, neun: 9, zehn: 10, elf: 11, zwölf: 12,
+};
+const NUMBER_WORD = new RegExp(`(?<!\\p{L})(${Object.keys(NUMBER_WORDS).join('|')})(?!\\p{L})`, 'giu');
+/** Count words become digits, except a count written exactly as a trusted page writes it ("două locații" when a page
+ *  says "Două locații."): that is the page's own count, not BB's. */
+const ABSTRACTION = /^\s*(etape|etapei|pa[șs]i|steps?|stages?|faze|phases?|modele|models?|linii|lines?|motoare|engines?|niveluri|levels?|moduri|ways?|c[ăa]i|paths?|logici|logics?|direc[țt]ii|directions?)$/iu;
+const withNumberWords = (t: string, pages: string[]): string => t.replace(new RegExp(`${NUMBER_WORD.source}(\\s+\\p{L}+)?`, 'giu'), (m, w: string, next?: string) => {
+  // "a two-step sale", "two operating models": BB's own structure words, not a count of things on a page.
+  if (next && ABSTRACTION.test(next)) return m;
+  const phrase = fold(m).replace(/\s+/g, ' ').trim();
+  const stem = next ? phrase.slice(0, Math.max(phrase.indexOf(' ') + 4, phrase.length - 2)) : '';
+  if (next && pages.some((p) => p.replace(/\s+/g, ' ').includes(stem))) return m;
+  return `${String(NUMBER_WORDS[w.toLowerCase()] ?? w)}${next ?? ''}`;
+});
+/** A clock time ("09:00") written on a trusted page is a label, not a quantity. */
+const CLOCK = /(?<!\d)([01]?\d|2[0-3])[:.][0-5]\d(?!\d)/g;
+const withoutPageTimes = (t: string, pages: string[]): string => t.replace(CLOCK, (m) => (pages.some((p) => p.includes(m)) ? ' ' : m));
+const CURRENCY = /^(lei|ron|eur|euro|usd|gbp|chf|lire|€|\$|£)$/i;
+const tokens = (s: string): string[] => fold(s).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+/**
+ * A number that is part of a NAME written on a trusted page ("Kinetoterapie posturală (copii 10–15 ani)"): grounded when
+ * a window of four words around it, with at least two words, appears verbatim on that page. Never a price.
+ */
+function partOfQuotedName(text: string, n: number, quotes: string[]): boolean {
+  const t = tokens(text);
+  const qs = quotes.map((q) => ` ${tokens(q).join(' ')} `);
+  for (let i = 0; i < t.length; i++) {
+    if (Number(t[i]!.replace(',', '.')) !== n) continue;
+    for (let s = Math.max(0, i - 3); s <= i; s++) {
+      const w = t.slice(s, s + 4);
+      if (w.length < 4 || w.some((x) => CURRENCY.test(x)) || w.filter((x) => /\p{L}/u.test(x)).length < 2) continue;
+      if (qs.some((q) => q.includes(` ${w.join(' ')} `))) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * STRUCTURAL SYNTHESIS governance (2026-10-15). The model proposes what the business is and 0–3 structural hypotheses;
+ * code keeps a hypothesis only when it is SYNTHESIS (≥ 2 anchored quotes from distinct facts, ≥ 2 business-model
+ * dimensions, ≥ 2 of the business's own named things that the sources contain), SPECIFIC (not a generic strategy truth),
+ * REVERSIBLE (an alternative explanation that is not a paraphrase, the unknown and question that would tell them apart,
+ * and what would weaken or reverse it), DECISION-RELEVANT (a decision it informs, never a predicted outcome), and
+ * EPISTEMICALLY CLEAN: hedging is allowed (it is a hypothesis), but no behaviour prediction, no unsupported economics, no
+ * founder choice read from the website, no argument from what a page does not show, no comparison of two surfaces with
+ * different purposes without a stated basis, and every number grounded (a counted list, an entity-tied number, or part
+ * of a quoted name). Everything rejected is kept in the audit with its reason, never shown. Deterministic, generic.
+ */
+export function governStructure(
+  raw: BusinessStructure | undefined,
+  observations: readonly PageObservation[],
+  ctx: { hasDeclared: boolean; trusted: (ref: string) => boolean; entities: string[] },
+): BusinessStructure | undefined {
+  if (!raw) return undefined;
+  const audit: NonNullable<BusinessStructure['audit']>[number][] = [];
+  const pages = observations.filter((o) => ctx.trusted(o.ref)).map((o) => fold(o.text));
+  const unsupportedClaim = (t: string): boolean => BEHAVIOUR.test(t) || ECONOMICS.test(t) || JUDGEMENT.test(t) || mixesSourceVoice(t) || makesUnlicensedClaim(t)
+    || (!ctx.hasDeclared && FOUNDER_CHOICE.test(t));
+  // The same discipline for every STORED reasoning field, shown or not (alternative, reversal, unknown, rationale): no
+  // behaviour, economics, performance judgement, customer trait or founder choice. Hedged mentions of a possible cause
+  // ("local demand may explain it") stay; an evaluative claim ("strong demand", "under-utilised") does not.
+  const storedFault = (t: string): string => BEHAVIOUR.test(t) || ECONOMICS.test(t) ? 'claims behaviour or economics'
+    : JUDGEMENT.test(t) ? 'a performance judgement (under-utilised, potential, demand level, value) the evidence does not earn'
+      : CUSTOMER_TRAIT.test(t) ? 'a customer trait read from footprint'
+        : !ctx.hasDeclared && FOUNDER_CHOICE.test(t) ? 'a founder choice read from the website' : '';
+  const brand = brandWords(observations, ctx.trusted);
+
+  // The synthesis: what the business is, without overstating it. A sentence that says what BB does NOT know yet
+  // ("I don't yet know whether they behave as one business economically") is an unknown, not a claim.
+  let synthesis = (raw.synthesis ?? '').trim();
+  const asserted = synthesis.split(/(?<=[.!?])\s+/).filter((x) => !NOT_KNOWING.test(x)).join(' ');
+  const synthesisWhy = !synthesis ? ''
+    : isWebsiteHygiene(synthesis) || isHousekeeping(synthesis) ? 'about the website, not the business'
+      : unsupportedClaim(asserted) ? 'claims behaviour, economics or a founder choice the sources cannot support'
+        : OVERCLAIM.test(asserted) ? 'overstates the structure (more than the evidence earns)'
+          : VISIBILITY.test(synthesis) ? 'argues from what a page does not show'
+            : AUDIENCE_MODEL.test(asserted) ? 'names an operating model by audience or life stage, not by how it is sold, delivered, booked or priced'
+            : numbersIn(synthesis).length && !groundNumbers([synthesis], raw.synthesisNumbers, [], observations, ctx.entities, ctx.trusted).ok ? 'a number that is not grounded'
+              : '';
+  if (synthesisWhy) { audit.push({ item: synthesis, verdict: 'rejected', reason: `synthesis: ${synthesisWhy}` }); synthesis = ''; }
+  // An attribute attached to a group of offers must hold for EACH member: unsupported members are removed from the group;
+  // if none would remain, the synthesis does not stand.
+  if (synthesis) {
+    const prop = checkAttributePropagation(synthesis, observations, ctx.trusted, brand);
+    if (prop.failed.length) { audit.push({ item: synthesis, verdict: 'rejected', reason: `synthesis: "${prop.failed.join(', ')}" applied to a group none of whose members the evidence shows it for` }); synthesis = ''; }
+    else if (prop.narrowed.length || prop.removed.length) {
+      audit.push({ item: synthesis, verdict: 'kept', reason: `synthesis narrowed: ${[
+        ...prop.narrowed.map((n) => `"${n.attribute}" is not grounded for ${n.member}`),
+        ...prop.removed.map((r) => `"${r.attribute}" removed from "${r.subject}": ${r.reason}`),
+      ].join('; ')}` });
+      synthesis = prop.text;
+    }
+  }
+
+  // Brand words: what every page title shares ("<Brand> Studio"), never what distinguishes one named thing from another.
+  const kept: StructuralHypothesis[] = [];
+  const trustedTexts = observations.filter((o) => ctx.trusted(o.ref)).map((o) => o.text);
+  for (const h of raw.hypotheses ?? []) {
+    const proposedPattern = (h.pattern ?? '').trim();
+    const proposedInterpretation = (h.interpretation ?? '').trim();
+    const reject = (reason: string): void => { audit.push({ item: proposedInterpretation || proposedPattern, verdict: 'rejected', reason }); };
+    if (!proposedPattern || !proposedInterpretation) { reject('no pattern or no interpretation'); continue; }
+    if (isWebsiteHygiene(`${proposedPattern} ${proposedInterpretation}`) || isHousekeeping(`${proposedPattern} ${proposedInterpretation}`) || SITEMAP.test(`${proposedPattern} ${proposedInterpretation}`)) { reject('about the website, not the business'); continue; }
+    // Synthesis, not restatement: two distinct anchored facts, two dimensions, two of the business's own things.
+    // Each named thing must be on a page and in the claim. Words every page title shares (a brand prefix such as
+    // "<Brand> Studio") are not what distinguishes them: the claim may use the distinctive part alone.
+    const named = [...new Set((h.between ?? []).map((x) => x.trim()).filter((x) => x.length >= 3))];
+    const distinctive = (x: string): string => wordsOf(x).filter((w) => !brand.has(w)).join(' ');
+    // A quote must be a verbatim span of a trusted page. Cited on the wrong page, it is re-attributed to the page that
+    // really contains it (the quote is real; only the citation was wrong). A section heading that says WHICH location or
+    // offer a line belongs to goes in `context` (or before " – "): kept only when it is on the same page, shortly before
+    // the line, with no other named thing in between. Stitched or paraphrased quotes are dropped.
+    const evidence = (h.evidence ?? []).flatMap((e) => {
+      const a = anchorEvidence(e, observations, ctx.trusted, named.flatMap((n) => [fold(n), distinctive(n)]).filter((x) => x.length >= 3));
+      return a ? [{ ...a, ...(e.surface && EVIDENCE_SURFACES.includes(e.surface) ? { surface: e.surface } : {}) }] : [];
+    }).filter((e, i, all) => !all.some((x, j) => j < i && (fold(x.quote).includes(fold(e.quote)) || fold(e.quote).includes(fold(x.quote)))));
+    if (evidence.length < 2) { reject('fewer than two distinct anchored facts: a restatement, not synthesis'); continue; }
+    const dimensions = [...new Set(h.dimensions ?? [])].filter((d) => MODEL_DIMENSIONS.includes(d));
+    if (dimensions.length < 2) { reject('it connects fewer than two business-model dimensions'); continue; }
+    const compares = [...new Set(h.compares ?? [])].filter((s) => EVIDENCE_SURFACES.includes(s));
+    if (compares.length >= 2 && !(h.comparisonBasis ?? '').trim()) { reject(`category confusion: it compares a ${compares[0]} with a ${compares[1]} without saying why they are comparable`); continue; }
+    // Counts the model listed must recount exactly: a wrong count is a false statement, not a trimmable sentence.
+    const counts = groundCounts(h.counts, observations, ctx.trusted);
+    if (!counts.ok) { reject(`count not grounded: ${counts.problems.join('; ')}`); continue; }
+    // Sentence by sentence (as stage lines are): a sentence that argues from what a page does not show, reads demand or
+    // volume from footprint, claims behaviour / economics / a founder choice, or shows an ungrounded number is DROPPED;
+    // the hypothesis stands only if a pattern and an interpretation remain and everything below still holds.
+    const quotes = [...evidence.map((e) => e.quote), ...trustedTexts];
+    const numbersOk = (sentence: string): boolean => {
+      const numeric = withNumberWords(withoutPageTimes(sentence, trustedTexts), pages);
+      const rest = numbersIn(numeric).filter((n) => !counts.values.includes(n) && !partOfQuotedName(numeric, n, quotes));
+      return !rest.length || groundNumbers([numeric.replace(/\d+(?:[.,]\d+)?/g, (m) => (rest.includes(Number(m.replace(',', '.'))) ? m : ''))], h.numbers, h.calculations, observations, ctx.entities, ctx.trusted).ok;
+    };
+    const faultOf = (sentence: string): string => VISIBILITY.test(sentence) ? 'category confusion: it argues from what a page does not show'
+      : (sentence.match(CLOCK) ?? []).length >= 3 ? 'a transcription of a schedule, not a relationship (the evidence carries the lines)'
+        : listItems(sentence) >= 6 ? 'a transcription of a list, not a relationship (the evidence carries the items)'
+        : FOOTPRINT_INFERENCE.test(sentence) ? 'reads demand, volume or occupancy from footprint'
+          : CUSTOMER_TRAIT.test(sentence) ? 'reads a customer trait (availability, preference) from footprint'
+        : unsupportedClaim(sentence) ? 'claims behaviour, economics or a founder choice the sources cannot support'
+          : !numbersOk(sentence) ? 'a number that is not grounded' : '';
+    const trimmed: string[] = [];
+    const keep = (text: string): string => sentencesOf(text).filter((x) => { const r = faultOf(x); if (r) trimmed.push(`${r}: "${x}"`); return !r; }).join(' ');
+    const pattern = keep(proposedPattern);
+    const interpretation = keep(proposedInterpretation);
+    if (!pattern || !interpretation) { reject(trimmed.length ? trimmed.join(' | ') : 'nothing left'); continue; }
+    const claim = `${pattern} ${interpretation}`;
+    const between = named.filter((x) => {
+      const d = distinctive(x);
+      return d.length >= 3 && pages.some((p) => mentions(p, d)) && mentions(fold(claim), d);
+    });
+    if (between.length < 2) { reject('it names fewer than two of this business\'s own things (generic)'); continue; }
+    if (GENERIC.test(claim) && !between.some((x) => mentions(fold(interpretation), distinctive(x)))) { reject('generic strategy language'); continue; }
+    // Reversible: an alternative that is not a paraphrase, what tells them apart, and what would reverse it.
+    const storedTrim = (text: string, label: string): string => sentencesOf(text).filter((x) => { const r = storedFault(x); if (r) trimmed.push(`${label}: ${r}: "${x}"`); return !r; }).join(' ').replace(/[;,:]\s*$/, '.');
+    const alternative = storedTrim((h.alternative ?? '').trim(), 'alternative');
+    if (!alternative || sameInsight(alternative, interpretation, 0.6)) { reject('no real alternative explanation'); continue; }
+    // An alternative keeps the meaningful set of explanations open: one named cause (only staffing, only space) where
+    // several remain plausible collapses the uncertainty before any evidence narrowed it.
+    const altKinds = kindsOf(alternative, [...named, ...ctx.entities]);
+    if (altKinds.size === 1) { reject(`the alternative collapses the uncertainty into one explanation (${[...altKinds][0]}) while others remain plausible`); continue; }
+    const question = (h.discriminator?.question ?? '').trim();
+    const unknown = storedTrim((h.discriminator?.unknown ?? '').trim(), 'discriminating unknown');
+    if (!question || !unknown || isWebsiteHygiene(question)) { reject('no discriminating unknown or question'); continue; }
+    // A reversal is checked against the same trusted evidence: a condition about what the pages show is either already
+    // true (it would contradict the reading) or a website change, never new evidence; it is dropped clause by clause.
+    const reversalCheck = checkReversal((h.reversal ?? '').trim(), pages, brand);
+    const reversal = storedTrim(reversalCheck.kept, 'reversal');
+    if (!reversal) { reject(`no valid reversal remains${reversalCheck.dropped.length ? `: ${reversalCheck.dropped.map((d) => `${d.reason}: "${d.clause}"`).join(' | ')}` : ''}`); continue; }
+    // Decision-relevant: a decision it informs, never an outcome.
+    // The decision line, fork by fork ("decides whether A, or whether B"): a branch that predicts an outcome, advises or
+    // judges performance is dropped; the line stands only if its first branch is clean.
+    const proposedWhy = (h.whyItMatters ?? '').trim();
+    const branches = proposedWhy.split(/,?\s(?=(?:sau dac[ăa]|or whether|or if|o se|oder ob)\s)/iu);
+    const licensedBy = `${pattern} ${interpretation} ${alternative}`;
+    const whyFault = (t: string): boolean => BEHAVIOUR.test(t) || ECONOMICS.test(t) || CONSEQUENCE.test(t) || JUDGEMENT.test(t) || makesUnlicensedClaim(t)
+      || FRAMING.some((f) => f.claim.test(t) && !f.license.test(licensedBy));
+    const whyItMatters = whyFault(branches[0] ?? '') ? '' : branches.filter((b) => { const bad = whyFault(b); if (bad) trimmed.push(`why it matters: an outcome, advice, performance judgement or unlicensed framing: "${b}"`); return !bad; }).join(' ').replace(/\s*[,;]?\s*$/, '').trim().replace(/([^.!?])$/, '$1.');
+    const changes = [...new Set(h.changes ?? [])].filter((x) => STRATEGIC_DECISIONS.includes(x));
+    if (!proposedWhy || !changes.length) { reject('it names no decision it informs'); continue; }
+    if (!whyItMatters) { reject('why it matters predicts an outcome, gives advice or judges performance'); continue; }
+    if (kept.some((k) => sameInsight(k.interpretation, interpretation, 0.5))) { reject('the same reading as one already kept'); continue; }
+    if (kept.length >= 3) { reject('more than three: lower impact'); continue; }
+    const why = governRationale((h.discriminator.why ?? '').trim(), [question, interpretation, alternative]);
+    const comparisonBasis = storedTrim((h.comparisonBasis ?? '').trim(), 'comparison basis');
+    kept.push({
+      pattern, interpretation, alternative, reversal, whyItMatters, changes, dimensions, between, evidence,
+      relationship: STRUCTURE_RELATIONSHIPS.includes(h.relationship) ? h.relationship : 'asymmetry',
+      discriminator: { unknown, question, ...(why ? { why } : {}) },
+      ...(compares.length ? { compares } : {}), ...(comparisonBasis ? { comparisonBasis } : {}),
+      ...(h.counts?.length ? { counts: h.counts } : {}), ...(h.numbers?.length ? { numbers: h.numbers } : {}), ...(h.calculations?.length ? { calculations: h.calculations } : {}),
+      // Only the verdicts are stored with the hypothesis; the dropped clauses themselves live in the audit.
+      reversalCheck: { checked: true, dropped: reversalCheck.dropped.map((d) => ({ reason: d.reason })) },
+    });
+    audit.push({ item: interpretation, verdict: 'kept', reason: `synthesis across facts, specific, reversible, decision-relevant${trimmed.length ? `; dropped sentences: ${trimmed.join(' | ')}` : ''}${reversalCheck.dropped.length ? `; dropped reversal clauses: ${reversalCheck.dropped.map((d) => `${d.reason}: "${d.clause}"`).join(' | ')}` : ''}` });
+  }
+  return { synthesis, hypotheses: kept, mechanisms: verifiedMechanisms(observations, ctx.trusted), audit };
+}
+
+/**
+ * One piece of structural evidence, anchored: the quote verbatim on its cited page, else on another trusted page; or a
+ * "<heading> – <line>" / {context: heading} pair where the line is verbatim, the heading is verbatim on the SAME page within
+ * 400 characters before it, and no other named thing of the hypothesis stands between them (else the heading would not be
+ * the line's section).
+ */
+function anchorEvidence(
+  e: { ref?: string; quote?: string; context?: string },
+  observations: readonly PageObservation[],
+  trusted: (ref: string) => boolean,
+  names: string[],
+): (ClaimEvidence & { context?: string }) | undefined {
+  const pages = observations.filter((o) => trusted(o.ref));
+  const direct = (quote: string): ClaimEvidence | undefined => {
+    const cited = trusted(e.ref ?? '') ? anchorClaimEvidence([{ ref: e.ref, quote }], observations)[0] : undefined;
+    return cited ?? pages.map((o) => anchorClaimEvidence([{ ref: o.ref, quote }], observations)[0]).find(Boolean);
+  };
+  const quote = (e.quote ?? '').trim();
+  const split = /^(.{3,80}?)\s+[–—-]\s+(.+)$/su.exec(quote);
+  const label = (e.context ?? '').trim() || (split ? split[1]!.trim() : '');
+  const plain = direct(quote);
+  if (plain && !label) return plain;
+  const line = (e.context ?? '').trim() ? plain : split ? direct(split[2]!.trim()) : undefined;
+  if (!line) return plain;
+  if (!label) return line;
+  const page = observations.find((o) => o.ref === line.ref);
+  const text = fold(page?.text ?? '').replace(/\s+/g, ' ');
+  const at = text.indexOf(fold(line.quote).replace(/\s+/g, ' '));
+  const fl = fold(label).replace(/\s+/g, ' ');
+  const from = at === -1 ? -1 : text.lastIndexOf(fl, at);
+  if (from === -1 || at - (from + fl.length) > 400) return plain;
+  const between = text.slice(from + fl.length, at);
+  if (names.some((n) => !fl.includes(n) && between.includes(n))) return plain;
+  return { ...line, context: label };
+}
+
+/**
+ * Fact-check a reversal condition clause by clause against the pages BB read. A clause about what the pages show
+ * ("if X appeared in the timetable / team") is dropped: when every business word it names already appears together on one
+ * trusted page it is ALREADY TRUE (and contradicts the reading); otherwise it is a website change, not new evidence.
+ * What remains must be something the founder can answer or the business can show.
+ */
+export function checkReversal(reversal: string, pages: readonly string[], brand: ReadonlySet<string> = new Set()): { kept: string; dropped: { clause: string; reason: string }[] } {
+  const dropped: { clause: string; reason: string }[] = [];
+  // Business words, inflection-tolerant ("kinetoterapia" ~ "Kinetoterapeut"): stems of 5+ letter words found on a page.
+  const stem = (w: string): string => (w.length > 7 ? w.slice(0, -3) : w.length > 5 ? w.slice(0, -2) : w);
+  const PRESENCE_WORDS = new Set(['exista', 'exist', 'exists', 'there', 'lucreaza', 'works', 'work', 'include', 'includes', 'listeaza', 'lists', 'este', 'sunt', 'have', 'altul', 'alta', 'another', 'other', 'inca', 'still', 'fapt', 'fact', 'daca',
+    // surfaces, not business things: "…who is not in the timetable" is about the page
+    'orar', 'orarul', 'orarului', 'timetable', 'schedule', 'pagina', 'page', 'site', 'siteul', 'website', 'lista', 'list', 'publicat', 'published', 'afara', 'outside',
+    // function words that also appear on every page
+    'care', 'unde', 'cand', 'prin', 'intr', 'dupa', 'fara', 'pentru', 'acolo', 'aici', 'doar', 'chiar', 'which', 'that', 'with', 'from', 'into', 'also', 'only', 'even', 'then', 'than', 'this', 'these', 'those', 'more', 'most', 'they', 'them', 'their', 'here', 'when', 'where', 'what', 'who']);
+  const vocabulary = (w: string): boolean => w.length >= 5 && !brand.has(w) && !REVERSAL_STOP.has(w) && pages.some((p) => p.includes(stem(w)));
+  // A new condition starts at every "or if" and at every further "if" ("If A, if B." is two conditions).
+  const clauses = sentencesOf(reversal).flatMap((x) => x.split(/;\s*|,?\s(?:sau|or|ori|oppure|oder)\s(?=(?:dac[ăa]|if|se|wenn)\s)|(?<=\S),?\s+(?=(?:dac[ăa]|if|wenn)\s)/iu)).map((x) => x.trim()).filter(Boolean);
+  // Presence claims ("if there is another X at Y", "if X works at Y") are checked like page conditions: when the pages
+  // already show X at Y (the business words co-occur on one page), the condition is already true. Short proper names
+  // (four letters) count here: a location is often named in two short words.
+  const presenceWords = (clause: string): string[] => [...new Set(wordsOf(clause).filter((w) => w.length >= 4 && !brand.has(w) && !REVERSAL_STOP.has(w) && !PRESENCE_WORDS.has(w) && pages.some((p) => p.includes(stem(w)))).map(stem))];
+  // Together = within one section of a page (300 characters either side), never merely somewhere on the same page: two
+  // locations' timetables share a page without the people of one working at the other.
+  const together = (words: string[]): boolean => pages.some((p) => {
+    for (let at = p.indexOf(words[0]!); at !== -1; at = p.indexOf(words[0]!, at + 1)) {
+      const section = p.slice(Math.max(0, at - 300), at + 300);
+      if (words.every((w) => section.includes(w))) return true;
+    }
+    return false;
+  });
+  const kept = clauses.filter((clause) => {
+    if (PRESENCE.test(clause)) {
+      const words = presenceWords(clause.replace(NEGATED_APPEARANCE, ' '));
+      if (words.length >= 2 && together(words)) { dropped.push({ clause, reason: 'already true in the pages BB read (its business words appear together on one page)' }); return false; }
+      return true;
+    }
+    // "…appointments that do not appear in the timetable" DESCRIBES the page (the fact itself is about the business);
+    // only a condition that something WOULD appear / be listed is a page condition.
+    if (!SOURCE_CONDITION.test(clause.replace(NEGATED_APPEARANCE, ' '))) return true;
+    const words = [...new Set(wordsOf(clause.replace(new RegExp(SOURCE_CONDITION.source, 'giu'), ' ')).filter(vocabulary).map(stem))];
+    const alreadyTrue = words.length >= 2 && together(words);
+    dropped.push({ clause, reason: alreadyTrue ? 'already true in the pages BB read (its business words appear together on one page)' : 'about what the pages show, not new evidence about the business' });
+    return false;
+  });
+  const text = kept.join(' ').trim();
+  return { kept: text ? text.charAt(0).toUpperCase() + text.slice(1) : '', dropped };
+}
+
+/** Words most page titles share ("<Brand> Studio"): never what distinguishes one named thing from another. */
+export function brandWords(observations: readonly PageObservation[], trusted: (ref: string) => boolean): Set<string> {
+  const titles = observations.filter((o) => trusted(o.ref)).map((o) => new Set(wordsOf(`${o.title ?? ''} ${o.ref}`)));
+  return new Set([...new Set(titles.flatMap((t) => [...t]))].filter((w) => titles.length >= 3 && titles.filter((t) => t.has(w)).length >= titles.length * 0.6));
+}
+
+/**
+ * ATTRIBUTE PROPAGATION: a synthesis groups several offers ("one-to-one services (A, B, C), which start with a paid
+ * evaluation") and attaches a mechanism to the group. The attribute must be grounded for EACH member: on the member's own
+ * page when it has one (a page titled with its name), else within the section around its mention. Members it is not
+ * grounded for are removed from the group (the subject narrows); if none would remain, the attribute fails.
+ */
+export function checkAttributePropagation(synthesis: string, observations: readonly PageObservation[], trusted: (ref: string) => boolean, brand: ReadonlySet<string>): { text: string; narrowed: { member: string; attribute: string }[]; failed: string[]; removed: { subject: string; attribute: string; reason: string }[] } {
+  const narrowed: { member: string; attribute: string }[] = [];
+  const failed: string[] = [];
+  const removed: { subject: string; attribute: string; reason: string }[] = [];
+  const pages = observations.filter((o) => trusted(o.ref));
+  const families = offerFamilies(observations, trusted, brand);
+  // The words the business's own offer pages use: an entry of a parenthesised list is a MEMBER only when every one of its
+  // significant words is offer vocabulary ("Kinetoterapie", "planșeu pelvin"); a description ("delivered as a group")
+  // is not a member.
+  const vocabulary = families.map((f) => fold(f.page.text)).join(' ');
+  const isMember = (entry: string): boolean => { const ws = significant(entry, brand); return ws.length > 0 && ws.every((w) => vocabulary.includes(stemOf(w))); };
+  const grounded = (member: string, evidence: RegExp): boolean => {
+    const words = wordsOf(member).filter((w) => w.length >= 5 && !brand.has(w));
+    if (!words.length) return true; // nothing to check it against: not a named offer
+    const stems = words.map((w) => (w.length > 6 ? w.slice(0, -2) : w.slice(0, -1)));
+    const own = pages.filter((o) => stems.some((st) => fold(`${o.title ?? ''} ${o.ref}`).includes(st)));
+    if (own.length) return own.some((o) => evidence.test(o.text));
+    return pages.some((o) => {
+      const t = fold(o.text);
+      for (let at = t.indexOf(stems[0]!); at !== -1; at = t.indexOf(stems[0]!, at + 1)) if (evidence.test(o.text.slice(Math.max(0, at - 250), at + 250))) return true;
+      return false;
+    });
+  };
+  // Each parenthesised group: its members, and the attribute text around it (the list item it sits in plus any relative
+  // clause inside the parentheses).
+  const text = synthesis.replace(/\(([^()]+)\)/g, (whole, inner: string, offset: number) => {
+    const before = synthesis.slice(0, offset);
+    // The list item the group sits in starts after the last separator (":", ";", ",", " and " / " și " / " e " / " und ").
+    const seps = [...before.matchAll(/[:;,]|\s(?:și|si|and|e|und)\s/gu)];
+    const lastSep = seps.length ? seps[seps.length - 1]! : null;
+    const itemStart = lastSep ? lastSep.index! + lastSep[0].length : 0;
+    const afterRaw = synthesis.slice(offset + whole.length);
+    const itemEnd = afterRaw.search(/,|;|\.(\s|$)|\s(și|si|and|e|und)\s/u);
+    // Members come before the first relative clause ("…, which start with …"); the clause is kept whole, as written.
+    const rel = /,\s*(care|ce|which|that|who|che|die|der|das)\s/iu.exec(inner);
+    const relativeText = rel ? inner.slice(rel.index + 1).trim() : '';
+    const members = (rel ? inner.slice(0, rel.index) : inner).split(/,|\s(?:și|si|and|e|und)\s/u).map((x) => x.trim()).filter(Boolean).filter(isMember);
+    const relative = relativeText ? [relativeText] : [];
+    if (!members.length) return whole;
+    const attributeText = `${before.slice(itemStart)} ${relative.join(' ')} ${itemEnd === -1 ? afterRaw : afterRaw.slice(0, itemEnd)}`;
+    let keep = members;
+    for (const a of ATTRIBUTES) {
+      if (!a.claim.test(attributeText)) continue;
+      const ok = keep.filter((m) => grounded(m, a.evidence));
+      for (const m of keep) if (!ok.includes(m)) narrowed.push({ member: m, attribute: a.name });
+      if (!ok.length) failed.push(a.name);
+      keep = ok;
+    }
+    if (keep.length === members.length) return whole;
+    return keep.length ? `(${keep.join(', ')}${relativeText ? `, ${relativeText}` : ''})` : whole;
+  });
+
+  // ABSTRACT GROUPS ("individual clinical services, which start with a paid evaluation"): the protection must not depend
+  // on the model listing members. Each list item without a member list that attaches an attribute is resolved to the
+  // business's offer families: the families it NAMES, else the families whose own page carries every descriptor word of
+  // the category. The attribute must hold on each covered family's page. All hold → kept. Some → the category is narrowed
+  // by naming those families. None, or the category cannot be resolved → the shared attribute is removed.
+  // Without priced offer pages there is nothing to resolve a category against: the explicit check above is all there is.
+  if (!families.length) return { text, narrowed, failed, removed };
+  const out = sentencesOf(text).map((sentence) => {
+    if (NOT_KNOWING.test(sentence)) return sentence;
+    const items = sentence.split(/(?<=[:;])|,(?![^()]*\))/u);
+    return items.map((item) => {
+      if (/\(/.test(item)) return item;
+      const claimed = ATTRIBUTES.filter((a) => a.claim.test(item));
+      if (!claimed.length) return item;
+      const cut = Math.min(...[
+        item.search(/\s(care|ce|which|that|who|che|die|der|das)\s/iu),
+        item.search(/\s(cu|with|con|mit|prin|through|via)\s/iu),
+        ...claimed.map((a) => item.search(a.claim)),
+      ].filter((i) => i > 0));
+      if (!Number.isFinite(cut)) return item;
+      const subject = item.slice(0, cut);
+      // The attribute IS the category's own name ("scheduled classes"): nothing is attached to a group.
+      if (!significant(subject, brand).length) return item;
+      const named = families.filter((f) => significant(f.name, brand).some((w) => mentions(fold(subject), w)));
+      const descriptors = significant(subject, brand).filter((w) => !GENERIC_CATEGORY.has(w));
+      const covered = named.length ? named
+        : descriptors.length ? families.filter((f) => descriptors.every((d) => fold(f.page.text).includes(stemOf(d)))) : [];
+      const drop = (reason: string): string => { for (const a of claimed) removed.push({ subject: subject.trim(), attribute: a.name, reason }); return subject.replace(/\s+$/, ''); };
+      if (!covered.length) return drop('the category cannot be resolved to the business\'s offers, so no shared attribute can be verified');
+      let keep = covered;
+      for (const a of claimed) keep = keep.filter((f) => a.evidence.test(f.page.text));
+      if (keep.length === covered.length) return item;
+      if (!keep.length) return drop(`no offer the category covers shows ${claimed.map((a) => a.name).join(', ')}`);
+      if (named.length) return drop(`${covered.filter((f) => !keep.includes(f)).map((f) => f.name).join(', ')} does not show ${claimed.map((a) => a.name).join(', ')}`);
+      for (const f of covered) if (!keep.includes(f)) for (const a of claimed) narrowed.push({ member: f.name, attribute: a.name });
+      return `${subject.replace(/\s+$/, '')} (${keep.map((f) => f.name).join(', ')})${item.slice(cut)}`;
+    }).join(',').replace(/:,/g, ':').replace(/;,/g, ';');
+  }).join(' ');
+  return { text: out, narrowed, failed, removed };
+}
+
+/** Words that name a kind of thing, not which offers ("services", "programmes", "sessions"): never a category descriptor. */
+const GENERIC_CATEGORY = new Set(['servicii', 'serviciile', 'serviciu', 'services', 'service', 'programe', 'programele', 'programs', 'programmes', 'oferte', 'oferta', 'offers', 'linii', 'lines', 'modele', 'models', 'sesiuni', 'sessions', 'sedinte', 'sedintele', 'activitati', 'activities', 'servizi', 'programmi', 'leistungen', 'angebote', 'rezervate', 'rezervat', 'booked', 'vandute', 'sold', 'livrate', 'delivered', 'distincte', 'distinct', 'separate', 'principal', 'principale']);
+const stemOf = (w: string): string => w.slice(0, Math.max(4, w.length - 3));
+const significant = (text: string, brand: ReadonlySet<string>): string[] => wordsOf(text).filter((w) => w.length >= 5 && !brand.has(w));
+/** The business's offer families: trusted pages that carry prices, named by their title (without the site name). */
+export function offerFamilies(observations: readonly PageObservation[], trusted: (ref: string) => boolean, brand: ReadonlySet<string>): { name: string; page: PageObservation }[] {
+  return observations
+    .filter((o) => trusted(o.ref) && /\d+\s*(lei|ron|eur|euro|€|\$|£|chf)(?!\p{L})/iu.test(o.text))
+    .map((o) => ({ name: ((o.title ?? '').trim() || o.ref).split(/\s+[-–|·]\s+/)[0]!.trim(), page: o }))
+    .filter((f) => significant(f.name, brand).length > 0);
+}
+
+/** The fallback's verified mechanisms: delivery or purchase mechanisms a trusted page actually shows. */
+export function verifiedMechanisms(observations: readonly PageObservation[], trusted: (ref: string) => boolean): { kind: MechanismKind; ref: string }[] {
+  const out: { kind: MechanismKind; ref: string }[] = [];
+  for (const m of MECHANISMS) {
+    const page = observations.find((o) => trusted(o.ref) && !SITEMAP.test(o.url ?? '') && m.test(o.text));
+    if (page) out.push({ kind: m.kind, ref: page.ref });
+  }
+  return out;
+}
+
+/**
+ * Does a question settle a hypothesis's fork? It must name one of the things the hypothesis is about and offer at least
+ * two explanations, at least one of them from the alternative ("deliberate, or caused by rooms, equipment or
+ * availability?"). "Demand, or because one person works there?" offers neither side of the actual fork.
+ */
+function settlesFork(question: string, h: StructuralHypothesis, names: readonly string[], brand: ReadonlySet<string> = new Set()): { ok: boolean; offers: string[] } {
+  const q = fold(question);
+  const named = h.between.some((b) => { const d = wordsOf(b).filter((w) => !brand.has(w)).join(' '); return d.length >= 3 && mentions(q, d); });
+  // A catch-all ("or another operational decision", "or something else") names no explanation: it does not count.
+  const offers = [...kindsOf(question.replace(CATCH_ALL, ' '), names)];
+  const alt = kindsOf(h.alternative, names);
+  const fromAlternative = [...alt].some((k) => offers.includes(k));
+  // The reading's side of the fork: a deliberate choice, or a kind the reading names that the alternative does not.
+  const reading = [...kindsOf(h.interpretation, names)].filter((k) => !alt.has(k));
+  const fromReading = offers.includes('deliberate') || reading.some((k) => offers.includes(k));
+  return { ok: named && offers.length >= 2 && fromAlternative && fromReading, offers };
+}
+
+/**
+ * Business framing a rationale may only use when the question it explains (or its hypothesis) licenses it: "or whether
+ * one location is simply smaller" invents a size reading nobody asked about. Each family: the framing words, and the words
+ * in the question / hypothesis that license them.
+ */
+const FRAMING: { name: string; claim: RegExp; license: RegExp }[] = [
+  { name: 'size', claim: /(?<!\p{L})(mai mic\p{L}*|mai mari?|smaller|bigger|larger|m[ăa]rime|dimensiun\p{L}*|size|scal[ăae]\p{L}*|scale|pi[ùu] piccol\p{L}*|kleiner|gr[öo][ßs]er)(?!\p{L})/iu, license: /(?<!\p{L})(mai mic\p{L}*|mai mari?|smaller|bigger|larger|m[ăa]rime|dimensiun\p{L}*|size|scal[ăae]\p{L}*|scale|c[âa][țt]i|c[âa]te|how many|num[ăa]r\p{L}*)(?!\p{L})/iu },
+  { name: 'utilisation', claim: /(?<!\p{L})(utiliz\p{L}*|ocupa\p{L}*|occupan\p{L}*|pline|full|locuri libere|spare capacity|capacitate liber\p{L}*|auslast\p{L}*)(?!\p{L})/iu, license: /(?<!\p{L})(utiliz\p{L}*|ocupa\p{L}*|occupan\p{L}*|pline|full|locuri|spots?|places?|capacit\p{L}*)(?!\p{L})/iu },
+  { name: 'maturity', claim: /(?<!\p{L})(matur\p{L}*|consacrat\p{L}*|established|în cre[șs]tere|growing|în declin|declining|stagn\p{L}*)(?!\p{L})/iu, license: /(?<!\p{L})(matur\p{L}*|cre[șs]t\p{L}*|grow\p{L}*|declin\p{L}*|stagn\p{L}*|ultimele|last \d+|over time)(?!\p{L})/iu },
+  { name: 'demand', claim: /(?<!\p{L})(cerer\p{L}*|demand|domanda|nachfrage)(?!\p{L})/iu, license: /(?<!\p{L})(cerer\p{L}*|demand|domanda|nachfrage)(?!\p{L})/iu },
+  { name: 'performance', claim: /(?<!\p{L})(motor\p{L}*|driver\p{L}*|miz[ăa]\p{L}*|performan\p{L}*|importan\p{L}*|principal\p{L}*|main|key|cheie)(?!\p{L})/iu, license: /(?<!\p{L})(venit\p{L}*|revenue|volum\p{L}*|num[ăa]r\p{L}*|clien[țt]i activi|ședin[țt]e|sedinte|sessions?|bookings?|rezerv\p{L}*|program[ăa]ri|aduc\p{L}*|bring\p{L}*|drive\p{L}*|genereaz\p{L}*)(?!\p{L})/iu },
+  { name: 'profitability', claim: /(?<!\p{L})(profit\p{L}*|rentab\p{L}*|marj\p{L}*|margin\p{L}*)(?!\p{L})/iu, license: /(?<!\p{L})(profit\p{L}*|rentab\p{L}*|marj\p{L}*|margin\p{L}*|cost\p{L}*)(?!\p{L})/iu },
+  { name: 'strategic role', claim: /(?<!\p{L})(strategic\p{L}*|rol(ul|uri)?|roles?)(?!\p{L})/iu, license: /(?<!\p{L})(deliberat\p{L}*|specializ\p{L}*|pozi[țt]ion\p{L}*|alegere|ales\p{L}*|decizi\p{L}*|choice|chos\p{L}*|deliberate|positioning|strategic\p{L}*|rol\p{L}*|roles?)(?!\p{L})/iu },
+];
+/**
+ * A question rationale (shown "why I ask", or a stored fork explanation) says which reading or decision the answer
+ * resolves. Clause by clause ("…whether A, or whether B"), a clause that brings in business framing the question or its
+ * hypothesis does not license is trimmed; if the first clause does, the rationale is blanked.
+ */
+export function governRationale(why: string, context: readonly string[]): string {
+  const w = governWhy(why);
+  if (!w) return '';
+  const licensed = context.join(' ');
+  // Unlicensed framing, or a future the founder never stated ("whether the line can be extended to X").
+  const fault = (clause: string): boolean => FRAMING.some((f) => f.claim.test(clause) && !f.license.test(licensed)) || PRESUPPOSES.test(clause);
+  // Clauses: "…, or whether …" forks, and trailing asides ("…, without assuming …", "…, which …").
+  const clauses = w.split(/(?=,?\s(?:sau dac[ăa]|or whether|or if|o se|oder ob)\s)|(?=,\s(?:f[ăa]r[ăa]|without|senza|ohne|ceea ce|which|il che)\s)/iu);
+  if (!clauses.some(fault)) return w;
+  if (fault(clauses[0] ?? '')) return '';
+  return clauses.filter((c) => !fault(c)).join('').trim().replace(/\s*[,;:.]?\s*$/, '.');
+}
+
+/** A question's "why": the decision the answer informs. A predicted outcome, behaviour or economics claim is blanked. */
+function governWhy(why: string): string {
+  const w = (why ?? '').trim();
+  return !w || CONSEQUENCE.test(w) || BEHAVIOUR.test(w) || ECONOMICS.test(w) || JUDGEMENT.test(w) ? '' : w;
+}
+
 export function governUnderstanding(raw: GovernedUnderstanding, observations: readonly PageObservation[]): GovernedUnderstanding {
   if (!raw?.read) return raw;
   // Every model list in its proper shape first (a lone string is a one-item list): nothing downstream assumes otherwise.
@@ -148,10 +720,6 @@ export function governUnderstanding(raw: GovernedUnderstanding, observations: re
   const offer = { ...u.offer, unclear: clean(u.offer?.unclear).filter((x) => { if (isWebsiteHygiene(x)) { websiteNotes.push(x); return false; } return true; }) };
   const audience = { ...u.audience, unknown: clean(u.audience?.unknown).filter((x) => !isWebsiteHygiene(x)) };
 
-  // Stage evidence from the sitemap or hygiene is not evidence of the business's stage.
-  const stage = u.stage ? governStage(u.stage, trustedRefs, (line, numbers, calcs) => !numbersIn(line).length
-    || groundNumbers([line], numbers, calcs, observations, entities, (r) => trust(r).trusted).ok) : u.stage;
-
   // The business model: each known claim rests on a trusted source; "declared" needs the founder to have said it.
   // A booking-mechanics line the model filed under acquisition belongs to conversion.
   const proposedModel = (u.read.model ?? []).map((d) => ({ ...d, known: [...(d?.known ?? [])] }));
@@ -188,6 +756,22 @@ export function governUnderstanding(raw: GovernedUnderstanding, observations: re
     return { dimension, known, unknown: clean(d?.unknown).filter((x) => !isWebsiteHygiene(x)) };
   });
 
+  // Stage evidence from the sitemap or hygiene is not evidence of the business's stage; nor is FOOTPRINT (locations,
+  // team size, service breadth, a busy timetable): a stage is earned only from performance evidence (volume, trend,
+  // capacity use). Without it the stage is undetermined, never shown; the proposed one stays for the audit.
+  const governedStage = u.stage ? governStage(u.stage, trustedRefs, (line, numbers, calcs) => !numbersIn(line).length
+    || groundNumbers([line], numbers, calcs, observations, entities, (r) => trust(r).trusted).ok) : u.stage;
+  const stage = governedStage && governedStage.stage !== 'undetermined' && !performanceEvidence(model)
+    ? { stage: 'undetermined' as const, evidence: governedStage.evidence, sourceRefs: governedStage.sourceRefs, secondary: null, proposed: governedStage.stage }
+    : governedStage;
+
+  // Structural synthesis: what the business is, read from the relationships between facts.
+  // The governed structure is what every surface may consume; the rejected or trimmed material is quarantined in a
+  // separate audit record that no surface reads (the card, the conversation and Strategy never see it).
+  const governedStructure = governStructure(u.read.structure, observations, { hasDeclared, trusted: (r) => trust(r).trusted, entities });
+  const structureAudit = governedStructure?.audit;
+  const structure: BusinessStructure | undefined = governedStructure ? (({ audit: _audit, ...rest }) => rest)(governedStructure) : undefined;
+
   // 4. The diagnosis, earned.
   const diagnosis = earnDiagnosis(u.read.diagnosis, { hasDeclared, trustedRefs });
 
@@ -218,7 +802,15 @@ export function governUnderstanding(raw: GovernedUnderstanding, observations: re
     if (ranked.some((r) => sameInsight(r.question, q.question, 0.6))) continue;
     ranked.push(q);
   }
-  const questions = ranked.map(({ question, dimension, changes, why, parts, fills }) => ({ question, dimension, changes, why, ...(parts.length >= 2 ? { parts } : {}), ...(fills.length ? { fills } : {}) }));
+  type Question = UnderstandingRead['questions'][number];
+  // A "why" says which decision the answer informs, never what the answer would mean for the business.
+  // A question that presupposes a future the founder never asked for (expand, add, fix, improve, remove…) is not
+  // asked: it steers. Only the founder's own words can license it.
+  const excludedQuestions: { question: string; reason: string }[] = [];
+  const leading = (q: string): boolean => !hasDeclared && PRESUPPOSES.test(q);
+  const questions: Question[] = ranked
+    .filter((q) => { if (q.dimension !== 'intent' && leading(q.question)) { excludedQuestions.push({ question: q.question, reason: 'presupposes a future the founder has not stated (expanding, adding, fixing, improving)' }); return false; } return true; })
+    .map(({ question, dimension, changes, why, parts, fills }) => ({ question, dimension, changes, why: governRationale(why, [question, ...parts]), ...(parts.length >= 2 ? { parts } : {}), ...(fills.length ? { fills } : {}) }));
 
   // STRATEGIC SUFFICIENCY: for an operating business, the variables that could reverse the next strategic decision —
   // the current driver (performance) and how new customers arrive (acquisition) — must be learned before a bet is
@@ -233,7 +825,45 @@ export function governUnderstanding(raw: GovernedUnderstanding, observations: re
     const q = questions.find((x) => covers(x, d) && !reserved.includes(x));
     if (q) reserved.push(q);
   }
-  const agenda = [...reserved, ...questions.filter((q) => !reserved.includes(q) && q.dimension !== 'intent')];
+  // QUESTION SELECTION IS NOT HYPOTHESIS SELECTION: the few slots go to what the NEXT strategic decision needs.
+  //   A. strategy-critical unknowns for readiness (reserved above);
+  //   B. the discriminating question of each kept structural hypothesis, highest impact first (a hypothesis whose
+  //      question an A question already asks is resolved there, not asked twice);
+  //   C. the remaining questions by information value.
+  // The founder sees the first three (agendaUnknowns); the rest wait for the conversation.
+  const tiers = new Map<Question, { tier: QuestionTier; reason: string; resolves?: number }>();
+  for (const q of reserved) tiers.set(q, { tier: 'A', reason: `strategy-critical for readiness: ${missing.find((d) => covers(q, d)) ?? q.dimension} is unknown` });
+  const discriminating: Question[] = [];
+  // A B question must settle THE fork (the hypothesis's reading vs its alternative), without steering. The hypothesis's
+  // own question is used when it does; otherwise a candidate question that does; otherwise no slot is spent on it.
+  const names = [...entities, ...(structure?.hypotheses ?? []).flatMap((h) => h.between)];
+  const brand = brandWords(observations, (r) => trust(r).trusted);
+  (structure?.hypotheses ?? []).forEach((h, i) => {
+    const own = h.discriminator.question;
+    const fork = `"${h.interpretation}" vs "${h.alternative}"`;
+    const ownCheck = settlesFork(own, h, names, brand);
+    const ownOk = ownCheck.ok && !leading(own);
+    if (!ownOk) excludedQuestions.push({ question: own, reason: leading(own) ? 'presupposes a future the founder has not stated' : `does not settle the fork of hypothesis ${i + 1} (offers: ${ownCheck.offers.join(', ') || 'no explanation'})` });
+    const candidate = ownOk ? own : questions.find((q) => !reserved.includes(q) && !discriminating.includes(q) && settlesFork(q.question, h, names, brand).ok)?.question;
+    if (!candidate) return;
+    const viaA = reserved.find((q) => sameInsight(q.question, candidate, 0.5));
+    if (viaA) { tiers.set(viaA, { ...tiers.get(viaA)!, resolves: i }); return; }
+    // The candidate itself, or a near-identical question that ALSO settles the fork (never a weaker look-alike).
+    const free = (q: Question): boolean => !reserved.includes(q) && !discriminating.includes(q);
+    const existing = questions.find((q) => free(q) && q.question === candidate)
+      ?? questions.find((q) => free(q) && sameInsight(q.question, candidate, 0.5) && settlesFork(q.question, h, names, brand).ok);
+    const q: Question = existing ?? {
+      question: candidate, dimension: h.dimensions[0] ?? 'offer', changes: h.changes, fills: h.dimensions,
+      why: governRationale(h.discriminator.why ?? '', [candidate, h.interpretation, h.alternative]) || governRationale(h.whyItMatters, [candidate, h.interpretation, h.alternative]),
+    };
+    if (!existing) questions.push(q);
+    discriminating.push(q);
+    tiers.set(q, { tier: 'B', reason: `settles hypothesis ${i + 1}: ${fork}; the answer chooses between ${settlesFork(q.question, h, names, brand).offers.join(' / ')}`, resolves: i });
+  });
+  const remaining = questions.filter((q) => !reserved.includes(q) && !discriminating.includes(q) && q.dimension !== 'intent');
+  for (const q of remaining) tiers.set(q, { tier: 'C', reason: 'remaining information value' });
+  const agenda = [...reserved, ...discriminating, ...remaining];
+  const questionTiers = agenda.map((q) => ({ question: q.question, ...tiers.get(q)! }));
   const strategyReadiness: NonNullable<UnderstandingRead['strategyReadiness']> = { state: missing.length ? 'not_ready' : 'ready_enough_for_strategy', missing };
 
   const notConcluding: UnderstandingRead['notConcluding'][number][] = (u.read.notConcluding ?? [])
@@ -249,7 +879,10 @@ export function governUnderstanding(raw: GovernedUnderstanding, observations: re
   }
 
   const read: UnderstandingRead = {
-    model, notConcluding, questions, diagnosis, strategyReadiness,
+    model, notConcluding, questions, diagnosis, strategyReadiness, questionTiers,
+    ...(excludedQuestions.length ? { excludedQuestions } : {}),
+    ...(structure ? { structure } : {}),
+    ...(structureAudit?.length ? { structureAudit } : {}),
     ...(u.read.observations?.length ? { observations: u.read.observations } : {}),
     untrusted: dedupeBy(untrusted, (x) => x.finding),
     websiteNotes: [...new Set(websiteNotes)],
@@ -278,6 +911,12 @@ export function governUnderstanding(raw: GovernedUnderstanding, observations: re
 export function strategyCriticalUnknowns(model: UnderstandingRead['model'], operating: boolean): ModelDimension[] {
   const critical: ModelDimension[] = operating ? ['intent', 'performance', 'acquisition'] : ['intent'];
   return critical.filter((d) => !(model.find((x) => x.dimension === d)?.known.length));
+}
+
+/** Performance evidence: something BB knows (not merely infers) about what is working, growing or declining. The only
+ *  thing that can earn a business stage. */
+export function performanceEvidence(model: UnderstandingRead['model'] | undefined): boolean {
+  return (model ?? []).some((d) => d.dimension === 'performance' && d.known.some((k) => k.basis !== 'inferred' && (k.text ?? '').trim()));
 }
 
 const squash = (x: string): string => x.normalize('NFC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();

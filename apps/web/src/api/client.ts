@@ -503,6 +503,10 @@ export interface ArcView {
       notConcluding: { claim: string; why: string; reason?: 'no_goal' | 'not_established' }[];
       untrusted: { finding: string; why: string; reason?: 'sitemap' | 'technical' | 'sitemap_only' | 'unread' }[];
       asks: { question: string; why: string; parts?: string[] }[];
+      /** Structural synthesis (2026-10-15; absent on older snapshots): leads the card; the model goes behind "What I read". */
+      structure?: { synthesis: string; hypotheses: { pattern: string; interpretation: string; alternative: string; reversal: string; evidence: { page: string; quote: string }[] }[]; stageNotNamed: boolean;
+        /** The synthesis did not stand: verified mechanisms only (never the inventory). */
+        fallback?: { mechanisms: ('group_timetable' | 'one_to_one' | 'paid_first_step' | 'packages')[] } };
     };
     stage?: { stage: 'validating' | 'growth' | 'plateau'; evidence: string[]; secondary?: { stage: 'validating' | 'growth' | 'plateau'; area: string } | null } | { stage: 'undetermined' } | null };
   correctionReflection?: { reflection: string; changes: string; holds: string };

@@ -153,6 +153,23 @@ describe('understanding systemPrompt — the reasoning contract (2026-10-15: a s
     expect(p).toMatch(/two metrics can DIVERGE[\s\S]*"a\) … b\) …"[\s\S]*"parts"/);
     expect(p).toContain('"parts": []');
   });
+  it('relates the facts (STRUCTURE) after the model and before tensions: reversible hypotheses, like with like, no footprint stage', () => {
+    expect(p).toMatch(/ORDER OF WORK[\s\S]*BUSINESS MODEL[\s\S]*RELATE the facts[\s\S]*STRUCTURE \(read\.structure\)[\s\S]*tensions/);
+    expect(p).toContain('"structure": {"synthesis": "", "hypotheses": [{"pattern": ""');
+    for (const f of ['"alternative"', '"discriminator"', '"reversal"', '"between"', '"dimensions"', '"whyItMatters"', '"context"', '"counts"']) expect(p).toContain(f);
+    expect(p).toMatch(/weaker than a conclusion the evidence has not earned/);
+    expect(p).toMatch(/Never "N businesses"/);
+    expect(p).toMatch(/SCOPE: every statement covers exactly the items its source says it for/);
+    expect(p).toMatch(/one\s+person listed on a team page does not establish capacity or availability/);
+    expect(p).toMatch(/OPERATING MODEL = a different MECHANISM[\s\S]*A\s+different audience, life stage or service name alone is NOT an operating model/);
+    expect(p).toMatch(/reversal = NEW evidence[\s\S]*Never something on the pages[\s\S]*not already true there/);
+    expect(p).toMatch(/never presupposes a future the founder has not stated/);
+    expect(p).toMatch(/COMPARE LIKE WITH LIKE/);
+    expect(p).toMatch(/FOOTPRINT IS NOT STAGE EVIDENCE/);
+    expect(p).toMatch(/which acquisition paths are already real and which options would be new\s+bets/);
+    expect(p).not.toMatch(/confidence (score|percentage)/i);
+  });
+
   it('contains no real business: no test case, no Body Move example, no withheld initiative', () => {
     expect(p).not.toMatch(/decision system/i);
     expect(p).not.toMatch(/karate|Ballet|Automasaj|kineto|Body Move|medical-referral|referral protocol|ghișeu/i);

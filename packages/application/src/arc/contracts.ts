@@ -81,6 +81,18 @@ export interface ArcUnderstanding {
     readonly untrusted: { readonly finding: string; readonly why: string; readonly reason?: 'sitemap' | 'technical' | 'sitemap_only' | 'unread' }[];
     /** `parts`: separate answers inside one question (metrics that can diverge, e.g. clients vs revenue). */
     readonly asks: { readonly question: string; readonly why: string; readonly parts?: string[] }[];
+    /** Structural synthesis (2026-10-15; absent on older snapshots): what BB thinks the business is, the reversible
+     *  hypotheses behind it (each with what else could explain it and what would change BB's mind), and whether BB is
+     *  deliberately not naming a stage. When present, the card leads with it and the model above goes behind "What I read". */
+    readonly structure?: {
+      readonly synthesis: string;
+      readonly hypotheses: { readonly pattern: string; readonly interpretation: string; readonly alternative: string; readonly reversal: string; readonly evidence: { readonly page: string; readonly quote: string }[] }[];
+      readonly stageNotNamed: boolean;
+      /** When the synthesis did not stand: a conservative read from governed facts only. `mechanisms` = the delivery /
+       *  purchase mechanisms a trusted page shows (≥ 2 → "several mechanisms, not yet how they work together"); fewer →
+       *  BB says it is not ready to form a structural read and goes to the questions. Never the inventory. */
+      readonly fallback?: { readonly mechanisms: ('group_timetable' | 'one_to_one' | 'paid_first_step' | 'packages')[] };
+    };
   };
   readonly stage: {
     readonly stage: 'validating' | 'growth' | 'plateau'; readonly evidence: string[];
