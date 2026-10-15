@@ -58,6 +58,8 @@ export const CONTENT_KEYS: ReadonlySet<string> = new Set([
   'impact.today.strategyMoving',
   'impact.today.executionShift',
   'impact.today.unchanged',
+  'verdict.queue.one',
+  'verdict.queue.many',
 ]);
 
 /** German exists ONLY as a content language: the UI has no German table, so only the content keys are here. */
@@ -107,6 +109,8 @@ const de: Record<string, string> = {
   'impact.today.strategyMoving': 'Deine Strategie verschiebt sich.',
   'impact.today.executionShift': 'Wie du arbeitest, ändert sich, die Wette nicht.',
   'impact.today.unchanged': 'Heute bleibt alles gleich. Die Strategie hält.',
+  'verdict.queue.one': '1 neues Follow-up wurde hinzugefügt, das erste am {date}.',
+  'verdict.queue.many': '{n} neue Follow-ups wurden hinzugefügt, das erste am {date}.',
 };
 
 const fill = (raw: string, vars?: Record<string, string>): string =>

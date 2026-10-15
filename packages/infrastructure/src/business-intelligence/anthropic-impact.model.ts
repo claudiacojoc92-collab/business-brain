@@ -13,7 +13,7 @@ import type {
  * on any error or missing key it returns a conservative "nothing strategic changed" signal so the loop can
  * never fabricate a strategy change out of a model failure.
  */
-const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian' };
+const LANG: Record<string, string> = { ro: 'Romanian', en: 'English', it: 'Italian', de: 'German' };
 
 const SHAPE = `{
   "changeKind": "none | execution | strategic",
@@ -25,7 +25,8 @@ const SHAPE = `{
   "todayNextMove": "the single most concrete next action this input implies, or null",
   "todayReason": "one sentence: why Today does or does not change",
   "founderStateKind": "constraint | resource | decision | business_correction | preference | intention",
-  "conflictsWithCurrentMove": false
+  "conflictsWithCurrentMove": false,
+  "evidenceSufficiency": "enough | too_early"
 }`;
 
 function rules(l: string): string {
@@ -52,6 +53,15 @@ function rules(l: string): string {
     '  Today move (below) inappropriate to do now (e.g. constraint bans exactly what the move asks). If there',
     '  is no current move, or the constraint does not touch it, set false.',
     '- Be conservative: only call something strategic when it genuinely undermines the bet or an assumption.',
+    '',
+    'WHEN CUMULATIVE RESULTS ARE GIVEN (counted from ALL logged outreach, not just this report):',
+    '- Judge the whole record, never this report alone. "Two clinics said no" means little after twenty said yes.',
+    '- evidenceSufficiency="too_early" when the counts are not yet enough to change the strategy, judged against THIS',
+    '  strategy\'s assumptions and reconsider conditions (their own numbers and time windows) and how much was tried.',
+    '  Use "enough" only when the record genuinely argues for a different bet. There is no fixed minimum number.',
+    '- A reconsider condition marked "met" by the counts is met; one marked "not_met" or "not_yet_measurable" is not:',
+    '  do not set matchedReconsider for it.',
+    '- An outcome is evidence about the bet. Never treat it as a business correction or an operating constraint.',
   ].join('\n');
 }
 
@@ -78,6 +88,11 @@ function userBlock(input: ImpactAssessInput): string {
     `The founder has told BB: ${input.baseline.toldStatements.join(' | ') || '(nothing yet)'}`,
     `Still unknown: ${input.baseline.unknowns.join('; ') || '(none)'}`,
     '', 'THE FOUNDER\'S CURRENT TODAY MOVE:', input.currentMove?.what || '(none right now)',
+    ...(input.cumulative ? [
+      '', 'CUMULATIVE RESULTS (counted across all logged outreach):', ...input.cumulative.statements,
+      '', 'RECONSIDER CONDITIONS, CHECKED AGAINST THE COUNTS:',
+      ...(input.cumulative.conditions.length ? input.cumulative.conditions.map((c) => `- "${c.condition}": ${c.state} (${c.detail})`) : ['(none measurable)']),
+    ] : []),
   ].join('\n');
 }
 
@@ -130,7 +145,47 @@ export class AnthropicImpactModel implements IImpactModelPort {
       return safeSignal();
     }
   }
+
+  /** The strategy's OWN reconsider conditions as checks over the counts. Shape-checked in the application layer;
+   *  on any failure every condition is unmeasurable (never triggers). */
+  async structureConditions(conditions: string[], _language: string): Promise<unknown> {
+    if (!this.apiKey || !conditions.length) return { checks: [] };
+    try {
+      const client = createAnthropicClient(this.apiKey);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const resp: any = await client.messages.create({
+        model: this.modelId, max_tokens: 1200, temperature: 0,
+        system: CONDITIONS_SYSTEM,
+        messages: [{ role: 'user', content: conditions.map((c, i) => `${i + 1}. ${c}`).join('\n') }],
+      });
+      const block = Array.isArray(resp?.content) ? resp.content.find((c: { type?: string }) => c?.type === 'text') : null;
+      return extractJson((block as { text?: string } | null)?.text ?? '');
+    } catch {
+      return { checks: [] };
+    }
+  }
 }
+
+const CONDITIONS_SYSTEM = [
+  'You turn a strategy\'s reconsider conditions into checks over outreach counts, keeping what each quantity MEANS. Return ONLY JSON:',
+  '{"checks": [ <check> ]} where each check is one of:',
+  '  absolute count: {"condition": "<copied EXACTLY>", "measurable": true, "kind": "absolute_count", "metric": "<metric>", "comparator": "<|<=|>|>=", "threshold": <whole number>, "minContacts": number|null, "withinDays": number|null}',
+  '  ratio:          {"condition": "<copied EXACTLY>", "measurable": true, "kind": "ratio", "metric": "<metric>", "denominator": "contacts_reached|contacts", "comparator": "<|<=|>|>=", "threshold": <fraction 0-1>, "minContacts": number|null, "withinDays": number|null}',
+  '  combined:       {"condition": "<copied EXACTLY>", "measurable": true, "kind": "all|any", "parts": [<absolute count or ratio, without "condition">, ...]}',
+  '  not countable:  {"condition": "<copied EXACTLY>", "measurable": false}',
+  'metric (always a NUMBER OF CONTACTS): contacts_reached | responded (answered at all) | positive (showed interest) | referrals |',
+  '  not_interested | no_response | material_requested | meetings.',
+  'Rules:',
+  '- One check per condition, condition text copied exactly.',
+  '- A proportion ("more than half", "most", "30%", "one in three", "peste jumătate", "majoritatea") is a RATIO: metric over its',
+  '  denominator ("of the clinics contacted" = contacts_reached; "of all target clinics" = contacts). "More than half refuse" =',
+  '  ratio not_interested / contacts_reached > 0.5. NEVER write a proportion as an absolute count (never `not_interested > 0.5`).',
+  '- A number of things ("more than 5 clinics", "fewer than 2 referrals") is an absolute_count with a whole-number threshold.',
+  '- A time window ("in 8 weeks", "within 2 months") goes in withinDays (weeks = 7 days, months = 30 days); a sample ("after 10',
+  '  clinics") in minContacts. Take every number from the condition itself: never add a sample or a window it does not state.',
+  '- Two requirements joined by and / or → combined (all / any).',
+  '- measurable=false when it is not about these counts (capacity, money, a competitor, a feeling).',
+].join('\n');
 
 function normalize(p: Record<string, unknown>, input: ImpactAssessInput): ImpactSignal {
   const changeKindRaw = String(p['changeKind'] ?? 'none');
@@ -165,5 +220,7 @@ function normalize(p: Record<string, unknown>, input: ImpactAssessInput): Impact
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     founderStateKind: (KINDS.includes(kindRaw) ? kindRaw : 'constraint') as any,
     conflictsWithCurrentMove: Boolean(p['conflictsWithCurrentMove']) && input.currentMove !== null,
+    // Without cumulative results there is nothing to weigh: the old path (no sufficiency judgment) stays as it was.
+    ...(input.cumulative ? { evidenceSufficiency: p['evidenceSufficiency'] === 'enough' ? 'enough' as const : 'too_early' as const } : {}),
   };
 }

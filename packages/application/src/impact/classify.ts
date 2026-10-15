@@ -1,79 +1,86 @@
-import type { ImpactResult, ImpactSignal, ImpactSource, ImpactVerdict } from './contracts';
+import type { ImpactResult, ImpactSignal, ImpactSource, ImpactVerdict, TodayFact } from './contracts';
+import type { ConditionEvaluation } from '../result-loop/evidence';
 
 /**
- * The deterministic heart of the living-state loop. Given the model's semantic {@link ImpactSignal} and
- * whether a strategy is actually held, it returns the full {@link ImpactResult} — verdict, what changed /
- * didn't, assumption impacts, and the today/strategy impact flags. Pure and total: no I/O, no model, no
- * randomness, so every verdict path, today-impact path and strategy-impact path is unit-testable.
+ * The deterministic heart of the living-state loop. Given the model's semantic {@link ImpactSignal}, whether a strategy
+ * is held, the deterministic Today fact and (for result reports) each reconsider condition's counted state, it returns
+ * the full {@link ImpactResult}. Pure and total: no I/O, no model, no randomness.
  *
- * Rules (in priority order), only when a strategy is held:
- *   1. A NAMED reconsider condition is met            → RECONSIDER (strategy changes)
- *   2. A load-bearing assumption is contradicted / the
- *      change is strategic                            → REVISE     (strategy changes)
- *   3. The change is execution/operational only       → TUNE       (strategy holds, Today adjusts)
- *   4. Otherwise                                       → STILL_HOLDS(strategy holds; Today changes only if
- *                                                                    a concrete next move exists)
+ * Verdict (only when a strategy is held):
+ *   1. RECONSIDER: an explicit reconsider condition is materially met. Counted conditions decide by the counts; a model
+ *      match on a condition the counts say is NOT met (or not yet measurable) is overruled.
+ *   2. REVISE: the change is strategic / an assumption is contradicted AND the evidence is enough to change now. When
+ *      the model judges it too early (against the held assumptions and conditions, never a global minimum), the
+ *      strategy holds and the verdict says "too early".
+ *   3. TUNE: execution changes (an operational change, or Today's follow-ups changed).
+ *   4. STILL_HOLDS: informational.
  *
- * With no held strategy there is nothing to revise: the strategy never changes; the verdict degrades to
- * TUNE (execution signal) or STILL_HOLDS, so the loop still explains itself without inventing a decision.
+ * Today (Result Loop V1, 2026-10-14) is ONE fact, never two: `today.changed` comes from outside the model (the current
+ * move before vs after, or a constraint actually blocking the current move). Unchanged ⇒ no new move. Follow-ups added to
+ * the queue are reported separately (`followUpsAdded`) and make the verdict TUNE (execution adjusted), but never change
+ * Today on their own. A strategy change alone does not change Today until the founder adopts it.
  */
-export function classify(signal: ImpactSignal, ctx: { hasHeldStrategy: boolean; source: ImpactSource }): ImpactResult {
+export function classify(
+  signal: ImpactSignal,
+  ctx: { hasHeldStrategy: boolean; source: ImpactSource; today?: TodayFact; conditions?: ConditionEvaluation[] },
+): ImpactResult {
   const held = ctx.hasHeldStrategy;
+  const today: TodayFact = ctx.today ?? { changed: false, move: null, reason: null };
+  const conditions = ctx.conditions ?? [];
+  const same = (a: string, b: string): boolean => a.trim() === b.trim();
+  const counted = (c: string): ConditionEvaluation | undefined => conditions.find((e) => same(e.condition, c));
+
+  const metByCounts = conditions.find((e) => e.state === 'met')?.condition ?? null;
+  const modelMatch = signal.matchedReconsider;
+  const modelMatchHolds = modelMatch ? !['not_met', 'not_yet_measurable'].includes(counted(modelMatch)?.state ?? '') : false;
+  const reconsider = metByCounts ?? (modelMatchHolds ? modelMatch : null);
+  const strategicSignal = signal.changeKind === 'strategic' || signal.contradictsAssumption;
+  const tooEarly = held && !reconsider && strategicSignal && signal.evidenceSufficiency === 'too_early';
 
   let verdict: ImpactVerdict;
-  let strategyChanges: boolean;
+  let strategyChanges = false;
+  if (held && reconsider) { verdict = 'RECONSIDER'; strategyChanges = true; }
+  else if (held && strategicSignal && !tooEarly) { verdict = 'REVISE'; strategyChanges = true; }
+  else if (signal.changeKind === 'execution' || today.changed || (today.queue?.added ?? 0) > 0) verdict = 'TUNE';
+  else verdict = 'STILL_HOLDS';
 
-  if (held && signal.matchedReconsider) {
-    verdict = 'RECONSIDER';
-    strategyChanges = true;
-  } else if (held && (signal.changeKind === 'strategic' || signal.contradictsAssumption)) {
-    verdict = 'REVISE';
-    strategyChanges = true;
-  } else if (signal.changeKind === 'execution') {
-    verdict = 'TUNE';
-    strategyChanges = false;
-  } else {
-    verdict = 'STILL_HOLDS';
-    strategyChanges = false;
-  }
-
-  // Today changes when a strategy moves (a new bet ⇒ a new next step), when execution is tuned, or when a
-  // concrete next move is implied even though nothing strategic moved (e.g. "follow up with that doctor").
-  const todayChanges = strategyChanges || verdict === 'TUNE' || Boolean(signal.todayNextMove);
-
-  // Founder-facing prose is NOT built here — this layer has no locale. Emit an i18n reason CODE (+ params);
-  // VerdictSurface renders it in the founder's language.
   const strategyReasonCode = strategyChanges
     ? (verdict === 'RECONSIDER' ? 'impact.strategy.reconsider' : 'impact.strategy.revise')
-    : 'impact.strategy.holds';
-  const strategyReasonVars = (strategyChanges && verdict === 'RECONSIDER' && signal.matchedReconsider)
-    ? { condition: signal.matchedReconsider }
-    : undefined;
+    : tooEarly ? 'impact.strategy.tooEarly' : 'impact.strategy.holds';
 
-  // The model's todayReason is already localized prose — pass it through. Only the deterministic fallback needs
-  // a code (never English literals). newMove is model prose (localized) and stays as-is.
-  const todayReasonProse = todayChanges ? (signal.todayReason?.trim() || null) : null;
-  const todayReasonCode = todayChanges
-    ? (todayReasonProse ? null : (strategyChanges ? 'impact.today.strategyMoving' : 'impact.today.executionShift'))
-    : 'impact.today.unchanged';
+  const todayImpact = today.changed
+    ? { changes: true, newMove: today.move?.trim() || null, reason: today.reason?.trim() || signal.todayReason?.trim() || null, reasonCode: null as string | null }
+    : { changes: false, newMove: null, reason: null, reasonCode: strategyChanges ? 'impact.today.afterAdoption' : 'impact.today.unchanged' };
+  if (todayImpact.changes && !todayImpact.reason) todayImpact.reasonCode = 'impact.today.executionShift';
+  const added = today.queue?.added ?? 0;
+  const followUpsAdded = added > 0 ? { count: added, firstDueOn: today.queue?.firstDueOn ?? null } : null;
 
   return {
     verdict,
     whatChanged: signal.whatChanged.filter((s) => s.trim()),
     whatDidNotChange: signal.whatDidNotChange.filter((s) => s.trim()),
     assumptionImpacts: signal.assumptionImpacts.filter((a) => a.assumption.trim()),
-    todayImpact: {
-      changes: todayChanges,
-      reason: todayReasonProse,
-      reasonCode: todayReasonCode,
-      newMove: todayChanges ? (signal.todayNextMove?.trim() || null) : null,
-    },
+    todayImpact: { ...todayImpact, followUpsAdded },
     strategyImpact: {
       changes: strategyChanges,
       reasonCode: strategyReasonCode,
-      ...(strategyReasonVars ? { reasonVars: strategyReasonVars } : {}),
+      ...(verdict === 'RECONSIDER' && reconsider ? { reasonVars: { condition: reconsider } } : {}),
       newVersion: null, // filled by the service after regeneration, projected by the route
     },
     source: ctx.source,
+    ...(conditions.length ? { evidence: { statements: [], conditions } } : {}),
   };
+}
+
+/**
+ * The ONE interpretation every surface renders (Result Loop V1): either Today changed (the new move, if any, and why) or
+ * it did not (and why not). Never both.
+ */
+export type TodayImpactView =
+  | { readonly kind: 'changed'; readonly move: string | null; readonly reason: string | null; readonly reasonCode: string | null }
+  | { readonly kind: 'unchanged'; readonly reasonCode: string };
+export function todayImpactView(t: ImpactResult['todayImpact']): TodayImpactView {
+  return t.changes
+    ? { kind: 'changed', move: t.newMove, reason: t.reason, reasonCode: t.reasonCode }
+    : { kind: 'unchanged', reasonCode: t.reasonCode ?? 'impact.today.unchanged' };
 }

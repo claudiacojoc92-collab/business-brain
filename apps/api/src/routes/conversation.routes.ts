@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { ServerDeps } from '../server';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
+import { asConversationSurface } from '@bb/application';
 import { recordFounderEvent } from '../telemetry/founder-events';
 import { contentLanguageFor, noteFounderText } from './content-language';
 
@@ -27,7 +28,9 @@ export function registerConversationRoutes(server: FastifyInstance, deps: Server
 
   server.post('/v1/businesses/:id/conversation', async (request: FastifyRequest, reply: FastifyReply) => {
     const { founderId, business, language } = await requireBusiness(request);
-    const view = await deps.conversationService.startOrResume(business.id, founderId, business.name, language);
+    // Talk drawer and the conversation page share this route: the client names its surface (closed set; else unknown).
+    const surface = asConversationSurface((request.body as { surface?: unknown } | null)?.surface);
+    const view = await deps.conversationService.startOrResume(business.id, founderId, business.name, language, surface);
     recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'talk_opened', surface: 'talk', metadata: { turns: view.turns.length } });
     await reply.status(200).send(view);
   });
@@ -36,21 +39,22 @@ export function registerConversationRoutes(server: FastifyInstance, deps: Server
   // business — reactivates the session + seeds only baseline domains never asked. Never resets.
   server.post('/v1/businesses/:id/conversation/reopen', async (request: FastifyRequest, reply: FastifyReply) => {
     const { founderId, business, language } = await requireBusiness(request);
-    const view = await deps.conversationService.reopen(business.id, founderId, business.name, language);
+    // Only the conversation page reopens the interview (baseline refresh).
+    const view = await deps.conversationService.reopen(business.id, founderId, business.name, language, 'conversation');
     recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'baseline_reopened', surface: 'business', metadata: { readyForAha2: view.readyForAha2 } });
     await reply.status(200).send(view);
   });
 
   server.post('/v1/businesses/:id/conversation/turn', async (request: FastifyRequest, reply: FastifyReply) => {
     const { founderId, business, language: current } = await requireBusiness(request);
-    const body = (request.body ?? {}) as { message?: string; context?: string };
+    const body = (request.body ?? {}) as { message?: string; context?: string; surface?: unknown };
     const message = (body.message ?? '').trim();
     if (!message) throw new ValidationError('MESSAGE_REQUIRED', 'A message is required.');
     // M6: optional, compact current-surface context (never persisted as a turn; grounds "what do you mean by this").
     const context = typeof body.context === 'string' ? body.context.slice(0, 1500).trim() || null : null;
     // An explicit "reply in English" switches the business's content language; otherwise it stays as decided.
     const language = await noteFounderText(deps.contentLanguageStore, business.id, message, current);
-    const view = await deps.conversationService.submitResponse(business.id, founderId, business.name, message, language, context);
+    const view = await deps.conversationService.submitResponse(business.id, founderId, business.name, message, language, context, asConversationSurface(body.surface));
     recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'talk_turn_submitted', surface: 'talk', metadata: { hasContext: Boolean(context) } });
     await reply.status(200).send(view);
   });

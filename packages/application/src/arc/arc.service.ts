@@ -1,5 +1,6 @@
 import type { StrategyVersionRecord } from '../strategy/index';
-import type { PlanVersion } from '../plan/index';
+import type { Action, DueMoveRef, PlanVersion, TodayMove, TodayResult } from '../plan/index';
+import { canonicalTodayMove, deriveAllReadiness, selectToday, todayPlanAction } from '../plan/index';
 import type { GovernedUnderstanding, ClaimEvidence } from '../bi/index';
 import { clipQuote } from '../bi/evidence-anchor';
 import { agendaUnknowns, isHousekeeping, critiquesWording, factOnly, restatesNotShown, makesUnlicensedClaim, makesUnlicensedSoWhatClaim, sameInsight, firstSentence } from '../bi/index';
@@ -34,6 +35,12 @@ export interface ArcDeps {
   plan: {
     getActive(businessId: string): Promise<{ plan: PlanVersion } | null>;
     proposalOrGenerate(businessId: string): Promise<PlanVersion | null>;
+    /** The canonical Today move's text (canonicalTodayMove over the active plan + due follow-ups), never the first action. */
+    todayMove?(businessId: string): Promise<string | null>;
+    /** The SAME Today derivation for a given plan version (Day One's proposal) — PlanService.todayFor. */
+    todayOf?(businessId: string, plan: PlanVersion): Promise<TodayResult | null>;
+    /** Due Result Loop follow-ups (they come first in the canonical Today). */
+    dueMoves?(businessId: string): Promise<DueMoveRef[]>;
   };
   voiceBoundaries: (businessId: string) => Promise<string[]>;
   founderContext: (businessId: string) => Promise<string[]>;
@@ -193,9 +200,12 @@ export class ArcService {
         }
         const priorities = (plan.priorities ?? []).slice().sort((a, b) => a.order - b.order);
         const week = priorities.map((p) => p.title.trim()).filter(Boolean).slice(0, 5);
-        const firstAction = priorities.flatMap((p) => p.actions)[0] ?? null;
-        const story = firstAction ? await this.weekStory(plan, current?.record ?? null, businessName, language, savedWeekStory) : null;
-        return { ...base, weekDay: { week, today: firstAction?.what?.trim() ?? null, canCreate: Boolean(firstAction?.leadsToCreate), story } };
+        // BUS-82: the week's "today" is the CANONICAL Today (due follow-up → selected plan move → blocked fallback), the
+        // same selection the Today page and Home use, never the plan's first action.
+        const selected = await this.canonicalToday(businessId, plan);
+        const todayAction = todayPlanAction(selected.today);
+        const story = todayAction ? await this.weekStory(plan, current?.record ?? null, businessName, language, savedWeekStory, todayAction) : null;
+        return { ...base, weekDay: { week, today: selected.move?.what ?? null, todayKind: selected.move?.kind ?? null, canCreate: selected.move?.kind === 'plan' && Boolean(todayAction?.leadsToCreate), story } };
       }
 
       case 'email':
@@ -360,9 +370,20 @@ export class ArcService {
    * so a refresh never re-writes the page. The model only re-voices; `guardWeekStory` keeps what the plan licenses.
    * `language` is the business's content language (the route resolves it), never the UI locale.
    */
-  private async weekStory(plan: PlanVersion, strategy: StrategyVersionRecord | null, businessName: string, language: string, saved: ArcWeekStory | null): Promise<ArcWeekStory> {
-    if (saved && saved.planVersionId === plan.planVersionId) return saved;
-    const input = weekStoryInput(plan, strategy, businessName, language);
+  /** Canonical Today for a plan version: selectToday's derivation (PlanService.todayFor) + due follow-ups first. */
+  private async canonicalToday(businessId: string, plan: PlanVersion): Promise<{ today: TodayResult | null; move: TodayMove | null }> {
+    // Not wired (tests): the same selectToday over readiness derived from the plan alone (no ledger yet on Day One).
+    const today = this.deps.plan.todayOf
+      ? await this.deps.plan.todayOf(businessId, plan)
+      : selectToday(plan, deriveAllReadiness(plan.priorities.flatMap((p) => p.actions), [], { strategyStale: false, availableMaterial: new Set(), decisionNeeded: new Set(), constrainedActions: new Map() }));
+    const due = this.deps.plan.dueMoves ? await this.deps.plan.dueMoves(businessId) : [];
+    return { today, move: canonicalTodayMove(today, due) };
+  }
+
+  private async weekStory(plan: PlanVersion, strategy: StrategyVersionRecord | null, businessName: string, language: string, saved: ArcWeekStory | null, todayAction: Action): Promise<ArcWeekStory> {
+    // A saved story is reused only when it was told for this plan version AND this canonical Today (BUS-82).
+    if (saved && saved.planVersionId === plan.planVersionId && saved.today.actionId === todayAction.actionId) return saved;
+    const input = weekStoryInput(plan, strategy, businessName, language, todayAction);
     let raw = null;
     if (this.deps.weekStory) {
       try {
@@ -417,7 +438,11 @@ export class ArcService {
     const current = await this.deps.strategy.getCurrent(businessId);
     const core = current?.record.bundle.core ?? null;
     const active = await this.deps.plan.getActive(businessId);
-    const move = (active?.plan.priorities.flatMap((p) => p.actions)[0]?.what ?? '').trim();
+    // The canonical Today move (BUS-82), never the plan's first action: from the port, or the same selection here.
+    const canonical = this.deps.plan.todayMove
+      ? await this.deps.plan.todayMove(businessId)
+      : active ? (await this.canonicalToday(businessId, active.plan)).move?.what ?? null : null;
+    const move = (canonical ?? '').trim();
     const input = {
       businessName,
       interfaceLanguage: language,

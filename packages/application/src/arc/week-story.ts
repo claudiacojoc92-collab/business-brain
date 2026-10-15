@@ -1,4 +1,4 @@
-import type { PlanVersion } from '../plan/index';
+import type { Action, PlanVersion } from '../plan/index';
 import type { StrategyVersionRecord } from '../strategy/index';
 import { claimTermsIn, firstSentence } from '../bi/index';
 import { withoutQuestions } from '../conversation/index';
@@ -89,7 +89,7 @@ export function fallbackStory(i: WeekStoryInput, planVersionId: string): ArcWeek
     whyNow: fit(firstSentence(i.priorities[0]?.why ?? i.bet), CAP.whyNow),
     // The plan's own action text is longer than a re-told title; a looser cap avoids cutting it mid-thought.
     chapters: i.moves.slice(0, MAX_CHAPTERS).map((m) => ({ title: fit(firstSentence(m.what), CAP.fallbackTitle), why: fit(firstSentence(m.why), CAP.why) })),
-    today: { move: fit(firstSentence(i.today?.what ?? ''), CAP.move), detail: fit(firstSentence(i.today?.why ?? ''), CAP.detail) },
+    today: { move: fit(firstSentence(i.today?.what ?? ''), CAP.move), detail: fit(firstSentence(i.today?.why ?? ''), CAP.detail), ...(i.today ? { actionId: i.today.actionId } : {}) },
     doneLooksLike: fit(i.today?.done ?? '', CAP.done),
   };
 }
@@ -112,16 +112,18 @@ export function guardWeekStory(raw: Partial<Omit<ArcWeekStory, 'planVersionId'>>
     today: {
       move: admit(raw.today?.move, CAP.move, src) || fb.today.move,
       detail: admit(raw.today?.detail, CAP.detail, src) || fb.today.detail,
+      ...(i.today ? { actionId: i.today.actionId } : {}),
     },
     doneLooksLike: admit(raw.doneLooksLike, CAP.done, src) || fb.doneLooksLike,
   };
 }
 
 /** The story's input from the plan proposal + the adopted strategy (same data the week/today view already used). */
-export function weekStoryInput(plan: PlanVersion, strategy: StrategyVersionRecord | null, businessName: string, language: string): WeekStoryInput {
+export function weekStoryInput(plan: PlanVersion, strategy: StrategyVersionRecord | null, businessName: string, language: string, todayAction: Action | null): WeekStoryInput {
   const priorities = (plan.priorities ?? []).slice().sort((a, b) => a.order - b.order);
   const actions = priorities.flatMap((p) => p.actions);
-  const firstAction = actions[0] ?? null;
+  // Today = the canonical selection's plan action (BUS-82), passed in; never simply the plan's first action.
+  const firstAction = todayAction;
   const core = strategy?.bundle.core;
   return {
     businessName, language,
@@ -131,8 +133,8 @@ export function weekStoryInput(plan: PlanVersion, strategy: StrategyVersionRecor
     monthDirection: (plan.monthDirection ?? '').trim(),
     priorities: priorities.map((p) => ({ title: p.title.trim(), why: (p.why ?? '').trim() })).filter((p) => p.title),
     // The week = the plan's first actions in order (the focus priority's steps, then the next priority's), not the
-    // month-level priorities. Today is the first of them.
+    // month-level priorities. Today is the one the canonical Today selection picked.
     moves: actions.slice(0, MAX_CHAPTERS).map((a) => ({ what: a.what.trim(), why: (a.why ?? '').trim() })).filter((m) => m.what),
-    today: firstAction ? { what: firstAction.what.trim(), why: (firstAction.why ?? '').trim(), done: (firstAction.doneDefinition ?? '').trim() } : null,
+    today: firstAction ? { actionId: firstAction.actionId, what: firstAction.what.trim(), why: (firstAction.why ?? '').trim(), done: (firstAction.doneDefinition ?? '').trim() } : null,
   };
 }

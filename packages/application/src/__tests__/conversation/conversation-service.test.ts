@@ -23,7 +23,7 @@ function makeDeps(step: Partial<ConversationStepOutput>, sourceList: any[] = [])
       create: async (i) => { const s = { id: i.id, businessId: i.businessId, conversationLanguage: i.conversationLanguage, status: 'active' as const, currentFocus: null }; sessions.push(s); return s; },
       setStatus: async (_id, status, currentFocus) => { statusSet = status; const s = sessions[0]; if (s) { s.status = status; s.currentFocus = currentFocus ?? null; } },
       setLanguage: async () => undefined,
-      appendTurn: async (i) => { const t = { id: i.id, role: i.role, content: i.content, language: i.language, infoNeedKey: i.infoNeedKey ?? null, seq: turns.length + 1, createdAt: '1970' }; turns.push(t); return t; },
+      appendTurn: async (i) => { const t = { id: i.id, role: i.role, content: i.content, language: i.language, infoNeedKey: i.infoNeedKey ?? null, surface: i.surface ?? null, seq: turns.length + 1, createdAt: '1970' }; turns.push(t); return t; },
       listTurns: async () => turns.slice(),
     },
     needs: {
@@ -450,6 +450,46 @@ describe('ConversationService — pacing cap (operator, 2026-10-12): at most 3 q
     expect(bbQuestions(m.turns).length).toBeGreaterThanOrEqual(2);
     await answer(svc, 'c');
     expect(await svc.awaitingGoal(P.businessId)).toBe(true); // 3rd discovery answer: capped → the goal step
+  });
+});
+
+// V086: every turn records where it was written; founder and BB turns of one interaction share it.
+describe('ConversationService — turn surface', () => {
+  const surfaces = (turns: any[]) => turns.map((t) => `${t.role}:${t.surface}`);
+
+  it('onboarding opener, answer and BB reply all carry the surface they were written on', async () => {
+    const m = makeDeps({ interpretation: 'Noted.', nextQuestion: 'What else?' });
+    const svc = new ConversationService(m.deps);
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language, 'onboarding');
+    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'referrals', P.language, null, 'onboarding');
+    expect(surfaces(m.turns)).toEqual(['bb:onboarding', 'founder:onboarding', 'bb:onboarding']);
+  });
+
+  it('a Talk turn (answer mode) and its grounded answer are "talk"; a mirror answer is "mirror"; same session', async () => {
+    const m = makeDeps({ interpretation: 'Because the referrals are the engine.' });
+    const svc = new ConversationService(m.deps);
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language, 'onboarding');
+    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'why this bet?', P.language, 'strategy card', 'talk');
+    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'the mirror is right', P.language, null, 'mirror');
+    expect(surfaces(m.turns).slice(1)).toEqual(['founder:talk', 'bb:talk', 'founder:mirror', 'bb:mirror']);
+    expect(m.turns.find((t: any) => t.role === 'founder' && t.surface === 'talk')?.content).toBe('why this bet?'); // the screen context is never stored
+    expect(JSON.stringify(m.turns)).not.toContain('strategy card');
+  });
+
+  it('the cap acknowledgement keeps the surface of the answer it closes', async () => {
+    const m = makeDeps({ interpretation: 'Got it. What next?' });
+    const svc = new ConversationService(m.deps);
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language, 'conversation');
+    for (const a of ['a', 'b', 'c']) await svc.submitResponse(P.businessId, P.founderId, P.businessName, a, P.language, null, 'conversation');
+    expect(new Set(m.turns.map((t: any) => t.surface))).toEqual(new Set(['conversation']));
+  });
+
+  it('a caller that does not say leaves it unknown (null), never guessed', async () => {
+    const m = makeDeps({ interpretation: 'Noted.' });
+    const svc = new ConversationService(m.deps);
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'x', P.language);
+    expect(m.turns.every((t: any) => t.surface === null)).toBe(true);
   });
 });
 

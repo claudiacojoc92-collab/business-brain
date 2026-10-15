@@ -217,10 +217,20 @@ function GoalConfirm({ candidate, t, busy, onConfirm }: {
  * like. No card-in-card: the beats are a list on the page, only Today is raised. An older api (no story) shows the
  * plan titles in the same shape.
  */
+/**
+ * BUS-82: the week's "today" = the canonical Today the server selected (w.today / w.todayKind). The story's re-told
+ * sentence (and its detail / done) is used only when it was told for that same plan move; a due follow-up is shown as is.
+ */
+export function weekToday(w: NonNullable<ArcView['weekDay']>): { move: string; fromStory: boolean } {
+  const s = w.story;
+  if (w.todayKind === 'follow_up' || !s?.today.move) return { move: w.today ?? '', fromStory: false };
+  return { move: s.today.move, fromStory: true };
+}
+
 function WeekStory({ w, t }: { w: NonNullable<ArcView['weekDay']>; t: T }) {
   const s = w.story;
   const chapters = s?.chapters.length ? s.chapters : w.week.slice(0, 3).map((title) => ({ title, why: '' }));
-  const move = s?.today.move || w.today || '';
+  const { move, fromStory } = weekToday(w);
   return (
     <div className="s0-wk">
       <p className="s0-wk-context">{s?.context || t('arc.week.eyebrow')}</p>
@@ -241,8 +251,8 @@ function WeekStory({ w, t }: { w: NonNullable<ArcView['weekDay']>; t: T }) {
         <section className="s0-wk-today" aria-label={t('arc.week.today')}>
           <div className="s0-wk-today-label">{t('arc.week.today')}</div>
           <p className="s0-wk-today-move">{move}</p>
-          {s?.today.detail ? <p className="s0-wk-today-detail">{s.today.detail}</p> : null}
-          {s?.doneLooksLike ? <p className="s0-wk-done"><span className="s0-wk-done-label">{t('arc.week.done')}:</span> {s.doneLooksLike}</p> : null}
+          {fromStory && s?.today.detail ? <p className="s0-wk-today-detail">{s.today.detail}</p> : null}
+          {fromStory && s?.doneLooksLike ? <p className="s0-wk-done"><span className="s0-wk-done-label">{t('arc.week.done')}:</span> {s.doneLooksLike}</p> : null}
         </section>
       ) : null}
     </div>

@@ -1307,3 +1307,22 @@ a.s0-btn { text-decoration: none; }
 .s0-landing-prov-src[href]:hover { color: var(--s0-ink, #111); text-decoration: underline; }
 .s0-landing-prov-note { font-style: italic; }
 .s0-landing-prov-anchored { border-left-color: var(--s0-ok, #047857); padding-left: .5rem; }
+
+/* ── Result Loop V1: due follow-ups, report confirmation, message composer, strategy contacts ── */
+.s0-today2-due { margin: 18px 0; padding: 16px 18px; border: 1px solid var(--s0-line); border-radius: 12px; background: var(--s0-bg-2); }
+.s0-today2-due-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 14px; }
+.s0-today2-due-what { margin: 0; font-weight: 600; color: var(--s0-ink); }
+.s0-today2-due-why { margin: 4px 0 8px; color: var(--s0-ink-3); font-size: 14px; }
+.s0-report-items { margin: 10px 0; padding-left: 20px; display: grid; gap: 14px; }
+.s0-report-items li[data-edited='true'] { border-left: 2px solid var(--s0-clay); padding-left: 10px; }
+.s0-report-items label { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0; font-size: 14px; color: var(--s0-ink-2); }
+.s0-report-quote { margin: 0 0 4px; color: var(--s0-ink-3); font-style: italic; }
+.s0-report-next { margin: 4px 0; font-size: 14px; color: var(--s0-ink-2); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.s0-msg-brief { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 0 0 12px; font-size: 14px; }
+.s0-msg-brief dt { color: var(--s0-ink-3); }
+.s0-msg-brief dd { margin: 0; color: var(--s0-ink-2); overflow-wrap: anywhere; }
+.s0-msg-writing { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--s0-line); }
+.s0-contacts-list { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 8px; }
+.s0-contacts-name { font-weight: 600; color: var(--s0-ink); }
+.s0-contacts-role, .s0-contacts-status, .s0-contacts-next { color: var(--s0-ink-3); font-size: 14px; }
+.s0-contacts-add { display: grid; gap: 6px; margin-top: 8px; max-width: 420px; }

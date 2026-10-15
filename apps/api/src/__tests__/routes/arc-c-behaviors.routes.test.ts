@@ -49,3 +49,20 @@ describe('Moment 5 challenge regenerates + surfaces "changed because"', () => {
     await server.close();
   });
 });
+
+// V086: the arc's conversation turns are "onboarding"; the founder's answer to the mirror is "mirror".
+describe('arc conversation turns carry their surface', () => {
+  it('an arc answer and a skip are onboarding; a mirror answer is mirror', async () => {
+    const c = { startOrResume: vi.fn(), submitResponse: vi.fn(), declineCurrentNeed: vi.fn() };
+    const s2 = buildServer('conversation', { conversationService: c });
+    await s2.server.inject({ method: 'POST', url: '/v1/businesses/b1/arc/conversation', payload: { message: 'referrals from doctors' } });
+    expect(c.startOrResume).toHaveBeenLastCalledWith('b1', 'founder-1', 'Body Move', 'en', 'onboarding');
+    expect(c.submitResponse).toHaveBeenLastCalledWith('b1', 'founder-1', 'Body Move', 'referrals from doctors', 'en', null, 'onboarding');
+    await s2.server.inject({ method: 'POST', url: '/v1/businesses/b1/arc/conversation', payload: { message: 'Skip', skip: true } });
+    expect(c.submitResponse).toHaveBeenLastCalledWith('b1', 'founder-1', 'Body Move', 'Skip', 'en', null, 'onboarding');
+    await s2.server.inject({ method: 'POST', url: '/v1/businesses/b1/arc/mirror/seen', payload: { answer: 'the clinic matters more' } });
+    expect(c.startOrResume).toHaveBeenCalledWith('b1', 'founder-1', 'Body Move', 'en', 'mirror'); // (the mocked view then lazily opens onboarding)
+    expect(c.submitResponse).toHaveBeenLastCalledWith('b1', 'founder-1', 'Body Move', 'the clinic matters more', 'en', null, 'mirror');
+    await s2.server.close();
+  });
+});

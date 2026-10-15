@@ -21,6 +21,14 @@ export type FounderStateKind =
   | 'resource'
   | 'business_correction';
 
+/**
+ * Where a turn was written (V086). Only the surface kind, never screen contents; founder and BB turns of one interaction
+ * share it. Null = written before V086 (unknown) or by a client that did not say.
+ */
+export type ConversationSurface = 'onboarding' | 'mirror' | 'talk' | 'conversation';
+export const CONVERSATION_SURFACES: readonly ConversationSurface[] = ['onboarding', 'mirror', 'talk', 'conversation'];
+export const asConversationSurface = (v: unknown): ConversationSurface | null => (CONVERSATION_SURFACES.includes(v as ConversationSurface) ? (v as ConversationSurface) : null);
+
 export interface ConversationTurn {
   readonly id: string;
   readonly role: 'founder' | 'bb';
@@ -29,6 +37,7 @@ export interface ConversationTurn {
   readonly seq: number;
   readonly createdAt: string;
   readonly infoNeedKey?: string | null; // FIX 3 — which need a bb question targeted (for per-thread depth tracking)
+  readonly surface?: ConversationSurface | null;
 }
 
 export interface ConversationSession {
@@ -199,7 +208,7 @@ export interface IConversationRepository {
   create(input: { id: string; businessId: string; founderId: string; conversationLanguage: string }): Promise<ConversationSession>;
   setStatus(sessionId: string, status: ConversationStatus, currentFocus: string | null): Promise<void>;
   setLanguage(sessionId: string, language: string): Promise<void>;
-  appendTurn(input: { id: string; sessionId: string; businessId: string; role: 'founder' | 'bb'; content: string; language: string; infoNeedKey: string | null }): Promise<ConversationTurn>;
+  appendTurn(input: { id: string; sessionId: string; businessId: string; role: 'founder' | 'bb'; content: string; language: string; infoNeedKey: string | null; surface?: ConversationSurface | null }): Promise<ConversationTurn>;
   listTurns(sessionId: string): Promise<ConversationTurn[]>;
 }
 

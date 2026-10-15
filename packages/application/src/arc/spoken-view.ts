@@ -48,7 +48,7 @@ export function spokenView(v: ArcView): ArcView {
       story: v.weekDay.story ? {
         ...v.weekDay.story, context: s(v.weekDay.story.context), statement: s(v.weekDay.story.statement), whyNow: s(v.weekDay.story.whyNow),
         chapters: v.weekDay.story.chapters.map((c) => ({ title: s(c.title), why: s(c.why) })),
-        today: { move: s(v.weekDay.story.today.move), detail: s(v.weekDay.story.today.detail) }, doneLooksLike: s(v.weekDay.story.doneLooksLike),
+        today: { ...v.weekDay.story.today, move: s(v.weekDay.story.today.move), detail: s(v.weekDay.story.today.detail) }, doneLooksLike: s(v.weekDay.story.doneLooksLike),
       } : v.weekDay.story,
     } } : {}),
     ...(v.email ? { email: { subject: s(v.email.subject), body: s(v.email.body) } } : {}),

@@ -73,4 +73,49 @@ describe('VerdictSurface', () => {
     fireEvent.click(screen.getByText('verdict.challengeSubmit'));
     await waitFor(() => expect(api.respondToStrategy).toHaveBeenCalledWith('b1', 'constraint', 'You misread the market.'));
   });
+
+  // ── Result Loop V1: one Today interpretation, never both ──
+  it('Today unchanged: no move is rendered even if a stale newMove is present; the strategy line no longer repeats "Today is unchanged"', () => {
+    const r: ImpactResult = { ...holds, todayImpact: { changes: false, reason: null, reasonCode: 'impact.today.unchanged', newMove: 'Follow up with the doctor.' } };
+    const { container } = render(<VerdictSurface businessId="b1" result={r} onDismiss={() => {}} />);
+    expect(screen.queryByText('Follow up with the doctor.')).toBeNull();
+    expect(screen.queryByText('verdict.today')).toBeNull();
+    expect(container.querySelector('[data-today="unchanged"]')?.textContent).toBe('impact.today.unchanged');
+    expect(container.querySelector('[data-today="changed"]')).toBeNull();
+    expect(screen.getByText('verdict.holds')).toBeInTheDocument();
+  });
+
+  it('new follow-ups are the queue, shown apart: Today stays unchanged (acceptance 2026-10-14)', () => {
+    const r: ImpactResult = { ...holds, todayImpact: { changes: false, reason: null, reasonCode: 'impact.today.unchanged', newMove: null, followUpsAdded: { count: 2, firstDueOn: '2026-10-15' } } };
+    const { container } = render(<VerdictSurface businessId="b1" result={r} onDismiss={() => {}} />);
+    expect(container.querySelector('[data-today="unchanged"]')).not.toBeNull();
+    expect(container.querySelector('[data-today="changed"]')).toBeNull();
+    expect(container.querySelector('[data-queue="added"]')?.textContent).toBe('verdict.queue.many:2,2026-10-15');
+  });
+
+  it('Today changed: the move and why, and never the unchanged line', () => {
+    const { container } = render(<VerdictSurface businessId="b1" result={holds} onDismiss={() => {}} />);
+    expect(screen.getByText('Follow up with the doctor.')).toBeInTheDocument();
+    expect(container.querySelector('[data-today="unchanged"]')).toBeNull();
+  });
+
+  it('"too early" is said in place of the generic holds line; evidence and condition states are shown', () => {
+    const r: ImpactResult = { ...holds, todayImpact: { changes: false, reason: null, reasonCode: 'impact.today.unchanged', newMove: null },
+      strategyImpact: { changes: false, reasonCode: 'impact.strategy.tooEarly', newVersion: null },
+      evidence: { statements: ['5 target contacts; 5 reached so far over 0 days.'], conditions: [{ condition: 'Fewer than 2 referrals within 6 weeks', state: 'not_yet_measurable', observed: 0, detail: '' }] } };
+    render(<VerdictSurface businessId="b1" result={r} onDismiss={() => {}} />);
+    expect(screen.getByText('impact.strategy.tooEarly')).toBeInTheDocument();
+    expect(screen.queryByText('verdict.holds')).toBeNull();
+    expect(screen.getByText('5 target contacts; 5 reached so far over 0 days.')).toBeInTheDocument();
+    expect(screen.getByText('verdict.cond.not_yet_measurable')).toBeInTheDocument();
+  });
+
+  it('"See this month\'s plan" appears only at cycle close, never on a mid-cycle outcome report', () => {
+    const r: ImpactResult = { ...holds, todayImpact: { changes: false, reason: null, reasonCode: 'impact.today.unchanged', newMove: null } };
+    const { unmount } = render(<VerdictSurface businessId="b1" result={r} onDismiss={() => {}} />);
+    expect(screen.queryByText(/home.close.next/)).toBeNull();
+    unmount();
+    render(<VerdictSurface businessId="b1" result={r} onDismiss={() => {}} cycleClose />);
+    expect(screen.getByText(/home.close.next/)).toBeInTheDocument();
+  });
 });

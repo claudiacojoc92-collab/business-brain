@@ -11,6 +11,7 @@ import type {
   SourceExcerpt,
   ConversationStepOutput,
   ConversationSession,
+  ConversationSurface,
   ConversationTurn,
   FounderStateItem,
   FounderObservation,
@@ -188,7 +189,7 @@ function joinReply(interpretation?: string | null, nextQuestion?: string | null)
 export class ConversationService {
   constructor(private readonly deps: ConversationDeps) {}
 
-  async startOrResume(businessId: string, founderId: string, businessName: string, language: string): Promise<ConversationView> {
+  async startOrResume(businessId: string, founderId: string, businessName: string, language: string, surface: ConversationSurface | null = null): Promise<ConversationView> {
     let session = await this.deps.conversations.getByBusiness(businessId);
     if (!session) {
       session = await this.deps.conversations.create({ id: generateId(), businessId, founderId, conversationLanguage: language });
@@ -208,7 +209,7 @@ export class ConversationService {
       const out = await this.deps.model.step(await this.buildStepInput(businessId, founderId, businessName, language, session.id, null));
       const opener = openerTurnContent(out);
       if (opener) {
-        await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: opener, language, infoNeedKey: null });
+        await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: opener, language, infoNeedKey: null, surface });
         turns = await this.deps.conversations.listTurns(session.id);
       }
     }
@@ -223,23 +224,23 @@ export class ConversationService {
    * turns and founder_state are preserved. If there is nothing new to ask, it stays ready (→ shows the
    * refreshed baseline directly). Then a fresh Aha2 + baseline projection reflect the updated state.
    */
-  async reopen(businessId: string, founderId: string, businessName: string, language: string): Promise<ConversationView> {
+  async reopen(businessId: string, founderId: string, businessName: string, language: string, surface: ConversationSurface | null = null): Promise<ConversationView> {
     const session = await this.deps.conversations.getByBusiness(businessId);
-    if (!session) return this.startOrResume(businessId, founderId, businessName, language);
+    if (!session) return this.startOrResume(businessId, founderId, businessName, language, surface);
     await this.deps.needs.seed(session.id, businessId, CORE_NEEDS); // adds only baseline domains not already present
     const open = await this.deps.needs.listOpen(session.id);
     if (open.length > 0) {
       await this.deps.conversations.setStatus(session.id, 'active', null); // reopen the interview
       const out = await this.deps.model.step(await this.buildStepInput(businessId, founderId, businessName, language, session.id, null));
       const opener = openerTurnContent(out);
-      if (opener) await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: opener, language, infoNeedKey: null });
+      if (opener) await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: opener, language, infoNeedKey: null, surface });
     }
     const fresh = (await this.deps.conversations.getByBusiness(businessId)) ?? session;
     const turns = await this.deps.conversations.listTurns(fresh.id);
     return { session: fresh, turns, readyForAha2: fresh.status === 'ready_for_aha2' };
   }
 
-  async submitResponse(businessId: string, founderId: string, businessName: string, message: string, language: string, currentContext?: string | null): Promise<ConversationView> {
+  async submitResponse(businessId: string, founderId: string, businessName: string, message: string, language: string, currentContext?: string | null, surface: ConversationSurface | null = null): Promise<ConversationView> {
     const session = await this.deps.conversations.getByBusiness(businessId);
     if (!session) throw new Error('NO_CONVERSATION');
     if (language !== session.conversationLanguage) await this.deps.conversations.setLanguage(session.id, language);
@@ -249,7 +250,7 @@ export class ConversationService {
     // never count toward the discovery cap.
     const answerMode = !!(currentContext && currentContext.trim());
     const founderTurn = await this.deps.conversations.appendTurn({
-      id: generateId(), sessionId: session.id, businessId, role: 'founder', content: message, language, infoNeedKey: answerMode ? ANSWER_MODE_TURN : null,
+      id: generateId(), sessionId: session.id, businessId, role: 'founder', content: message, language, infoNeedKey: answerMode ? ANSWER_MODE_TURN : null, surface,
     });
 
     const out = await this.deps.model.step(await this.buildStepInput(businessId, founderId, businessName, language, session.id, message, currentContext));
@@ -283,7 +284,7 @@ export class ConversationService {
     if (answerMode) {
       // a contextual answer is the grounded answer ALONE — no discovery question, no state-machine advance.
       const bbContent = (out.interpretation ?? '').trim();
-      if (bbContent) await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: bbContent, language, infoNeedKey: null });
+      if (bbContent) await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: bbContent, language, infoNeedKey: null, surface });
       const turns = await this.deps.conversations.listTurns(session.id);
       const updated = await this.deps.conversations.getByBusiness(businessId);
       return { session: updated ?? session, turns, readyForAha2: session.status === 'ready_for_aha2' };
@@ -292,7 +293,7 @@ export class ConversationService {
     // PACING CAP — the founder has now answered MAX_DISCOVERY_ANSWERS discovery questions: no further question, ever.
     const answered = (await this.deps.conversations.listTurns(session.id))
       .filter((x) => x.role === 'founder' && x.infoNeedKey !== ANSWER_MODE_TURN).length;
-    if (answered >= MAX_DISCOVERY_ANSWERS) return this.closeAtCap(session, businessId, language, out.interpretation, answered);
+    if (answered >= MAX_DISCOVERY_ANSWERS) return this.closeAtCap(session, businessId, language, out.interpretation, answered, surface);
 
     // FIX 3 — coverage gate. A strategy is only honest once the required-core is covered: goal (a persisted goal
     // row), horizon, whats_working, acquisition_today. `coveredCore` = the forceable three are no longer open.
@@ -332,7 +333,7 @@ export class ConversationService {
     // FIX 2a — joinReply never duplicates the question when the interpretation already ends with it.
     const bbContent = joinReply(finalOut.interpretation, finalOut.nextQuestion);
     if (bbContent) {
-      await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: bbContent, language, infoNeedKey: finalOut.nextNeedKey ?? null });
+      await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: bbContent, language, infoNeedKey: finalOut.nextNeedKey ?? null, surface });
     }
 
     const otherwiseReady = finalOut.readyForAha2 || openNeeds.length === 0;
@@ -362,9 +363,9 @@ export class ConversationService {
    * writes the goal and releases the strategy). Nothing goal-shaped → ready WITHOUT a goal: the strategy is built on
    * an assumed goal from the named constraint and says so.
    */
-  private async closeAtCap(session: ConversationSession, businessId: string, language: string, interpretation: string | null | undefined, answered: number): Promise<ConversationView> {
+  private async closeAtCap(session: ConversationSession, businessId: string, language: string, interpretation: string | null | undefined, answered: number, surface: ConversationSurface | null): Promise<ConversationView> {
     const ack = withoutQuestions(interpretation ?? '');
-    if (ack) await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: ack, language, infoNeedKey: null });
+    if (ack) await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: ack, language, infoNeedKey: null, surface });
     const active = await this.deps.state.listActive(businessId);
     const hasGoal = active.some(isHeldGoal);
     // Already handed over (the goal was confirmed, or the strategy was assumed): a later message — e.g. an answer to the

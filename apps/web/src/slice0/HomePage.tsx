@@ -92,7 +92,7 @@ export function HomePage(): React.ReactElement {
     if (verdict) {
       return (
         <AppShell home>
-          <VerdictSurface businessId={id} result={verdict} contentLanguage={briefing.contentLanguage}
+          <VerdictSurface businessId={id} result={verdict} contentLanguage={briefing.contentLanguage} cycleClose
             onDismiss={() => { setVerdict(null); setCloseText(''); void load(); }}
             onAdopted={() => navigate(`${base}/today`)} />
         </AppShell>

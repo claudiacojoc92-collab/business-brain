@@ -66,7 +66,7 @@ export function ConversationPage() {
       try { setUnderstanding(await getUnderstanding(id)); } catch { /* baseline degrades gracefully */ }
       const existing = await getAha2(id);
       // Refresh mode (R2B): reopen the interview to update the baseline; else resume normally.
-      const view = refreshMode ? await reopenConversation(id) : await startConversation(id);
+      const view = refreshMode ? await reopenConversation(id) : await startConversation(id, 'conversation');
       setTurns(view.turns);
       setReady(view.readyForAha2);
       const hasAha2 = existing.state === 'produced' || existing.state === 'insufficient';
@@ -91,7 +91,7 @@ export function ConversationPage() {
     if (!id || !input.trim()) return;
     setSending(true); setActionError(null);
     try {
-      const view = await submitTurn(id, input.trim());
+      const view = await submitTurn(id, input.trim(), 'conversation');
       setTurns(view.turns);
       setReady(view.readyForAha2);
       setInput('');

@@ -47,11 +47,11 @@ const model: IPlanModelPort = { draftPlan: async () => draft };
 function makeLogger(): Logger { return { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() } as unknown as Logger; }
 
 // Build a server whose business boundary is owned by `ownerId`; requests authenticate as `asFounder`.
-function buildServer(asFounder: string, ownerId = 'founder-1', planModel: IPlanModelPort = model) {
+function buildServer(asFounder: string, ownerId = 'founder-1', planModel: IPlanModelPort = model, extra: Record<string, unknown> = {}) {
   const mem = inMemoryRepo();
   const planService = new PlanService({ plan: mem.repo, model: planModel, currentStrategy: async () => STRATEGY, clock: () => '2026-01-01T00:00:00.000Z' });
   const businessService = { getBusiness: async (id: string, founderId: string) => (founderId === ownerId ? { id, name: 'Acme' } : null) } as any;
-  const deps = { planService, businessService } as any;
+  const deps = { planService, businessService, ...extra } as any;
   const server = Fastify();
   registerErrorHandler(server, makeLogger());
   server.addHook('preHandler', async (req) => { (req as any).user = { sub: asFounder, role: 'founder' }; });
@@ -85,6 +85,20 @@ describe('Slice 5 — plan routes (founder-visible surface + tenancy)', () => {
     await server.inject({ method: 'POST', url: `${B}/propose`, payload: {} });
     const today = await server.inject({ method: 'GET', url: `${B}/today` });
     expect(today.json<any>().state).toBe('none');
+  });
+
+  it('BUS-82: Today carries the ONE canonical move: selectToday\'s, or a due follow-up when the composition supplies one', async () => {
+    const plain = buildServer('founder-1');
+    const p1 = (await plain.server.inject({ method: 'POST', url: `${B}/propose`, payload: {} })).json<any>();
+    await plain.server.inject({ method: 'POST', url: `${B}/${p1.planVersionId}/adopt`, payload: {} });
+    const t1 = (await plain.server.inject({ method: 'GET', url: `${B}/today` })).json<any>();
+    expect(t1.current).toMatchObject({ kind: 'plan', what: t1.ready[0].what, followUpId: null });
+
+    const fu = buildServer('founder-1', 'founder-1', model, { canonicalToday: async () => ({ kind: 'follow_up', what: 'Trimite broșura pe email (Spitalul Clinic)', followUpId: 'f1', actionId: null }) });
+    const p2 = (await fu.server.inject({ method: 'POST', url: `${B}/propose`, payload: {} })).json<any>();
+    await fu.server.inject({ method: 'POST', url: `${B}/${p2.planVersionId}/adopt`, payload: {} });
+    const t2 = (await fu.server.inject({ method: 'GET', url: `${B}/today` })).json<any>();
+    expect(t2.current).toEqual({ kind: 'follow_up', what: 'Trimite broșura pe email (Spitalul Clinic)', actionId: null, followUpId: 'f1' });
   });
 
   it('C. adopt → Active → Today derives ready actions', async () => {

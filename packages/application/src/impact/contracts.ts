@@ -1,4 +1,5 @@
 import type { FounderStateKind } from '../conversation/index';
+import type { ConditionEvaluation } from '../result-loop/evidence';
 
 /**
  * LIVING STATE — the impact evaluator.
@@ -30,6 +31,9 @@ export interface TodayImpact {
   readonly reason: string | null;      // localized model prose, or null → render `reasonCode` via i18n
   readonly reasonCode: string | null;  // i18n key for the deterministic fallback
   readonly newMove: string | null;
+  /** Result Loop: follow-ups this input added to the execution queue. Separate from Today: a longer queue is not a new
+   *  current move. Null when none were added. */
+  readonly followUpsAdded?: { readonly count: number; readonly firstDueOn: string | null } | null;
 }
 
 /** A newly-proposed strategy version, projected for the founder. Populated only on REVISE / RECONSIDER. */
@@ -56,6 +60,22 @@ export interface ImpactResult {
   todayImpact: TodayImpact;
   strategyImpact: StrategyImpact;
   source: ImpactSource;
+  /** Result Loop: the counted evidence and each reconsider condition's state, when the input was a result report. */
+  evidence?: { statements: string[]; conditions: ConditionEvaluation[] };
+}
+
+/**
+ * Whether Today changed, decided OUTSIDE the model (Result Loop V1, 2026-10-14): from the follow-up diff of a result
+ * report, or from a TUNE constraint actually blocking the current move. The single source of the Today interpretation:
+ * changed=false ⇒ no new move is ever shown.
+ */
+export interface TodayFact {
+  /** The CURRENT Today move changed materially (a different move is first now). Never "the queue got longer". */
+  readonly changed: boolean;
+  readonly move: string | null;
+  readonly reason: string | null;
+  /** The execution queue, kept apart from the current move: follow-ups added by this input. */
+  readonly queue?: { readonly added: number; readonly firstDueOn: string | null } | null;
 }
 
 /**
@@ -80,6 +100,11 @@ export interface ImpactSignal {
   /** TUNE: whether this operating constraint makes the CURRENT Today move inappropriate now, so it should be
    *  bound to that move (blocking it) rather than held as general context. */
   readonly conflictsWithCurrentMove: boolean;
+  /**
+   * Result Loop: is there enough evidence, judged against the held assumptions / conditions / cumulative counts, to
+   * change the strategy now? 'too_early' keeps the strategy (BB says so) without any global minimum count.
+   */
+  readonly evidenceSufficiency?: 'enough' | 'too_early';
 }
 
 export interface ImpactAssessInput {
@@ -98,9 +123,13 @@ export interface ImpactAssessInput {
   };
   /** the founder's current Today move, so the model can judge whether a new constraint conflicts with it. */
   readonly currentMove: { what: string } | null;
+  /** Result Loop: counted evidence across ALL logged outreach + each reconsider condition's deterministic state. */
+  readonly cumulative?: { statements: string[]; conditions: ConditionEvaluation[] } | null;
 }
 
 export interface IImpactModelPort {
   /** Return a conservative signal on any failure — NEVER throw, NEVER auto-escalate to a strategic change. */
   assess(input: ImpactAssessInput): Promise<ImpactSignal>;
+  /** Structure the strategy's OWN reconsider conditions as checks over the counts (shape-checked by checkConditionChecks). */
+  structureConditions?(conditions: string[], language: string): Promise<unknown>;
 }

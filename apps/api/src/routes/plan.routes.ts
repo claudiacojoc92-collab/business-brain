@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { spoken } from '@bb/application';
+import { canonicalTodayMove, spoken } from '@bb/application';
 import type { ServerDeps } from '../server';
-import { recordFounderEvent, readReturnSummary, readTodayNote, readLatestOutcomeText, readWeeklyReachPrompt } from '../telemetry/founder-events';
+import { recordFounderEvent, readReturnSummary, readTodayNote, readLatestOutcomeText, readWeeklyReachPrompt, readResultReview } from '../telemetry/founder-events';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
 import { contentLanguageFor } from './content-language';
 import type { PlanVersion, Priority, Action, ActionOutcome } from '@bb/application';
@@ -113,6 +113,29 @@ const findAction = (plan: PlanVersion, actionId: string): Action | null => {
  * adopts it; Today reads only the Active plan; action outcomes are append-only; Create emits a product-level
  * handoff (no asset yet). All under /v1 (JWT via the global preHandler); membership enforced per request.
  */
+/**
+ * Result Loop V1 on Today: only what matters now. The follow-ups that are due (the move: "Follow up with Dr X"), and at
+ * most ONE line about the results: a strategy review the results argue for, or how many contacts have not answered
+ * (with the strategy deliberately unchanged). Today stays a strategic surface, not a contact list.
+ */
+async function resultsToday(deps: ServerDeps, businessId: string) {
+  if (!deps.resultLoopService) return null;
+  try {
+    const [due, views] = await Promise.all([deps.resultLoopService.due(businessId), deps.resultLoopService.views(businessId)]);
+    if (!views.length) return null;
+    const review = await readResultReview(deps.db, businessId);
+    const awaiting = views.filter((v) => v.contact.status === 'CONTACTED').length;
+    const line = review ? { code: review.verdict === 'RECONSIDER' ? 'results.line.reconsider' : 'results.line.revise', vars: {} }
+      : awaiting ? { code: 'results.line.awaiting', vars: { n: String(awaiting) } } : null;
+    return {
+      due: due.slice(0, 3).map((d) => ({ followUpId: d.followUp.id, contactId: d.contact.id, contactName: d.contact.name, role: d.contact.role, what: d.followUp.what, reason: d.followUp.reason, dueOn: d.followUp.dueOn })),
+      line,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function registerPlanRoutes(server: FastifyInstance, deps: ServerDeps): void {
   async function requireBusiness(request: FastifyRequest) {
     const founderId = founderOf(request);
@@ -178,11 +201,19 @@ export function registerPlanRoutes(server: FastifyInstance, deps: ServerDeps): v
     recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'return_summary_shown', surface: 'today', metadata: {} });
     const active = await deps.planService.getActivePlan(business.id);
     const today = await deps.planService.today(business.id);
-    if (!active || !today) { await reply.status(200).send({ state: 'none', sinceLastHere, todayNote }); return; }
+    const results = await resultsToday(deps, business.id);
+    if (!active || !today) {
+      const due = deps.canonicalToday ? await deps.canonicalToday(business.id) : null; // a due follow-up is Today even without a plan
+      const current = due ? { kind: due.kind, what: due.what, actionId: due.actionId, followUpId: due.kind === 'follow_up' ? due.followUpId : null } : null;
+      await reply.status(200).send({ state: 'none', current, sinceLastHere, todayNote, results }); return;
+    }
     // Attribution by asking (V081): the skippable weekly reach prompt, shown only on a real operating business
     // (one with an active plan). Reflective-only; reset/suppressed weekly via founder_event.
     const weeklyPrompt = await readWeeklyReachPrompt(deps.db, business.id, founderId);
-    await reply.status(200).send({ state: 'active', ...spokenFields(projectToday(today, active.plan)), sinceLastHere, todayNote, weeklyPrompt });
+    // BUS-82: the ONE canonical Today move (what Home, the Day One week, Talk and the email use too).
+    const move = deps.canonicalToday ? await deps.canonicalToday(business.id) : canonicalTodayMove(today);
+    const current = move ? { kind: move.kind, what: move.what, actionId: move.actionId, followUpId: move.kind === 'follow_up' ? move.followUpId : null } : null;
+    await reply.status(200).send({ state: 'active', ...spokenFields(projectToday(today, active.plan)), current, sinceLastHere, todayNote, weeklyPrompt, results });
   });
 
   // Mark an action done/deferred/skipped — append-only; applies to the Active plan only.

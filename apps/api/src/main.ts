@@ -23,7 +23,7 @@ async function main(): Promise<void> {
     conversationService, businessCorrectionService, aha2Service, strategyService, impactService, mirrorService, arcService, voiceService, planService, carouselService,
     photoLedService, photoLedRepo, reelService, reelObjectStore, reelRepo, reelShootService, reelShootRepo,
     moveDraftService, moveDraftRepo, produceLandingMove,
-    reachService,
+    reachService, resultLoopService, communicationService, resultReportModel, canonicalToday,
   } = buildCompositionRoot(db);
 
   const server = await createServer({
@@ -34,7 +34,7 @@ async function main(): Promise<void> {
     conversationService, businessCorrectionService, aha2Service, strategyService, impactService, mirrorService, arcService, voiceService, planService, carouselService,
     photoLedService, photoLedRepo, reelService, reelObjectStore, reelRepo, reelQueue, reelShootService, reelShootRepo,
     moveDraftService, moveDraftRepo, produceLandingMove, moveDraftQueue: reelQueue,
-    reachService,
+    reachService, resultLoopService, communicationService, resultReportModel, canonicalToday,
   });
 
   const port = parseInt(process.env['PORT'] ?? '3000', 10);

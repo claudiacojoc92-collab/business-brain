@@ -282,6 +282,15 @@ export class PlanService {
   async today(businessId: string): Promise<TodayResult | null> {
     const active = await this.getActivePlan(businessId);
     if (!active) return null;
+    return this.todayFor(businessId, active.plan, active.strategyStale);
+  }
+
+  /**
+   * The same Today derivation (readiness + selectToday) for ANY plan version — e.g. Day One's proposed plan, before it
+   * is active — so every surface uses one selection (BUS-82), never the plan's first action.
+   */
+  async todayFor(businessId: string, plan: PlanVersion, strategyStale = false): Promise<TodayResult> {
+    const active = { plan, strategyStale };
     const strategy = await this.deps.currentStrategy(businessId);
     const ledger = await this.deps.plan.listActionStates(businessId, active.plan.planVersionId);
     const availableMaterial = new Set(strategy?.licensedMaterial ?? []);

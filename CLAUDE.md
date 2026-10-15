@@ -121,7 +121,9 @@ Gotchas:
   reels. Don't modify them except to fix a regression.
 - A per-business reset must also clear the `understanding.*` tables (`raw_capture`,
   `normalized_observation`, `corpus_revision`, `ingestion_idempotency`), scoped by
-  `business_ref='business:<id>'` (not `business_id`). Otherwise re-ingest throws a content conflict.
+  `business_ref='business:<id>'` (not `business_id`). Otherwise re-ingest throws a content conflict. It must also
+  clear `result.*` (contacts, touches, outcomes, follow-ups, writing entries) by `business_id`: use
+  `clearResultLoopForBusiness(db, businessId)` (`@bb/infrastructure`, one transaction, BUS-78).
 - The prod DB is internal-only. Reach it via `railway connect` or `railway ssh --service api`.
 - `app.getbusinessbrain.com` is the Railway `web` service (nginx proxies `/v1`, `/auth`, `/api` to
   `api.railway.internal`). API deploys self-heal through the nginx dynamic resolver. If they don't,

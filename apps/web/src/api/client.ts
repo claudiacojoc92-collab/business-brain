@@ -304,15 +304,17 @@ export interface ConvView {
 }
 const CONV = (id: string) => `v1/businesses/${encodeURIComponent(id)}/conversation`;
 
-export function startConversation(businessId: string): Promise<ConvView> {
-  return request<ConvView>(CONV(businessId), { method: 'POST', body: '{}' });
+/** Where a conversation turn is written (stored with the turn; the kind only, never screen contents). */
+export type ConversationSurface = 'talk' | 'conversation';
+export function startConversation(businessId: string, surface: ConversationSurface): Promise<ConvView> {
+  return request<ConvView>(CONV(businessId), { method: 'POST', body: JSON.stringify({ surface }) });
 }
 /** Living baseline (R2B): reopen the interview to refresh the current-state baseline (never resets). */
 export function reopenConversation(businessId: string): Promise<ConvView> {
   return request<ConvView>(`${CONV(businessId)}/reopen`, { method: 'POST', body: '{}' });
 }
-export function submitTurn(businessId: string, message: string, context?: string): Promise<ConvView> {
-  return request<ConvView>(`${CONV(businessId)}/turn`, { method: 'POST', body: JSON.stringify(context ? { message, context } : { message }) });
+export function submitTurn(businessId: string, message: string, surface: ConversationSurface, context?: string): Promise<ConvView> {
+  return request<ConvView>(`${CONV(businessId)}/turn`, { method: 'POST', body: JSON.stringify(context ? { message, context, surface } : { message, surface }) });
 }
 export function pauseConversation(businessId: string): Promise<void> {
   return request<void>(`${CONV(businessId)}/pause`, { method: 'POST', body: '{}' });
@@ -438,9 +440,11 @@ export interface ImpactResult {
   whatChanged: string[];
   whatDidNotChange: string[];
   assumptionImpacts: AssumptionImpact[];
-  todayImpact: { changes: boolean; reason: string | null; reasonCode: string | null; newMove: string | null };
+  todayImpact: { changes: boolean; reason: string | null; reasonCode: string | null; newMove: string | null; followUpsAdded?: { count: number; firstDueOn: string | null } | null };
   strategyImpact: { changes: boolean; reasonCode: string; reasonVars?: Record<string, string>; newVersion: { id: string; version: number; status: string; strategy: StrategyBundle } | null };
   source: ImpactSource;
+  /** Result reports: counted evidence + each reconsider condition's state. */
+  evidence?: { statements: string[]; conditions: { condition: string; state: 'met' | 'not_met' | 'not_yet_measurable' | 'not_measurable'; observed: number | null; detail: string }[] };
 }
 export function evaluateImpact(businessId: string, source: ImpactSource, text: string): Promise<ImpactResult> {
   return request<ImpactResult>(`v1/businesses/${encodeURIComponent(businessId)}/impact/evaluate`, { method: 'POST', body: JSON.stringify({ source, text }) });
@@ -496,7 +500,7 @@ export interface ArcView {
   coverage?: { key: string; covered: boolean }[]; // conversation — quiet progress map
   mirror?: { founderWords: string; against: string; tension: string } | null;
   strategy?: { bet: string; over: string; horizon: string; tradeOffs: string[]; notNow: string[]; reconsider: string[]; proposalId: string | null; adoptable: boolean; assumedGoal?: string | null };
-  weekDay?: { week: string[]; today: string | null; canCreate: boolean;
+  weekDay?: { week: string[]; today: string | null; canCreate: boolean; todayKind?: 'follow_up' | 'plan' | 'blocked' | null;
     // The week told as a chapter (2026-10-12); null/absent on an older api.
     story?: { planVersionId: string; context: string; statement: string; whyNow: string; chapters: { title: string; why: string }[];
       today: { move: string; detail: string }; doneLooksLike: string } | null };
@@ -645,8 +649,11 @@ export interface WeeklyReach {
   weekStart: string;
   weekEnd: string;
 }
+/** BUS-82: the ONE canonical Today move (due follow-up → selected plan move → blocked fallback). */
+export interface TodayCurrent { kind: 'follow_up' | 'plan' | 'blocked'; what: string; actionId: string | null; followUpId: string | null }
 export interface TodayResp {
   state: 'active' | 'none';
+  current?: TodayCurrent | null;
   ready?: TodayAction[];
   blocked?: TodayBlocked | null;
   blockedMoves?: TodayBlockedMove[];
@@ -654,6 +661,11 @@ export interface TodayResp {
   sinceLastHere?: ReturnSummary;
   todayNote?: TodayNote;
   weeklyPrompt?: WeeklyReach;
+  /** Result Loop V1: what is due now in the acquisition loop + at most one line about the results. */
+  results?: {
+    due: { followUpId: string; contactId: string; contactName: string; role: string | null; what: string; reason: string; dueOn: string }[];
+    line: { code: string; vars: Record<string, string> } | null;
+  } | null;
 }
 /** One collected weekly reach report — the founder's own words, shown back to them to review/correct/delete. */
 export interface ReachReportView {
@@ -1237,3 +1249,72 @@ export function rewriteLandingSection(businessId: string, actionId: string, role
 export function editLandingSection(businessId: string, actionId: string, role: string, body: string, heading?: string): Promise<LandingDraftView> {
   return request(`v1/businesses/${businessId}/moves/${encodeURIComponent(actionId)}/landing-draft/sections/${role}/edit`, { method: 'POST', body: JSON.stringify({ heading, body }) });
 }
+
+// ── Result Loop V1: contacts / touches / follow-ups / report / founder messages (intent/2026-10-14-result-loop) ──
+export type ContactStatus = 'TARGET' | 'CONTACTED' | 'IN_CONVERSATION' | 'PARTNER' | 'NOT_INTERESTED' | 'NEEDS_DETAILS';
+export type OutcomeTypeName = 'NO_RESPONSE' | 'NOT_INTERESTED' | 'MATERIAL_REQUESTED' | 'FOLLOW_UP_REQUESTED' | 'MEETING_REQUESTED' | 'REFERRAL_RECEIVED' | 'CONVERTED' | 'OTHER';
+export interface ResultContact {
+  id: string; type: 'ORGANISATION' | 'PERSON'; name: string; organisationName: string | null; role: string | null; email: string | null; phone: string | null; website: string | null;
+  status: ContactStatus; needsDetails: boolean;
+  lastTouch: { type: string; channel: string; at: string; summary: string } | null;
+  lastOutcome: { type: OutcomeTypeName; at: string; note: string } | null;
+  nextFollowUp: { id: string; what: string; dueOn: string } | null;
+}
+export interface SenderIdentityView { displayName: string; role: string; business: string; signOff: string | null }
+export interface ResultsView {
+  contacts: ResultContact[];
+  due: { followUpId: string; contactId: string; contactName: string; what: string; dueOn: string }[];
+  sender: SenderIdentityView | null;
+  senderSuggestion: SenderIdentityView | null;
+  writing: { samples: number; liked?: number; neverSay: string[]; acceptedPhrases: string[]; rejectedInContext?: number; preferences: Record<string, string>; rules?: WritingRuleView[] };
+}
+/** A writing rule BB uses for her, and where it came from (never a personality trait). */
+export interface WritingRuleView { key: string; value: string; source: 'explicit' | 'samples' | 'edits' | 'edit'; evidenceCount: number; scope?: { recipientCategory: 'medical' | 'organisation' | 'individual'; channel: 'EMAIL' | 'WHATSAPP' } }
+export interface ReportItem {
+  id: string;
+  contact: { existingContactId: string | null; name: string | null; organisationName: string | null; role: string | null; type: 'ORGANISATION' | 'PERSON'; placeholder: boolean };
+  touch: { channel: string; type: string } | null;
+  outcome: { type: OutcomeTypeName; note: string } | null;
+  followUp: { what: string; dueInDays: number } | null;
+  quote: string;
+  edited?: boolean;
+}
+export interface ParsedReportView { statement: string; items: ReportItem[]; unclear: string[]; contacts: { id: string; name: string; role: string | null; organisationName: string | null }[] }
+export interface CommunicationBriefView {
+  sender_identity: SenderIdentityView; recipient_identity: { name: string; organisation: string | null; email: string | null; phone: string | null };
+  recipient_role: string | null; relationship_context: string; why_now: string; strategic_reason: string; desired_outcome: string;
+  offer_or_value: string | null; supporting_context: string[]; what_not_to_say: string[]; prefer_to_avoid?: string[]; cta: string; tone: string; length: { maxWords: number };
+  language: string; channel: 'EMAIL' | 'WHATSAPP'; purpose: string;
+  offer_items: string[];
+  relevant_offer_parts: RelevantOfferPartView[];
+  relevance: { uncertain: boolean; source: 'model' | 'founder'; correctionId: string | null };
+}
+export interface RelevantOfferPartView { offer_part: string; reason: string; evidence: string[]; confidence: 'HIGH' | 'MEDIUM' | 'LOW' }
+export type DraftView =
+  | { status: 'ready'; brief: CommunicationBriefView; message: { subject: string | null; body: string }; attempts: number; warnings: { code: string; detail: string }[]; messageId: string }
+  | { status: 'needs_input'; problems: { severity: string; code: string; detail: string }[] }
+  | { status: 'failed'; brief: CommunicationBriefView; attempts: number; reasons: { code: string; detail: string }[]; missingContext: string[]; clarify: string[] };
+
+const rb = (businessId: string): string => `v1/businesses/${encodeURIComponent(businessId)}/results`;
+export const getResults = (bid: string): Promise<ResultsView> => request<ResultsView>(rb(bid));
+export const addContact = (bid: string, c: { type: 'ORGANISATION' | 'PERSON'; name: string; organisationName?: string; role?: string; email?: string; phone?: string }): Promise<{ id: string }> =>
+  request(`${rb(bid)}/contacts`, { method: 'POST', body: JSON.stringify(c) });
+export const updateContact = (bid: string, cid: string, patch: Partial<{ name: string; organisationName: string; role: string; email: string; phone: string }>): Promise<{ ok: true }> =>
+  request(`${rb(bid)}/contacts/${encodeURIComponent(cid)}`, { method: 'PATCH', body: JSON.stringify(patch) });
+export const logTouch = (bid: string, cid: string, t: { channel: string; type: string; summary: string; outcome?: { type: OutcomeTypeName; note?: string }; followUp?: { what: string; dueOn: string } }): Promise<{ id: string }> =>
+  request(`${rb(bid)}/contacts/${encodeURIComponent(cid)}/touches`, { method: 'POST', body: JSON.stringify(t) });
+export const rescheduleFollowUp = (bid: string, fid: string, dueOn: string): Promise<{ id: string; dueOn: string }> =>
+  request(`${rb(bid)}/follow-ups/${encodeURIComponent(fid)}/reschedule`, { method: 'POST', body: JSON.stringify({ dueOn }) });
+export const cancelFollowUp = (bid: string, fid: string): Promise<{ ok: true }> => request(`${rb(bid)}/follow-ups/${encodeURIComponent(fid)}/cancel`, { method: 'POST', body: '{}' });
+export const parseReport = (bid: string, text: string): Promise<ParsedReportView> => request(`${rb(bid)}/report/parse`, { method: 'POST', body: JSON.stringify({ text }) });
+export const confirmReport = (bid: string, text: string, items: ReportItem[]): Promise<{ written: Record<string, number>; verdict: ImpactResult }> =>
+  request(`${rb(bid)}/report/confirm`, { method: 'POST', body: JSON.stringify({ text, items }) });
+export const confirmSender = (bid: string, s: SenderIdentityView): Promise<{ sender: SenderIdentityView }> => request(`${rb(bid)}/sender`, { method: 'POST', body: JSON.stringify(s) });
+export const addWriting = (bid: string, kind: 'SAMPLE' | 'LIKED' | 'ACCEPTED_PHRASE' | 'REJECTED_PHRASE' | 'NEVER_SAY' | 'PREFERENCE', text: string, key?: string): Promise<{ rules?: WritingRuleView[] }> =>
+  request(`${rb(bid)}/writing`, { method: 'POST', body: JSON.stringify({ kind, text, key }) });
+export const draftMessage = (bid: string, cid: string, channel: 'EMAIL' | 'WHATSAPP' = 'EMAIL'): Promise<DraftView> =>
+  request(`${rb(bid)}/contacts/${encodeURIComponent(cid)}/draft`, { method: 'POST', body: JSON.stringify({ channel }) });
+export const correctRelevance = (bid: string, cid: string, parts: { offer_part: string; reason: string }[]): Promise<unknown> =>
+  request(`${rb(bid)}/contacts/${encodeURIComponent(cid)}/relevance`, { method: 'POST', body: JSON.stringify({ parts }) });
+export const markMessageSent = (bid: string, cid: string, m: { messageId: string; subject: string | null; body: string; draftBody: string | null; channel: 'EMAIL' | 'WHATSAPP' }): Promise<{ id: string }> =>
+  request(`${rb(bid)}/contacts/${encodeURIComponent(cid)}/sent`, { method: 'POST', body: JSON.stringify(m) });

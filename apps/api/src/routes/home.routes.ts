@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { ServerDeps } from '../server';
 import { AuthenticationError, NotFoundError } from '@bb/shared';
-import { composeHomeBriefing, type HomeBriefingInput, type HomeLine } from '@bb/application';
+import { canonicalTodayMove, composeHomeBriefing, type HomeBriefingInput, type HomeLine } from '@bb/application';
 import { readTodayNote, readArcWeekStory } from '../telemetry/founder-events';
 import { contentLanguageFor } from './content-language';
 
@@ -55,15 +55,15 @@ export function registerHomeRoutes(server: FastifyInstance, deps: ServerDeps): v
     if (note?.kind === 'strategy_adopted') changeLine = { key: 'home.line.changed.strategy', vars: { v: String(note.version) } };
     else if (note?.kind === 'impact' && note.reason.trim()) changeLine = { key: 'home.line.changed.impact', vars: { reason: note.reason.trim() } };
 
-    // Today's move in the founder's voice: when the ready move is the week's first move of the same plan, use the
-    // week story's re-told (gated, cleaned) sentence instead of the plan's long brief text.
-    let todayWhat = today?.ready?.[0]?.what ?? '';
+    // BUS-82: Home's "today" is the CANONICAL Today (due follow-up → selected plan move → blocked fallback), the same
+    // selection the Today page and the Day One week use. In the founder's voice: when the canonical move is the plan
+    // action the week story was told for (same plan version), use the story's re-told sentence.
+    const move = deps.canonicalToday ? await deps.canonicalToday(business.id) : canonicalTodayMove(today);
+    let todayWhat = move?.what ?? '';
     try {
-      const ready = today?.ready?.[0];
-      if (ready) {
+      if (move?.kind === 'plan') {
         const [story, active] = await Promise.all([readArcWeekStory(deps.db, business.id, founderId), deps.planService.getActivePlan(business.id)]);
-        const firstId = active ? [...active.plan.priorities].sort((x, y) => x.order - y.order).flatMap((p) => p.actions)[0]?.actionId : null;
-        if (story && active && story.planVersionId === active.plan.planVersionId && firstId === ready.actionId && story.today.move.trim()) todayWhat = story.today.move;
+        if (story && active && story.planVersionId === active.plan.planVersionId && story.today.actionId === move.actionId && story.today.move.trim()) todayWhat = story.today.move;
       }
     } catch (e) { deps.logger.warn({ err: e, businessId: business.id }, 'home: week story read failed, plan wording used'); }
 
@@ -74,8 +74,8 @@ export function registerHomeRoutes(server: FastifyInstance, deps: ServerDeps): v
       strategy: current ? { bet: current.record.bundle.core.coreBet.priority, adoptedAt: current.adoptedAt } : null,
       today: {
         state: today ? 'active' : 'none',
-        move: today?.ready?.[0] ? { what: todayWhat, canCreate: today.ready[0].leadsToCreate } : null,
-        blocked: today?.blockedFallback ? { what: today.blockedFallback.action.what } : null,
+        move: move && move.kind !== 'blocked' ? { what: todayWhat, canCreate: move.kind === 'plan' && move.action.leadsToCreate } : null,
+        blocked: move?.kind === 'blocked' ? { what: move.what } : null,
       },
       changeLine,
       // Month two: the cycle-close prompt fires only when the active plan's cycle is complete.

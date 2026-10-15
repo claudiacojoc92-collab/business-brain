@@ -64,7 +64,7 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
     // failure here is a PER-MOMENT error (the founder retries the conversation), never a whole-arc surface failure.
     if (view.moment === 'conversation' && (view.turns?.length ?? 0) === 0) {
       try {
-        await deps.conversationService.startOrResume(businessId, founderId, businessName, language);
+        await deps.conversationService.startOrResume(businessId, founderId, businessName, language, 'onboarding');
         view = await deps.arcService.view(businessId, businessName, language, flags, sources, email, connected, savedMirror, savedWeekStory, savedContainer);
       } catch {
         view = { ...view, error: { kind: 'generation' } };
@@ -350,14 +350,14 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
     const message = (body.message ?? '').trim();
     if (!body.skip && !message) throw new ValidationError('MESSAGE_REQUIRED', 'A message is required.');
     const language = message ? await noteFounderText(deps.contentLanguageStore, business.id, message, current) : current;
-    await deps.conversationService.startOrResume(business.id, founderId, business.name, language);
+    await deps.conversationService.startOrResume(business.id, founderId, business.name, language, 'onboarding');
     // FIX 3 / Addition 1 — one-tap skip: decline the current question's need FIRST (deterministic, so the depth cap
     // never re-forces it), then let the interview move on. The founder's (localized) message carries the skip.
     if (body.skip) {
       await deps.conversationService.declineCurrentNeed(business.id);
       mark(founderId, business.id, 'talk_turn_submitted', { skip: true });
     }
-    await deps.conversationService.submitResponse(business.id, founderId, business.name, message || '(skip)', language);
+    await deps.conversationService.submitResponse(business.id, founderId, business.name, message || '(skip)', language, null, 'onboarding');
     await reply.status(200).send(await viewFor(business.id, business.name, language, founderId));
   });
 
@@ -366,8 +366,8 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
     const { founderId, business, language } = await requireBusiness(request);
     const answer = ((request.body as { answer?: string })?.answer ?? '').trim();
     if (answer) {
-      await deps.conversationService.startOrResume(business.id, founderId, business.name, language);
-      await deps.conversationService.submitResponse(business.id, founderId, business.name, answer, language);
+      await deps.conversationService.startOrResume(business.id, founderId, business.name, language, 'mirror');
+      await deps.conversationService.submitResponse(business.id, founderId, business.name, answer, language, null, 'mirror');
     }
     // Awaited, like flagRoute: the view below derives the moment from this flag. Fire-and-forget raced it, so "skip"
     // came back still on the mirror (found walking QuFi through the real routes, 2026-10-12).

@@ -6,10 +6,12 @@ import { useTalk } from './TalkDrawer';
 import { isNotFound, LoadError, actionErrorKey } from './errors';
 import { VerdictSurface } from './VerdictSurface';
 import { createDestination } from './create-route';
+import { MessageComposer } from './MessageComposer';
 import {
   getBusiness, getToday, getPlanState, proposePlan, adoptPlan, getCurrentStrategy,
   applyActionOutcome, createFromAction, resolveActionState, submitCorrection, evaluateImpact,
-  submitReachReport, skipReachReport,
+  submitReachReport, skipReachReport, parseReport, confirmReport, logTouch, rescheduleFollowUp, cancelFollowUp,
+  type ParsedReportView, type ReportItem, type OutcomeTypeName,
   type Business, type TodayResp, type TodayBlocked, type TodayBlockedMove, type PlanActiveResp, type StrategyResp,
   type ImpactResult, type ReturnSummary, type WeeklyReach,
 } from '../api/client';
@@ -49,6 +51,9 @@ export function TodayPage() {
   const [verdict, setVerdict] = useState<ImpactResult | null>(null); // Living State: the last impact verdict
   const [reporting, setReporting] = useState(false);
   const [outcomeText, setOutcomeText] = useState('');
+  // Result Loop V1: BB's reading of a report, checked item by item before saving; and the message composer.
+  const [parsed, setParsed] = useState<ParsedReportView | null>(null);
+  const [composer, setComposer] = useState<{ contactId: string; name: string } | null>(null);
   const started = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -110,13 +115,40 @@ export function TodayPage() {
   }
   // Living State: the founder reports an outcome of their work → assessed against the held strategy + baseline,
   // returning the shared verdict surface (STILL_HOLDS / TUNE / REVISE / RECONSIDER).
+  // Result Loop V1: a report is first READ into typed items (nothing saved) and shown back; the founder corrects and
+  // confirms; only then is it written and evaluated against the cumulative results. A report that names no contacts
+  // or results is assessed as a general update (it is never stored as a constraint or a correction).
   async function reportOutcome() {
     if (!id || !outcomeText.trim()) return;
     setBusy('report'); setActionError(null);
     try {
+      const p = await parseReport(id, outcomeText.trim());
+      if (p.items.length) { setParsed(p); setReporting(false); return; }
       const r = await evaluateImpact(id, 'outcome_report', outcomeText.trim());
       setVerdict(r); setReporting(false); setOutcomeText('');
     } catch (e) { setActionError(t(actionErrorKey(e))); } finally { setBusy(null); }
+  }
+  async function confirmParsed(items: ReportItem[]) {
+    if (!id || !parsed) return;
+    setBusy('report'); setActionError(null);
+    try {
+      const r = await confirmReport(id, parsed.statement, items);
+      setVerdict(r.verdict); setParsed(null); setOutcomeText('');
+    } catch (e) { setActionError(t(actionErrorKey(e))); } finally { setBusy(null); }
+  }
+  async function followUpDone(contactId: string, what: string) {
+    if (!id) return;
+    setBusy(`fu:${contactId}`);
+    try { await logTouch(id, contactId, { channel: 'OTHER', type: 'FOLLOW_UP', summary: what }); await refresh(); }
+    catch (e) { setActionError(t(actionErrorKey(e))); } finally { setBusy(null); }
+  }
+  async function followUpMove(followUpId: string, dueOn: string) {
+    if (!id || !dueOn) return;
+    try { await rescheduleFollowUp(id, followUpId, dueOn); await refresh(); } catch (e) { setActionError(t(actionErrorKey(e))); }
+  }
+  async function followUpCancel(followUpId: string) {
+    if (!id) return;
+    try { await cancelFollowUp(id, followUpId); await refresh(); } catch (e) { setActionError(t(actionErrorKey(e))); }
   }
   async function dismissVerdict() {
     setVerdict(null);
@@ -242,6 +274,13 @@ export function TodayPage() {
             {/* Attribution by asking (V081): the skippable weekly reach prompt. First time, it teaches the
                 door-question. Reflective-only — BB only ever shows the founder their own words back. */}
             {today?.weeklyPrompt?.show && id ? <WeeklyReachPrompt businessId={id} prompt={today.weeklyPrompt} t={t} /> : null}
+            {/* Result Loop V1: what is due now in the acquisition loop (the move), and at most one line about results. */}
+            {today?.results?.line ? <div className="s0-today2-note" role="status">{t(today.results.line.code, today.results.line.vars)}</div> : null}
+            {(today?.results?.due ?? []).length > 0 ? (
+              <DueFollowUps due={today!.results!.due} busy={busy} t={t}
+                onWrite={(d) => setComposer({ contactId: d.contactId, name: d.contactName })}
+                onDone={(d) => followUpDone(d.contactId, d.what)} onMove={followUpMove} onCancel={followUpCancel} />
+            ) : null}
         {stage === 'no_strategy' ? (
           <Empty from={t('today2.today')} lead={t('today2.needStrategy')} cta={t('today2.toStrategy')} onCta={() => navigate(`${base}/strategy`)} />
         ) : stage === 'shaping' ? (
@@ -334,7 +373,9 @@ export function TodayPage() {
                 <button type="button" className="s0-linkbtn" onClick={() => navigate(`${base}/reach`)}>{t('reach.see')} →</button>
               </div>
             ) : null}
-            {canReport ? (
+            {parsed ? (
+              <ReportConfirm parsed={parsed} busy={busy === 'report'} t={t} onConfirm={confirmParsed} onCancel={() => setParsed(null)} />
+            ) : canReport ? (
               <OutcomeReporter
                 reporting={reporting} onOpen={() => setReporting(true)} onCancel={() => { setReporting(false); setOutcomeText(''); }}
                 text={outcomeText} setText={setOutcomeText} onSubmit={reportOutcome} busy={busy === 'report'} t={t}
@@ -343,7 +384,79 @@ export function TodayPage() {
           </>
         )}
       </div>
+      {composer && id ? <MessageComposer businessId={id} contactId={composer.contactId} contactName={composer.name} onClose={() => { setComposer(null); void refresh(); }} /> : null}
     </AppShell>
+  );
+}
+
+type DueItem = NonNullable<NonNullable<TodayResp['results']>['due']>[number];
+/** Due follow-ups: the acquisition loop's move for today (not a task list: at most three, each tied to a person). */
+function DueFollowUps(props: { due: DueItem[]; busy: string | null; t: Tr; onWrite: (d: DueItem) => void; onDone: (d: DueItem) => void; onMove: (id: string, dueOn: string) => void; onCancel: (id: string) => void }) {
+  const { due, t } = props;
+  const today = new Date().toISOString().slice(0, 10);
+  const [moving, setMoving] = useState<string | null>(null);
+  return (
+    <div className="s0-today2-due">
+      <div className="s0-today2-k">{t('results.due.k')}</div>
+      <ul className="s0-today2-due-list">
+        {due.map((d) => (
+          <li key={d.followUpId}>
+            <p className="s0-today2-due-what">{t('results.due.item', { what: d.what, name: d.contactName })}{d.dueOn < today ? ` · ${t('results.due.overdue', { date: d.dueOn })}` : ''}</p>
+            {d.reason ? <p className="s0-today2-due-why">“{d.reason}”</p> : null}
+            <div className="s0-today2-actions">
+              <button type="button" className="s0-btn" onClick={() => props.onWrite(d)}>{t('results.due.write')}</button>
+              <button type="button" className="s0-btn-ghost" disabled={props.busy === `fu:${d.contactId}`} onClick={() => props.onDone(d)}>{t('results.due.done')}</button>
+              {moving === d.followUpId
+                ? <input type="date" className="s0-blk-input" aria-label={t('results.due.move')} min={today} onChange={(e) => { props.onMove(d.followUpId, e.target.value); setMoving(null); }} />
+                : <button type="button" className="s0-linkbtn" onClick={() => setMoving(d.followUpId)}>{t('results.due.move')}</button>}
+              <button type="button" className="s0-linkbtn" onClick={() => props.onCancel(d.followUpId)}>{t('results.due.cancel')}</button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+const OUTCOMES: OutcomeTypeName[] = ['NOT_INTERESTED', 'MATERIAL_REQUESTED', 'FOLLOW_UP_REQUESTED', 'MEETING_REQUESTED', 'REFERRAL_RECEIVED', 'CONVERTED', 'NO_RESPONSE', 'OTHER'];
+/** BB's reading of the report, line by line: the founder corrects any item (who, what came of it, what's owed) or removes
+ *  it. Her original words stay attached to every saved record. Nothing is saved before "Save these". */
+export function ReportConfirm(props: { parsed: ParsedReportView; busy: boolean; t: Tr; onConfirm: (items: ReportItem[]) => void; onCancel: () => void }) {
+  const { parsed, t } = props;
+  const [items, setItems] = useState<ReportItem[]>(parsed.items);
+  const edit = (i: number, patch: Partial<ReportItem>) => setItems((xs) => xs.map((x, k) => (k === i ? { ...x, ...patch, edited: true } : x)));
+  return (
+    <div className="s0-today2-report s0-report-confirm">
+      <div className="s0-today2-k">{t('report.confirmK')}</div>
+      <p className="s0-talk-note">{t('report.confirmLead')}</p>
+      <ol className="s0-report-items">
+        {items.map((it, i) => (
+          <li key={it.id} data-edited={it.edited ? 'true' : 'false'}>
+            <p className="s0-report-quote">“{it.quote}”</p>
+            <label>{t('report.who')}{' '}
+              <input className="s0-blk-input" value={it.contact.existingContactId ? (parsed.contacts.find((c) => c.id === it.contact.existingContactId)?.name ?? '') : (it.contact.name ?? '')}
+                placeholder={t('report.whoUnnamed', { hint: it.contact.role ?? it.contact.organisationName ?? (it.contact.type === 'PERSON' ? 'person' : 'organisation') })}
+                onChange={(e) => edit(i, { contact: { ...it.contact, existingContactId: null, name: e.target.value || null, placeholder: !e.target.value } })} />
+            </label>
+            <label>{t('report.result')}{' '}
+              <select className="s0-blk-input" value={it.outcome?.type ?? ''} onChange={(e) => edit(i, { outcome: e.target.value ? { type: e.target.value as OutcomeTypeName, note: it.outcome?.note ?? '' } : null })}>
+                <option value="">{t('report.outcome.none')}</option>
+                {OUTCOMES.map((o) => <option key={o} value={o}>{t(`report.outcome.${o}`)}</option>)}
+              </select>
+            </label>
+            {it.followUp ? (
+              <p className="s0-report-next">{t('report.next')}: <input className="s0-blk-input" value={it.followUp.what} onChange={(e) => edit(i, { followUp: { ...it.followUp!, what: e.target.value } })} /> {t('report.inDays', { n: String(it.followUp.dueInDays) })}</p>
+            ) : null}
+            <button type="button" className="s0-linkbtn" onClick={() => setItems((xs) => xs.filter((_, k) => k !== i))}>{t('report.remove')}</button>
+          </li>
+        ))}
+      </ol>
+      {parsed.unclear.map((u, i) => <p key={i} className="s0-talk-note">{t('report.unclear', { text: u })}</p>)}
+      <div className="s0-today2-actions">
+        <button type="button" className="s0-btn" disabled={props.busy || items.length === 0} onClick={() => props.onConfirm(items)}>{props.busy ? t('today2.working') : t('report.confirm')}</button>
+        <button type="button" className="s0-today2-defer" disabled={props.busy} onClick={props.onCancel}>{t('today2.blk.cancel')}</button>
+      </div>
+    </div>
   );
 }
 

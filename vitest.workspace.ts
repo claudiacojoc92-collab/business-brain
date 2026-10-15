@@ -32,6 +32,9 @@ export default defineWorkspace([
         ? [
             'packages/infrastructure/src/__tests__/database/repositories/pg-businessbrain.integration.spec.ts',
             'apps/api/src/__tests__/__integration__/businessbrain-api.integration.spec.ts',
+            // Result Loop V1 (V085 `result` schema must be applied to that database).
+            'packages/infrastructure/src/__tests__/database/repositories/pg-result-loop.integration.spec.ts',
+            'packages/infrastructure/src/__tests__/database/repositories/pg-conversation-surface.integration.spec.ts',
           ]
         : [],
     },
