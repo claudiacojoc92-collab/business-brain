@@ -146,6 +146,51 @@ export function groundNumbers(
 }
 
 /**
+ * COUNT GROUNDING (2026-10-15): a count shown to the founder ("10 of the 28 classes", "four therapists") is grounded only
+ * when every counted item is listed, each item is a verbatim span of a trusted page, the same line is not counted more
+ * often than it occurs on its page, and the list length IS the value. Code recounts; the model's number is not trusted.
+ */
+export interface CountGroundingResult { readonly ok: boolean; readonly problems: string[]; readonly values: number[] }
+export function groundCounts(
+  counts: readonly { value: number | string; of: string; items: { ref: string; quote: string }[] }[] | undefined,
+  observations: readonly PageObservation[],
+  trusted: (ref: string) => boolean,
+): CountGroundingResult {
+  const problems: string[] = [];
+  const values: number[] = [];
+  const squash = (s: string): string => fold(s).replace(/\s+/g, ' ').trim();
+  for (const c of counts ?? []) {
+    const value = num(c.value);
+    const items = Array.isArray(c.items) ? c.items : [];
+    if (!Number.isFinite(value) || value < 1) { problems.push(`count of ${c.of}: no value`); continue; }
+    if (items.length !== value) { problems.push(`count of ${c.of}: ${value} claimed, ${items.length} listed`); continue; }
+    const uses = new Map<string, { page: string; times: number }>();
+    let bad = '';
+    for (const it of items) {
+      if (!trusted(it?.ref ?? '')) { bad = 'an item rests on an untrusted source'; break; }
+      const anchored = anchorClaimEvidence([it], observations)[0];
+      if (!anchored) { bad = `"${(it?.quote ?? '').slice(0, 40)}" is not on its page`; break; }
+      const page = observations.find((o) => o.ref === anchored.ref);
+      const key = `${anchored.ref}\u0000${squash(anchored.quote)}`;
+      const u = uses.get(key) ?? { page: squash(page?.text ?? ''), times: 0 };
+      u.times++;
+      uses.set(key, u);
+    }
+    if (!bad) {
+      for (const [key, u] of uses) {
+        const q = key.split('\u0000')[1]!;
+        let n = 0;
+        for (let at = u.page.indexOf(q); at !== -1; at = u.page.indexOf(q, at + q.length)) n++;
+        if (n < u.times) { bad = `"${q.slice(0, 40)}" is counted ${u.times} times but appears ${n}`; break; }
+      }
+    }
+    if (bad) { problems.push(`count of ${c.of}: ${bad}`); continue; }
+    values.push(value);
+  }
+  return { ok: problems.length === 0, problems, values };
+}
+
+/**
  * Null when `value` belongs to `entity` (and `qualifier`) on the page; else why not. An entity's section runs from an
  * occurrence of its name to the next occurrence of any OTHER named entity; inside it, the value must be the first number
  * after the qualifier (or, without a qualifier, present). Any occurrence of the entity may carry it.

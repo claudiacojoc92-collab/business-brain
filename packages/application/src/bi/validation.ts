@@ -39,7 +39,7 @@ function isTransplantable(text: string): boolean {
  */
 const UNLICENSED_CLAIM_TERMS = [
   // market / competitive / differentiation (needs comparative market evidence)
-  'differentiat', 'competitor', 'competitive', 'stand out', 'stands out', 'set apart', 'sets apart',
+  'differentiat', 'competitor', 'competitiv', 'stand out', 'stands out', 'set apart', 'sets apart',
   'category-leading', 'market-leading', 'best-in-class', 'best in class', 'edge over', 'advantage over',
   'unlike competitors', 'unlike other', 'rare', 'unique', 'superior', 'outperform',
   'diferențiator', 'diferentiator', 'se diferențiaz', 'se diferentiaz', 'concurenț', 'concurent', 'avantaj fața', 'avantaj fata', 'unic', 'superior',

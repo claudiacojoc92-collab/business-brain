@@ -1335,3 +1335,14 @@ a.s0-btn { text-decoration: none; }
 .s0-contacts-name { font-weight: 600; color: var(--s0-ink); }
 .s0-contacts-role, .s0-contacts-status, .s0-contacts-next { color: var(--s0-ink-3); font-size: 14px; }
 .s0-contacts-add { display: grid; gap: 6px; margin-top: 8px; max-width: 420px; }
+
+/* Structural synthesis (2026-10-15): hypotheses read as one paragraph each; "What I read" is collapsed and secondary. */
+.s0-u-hyps > li { margin-top: 12px; line-height: 1.55; }
+.s0-u-hyps > li:first-child { margin-top: 0; }
+.s0-u-hyp-alt { display: block; margin-top: 4px; }
+.s0-u-whatiread { background: transparent; }
+.s0-u-whatiread > summary { cursor: pointer; list-style: none; user-select: none; margin-bottom: 0; }
+.s0-u-whatiread > summary::-webkit-details-marker { display: none; }
+.s0-u-whatiread > summary::before { content: '›'; display: inline-block; margin-right: 8px; transition: transform .15s ease; }
+.s0-u-whatiread[open] > summary { margin-bottom: 12px; }
+.s0-u-whatiread[open] > summary::before { transform: rotate(90deg); }

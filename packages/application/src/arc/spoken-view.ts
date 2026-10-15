@@ -40,6 +40,12 @@ export function spokenView(v: ArcView): ArcView {
         notConcluding: u.read.notConcluding.map((n) => ({ ...n, claim: s(n.claim), why: s(n.why) })),
         untrusted: u.read.untrusted.map((x) => ({ ...x, finding: s(x.finding), why: s(x.why) })),
         asks: u.read.asks.map((a) => ({ ...a, question: s(a.question), why: s(a.why), ...(a.parts ? { parts: a.parts.map((x) => s(x)) } : {}) })),
+        ...(u.read.structure ? { structure: {
+          ...u.read.structure,
+          synthesis: s(u.read.structure.synthesis),
+          // evidence quotes are the source's own words: never rewritten
+          hypotheses: u.read.structure.hypotheses.map((h) => ({ ...h, pattern: s(h.pattern), interpretation: s(h.interpretation), alternative: s(h.alternative), reversal: s(h.reversal) })),
+        } } : {}),
       } } : {}),
       // Stage evidence lines are fragments joined into one "Why: a; b." sentence: no closing punctuation of their own.
       stage: u.stage && 'evidence' in u.stage ? { ...u.stage, evidence: u.stage.evidence.map((e) => s(e).trim().replace(/[.;,:]+$/, '')) } : u.stage,

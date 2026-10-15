@@ -4,7 +4,7 @@ import { canonicalTodayMove, deriveAllReadiness, selectToday, todayPlanAction } 
 import type { GovernedUnderstanding, ClaimEvidence } from '../bi/index';
 import { clipQuote } from '../bi/evidence-anchor';
 import { normalizeUnderstandingShapes, stringList } from '../bi/model-shapes';
-import { agendaUnknowns, isHousekeeping, critiquesWording, factOnly, restatesNotShown, makesUnlicensedClaim, makesUnlicensedSoWhatClaim, sameInsight, firstSentence } from '../bi/index';
+import { agendaUnknowns, performanceEvidence, isHousekeeping, critiquesWording, factOnly, restatesNotShown, makesUnlicensedClaim, makesUnlicensedSoWhatClaim, sameInsight, firstSentence } from '../bi/index';
 import type { GoalCandidate } from '../conversation/index';
 import { computeArcMoment } from './moment';
 import type {
@@ -334,8 +334,11 @@ export class ArcService {
     const secArea = (sec?.area ?? '').trim();
     const secondary = sec && named(sec.stage) && sec.stage !== rawS?.stage && secArea && !makesUnlicensedClaim(secArea)
       && clean(sec.evidence).length > 0 ? { stage: sec.stage, area: lowerFirst(secArea) } : null;
+    // A v2 read names a stage only from performance evidence (footprint is not stage evidence). Applied here too, so a
+    // snapshot stored before the rule never shows a footprint stage either.
+    const earned = !u?.read || performanceEvidence(u.read.model);
     const stage: ArcUnderstanding['stage'] = !rawS ? null
-      : named(rawS.stage) && evidence.length >= 2 && clean(rawS.sourceRefs).length > 0
+      : earned && named(rawS.stage) && evidence.length >= 2 && clean(rawS.sourceRefs).length > 0
         ? { stage: rawS.stage, evidence, secondary } : { stage: 'undetermined' };
 
     // Confident = anchored in the evidence: the grounded Aha findings + what the offer states explicitly +
@@ -354,7 +357,7 @@ export class ArcService {
     ]).slice(0, 4);
     // Card 3 "What I'll ask you about" — the SAME ≤3 unknowns the conversation seeds as its opening agenda.
     const unanswered = agendaUnknowns(u);
-    const read = u?.read ? projectRead(u.read, unanswered) : undefined;
+    const read = u?.read ? projectRead(u.read, unanswered, stage?.stage === 'undetermined' || !stage) : undefined;
 
     // "What I read" stays 3-4 lines: one sentence on what you sell, one on what you're betting on, one audience line.
     const oneLine = (x?: string): string => { const v = firstSentence(x ?? ''); return v && !isHousekeeping(v) ? v : ''; };
@@ -487,7 +490,7 @@ export class ArcService {
  * The v2 read for the card (2026-10-15): at most two known lines per dimension (each with its basis), the dimensions BB
  * knows nothing about, what it will not conclude, what it found but does not trust, and why each question is asked.
  */
-function projectRead(r: NonNullable<GovernedUnderstanding['read']>, asked: string[]): NonNullable<ArcUnderstanding['read']> {
+function projectRead(r: NonNullable<GovernedUnderstanding['read']>, asked: string[], stageNotNamed: boolean): NonNullable<ArcUnderstanding['read']> {
   const ok = (x: string): boolean => Boolean(x.trim()) && !isHousekeeping(x) && !makesUnlicensedClaim(x);
   const model = r.model
     .map((d) => ({ dimension: d.dimension, lines: d.known.filter((k) => ok(k.text)).slice(0, 2).map((k) => ({ text: firstSentence(k.text), basis: k.basis })) }))
@@ -505,5 +508,21 @@ function projectRead(r: NonNullable<GovernedUnderstanding['read']>, asked: strin
       .map(({ claim, why, reason }) => ({ claim, why, ...(reason === 'no_goal' || reason === 'not_established' ? { reason } : {}) })),
     untrusted: r.untrusted.filter((x) => x.finding.trim()).slice(0, 3).map(({ finding, why, reason }) => ({ finding, why, ...(reason ? { reason } : {}) })),
     asks: asked.map((question) => ({ question, why: whyOf(question), ...(partsOf(question).length ? { parts: partsOf(question) } : {}) })),
+    // Governance kept only reversible, specific, multi-fact hypotheses; the card shows them with their evidence.
+    // A read with a structure step leads with it even when governance kept nothing: the card then falls back to the offer
+    // summary as "what it is", never to the inventory view.
+    ...(r.structure ? { structure: {
+      synthesis: r.structure.synthesis.trim(),
+      hypotheses: r.structure.hypotheses.filter((h) => !isHousekeeping(`${h.pattern} ${h.interpretation}`)).slice(0, 3).map((h) => ({
+        // The relationship in at most two sentences: the quoted evidence carries the detail, so the card never turns back
+        // into an inventory.
+        pattern: (h.pattern.match(/[^.!?]+[.!?]+(\s|$)/g) ?? [h.pattern]).slice(0, 2).join('').trim(), interpretation: h.interpretation, alternative: h.alternative, reversal: h.reversal,
+        // The page, and the section the line sits under when that is what makes it evidence ("Locații · <location>").
+        evidence: (h.evidence ?? []).map((e) => ({ page: [(e.page ?? e.ref ?? '').trim(), (e.context ?? '').trim()].filter(Boolean).join(' · '), quote: clipQuote(e.quote) })),
+      })),
+      stageNotNamed,
+      // The synthesis did not stand: say what the governed facts DO show (verified mechanisms), never the inventory.
+      ...(!r.structure.synthesis.trim() ? { fallback: { mechanisms: [...new Set((r.structure.mechanisms ?? []).map((m) => m.kind))] } } : {}),
+    } } : {}),
   };
 }

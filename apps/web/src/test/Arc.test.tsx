@@ -224,6 +224,68 @@ describe('ArcSurface — one surface, eight moments', () => {
     expect(screen.getByText(/\(arc\.u2\.basis\.observed\)/)).toBeInTheDocument();
   });
 
+  it('structural synthesis: what it is → what I noticed → what could change my read → ≤3 questions; the inventory is collapsed under "What I read"', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: {
+      does: 'You sell classes and physio in two studios.', serves: 'adults in recovery', standsOut: '',
+      tensions: [], confident: [], inferring: [], unanswered: [],
+      constraint: { decided: false }, diagnosis: null, stage: { stage: 'undetermined' },
+      read: {
+        model: [{ dimension: 'offer', lines: [{ text: 'Seven class types with published prices.', basis: 'observed' }] }],
+        unknownDimensions: ['acquisition'], notConcluding: [], untrusted: [],
+        asks: [
+          { question: 'Which offers bring the most visits and revenue?', why: 'It tells me what carries the business.' },
+          { question: 'Where do new clients come from today?', why: 'It tells me which paths are already real.' },
+          { question: 'Is the split between the studios deliberate?', why: 'It tells me whether to plan them as one or two.' },
+          { question: 'A fourth question never shows.', why: '' },
+        ],
+        structure: {
+          synthesis: 'Your offer appears to combine several operating models under one brand.',
+          hypotheses: [{ pattern: 'Physio is listed only at Hilltop.', interpretation: 'The studios may play different roles.', alternative: 'rooms or equipment', reversal: 'Clients booking freely at both.', evidence: [{ page: 'Locations · Hilltop', quote: 'Services available Physiotherapy' }] }],
+          stageNotNamed: true,
+        },
+      },
+    } }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    for (const k of ['arc.u2.whatItIs', 'arc.u2.noticed', 'arc.u2.couldChange', 'arc.u2.need', 'arc.u2.whatIRead']) expect(await screen.findByText(k)).toBeInTheDocument();
+    expect(screen.getByText('Your offer appears to combine several operating models under one brand.')).toBeInTheDocument();
+    expect(screen.getByText('The studios may play different roles.')).toBeInTheDocument();
+    expect(screen.getByText(/arc\.u2\.alt:rooms or equipment/)).toBeInTheDocument();
+    expect(screen.getByText('Clients booking freely at both.')).toBeInTheDocument();
+    expect(screen.getByText('arc.u2.stageNotNamed')).toBeInTheDocument();
+    expect(screen.queryByText('A fourth question never shows.')).toBeNull();
+    // the inventory card is gone; the model is inside a closed <details>
+    expect(screen.queryByText('arc.u2.understand')).toBeNull();
+    const whatIRead = screen.getByText('arc.u2.whatIRead').closest('details')!;
+    expect(whatIRead.open).toBe(false);
+    expect(whatIRead).toContainElement(screen.getByText(/Seven class types with published prices\./));
+    // order: synthesis before noticed before could-change before questions
+    const pos = (k: string) => screen.getByText(k);
+    expect(pos('arc.u2.whatItIs').compareDocumentPosition(pos('arc.u2.noticed')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(pos('arc.u2.couldChange').compareDocumentPosition(pos('arc.u2.need')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('a synthesis that did not stand: verified mechanisms (or "not ready yet"), never the inventory as the first card', async () => {
+    const base = {
+      does: 'INVENTORY: You sell classes, physio and massage.', serves: '', standsOut: '', tensions: [], confident: [], inferring: [], unanswered: [],
+      constraint: { decided: false } as const, diagnosis: null, stage: { stage: 'undetermined' } as const,
+    };
+    const read = (mechanisms: ('group_timetable' | 'one_to_one' | 'paid_first_step' | 'packages')[]) => ({
+      model: [], unknownDimensions: [], notConcluding: [], untrusted: [], asks: [{ question: 'Where do new clients come from today?', why: '' }],
+      structure: { synthesis: '', hypotheses: [], stageNotNamed: true, fallback: { mechanisms } },
+    });
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: { ...base, read: read(['group_timetable', 'one_to_one']) } }));
+    const { unmount } = render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    expect(await screen.findByText('arc.u2.fallback.lead')).toBeInTheDocument();
+    expect(screen.getByText('arc.u2.mech.group_timetable')).toBeInTheDocument();
+    expect(screen.getByText('arc.u2.mech.one_to_one')).toBeInTheDocument();
+    // the inventory line exists only inside the closed "What I read"
+    expect(screen.getByText(/INVENTORY/).closest('details')).not.toBeNull();
+    unmount();
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: { ...base, read: read([]) } }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    expect(await screen.findByText('arc.u2.fallback.notReady')).toBeInTheDocument();
+  });
+
   it('Strategic Depth W1: a split stage names the core and the one area at a different stage, each with its implication', async () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: {
       does: 'X', serves: '', standsOut: '', tensions: [], confident: [], inferring: [], unanswered: [],
