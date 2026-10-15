@@ -15,7 +15,9 @@ vi.mock('../api/client', () => ({
   proposePlan: vi.fn(), adoptPlan: vi.fn(), applyActionOutcome: vi.fn(), createFromAction: vi.fn(),
   resolveActionState: vi.fn(), submitCorrection: vi.fn(), evaluateImpact: vi.fn(),
   adoptStrategy: vi.fn(), respondToStrategy: vi.fn(),
+  parseReport: vi.fn(), confirmReport: vi.fn(), logTouch: vi.fn(), rescheduleFollowUp: vi.fn(), cancelFollowUp: vi.fn(),
 }));
+vi.mock('../slice0/MessageComposer', () => ({ MessageComposer: (p: { contactName: string }) => <div>composer:{p.contactName}</div> }));
 
 const noSince = { show: false, hasChanges: false, changes: [], strategyMoved: false, todayChanged: false, oneThing: null, since: null, awayHours: null };
 
@@ -90,6 +92,8 @@ describe('TodayPage — Living State (return loop + outcome report)', () => {
       strategyImpact: { changes: false, reasonCode: 'impact.strategy.holds', newVersion: null }, source: 'outcome_report',
     };
     vi.mocked(api.evaluateImpact).mockResolvedValue(verdict);
+    // A report that names no contacts / results is assessed as a general update (Result Loop V1 fallback).
+    vi.mocked(api.parseReport).mockResolvedValue({ statement: 'x', items: [], unclear: [], contacts: [] });
     render(<TodayPage />);
     fireEvent.click(await screen.findByText('today2.report'));
     fireEvent.change(screen.getByPlaceholderText('today2.reportPh'), { target: { value: 'Visited five clinics; one wants a follow-up.' } });
@@ -110,5 +114,41 @@ describe('TodayPage — Living State (return loop + outcome report)', () => {
     vi.mocked(api.getToday).mockResolvedValue({ state: 'active', ready: [readyMove], blocked: null, sinceLastHere: noSince, constraints: [], todayNote: { kind: 'strategy_adopted', version: 2 } });
     render(<TodayPage />);
     expect(await screen.findByText('today2.changedStrategy:2')).toBeInTheDocument(); // {v} interpolated by the identity t
+  });
+
+  // ── Result Loop V1 ──
+  it('a report with contacts/results: BB\'s reading is shown item by item, corrected, and only saved on confirm', async () => {
+    vi.mocked(api.getToday).mockResolvedValue(todayWith({ show: false, hasChanges: false, changes: [], strategyMoved: false, todayChanged: false, oneThing: null, since: null, awayHours: null }));
+    const report = 'Visited five clinics. Two were not interested. One doctor wants a follow-up.';
+    const item = (id: string, type: 'NOT_INTERESTED' | 'FOLLOW_UP_REQUESTED', quote: string) => ({ id, contact: { existingContactId: null, name: null, organisationName: null, role: null, type: 'ORGANISATION' as const, placeholder: true }, touch: { channel: 'VISIT', type: 'VISITED' }, outcome: { type, note: '' }, followUp: type === 'FOLLOW_UP_REQUESTED' ? { what: 'Follow up with the doctor', dueInDays: 5 } : null, quote });
+    vi.mocked(api.parseReport).mockResolvedValue({ statement: report, items: [item('i1', 'NOT_INTERESTED', 'Two were not interested'), item('i2', 'FOLLOW_UP_REQUESTED', 'One doctor wants a follow-up')], unclear: [], contacts: [] });
+    const verdict: ImpactResult = { verdict: 'TUNE', whatChanged: ['A follow-up is due.'], whatDidNotChange: ['The bet.'], assumptionImpacts: [], todayImpact: { changes: true, reason: 'One doctor wants a follow-up', reasonCode: null, newMove: 'Follow up with the doctor (Dr. Rus, 2026-10-19)' }, strategyImpact: { changes: false, reasonCode: 'impact.strategy.tooEarly', newVersion: null }, source: 'outcome_report' };
+    vi.mocked(api.confirmReport).mockResolvedValue({ written: {}, verdict });
+    render(<TodayPage />);
+    fireEvent.click(await screen.findByText('today2.report'));
+    fireEvent.change(screen.getByPlaceholderText('today2.reportPh'), { target: { value: report } });
+    fireEvent.click(screen.getByText('today2.reportSubmit'));
+    expect(await screen.findByText('report.confirmK')).toBeInTheDocument();
+    expect(api.confirmReport).not.toHaveBeenCalled();                       // nothing saved yet
+    const who = screen.getAllByPlaceholderText(/report.whoUnnamed/)[1]!;
+    fireEvent.change(who, { target: { value: 'Dr. Rus' } });                // the founder names the doctor
+    fireEvent.click(screen.getByText('report.confirm'));
+    await waitFor(() => expect(api.confirmReport).toHaveBeenCalled());
+    const sent = vi.mocked(api.confirmReport).mock.calls[0]![2];
+    expect(sent[1]).toMatchObject({ edited: true, contact: { name: 'Dr. Rus', placeholder: false } });
+    expect(sent[0]!.edited).toBeUndefined();
+    expect(api.evaluateImpact).not.toHaveBeenCalled();                      // the typed path, not a free-text verdict
+    expect(await screen.findByText('Follow up with the doctor (Dr. Rus, 2026-10-19)')).toBeInTheDocument();
+    expect(screen.getByText('impact.strategy.tooEarly')).toBeInTheDocument();
+  });
+
+  it('due follow-ups are the move on Today, with one result line; "Write it" opens the composer for that person', async () => {
+    vi.mocked(api.getToday).mockResolvedValue({ state: 'active', ready: [readyMove], blocked: null, sinceLastHere: noSince, constraints: [], todayNote: null,
+      results: { due: [{ followUpId: 'f1', contactId: 'c1', contactName: 'Dr. Ana Pop', role: 'ortoped', what: 'Email the brochure', reason: 'asked for the brochure by email', dueOn: '2026-10-15' }], line: { code: 'results.line.awaiting', vars: { n: '3' } } } });
+    render(<TodayPage />);
+    expect(await screen.findByText('results.due.item:Email the brochure,Dr. Ana Pop')).toBeInTheDocument();
+    expect(screen.getByText('results.line.awaiting:3')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('results.due.write'));
+    expect(await screen.findByText('composer:Dr. Ana Pop')).toBeInTheDocument();
   });
 });

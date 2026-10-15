@@ -66,3 +66,34 @@ export function selectToday(plan: PlanVersion, readiness: Map<string, ActionRead
   const top = blockedSorted[0];
   return { ready: [], blockedFallback: top && top.r?.blocker ? { action: top.a, blocker: top.r.blocker } : null, blocked, constraints };
 }
+
+/** A due Result Loop follow-up as the canonical Today reads it (structural: no dependency on the result-loop module). */
+export interface DueMoveRef { readonly followUpId: string; readonly what: string; readonly contactName: string }
+
+/**
+ * THE canonical Today move (BUS-82): the ONE selection every user-facing "today" uses (Today page, Home, Day One week,
+ * the arc email, Talk, the communication brief). Order, the same the Today page shows:
+ *   1. a Result Loop follow-up that is due (owed to a real person now), oldest first;
+ *   2. otherwise selectToday's top ready action (strategy-ranked, never the plan's first action);
+ *   3. otherwise selectToday's single blocked fallback (the move to unblock).
+ * Pure; selectToday stays the only ranking.
+ */
+export type TodayMove =
+  | { readonly kind: 'follow_up'; readonly what: string; readonly followUpId: string; readonly actionId: null }
+  | { readonly kind: 'plan'; readonly what: string; readonly actionId: string; readonly action: Action }
+  | { readonly kind: 'blocked'; readonly what: string; readonly actionId: string; readonly action: Action };
+
+export function canonicalTodayMove(today: TodayResult | null, due: readonly DueMoveRef[] = []): TodayMove | null {
+  const fu = due[0];
+  if (fu) return { kind: 'follow_up', what: `${fu.what.trim()} (${fu.contactName.trim()})`, followUpId: fu.followUpId, actionId: null };
+  const ready = today?.ready[0];
+  if (ready) return { kind: 'plan', what: ready.what.trim(), actionId: ready.actionId, action: ready };
+  const blocked = today?.blockedFallback?.action;
+  if (blocked) return { kind: 'blocked', what: blocked.what.trim(), actionId: blocked.actionId, action: blocked };
+  return null;
+}
+
+/** The plan action Today selected (ready first, else the blocked fallback): what a plan-level story calls "today". */
+export function todayPlanAction(today: TodayResult | null): Action | null {
+  return today?.ready[0] ?? today?.blockedFallback?.action ?? null;
+}

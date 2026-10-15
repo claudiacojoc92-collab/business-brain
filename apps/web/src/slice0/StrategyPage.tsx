@@ -4,9 +4,10 @@ import { useLocale } from '../i18n/LocaleContext';
 import { AppShell } from './AppShell';
 import { isNotFound, LoadError, actionErrorKey } from './errors';
 import {
-  getBusiness, getCurrentStrategy, getStrategyProposal, regenerateStrategy, adoptStrategy, respondToStrategy,
-  type Business, type StrategyResp,
+  getBusiness, getCurrentStrategy, getStrategyProposal, regenerateStrategy, adoptStrategy, respondToStrategy, getResults, addContact,
+  type Business, type StrategyResp, type ResultContact,
 } from '../api/client';
+import { MessageComposer } from './MessageComposer';
 
 /**
  * Strategy — "what have we decided, and why?" A held DECISION, not a plan or a report. The bet dominates;
@@ -100,7 +101,7 @@ export function StrategyPage() {
       <StrategyView
         resp={resp!} current={phase === 'current'} from={from} t={t} busy={busy}
         onAdopt={adopt} onChallenge={challenge} onToday={() => navigate(`/b/${id}/today`)}
-        onVoice={() => navigate(`/b/${id}/voice`)}
+        onVoice={() => navigate(`/b/${id}/voice`)} businessId={id}
       />
     </AppShell>
   );
@@ -125,8 +126,8 @@ function InsufficientView({ from, t, busy, onGoal, onRegen }: { from: string; t:
   );
 }
 
-function StrategyView({ resp, current, from, t, busy, onAdopt, onChallenge, onToday, onVoice }: {
-  resp: StrategyResp; current: boolean; from: string; t: T; busy: boolean;
+function StrategyView({ resp, current, from, t, busy, onAdopt, onChallenge, onToday, onVoice, businessId }: {
+  resp: StrategyResp; current: boolean; from: string; t: T; busy: boolean; businessId?: string;
   onAdopt: () => void; onChallenge: (text: string) => void; onToday: () => void; onVoice: () => void;
 }) {
   const s = resp.strategy!;
@@ -174,6 +175,10 @@ function StrategyView({ resp, current, from, t, busy, onAdopt, onChallenge, onTo
           ) : null}
         </div>
       ) : null}
+
+      {/* Result Loop V1: the people and places the HELD strategy works through (supporting state, not a CRM). Only when THIS
+          strategy works through referrers: partnerships are one possible strategic system, never a module every business sees. */}
+      {current && businessId && worksThroughReferrers(core) ? <StrategyContacts businessId={businessId} t={t} /> : null}
 
       {notNow.length > 0 ? (
         <section className="s0-strat2-sec">
@@ -227,5 +232,62 @@ function StrategyView({ resp, current, from, t, busy, onAdopt, onChallenge, onTo
         ) : null}
       </div>
     </div>
+  );
+}
+
+/** Does the held strategy work through other people / organisations sending customers (a referrer role)? */
+export function worksThroughReferrers(core: { audienceRoles?: { role: string; who: string }[] } | null | undefined): boolean {
+  return Boolean(core?.audienceRoles?.some((r) => r.role.trim().toLowerCase() === 'referrer' && r.who.trim()));
+}
+
+/** "Who can send them": the contacts this strategy works through, with what happened and what is next for each. */
+function StrategyContacts({ businessId, t }: { businessId: string; t: T }) {
+  const [contacts, setContacts] = useState<ResultContact[] | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ type: 'PERSON' as 'PERSON' | 'ORGANISATION', name: '', role: '', organisationName: '', email: '' });
+  const [composer, setComposer] = useState<ResultContact | null>(null);
+  const [err, setErr] = useState(false);
+  const load = async () => { try { setContacts((await getResults(businessId)).contacts); } catch { setErr(true); } };
+  useEffect(() => { void load(); }, [businessId]); // eslint-disable-line react-hooks/exhaustive-deps
+  async function save() {
+    if (!form.name.trim()) return;
+    try {
+      await addContact(businessId, { type: form.type, name: form.name.trim(), role: form.role.trim() || undefined, organisationName: form.organisationName.trim() || undefined, email: form.email.trim() || undefined });
+      setForm({ ...form, name: '', role: '', organisationName: '', email: '' }); setAdding(false); await load();
+    } catch { setErr(true); }
+  }
+  if (contacts === null && !err) return null;
+  return (
+    <section className="s0-strat2-sec s0-contacts">
+      <div className="s0-strat2-k">{t('results.k')}</div>
+      <p className="s0-talk-note">{t('results.lead')}</p>
+      {err ? <div className="s0-error" role="alert">{t('common.actionFailed')}</div> : null}
+      {contacts && contacts.length === 0 ? <p className="s0-talk-note">{t('results.none')}</p> : null}
+      <ul className="s0-contacts-list">
+        {(contacts ?? []).map((c) => (
+          <li key={c.id}>
+            <span className="s0-contacts-name">{c.name}</span>
+            {[c.role, c.organisationName].filter(Boolean).length ? <span className="s0-contacts-role"> · {[c.role, c.organisationName].filter(Boolean).join(', ')}</span> : null}
+            <span className="s0-contacts-status"> · {t(`results.status.${c.status}`)}</span>
+            {c.nextFollowUp ? <span className="s0-contacts-next"> · {t('results.next', { what: c.nextFollowUp.what, date: c.nextFollowUp.dueOn })}</span> : null}
+            {c.status !== 'NEEDS_DETAILS' ? <button type="button" className="s0-linkbtn" onClick={() => setComposer(c)}>{t('results.write')}</button> : null}
+          </li>
+        ))}
+      </ul>
+      {adding ? (
+        <div className="s0-contacts-add">
+          <select className="s0-blk-input" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as 'PERSON' | 'ORGANISATION' })}>
+            <option value="PERSON">{t('results.addType.person')}</option><option value="ORGANISATION">{t('results.addType.org')}</option>
+          </select>
+          <input className="s0-blk-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t('results.addName')} />
+          <input className="s0-blk-input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} placeholder={t('results.addRole')} />
+          <input className="s0-blk-input" value={form.organisationName} onChange={(e) => setForm({ ...form, organisationName: e.target.value })} placeholder={t('results.addOrg')} />
+          <input className="s0-blk-input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder={t('results.addEmail')} />
+          <div className="s0-strat2-actions"><button type="button" className="s0-btn" disabled={!form.name.trim()} onClick={save}>{t('results.save')}</button>
+            <button type="button" className="s0-btn-ghost" onClick={() => setAdding(false)}>{t('verdict.cancel')}</button></div>
+        </div>
+      ) : <button type="button" className="s0-strat2-more" onClick={() => setAdding(true)}>{t('results.add')}</button>}
+      {composer ? <MessageComposer businessId={businessId} contactId={composer.id} contactName={composer.name} onClose={() => { setComposer(null); void load(); }} /> : null}
+    </section>
   );
 }

@@ -19,6 +19,7 @@ const input: WeekStoryInput = {
     { what: 'Reach out to the shortlisted firm and move to a signed engagement letter.', why: 'The bank needs a dated commitment, not an intention.' },
   ],
   today: {
+    actionId: 'a1',
     what: 'Identify every step in the current testnet environment setup that requires manual engineer intervention.',
     why: 'The audit firm will need to run the protocol without you in the room.',
     done: 'A written list of every place an engineer has to intervene, with what they do at each.',

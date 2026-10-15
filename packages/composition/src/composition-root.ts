@@ -140,6 +140,11 @@ import { AnthropicCarouselModel } from '@bb/infrastructure';
 import { AnthropicObservationModel, AnthropicOpportunityModel } from '@bb/infrastructure';
 import { AnthropicVideoObservationModel, AnthropicReelOpportunityModel } from '@bb/infrastructure';
 import { ReelService, ReelShootService, ReachService } from '@bb/application';
+import { ResultLoopService, CommunicationService, canonicalTodayMove, type DueMoveRef, type TodayMove } from '@bb/application';
+import {
+  PgContactRepository, PgTouchRepository, PgOutcomeRepository, PgFollowUpRepository, PgWritingRepository,
+  AnthropicResultReportModel, AnthropicMessageModel, AnthropicSendabilityJudge, AnthropicClaimGrounder, AnthropicRelevanceModel,
+} from '@bb/infrastructure';
 import { PgReelShootRepository } from '@bb/infrastructure';
 import { AnthropicConceptPlanModel } from '@bb/infrastructure';
 
@@ -181,6 +186,12 @@ export interface CompositionRoot {
   >;
   // Attribution by asking (V081) — reflective-only. HARD-WALLED from asset authority (see WALL-END below).
   reachService: ReachService;
+  // Result Loop V1
+  resultLoopService: ResultLoopService;
+  communicationService: CommunicationService;
+  resultReportModel: AnthropicResultReportModel;
+  /** BUS-82: the canonical Today move every user-facing "today" uses. */
+  canonicalToday: (businessId: string) => Promise<TodayMove | null>;
 }
 
 /**
@@ -402,7 +413,7 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     strategy: {
       getCurrent: (bid) => strategyService.getCurrent(bid),
       recordFounderInput: (bid, fid, name, kind, statement, lang) => strategyService.recordFounderInput(bid, fid, name, kind, statement, lang),
-      regenerate: (bid, name, lang) => strategyService.generate(bid, name, lang),
+      regenerate: (bid, name, lang, o) => strategyService.generate(bid, name, lang, { observedResults: o?.observedResults }),
     },
     model: new AnthropicImpactModel(anthropicKey),
     // eslint-disable-next-line no-console
@@ -520,6 +531,9 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     plan: {
       getActive: (bid) => planService.getActivePlan(bid),
       proposalOrGenerate: async (bid) => (await planService.getLatestProposed(bid)) ?? (await planService.generateProposedPlan(bid)),
+      todayMove: async (bid) => (await canonicalToday(bid))?.what ?? null,
+      todayOf: (bid, plan) => planService.todayFor(bid, plan),
+      dueMoves: (bid) => dueMoves(bid),
     },
     voiceBoundaries: async (bid) => { const cur = await strategyService.getCurrent(bid); if (!cur) return []; const br = cur.record.bundle.branch; return [br.messagingDirection, br.ctaDirection].map((s) => (s ?? '').trim()).filter(Boolean); },
     founderContext: async (bid) => (await founderStateRepo.listActive(bid)).filter((s) => s.kind === 'resource' || s.kind === 'decision' || s.kind === 'preference').map((s) => s.statement.trim()).filter(Boolean),
@@ -782,7 +796,41 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
   // above it. The guard is reach-wall.test.ts; do not remove this marker.
   const reachService = new ReachService({ repo: new PgReachRepository(db) });
 
+  // ── Result Loop V1 (intent/2026-10-14-result-loop): contact / touch / outcome / follow-up + founder communication ──
+  // The acquisition loop's state (V085 `result` schema). Outcomes live here only, never in founder_state.
+  const resultRepos = {
+    contacts: new PgContactRepository(db), touches: new PgTouchRepository(db), outcomes: new PgOutcomeRepository(db), followUps: new PgFollowUpRepository(db),
+  };
+  const resultLoopService = new ResultLoopService(resultRepos);
+  // BUS-82: THE canonical Today move for every surface (due follow-up → selectToday's move → blocked fallback).
+  async function dueMoves(bid: string): Promise<DueMoveRef[]> {
+    return (await resultLoopService.due(bid)).map((d) => ({ followUpId: d.followUp.id, what: d.followUp.what, contactName: d.contact.name }));
+  }
+  async function canonicalToday(bid: string): Promise<TodayMove | null> {
+    return canonicalTodayMove(await planService.today(bid), await dueMoves(bid));
+  }
+  const resultReportModel = new AnthropicResultReportModel(anthropicKey);
+  const communicationService = new CommunicationService({
+    results: resultRepos, resultService: resultLoopService, writing: new PgWritingRepository(db),
+    model: new AnthropicMessageModel(anthropicKey), judge: new AnthropicSendabilityJudge(anthropicKey), grounder: new AnthropicClaimGrounder(anthropicKey), relevance: new AnthropicRelevanceModel(anthropicKey),
+    context: {
+      strategy: async (bid) => {
+        const cur = await strategyService.getCurrent(bid);
+        if (!cur) return null;
+        const c = cur.record.bundle.core;
+        return { goal: c.goal, bet: c.coreBet.priority, referrer: c.audienceRoles.find((r) => r.role === 'referrer')?.who ?? null };
+      },
+      todayMove: async (bid) => (await canonicalToday(bid))?.what ?? null,
+      // The founder's own words BB holds (never outcomes: those live in result.*). Corrections are facts she stated.
+      founderSaid: async (bid) => (await founderStateRepo.listActive(bid))
+        .filter((s) => ['resource', 'decision', 'intention', 'preference', 'business_correction'].includes(s.kind)).map((s) => s.statement.trim()).filter(Boolean),
+      constraints: async (bid) => (await founderStateRepo.listActive(bid)).filter((s) => s.kind === 'constraint').map((s) => s.statement.trim()).filter(Boolean),
+      businessOffer: async (bid) => (await understandingRepo.latest(bid))?.understanding?.offer?.summary ?? null,
+    },
+  }).withLanguage((bid) => resolveContentLanguage(contentLanguageStore, bid, null));
+
   return {
+    resultLoopService, communicationService, resultReportModel, canonicalToday,
     commandBus, queryBus, jwtService, passwordService, internalBriefRepo,
     businessService, founderAccountService,
     learnBusinessService, discoveredProfileRepo, understandingRepo, ahaRepo, contentLanguageStore,

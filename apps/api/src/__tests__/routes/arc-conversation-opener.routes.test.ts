@@ -42,7 +42,7 @@ describe('arc Moment 4 — lazy opener on GET', () => {
     expect(body.moment).toBe('conversation');
     expect(body.turns?.[0]?.content).toBe(OPENER);          // the recap opener is present without any POST
     expect(startOrResume).toHaveBeenCalledTimes(1);          // generated lazily
-    expect(startOrResume).toHaveBeenCalledWith('b1', 'founder-1', 'Body Move', 'en');
+    expect(startOrResume).toHaveBeenCalledWith('b1', 'founder-1', 'Body Move', 'en', 'onboarding');
     expect(view).toHaveBeenCalledTimes(2);                    // view, generate, re-view
     await server.close();
   });

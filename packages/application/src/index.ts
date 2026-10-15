@@ -93,3 +93,7 @@ export * from './move-draft/index';
 
 // Strategic Moves — the one place BB looks outside the founder's material (web research port).
 export * from './moves/index';
+
+// Result Loop V1 — contact / touch / outcome / follow-up + communication (intent/2026-10-14-result-loop)
+export * from './result-loop/index';
+export * from './communication/index';

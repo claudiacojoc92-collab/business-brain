@@ -6,6 +6,7 @@ import type {
   IFounderObservationRepository,
   IAha2Repository,
   ConversationSession,
+  ConversationSurface,
   ConversationTurn,
   ConversationStatus,
   FounderStateItem,
@@ -43,18 +44,18 @@ export class PgConversationRepository implements IConversationRepository {
     await (this.db as any).updateTable('workspace.conversation_sessions').set({ conversation_language: language }).where('id', '=', sessionId).execute();
   }
 
-  async appendTurn(input: { id: string; sessionId: string; businessId: string; role: 'founder' | 'bb'; content: string; language: string; infoNeedKey: string | null }): Promise<ConversationTurn> {
+  async appendTurn(input: { id: string; sessionId: string; businessId: string; role: 'founder' | 'bb'; content: string; language: string; infoNeedKey: string | null; surface?: ConversationSurface | null }): Promise<ConversationTurn> {
     const maxRow = await (this.db as any).selectFrom('workspace.conversation_turns').select((eb: any) => eb.fn.max('seq').as('m')).where('session_id', '=', input.sessionId).executeTakeFirst();
     const seq = (maxRow?.m ?? 0) + 1;
     const r = await (this.db as any).insertInto('workspace.conversation_turns')
-      .values({ id: input.id, session_id: input.sessionId, business_id: input.businessId, seq, role: input.role, content: input.content, language: input.language, info_need_key: input.infoNeedKey })
+      .values({ id: input.id, session_id: input.sessionId, business_id: input.businessId, seq, role: input.role, content: input.content, language: input.language, info_need_key: input.infoNeedKey, surface: input.surface ?? null })
       .returningAll().executeTakeFirstOrThrow();
-    return { id: r.id, role: r.role, content: r.content, language: r.language, seq: r.seq, createdAt: iso(r.created_at), infoNeedKey: r.info_need_key ?? null };
+    return { id: r.id, role: r.role, content: r.content, language: r.language, seq: r.seq, createdAt: iso(r.created_at), infoNeedKey: r.info_need_key ?? null, surface: r.surface ?? null };
   }
 
   async listTurns(sessionId: string): Promise<ConversationTurn[]> {
     const rows = await (this.db as any).selectFrom('workspace.conversation_turns').selectAll().where('session_id', '=', sessionId).orderBy('seq', 'asc').execute();
-    return rows.map((r: any) => ({ id: r.id, role: r.role, content: r.content, language: r.language, seq: r.seq, createdAt: iso(r.created_at), infoNeedKey: r.info_need_key ?? null }));
+    return rows.map((r: any) => ({ id: r.id, role: r.role, content: r.content, language: r.language, seq: r.seq, createdAt: iso(r.created_at), infoNeedKey: r.info_need_key ?? null, surface: r.surface ?? null }));
   }
 }
 

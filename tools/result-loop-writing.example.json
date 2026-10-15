@@ -1,0 +1,23 @@
+{
+  "_comment": "FORMAT ONLY (fictional text). The real file holds the founder's private writing: keep it outside the repo and pass it with --writing <path>. Every field is optional; 3-5 samples is the useful minimum.",
+  "sender": { "displayName": "Raluca", "role": "fondatoare", "business": "Body Move Studio", "signOff": null },
+  "samples": [
+    { "text": "Bună ziua,\n\n<a real email she wrote and sent to a doctor, pasted exactly, greeting to signature>\n\nMulțumesc,\nRaluca", "recipient": "medical", "channel": "EMAIL", "purpose": "first_outreach" },
+    { "text": "<a real WhatsApp she wrote to a client>", "recipient": "individual", "channel": "WHATSAPP" },
+    "<a real message whose recipient is unknown: a voice example only, it shapes no rule>"
+  ],
+  "liked": [
+    "<an outreach message SOMEONE ELSE wrote that she liked; never treated as her voice>"
+  ],
+  "neverSay": ["<a phrase she would never use>", "<another one>"],
+  "preferences": {
+    "greeting": "<how she opens, e.g. Bună ziua,>",
+    "signoff": "<how she closes, e.g. Mulțumesc, / Raluca>",
+    "length": "short | medium | long",
+    "directness": "<her words, e.g. direct, no introductions>",
+    "warmth": "<her words, e.g. polite, not familiar>"
+  },
+  "edits": [
+    { "draft": "<a BB draft (or any draft) she changed>", "final": "<what she actually sent>", "recipient": "medical | organisation | individual", "channel": "EMAIL | WHATSAPP", "purpose": "first_outreach | material_follow_up | no_response_follow_up | requested_follow_up (optional)" }
+  ]
+}

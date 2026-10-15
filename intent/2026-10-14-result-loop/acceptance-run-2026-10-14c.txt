@@ -1,0 +1,186 @@
+ANTHROPIC_API_KEY: present
+
+════════ A · first outreach to a doctor (TEST contact) ═══════════════
+BRIEF · purpose=first_outreach · to=Dr. Andrei Mureșan (TEST) (medic ortoped)
+  relationship: No contact yet: this is the first message they will get from the sender.
+  why now: The strategy works through people like them now.
+  desired outcome: They know who the sender is and what she does, and are open to a short conversation about sending people her way.
+  the one ask: One easy, low-pressure question (would they be open to a short chat, or to telling the right patients about it).
+  facts she may use: 2 medici confirmați, unul a trimis 3 paciente · Canalele de achiziție active sunt recomandările și contentul organic, fără paid sau parteneriate active · Echipa prenatală acoperă ambele locații
+  verified offer parts: Kinetoterapie · Pilates · gimnastică prenatală · recuperare postpartum · masaj
+  RELEVANT OFFER PARTS (decided once; source=model):
+    · Kinetoterapie [HIGH] — Un medic ortoped trimite pacienți după tratament ortopedic, iar kinetoterapia este continuarea firească a recuperării post-chirurgicale sau post-traumatice pe care o recomandă.
+        evidence: "medic ortoped" · "medici și clinici care văd pacienții după tratament" · "medici și secții de recuperare care trimit pacienți la Body Move"
+  max words: 90 · language: ro
+
+── attempt 1 (initial draft) ──
+Subject: Kinetoterapie pentru pacienții dvs. după tratament
+Bună ziua, Dr. Mureșan,
+
+Mă numesc Raluca, conduc Body Move Studio în Cluj. Lucrez cu pacienți în recuperare post-chirurgicală și post-traumatică prin kinetoterapie și mă gândesc că unii dintre pacienții dvs. ar putea continua recuperarea la noi după ce ies din tratamentul ortopedic.
+
+Am 2 medici cu care există deja acest flux, unul a trimis 3 paciente.
+
+Ați fi deschis la un schimb scurt de câteva minute, ca să vedeți dacă are sens?
+
+Raluca
+  deterministic: pass
+  claims:
+    · [offer/exact] conduc Body Move Studio în Cluj  ← "Body Move Studio"
+    · [offer/unsupported] Lucrez cu pacienți în recuperare post-chirurgicală și post-traumatică prin kinetoterapie  ← "Kinetoterapie"
+    · [recipient/exact] unii dintre pacienții dvs. ar putea continua recuperarea la noi după ce ies din tratamentul ortopedic  ← "medic ortoped"
+    · [social_proof/exact] Am 2 medici cu care există deja acest flux  ← "2 medici confirmați, unul a trimis 3 paciente"
+    · [social_proof/exact] unul a trimis 3 paciente  ← "unul a trimis 3 paciente"
+  grounding: 
+    ✗ unsupported_claim: "Lucrez cu pacienți în recuperare post-chirurgicală și post-traumatică prin kinetoterapie" is not in the brief. Brief lists kinetoterapie as a service but does not specify post-surgical or post-traumatic recovery as the scope.
+
+── attempt 2 (repair) ──
+Subject: Kinetoterapie pentru pacienții dvs. după tratament
+Bună ziua, Dr. Mureșan,
+
+Mă numesc Raluca, fondatoarea Body Move Studio din Cluj. Oferim kinetoterapie și mă gândesc că unii dintre pacienții dvs. ar putea continua recuperarea la noi după ce tratamentul ortopedic s-a încheiat.
+
+Ați fi deschis la un schimb scurt de câteva minute, ca să vedem dacă are sens să le menționați opțiunea?
+
+Raluca
+  deterministic: pass
+  claims:
+    · [other/exact] fondatoarea Body Move Studio din Cluj  ← "fondatoare"
+    · [offer/exact] Oferim kinetoterapie  ← "Kinetoterapie"
+    · [recipient/exact] unii dintre pacienții dvs. ar putea continua recuperarea la noi după ce tratamentul ortopedic s-a încheiat  ← "medic ortoped"
+  grounding: pass
+  judge: pass
+
+READY after 2 attempt(s) (repaired)
+Subject: Kinetoterapie pentru pacienții dvs. după tratament
+
+Bună ziua, Dr. Mureșan,
+
+Mă numesc Raluca, fondatoarea Body Move Studio din Cluj. Oferim kinetoterapie și mă gândesc că unii dintre pacienții dvs. ar putea continua recuperarea la noi după ce tratamentul ortopedic s-a încheiat.
+
+Ați fi deschis la un schimb scurt de câteva minute, ca să vedem dacă are sens să le menționați opțiunea?
+
+Raluca
+
+════════ B · follow-up after the brochure was requested ══════════════
+BRIEF · purpose=material_follow_up · to=Spitalul Clinic de Recuperare Cluj-Napoca (secția Recuperare, Medicină Fizică și Balneologie)
+  relationship: 2026-10-10: you (or your team) visited (visit): "Am trecut pe la secretariat și am lăsat o broșură" · 2026-10-10: they asked for material (au cerut broșura pe email)
+  why now: Trimite broșura pe email (due 2026-10-14), because: "au cerut broșura pe email"
+  desired outcome: They have the material they asked for and know the simplest way to send someone over.
+  the one ask: Give them what they asked for; at most one small question.
+  facts she may use: 2 medici confirmați, unul a trimis 3 paciente · Canalele de achiziție active sunt recomandările și contentul organic, fără paid sau parteneriate active · Echipa prenatală acoperă ambele locații
+  verified offer parts: Kinetoterapie · Pilates · gimnastică prenatală · recuperare postpartum · masaj
+  RELEVANT OFFER PARTS (decided once; source=model):
+    · Kinetoterapie [HIGH] — O secție de recuperare fizică trimite pacienți după tratament spre continuarea recuperării funcționale, iar kinetoterapia este serviciul direct complementar acestui flux clinic.
+        evidence: "secția Recuperare, Medicină Fizică și Balneologie" · "medici și secții de recuperare care trimit pacienți la Body Move" · "medici și clinici care văd pacienții după tratament"
+  max words: 90 · language: ro
+
+── attempt 1 (initial draft) ──
+Subject: Broșura Body Move – cum ați cerut
+Bună ziua,
+
+Sunt Raluca, fondatoarea Body Move Studio. Am trecut pe la secretariat și am lăsat o broșură; ați cerut să v-o trimit și pe email, așa că o atașez aici.
+
+Lucrez cu kinetoterapie pentru pacienți care continuă recuperarea funcțională după tratament. Dacă vreți să discutați cum poate ajunge un pacient la noi, mă găsiți la acest email.
+
+Raluca
+  deterministic: pass
+  claims:
+    · [other/exact] Sunt Raluca, fondatoarea Body Move Studio.  ← "fondatoare"
+    · [relationship/exact] Am trecut pe la secretariat și am lăsat o broșură  ← "Am trecut pe la secretariat și am lăsat o broșură"
+    · [relationship/exact] ați cerut să v-o trimit și pe email  ← "au cerut broșura pe email"
+    · [offer/exact] Lucrez cu kinetoterapie  ← "Kinetoterapie"
+    · [recipient/exact] pentru pacienți care continuă recuperarea funcțională după tratament  ← "secția Recuperare, Medicină Fizică și Balneologie"
+  grounding: pass
+  judge: pass
+
+READY after 1 attempt(s)
+Subject: Broșura Body Move – cum ați cerut
+
+Bună ziua,
+
+Sunt Raluca, fondatoarea Body Move Studio. Am trecut pe la secretariat și am lăsat o broșură; ați cerut să v-o trimit și pe email, așa că o atașez aici.
+
+Lucrez cu kinetoterapie pentru pacienți care continuă recuperarea funcțională după tratament. Dacă vreți să discutați cum poate ajunge un pacient la noi, mă găsiți la acest email.
+
+Raluca
+
+════════ C · follow-up after no response (9 days) ════════════════════
+BRIEF · purpose=no_response_follow_up · to=Gral Medical Cluj (clinică)
+  relationship: 2026-10-05: you wrote to them (email): "I-am scris despre pacienții care au nevoie de kinetoterapie după consultație"
+  why now: The strategy works through people like them now.
+  desired outcome: A clear answer (yes, no or not now), and it is easy for them to say no.
+  the one ask: A short nudge that makes answering either way easy. No guilt, no pressure.
+  facts she may use: 2 medici confirmați, unul a trimis 3 paciente · Canalele de achiziție active sunt recomandările și contentul organic, fără paid sau parteneriate active · Echipa prenatală acoperă ambele locații
+  verified offer parts: Kinetoterapie · Pilates · gimnastică prenatală · recuperare postpartum · masaj
+  RELEVANT OFFER PARTS (decided once; source=model):
+    · Kinetoterapie [HIGH] — Gral Medical este o clinică care vede pacienți după tratament, iar fondatoarea le-a scris explicit despre pacienții care au nevoie de kinetoterapie după consultație — exact serviciul prin care strategia B2B funcționează.
+        evidence: "I-am scris despre pacienții care au nevoie de kinetoterapie după consultație" · "medici și clinici care văd pacienții după tratament"
+  max words: 90 · language: ro
+
+── attempt 1 (initial draft) ──
+Subject: Kinetoterapie după consultație — mai discutăm?
+Bună ziua,
+
+Am scris anterior despre pacienții care au nevoie de kinetoterapie după consultație. Conduc Body Move Studio și lucrez cu 2 medici care trimit pacienți la kinetoterapie — unul a trimis deja 3 paciente.
+
+Vreau să știu dacă există interes și din partea Gral Medical Cluj pentru ceva similar, sau nu.
+
+Un răspuns scurt e suficient — da, nu, sau nu acum.
+
+Raluca
+  deterministic: pass
+  claims:
+    · [relationship/exact] Am scris anterior despre pacienții care au nevoie de kinetoterapie după consultație.  ← "2026-10-05: you wrote to them (email): "I-am scris despre pacienții care au nevoie de kinetoterapie după consultație""
+    · [offer/exact] Conduc Body Move Studio  ← "fondatoare"
+    · [social_proof/exact] lucrez cu 2 medici care trimit pacienți la kinetoterapie  ← "2 medici confirmați, unul a trimis 3 paciente"
+    · [social_proof/exact] unul a trimis deja 3 paciente  ← "unul a trimis 3 paciente"
+  grounding: pass
+  judge: pass
+
+READY after 1 attempt(s)
+Subject: Kinetoterapie după consultație — mai discutăm?
+
+Bună ziua,
+
+Am scris anterior despre pacienții care au nevoie de kinetoterapie după consultație. Conduc Body Move Studio și lucrez cu 2 medici care trimit pacienți la kinetoterapie — unul a trimis deja 3 paciente.
+
+Vreau să știu dacă există interes și din partea Gral Medical Cluj pentru ceva similar, sau nu.
+
+Un răspuns scurt e suficient — da, nu, sau nu acum.
+
+Raluca
+
+════════ OUTCOME TRACE ═══════════════════════════════════════════════
+Founder report: "Reprezentantul a vizitat cinci clinici. Două nu au fost interesate. Două au cerut broșura pe email. Un medic vrea să revenim."
+
+BB's reading (5 items; the founder would confirm / correct each):
+  · (unnamed organisation) — VISITED / NOT_INTERESTED   «Două nu au fost interesate.»
+  · (unnamed organisation) — VISITED / NOT_INTERESTED   «Două nu au fost interesate.»
+  · (unnamed organisation) — VISITED / MATERIAL_REQUESTED → owed: Trimite broșura pe email in 1d   «Două au cerut broșura pe email.»
+  · (unnamed organisation) — VISITED / MATERIAL_REQUESTED → owed: Trimite broșura pe email in 1d   «Două au cerut broșura pe email.»
+  · (unnamed person) — VISITED / FOLLOW_UP_REQUESTED → owed: Revenire la medic in 5d   «Un medic vrea să revenim.»
+  unclear: Raportul nu specifică identitatea niciuneia dintre cele cinci clinici vizitate; niciuna nu a putut fi asociată cu contactele cunoscute. Fondatoarea ar trebui să confirme care clinici sunt implicate.
+
+Written: 5 contacts, 5 touches, 5 outcomes, 3 follow-ups (no founder_state).
+Cumulative evidence:
+  8 target contacts; 7 reached so far over 9 days.
+  Outcomes: 2 not interested, 0 no response, 3 asked for material, 1 asked for a follow-up, 0 asked to meet, 0 referrals.
+  Response rate 86%; interested 57% of contacts reached.
+  4 follow-ups open (0 overdue).
+Reconsider conditions vs the counts:
+  - Mai puțin de 2 recomandări noi în 8 săptămâni de la începerea contactării sistematice: not_yet_measurable (9 of 56 days elapsed)
+  - Dacă peste jumătate din clinicile contactate refuză explicit: not_met (not_interested / contacts_reached = 2/7 = 28.6% (condition: > 50%))
+
+VERDICT: TUNE
+  strategy: impact.strategy.holds
+  what changed: Un medic a cerut explicit să reveniți — primul contact care a generat o întâlnire viitoare concretă. | Trei clinici au cerut broșura pe email — pipeline-ul de follow-up este acum deschis și necesită acțiune. | Rata de refuz explicit rămâne la 28.6% din contactele ajunse — sub pragul de reconsiderat.
+  what didn't: Pariul strategic rămâne neschimbat: medicii și secțiile de recuperare din Cluj sunt motorul principal de clienți, nu reclamele plătite. | Reclamele plătite sunt deliberat lăsate deoparte și această decizie nu e atinsă de rezultatele de până acum. | Sunt doar 9 zile din cele 56 alocate — nicio condiție de reconsiderat nu este măsurabilă încă.
+  assumptions: stronger: Medicii și clinicile din Cluj trimit pacienți dacă știu de Body Move și au un pas simplu de urmat
+
+TODAY before: Trimite broșura pe email (Spitalul Clinic de Recuperare Cluj-Napoca)
+TODAY after:  Trimite broșura pe email (Spitalul Clinic de Recuperare Cluj-Napoca)
+Current move before: Trimite broșura pe email (Spitalul Clinic de Recuperare Cluj-Napoca) · after: Trimite broșura pe email (Spitalul Clinic de Recuperare Cluj-Napoca)
+Today impact: UNCHANGED (impact.today.unchanged)
+Execution queue: 3 new follow-up(s) added, first due 2026-10-15
+TODAY tomorrow: Trimite broșura pe email (Spitalul Clinic de Recuperare Cluj-Napoca) · Trimite broșura pe email (Organisation 3) · Trimite broșura pe email (Organisation 4)

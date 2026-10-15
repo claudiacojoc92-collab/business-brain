@@ -1,5 +1,6 @@
 export * from './contracts';
-export { classify } from './classify';
+export { todayFactFromReport, type CurrentMoveRef } from './today';
+export { classify, todayImpactView, type TodayImpactView } from './classify';
 export {
   ImpactService,
   type ImpactDeps,

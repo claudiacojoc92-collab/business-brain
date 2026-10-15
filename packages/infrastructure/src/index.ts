@@ -209,6 +209,8 @@ export { AnthropicPlanModel, PLAN_SYSTEM } from './business-intelligence/anthrop
 export { AnthropicCarouselModel } from './business-intelligence/anthropic-carousel.model';
 export { AnthropicProofModel } from './business-intelligence/anthropic-proof.model';
 export { AnthropicWebResearchAdapter, parseSearchResponse, parseFetchResponse } from './business-intelligence/anthropic-web-research.adapter';
+export { PgContactRepository, PgTouchRepository, PgOutcomeRepository, PgFollowUpRepository, PgWritingRepository, clearResultLoopForBusiness, RESULT_LOOP_TABLES } from './database/repositories/pg-result-loop.repository';
+export { AnthropicResultReportModel, AnthropicMessageModel, AnthropicSendabilityJudge, AnthropicClaimGrounder, AnthropicRelevanceModel, REPORT_SYSTEM, JUDGE_SYSTEM, GROUNDING_SYSTEM, RELEVANCE_SYSTEM, messageSystem, messageUser } from './business-intelligence/anthropic-result-loop.models';
 export { AnthropicObservationModel, AnthropicOpportunityModel } from './business-intelligence/anthropic-photoled.model';
 export { AnthropicVideoObservationModel, AnthropicReelOpportunityModel } from './business-intelligence/anthropic-reel.model';
 export { AnthropicConceptPlanModel } from './business-intelligence/anthropic-shoot.model';

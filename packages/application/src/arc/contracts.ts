@@ -97,6 +97,8 @@ export interface ArcStrategy { readonly bet: string; readonly over: string; read
   /** The constraint the strategy ASSUMED as the goal (the founder gave none before the cap); null when the goal is the founder's. */
   readonly assumedGoal?: string | null }
 export interface ArcWeekDay { readonly week: string[]; readonly today: string | null; readonly canCreate: boolean;
+  /** Which canonical Today this is (BUS-82): a due follow-up, the selected plan move, or the move to unblock. */
+  readonly todayKind?: 'follow_up' | 'plan' | 'blocked' | null;
   /** The week told as a strategist's chapter (operator, 2026-10-12). Absent only when the plan has no priorities. */
   readonly story?: ArcWeekStory | null }
 
@@ -111,7 +113,8 @@ export interface ArcWeekStory {
   readonly statement: string;      // "The testnet becomes real this week."
   readonly whyNow: string;         // "Two banks are waiting on it. Everything else can wait."
   readonly chapters: { readonly title: string; readonly why: string }[]; // ≤ 3: the week's first actions, plan order, verb-first titles
-  readonly today: { readonly move: string; readonly detail: string };
+  /** actionId = the plan action this story's "today" was told for (absent on stories saved before BUS-82). */
+  readonly today: { readonly move: string; readonly detail: string; readonly actionId?: string };
   readonly doneLooksLike: string;
 }
 export interface WeekStoryInput {
@@ -123,7 +126,7 @@ export interface WeekStoryInput {
   readonly monthDirection: string;
   readonly priorities: { readonly title: string; readonly why: string }[]; // the month's arc, plan order (context only)
   readonly moves: { readonly what: string; readonly why: string }[];       // this week's beats: the first ≤ 3 actions, plan order
-  readonly today: { readonly what: string; readonly why: string; readonly done: string } | null; // = moves[0], with its done
+  readonly today: { readonly actionId: string; readonly what: string; readonly why: string; readonly done: string } | null; // the canonical Today's plan action, with its done
 }
 export interface IWeekStoryModel {
   /** Raw model draft (unguarded). May throw / return junk — `guardWeekStory` decides what survives. `rewrite` = the

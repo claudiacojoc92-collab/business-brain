@@ -91,9 +91,13 @@ export class StrategyService {
    * conversation cap without stating one (operator, 2026-10-12). It joins the founder state as an explicitly assumed
    * goal and is recorded on the bundle (core.assumedGoal) so the card flags it. A held goal always wins.
    */
-  async generate(businessId: string, businessName: string, language: string, opts: { assumedGoal?: string | null } = {}): Promise<StrategyVersionRecord> {
+  async generate(businessId: string, businessName: string, language: string, opts: { assumedGoal?: string | null; observedResults?: readonly string[] } = {}): Promise<StrategyVersionRecord> {
     const loaded = await this.loadInput(businessId, businessName, language);
-    const { input, ctx } = loaded;
+    const { ctx } = loaded;
+    // Observed results (Result Loop) join as their own R-refs: citable business evidence for the gates, never founder state.
+    const results = (opts.observedResults ?? []).map((s) => s.trim()).filter(Boolean).map((statement, i) => ({ ref: `R${i + 1}`, statement }));
+    const input: StrategyModelInput = results.length ? { ...loaded.input, observedResults: results } : loaded.input;
+    if (results.length) ctx.business.push(...results.map((r) => ({ ref: r.ref, text: `Observed result: ${r.statement}` })));
     const assumed = !loaded.hasGoal ? (opts.assumedGoal ?? '').trim() : '';
     if (assumed) {
       // input.founderState and ctx.founder are the same array: the gates see the assumed goal too.

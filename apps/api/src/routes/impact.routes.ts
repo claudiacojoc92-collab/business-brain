@@ -22,8 +22,8 @@ function scrubProse(text: string): string {
     .replace(/\s+([.,;:])/g, '$1')
     .trim();
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function scrub(v: any): any {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
+export function scrub(v: any): any {
   if (typeof v === 'string') return scrubProse(v);
   if (Array.isArray(v)) return v.map(scrub);
   if (v && typeof v === 'object') {
@@ -97,7 +97,7 @@ export function registerImpactRoutes(server: FastifyInstance, deps: ServerDeps):
     });
     if (source === 'outcome_report') {
       // Keep the founder's own words on the event so month two's next plan can advance from what actually happened.
-      recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'outcome_reported', surface: 'today', metadata: { text: text.slice(0, 2000) } });
+      recordFounderEvent(deps.db, { accountId: founderId, businessId: business.id, eventType: 'outcome_reported', surface: 'today', metadata: { text: text.slice(0, 1500) } }); // well under the row cut: a cut JSON would not be written
     }
 
     await reply.status(200).send(out);

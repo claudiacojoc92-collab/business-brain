@@ -28,6 +28,17 @@ function todayReasonText(today: ImpactResult['todayImpact'], t: T): string {
   return today.reason ?? (today.reasonCode ? t(today.reasonCode) : '');
 }
 
+/**
+ * The ONE Today interpretation (Result Loop V1): changed (the new move, if any, and why) or unchanged (and why not).
+ * Never both: an unchanged Today never renders a move, whatever else the result carries.
+ */
+export type TodayView = { kind: 'changed'; move: string | null; reason: string } | { kind: 'unchanged'; reason: string };
+export function todayView(today: ImpactResult['todayImpact'], t: T): TodayView {
+  return today.changes
+    ? { kind: 'changed', move: today.newMove, reason: todayReasonText(today, t) }
+    : { kind: 'unchanged', reason: today.reasonCode ? t(today.reasonCode) : t('impact.today.unchanged') };
+}
+
 function Lane(props: { label: string; items: string[]; tone: 'clay' | 'muted' }) {
   if (props.items.length === 0) return null;
   return (
@@ -46,10 +57,13 @@ export function VerdictSurface(props: {
   /** The business's STORED content language: the verdict's reason sentences follow it (rule amendment 2026-10-13);
    *  buttons and labels stay English. Omitted → English. */
   contentLanguage?: string | null;
+  /** Month two only (Home, cycle close): offer the next month's plan. Never mid-cycle (it would replace the active plan). */
+  cycleClose?: boolean;
 }) {
-  const { businessId, result, onDismiss, onAdopted, contentLanguage } = props;
+  const { businessId, result, onDismiss, onAdopted, contentLanguage, cycleClose } = props;
   const { t: uiT } = useLocale() as { t: T };
   const t: T = useMemo(() => withContentLanguage(uiT, contentLanguage), [uiT, contentLanguage]);
+  const tv = todayView(result.todayImpact, t);
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [phase, setPhase] = useState<'view' | 'challenging' | 'adopted' | 'challenged'>('view');
@@ -143,15 +157,31 @@ export function VerdictSurface(props: {
         </div>
       ) : null}
 
-      {result.todayImpact.changes ? (
-        <div className="s0-verdict-today">
+      {result.evidence && (result.evidence.statements.length || result.evidence.conditions.length) ? (
+        <div className="s0-verdict-lane">
+          <div className="s0-verdict-lane-k">{t('verdict.evidence')}</div>
+          <ul className="s0-verdict-list">
+            {result.evidence.statements.map((x, i) => <li key={`s${i}`}>{x}</li>)}
+            {result.evidence.conditions.map((c, i) => <li key={`c${i}`}>{c.condition}: <b>{t(`verdict.cond.${c.state}`)}</b></li>)}
+          </ul>
+        </div>
+      ) : null}
+
+      {tv.kind === 'changed' ? (
+        <div className="s0-verdict-today" data-today="changed">
           <div className="s0-verdict-lane-k">{t('verdict.today')}</div>
-          {result.todayImpact.newMove ? <p className="s0-verdict-move">{result.todayImpact.newMove}</p> : null}
-          <p className="s0-verdict-reason">{t('verdict.because', { reason: todayReasonText(result.todayImpact, t) })}</p>
+          {tv.move ? <p className="s0-verdict-move">{tv.move}</p> : null}
+          {tv.reason ? <p className="s0-verdict-reason">{t('verdict.because', { reason: tv.reason })}</p> : null}
         </div>
       ) : (
-        <p className="s0-verdict-reason s0-verdict-nochange">{todayReasonText(result.todayImpact, t)}</p>
+        <p className="s0-verdict-reason s0-verdict-nochange" data-today="unchanged">{tv.reason}</p>
       )}
+      {/* The execution queue, apart from Today: new follow-ups never read as "Today changed". */}
+      {result.todayImpact.followUpsAdded?.count ? (
+        <p className="s0-verdict-reason" data-queue="added">
+          {t(result.todayImpact.followUpsAdded.count === 1 ? 'verdict.queue.one' : 'verdict.queue.many', { n: String(result.todayImpact.followUpsAdded.count), date: result.todayImpact.followUpsAdded.firstDueOn ?? '' })}
+        </p>
+      ) : null}
 
       {strat.changes ? (
         <div className="s0-verdict-strategy">
@@ -160,7 +190,7 @@ export function VerdictSurface(props: {
           {strat.newVersion ? <p className="s0-verdict-newver">{t('verdict.newStrategy', { v: String(strat.newVersion.version) })}</p> : null}
         </div>
       ) : (
-        <p className="s0-verdict-holds">{t('verdict.holds')}</p>
+        <p className="s0-verdict-holds">{strat.reasonCode === 'impact.strategy.tooEarly' ? t(strat.reasonCode) : t('verdict.holds')}</p>
       )}
 
       {err ? <div className="s0-error" role="alert">{t('common.actionFailed')}</div> : null}
@@ -184,10 +214,10 @@ export function VerdictSurface(props: {
           {canAct ? <button type="button" className="s0-btn-ghost" onClick={() => setPhase('challenging')}>{t('verdict.challenge')}</button> : null}
           {/* MONTH TWO — the bet held at a cycle close: the value is the NEXT month's plan (built progress-aware from
               what got done + this report). Generate + adopt it inline, then go to Today. */}
-          {!canAct && result.source === 'outcome_report'
+          {!canAct && cycleClose && result.source === 'outcome_report'
             ? <button type="button" className="s0-btn" onClick={seeNextPlan}>{t('home.close.next')} →</button>
             : null}
-          <button type="button" className={(canAct || result.source === 'outcome_report') ? 's0-linkbtn' : 's0-btn'} onClick={onDismiss}>{t('verdict.dismiss')}</button>
+          <button type="button" className={(canAct || (cycleClose && result.source === 'outcome_report')) ? 's0-linkbtn' : 's0-btn'} onClick={onDismiss}>{t('verdict.dismiss')}</button>
         </div>
       )}
     </div>

@@ -111,16 +111,41 @@ describe('ImpactService — evaluate wires the classifier to the strategy engine
     expect(m.appended[0].kind).toBe('constraint');
     expect(m.appended[0].scope).toBe('add_context');
     expect(newVersion).toBeNull();
-    expect(result.todayImpact.changes).toBe(true);
+    expect(result.todayImpact.changes).toBe(false);             // it blocks nothing on Today: no move claimed
   });
 
-  it('STILL_HOLDS persists the input and changes Today only if a next move exists', async () => {
-    const m = makeDeps({ changeKind: 'none', todayNextMove: 'Follow up with the doctor.' });
-    const { result } = await new ImpactService(m.deps).evaluate('B', 'F', 'Acme', 'outcome_report', 'Visited 5 clinics; one doctor wants a follow-up.', 'en');
-    expect(result.verdict).toBe('STILL_HOLDS');
-    expect(m.regenCalls).toHaveLength(0);
-    expect(m.appended).toHaveLength(1);
-    expect(result.todayImpact.newMove).toMatch(/follow up/i);
+  it('an OUTCOME is never written as founder_state (not a constraint, not a correction), whatever kind the model picks', async () => {
+    for (const founderStateKind of ['constraint', 'business_correction', 'resource'] as const) {
+      const m = makeDeps({ changeKind: 'none', todayNextMove: 'Follow up with the doctor.', founderStateKind });
+      const { result } = await new ImpactService(m.deps).evaluate('B', 'F', 'Acme', 'outcome_report', 'Visited 5 clinics; one doctor wants a follow-up.', 'en');
+      expect(result.verdict).toBe('STILL_HOLDS');
+      expect(m.regenCalls).toHaveLength(0);
+      expect(m.appended).toHaveLength(0);
+      expect(result.todayImpact).toMatchObject({ changes: false, newMove: null });
+    }
+  });
+
+  it('a result report: cumulative evidence + the strategy\'s own conditions decide; a strategic change regenerates with OBSERVED results, no founder_state', async () => {
+    const m = makeDeps({ changeKind: 'strategic', contradictsAssumption: true, evidenceSufficiency: 'enough' });
+    const regenOpts: any[] = [];
+    (m.deps.strategy as any).regenerate = async (bid: string, _n: string, _l: string, opts?: any) => { regenOpts.push(opts); return { id: 'v2', version: 2, status: 'proposal', businessId: bid, bundle: { core: CORE, branch: {}, decisions: [] }, gateResults: [], language: 'en', createdAt: 't2' } as any; };
+    (m.deps.model as any).structureConditions = async () => ({ checks: [{ condition: 'if the referral channel stops responding', measurable: true, metric: 'response_rate', comparator: '<', threshold: 0.1, minContacts: 10 }] });
+    const evidence = { contacts: 12, contacted: 12, byStatus: {}, touches: { VISITED: 12 }, outcomes: { NOT_INTERESTED: 11, NO_RESPONSE: 1 }, responded: 11, positive: 0, responseRate: 11 / 12, positiveRate: 0, referrals: 0, firstTouchAt: null, lastTouchAt: null, daysSinceFirstTouch: 30, openFollowUps: 0, overdueFollowUps: 0 };
+    const { result } = await new ImpactService(m.deps).evaluate('B', 'F', 'Acme', 'outcome_report', 'Eleven of twelve clinics said no.', 'en', { results: { evidence, today: { changed: false, move: null, reason: null } } });
+    expect(result.verdict).toBe('REVISE');                       // the condition (response rate < 10%) is NOT met: 92% responded
+    expect(result.evidence?.conditions[0]).toMatchObject({ state: 'not_met' });
+    expect(result.evidence?.statements[1]).toMatch(/11 not interested/);
+    expect(regenOpts[0].observedResults.join(' ')).toMatch(/11 not interested.*Eleven of twelve clinics said no/s);
+    expect(m.appended).toHaveLength(0);
+  });
+
+  it('a result report whose counts meet the condition → RECONSIDER even when the model saw nothing strategic', async () => {
+    const m = makeDeps({ changeKind: 'none' });
+    (m.deps.model as any).structureConditions = async () => [{ condition: 'if the referral channel stops responding', measurable: true, metric: 'response_rate', comparator: '<', threshold: 10, minContacts: 10 }];
+    const evidence = { contacts: 10, contacted: 10, byStatus: {}, touches: {}, outcomes: { NO_RESPONSE: 10 }, responded: 0, positive: 0, responseRate: 0, positiveRate: 0, referrals: 0, firstTouchAt: null, lastTouchAt: null, daysSinceFirstTouch: 21, openFollowUps: 0, overdueFollowUps: 0 };
+    const { result } = await new ImpactService(m.deps).evaluate('B', 'F', 'Acme', 'outcome_report', 'Nobody answered.', 'en', { results: { evidence, today: { changed: true, move: 'Call the 3 clinics', reason: null } } });
+    expect(result.verdict).toBe('RECONSIDER');
+    expect(result.todayImpact).toMatchObject({ changes: true, newMove: 'Call the 3 clinics' });
   });
 
   it('with no held strategy, a strategic-looking input cannot revise (no engine call)', async () => {
@@ -130,5 +155,11 @@ describe('ImpactService — evaluate wires the classifier to the strategy engine
     expect(m.regenCalls).toHaveLength(0);
     expect(newVersion).toBeNull();
     expect(m.appended).toHaveLength(1);
+  });
+
+  it('a constraint that blocks the current move is the deterministic Today change (move + why)', async () => {
+    const m = makeDeps({ changeKind: 'execution', founderStateKind: 'constraint', conflictsWithCurrentMove: true, todayNextMove: 'Post the clinic leaflet instead', todayReason: 'No evening sessions now.' });
+    const { result } = await new ImpactService(m.deps).evaluate('B', 'F', 'Acme', 'add_context', 'No evening sessions.', 'en', { persistInput: false, currentMove: { actionId: 'a1', what: 'Promote evening kineto' } });
+    expect(result.todayImpact).toMatchObject({ changes: true, newMove: 'Post the clinic leaflet instead', reason: 'No evening sessions now.' });
   });
 });

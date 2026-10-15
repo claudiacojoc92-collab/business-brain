@@ -17,6 +17,7 @@ import { registerConversationRoutes } from './conversation.routes';
 import { registerEventsRoutes } from './events.routes';
 import { registerStrategyRoutes } from './strategy.routes';
 import { registerImpactRoutes } from './impact.routes';
+import { registerResultRoutes } from './result.routes';
 import { registerMirrorRoutes } from './mirror.routes';
 import { registerHomeRoutes } from './home.routes';
 import { registerArcRoutes } from './arc.routes';
@@ -57,6 +58,7 @@ export async function registerRoutes(
   registerStrategyRoutes(server, deps);
   // Living State — impact evaluator (new reality → held state → explicit verdict) (/v1, JWT).
   registerImpactRoutes(server, deps);
+  registerResultRoutes(server, deps);
   // The Mirror — three lanes + grounded contrast (/v1, JWT).
   registerMirrorRoutes(server, deps);
   // The Home surface — the strategist's briefing (/v1, JWT).

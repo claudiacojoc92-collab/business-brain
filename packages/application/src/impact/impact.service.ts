@@ -8,7 +8,10 @@ import type {
   ImpactAssessInput,
   ImpactResult,
   ImpactSource,
+  TodayFact,
 } from './contracts';
+import { checkConditionChecks, evaluateCondition, evidenceStatements, type ConditionEvaluation } from '../result-loop/evidence';
+import type { CumulativeEvidence } from '../result-loop/contracts';
 
 /** The ports the evaluator needs from the strategy engine — kept narrow so nothing else can leak. */
 export interface ImpactStrategyPort {
@@ -18,8 +21,9 @@ export interface ImpactStrategyPort {
     businessId: string, founderId: string, businessName: string,
     kind: FounderStateKind, statement: string, language: string,
   ): Promise<StrategyVersionRecord>;
-  /** Regenerate a fresh Proposal over the CURRENT state (used when a caller already persisted the input). */
-  regenerate(businessId: string, businessName: string, language: string): Promise<StrategyVersionRecord>;
+  /** Regenerate a fresh Proposal over the CURRENT state (used when a caller already persisted the input). Result
+   *  reports pass their counted results as observed facts (never founder_state). */
+  regenerate(businessId: string, businessName: string, language: string, opts?: { observedResults?: string[] }): Promise<StrategyVersionRecord>;
 }
 
 export interface EvaluateOptions {
@@ -36,6 +40,12 @@ export interface EvaluateOptions {
   persistInput?: boolean;
   /** The founder's current Today move — lets a TUNE constraint bind to (and block) the move it conflicts with. */
   currentMove?: { actionId: string; what: string } | null;
+  /**
+   * Result Loop V1: the input is a CONFIRMED result report already written as typed touches / outcomes / follow-ups.
+   * The evaluator reads the cumulative evidence (never only this report), evaluates the strategy's own reconsider
+   * conditions against the counts, and takes Today's change from the follow-up diff. Nothing goes to founder_state.
+   */
+  results?: { evidence: CumulativeEvidence; today: TodayFact };
 }
 
 export type ImpactEvent =
@@ -110,14 +120,37 @@ export class ImpactService {
       currentMove: opts.currentMove ? { what: opts.currentMove.what } : null,
     };
 
+    // Result reports: counted evidence + the strategy's own conditions, evaluated deterministically.
+    let conditions: ConditionEvaluation[] = [];
+    let statements: string[] = [];
+    if (opts.results) {
+      statements = evidenceStatements(opts.results.evidence);
+      if (assess.reconsiderTriggers.length && this.deps.model.structureConditions) {
+        let raw: unknown = null;
+        try { raw = await this.deps.model.structureConditions(assess.reconsiderTriggers, language); } catch { raw = null; }
+        conditions = checkConditionChecks(raw, assess.reconsiderTriggers).map((c) => evaluateCondition(c, opts.results!.evidence));
+      }
+      (assess as { cumulative?: ImpactAssessInput['cumulative'] }).cumulative = { statements, conditions };
+    }
+
     const signal = await this.deps.model.assess(assess);
-    const result = classify(signal, { hasHeldStrategy: Boolean(core), source });
+    const kind: FounderStateKind = VALID_KINDS.includes(signal.founderStateKind) ? signal.founderStateKind : 'constraint';
+    // An OUTCOME is never founder truth of another type (Result Loop V1): no founder_state row, no constraint, no correction.
+    const isOutcome = source === 'outcome_report';
+    const blocksCurrentMove = !isOutcome && kind === 'constraint' && signal.conflictsWithCurrentMove && Boolean(opts.currentMove?.actionId);
+    const today: TodayFact = opts.results?.today
+      ?? (blocksCurrentMove ? { changed: true, move: signal.todayNextMove, reason: signal.todayReason || null } : { changed: false, move: null, reason: null });
+    const result = classify(signal, { hasHeldStrategy: Boolean(core), source, today, conditions });
+    if (opts.results) result.evidence = { statements, conditions };
     this.deps.log?.({ type: 'evaluated', verdict: result.verdict, source });
 
-    const kind: FounderStateKind = VALID_KINDS.includes(signal.founderStateKind) ? signal.founderStateKind : 'constraint';
-
     let newVersion: StrategyVersionRecord | null = null;
-    if (result.strategyImpact.changes && core && input) {
+    if (result.strategyImpact.changes && core && input && isOutcome) {
+      // Outcomes reach the strategy as OBSERVED RESULTS (facts), never as founder_state.
+      newVersion = await this.deps.strategy.regenerate(businessId, businessName, language, { observedResults: [...statements, `Latest report, in the founder's words: "${input}"`] });
+      result.strategyImpact.newVersion = { id: newVersion.id, version: newVersion.version, status: newVersion.status, strategy: newVersion.bundle };
+      this.deps.log?.({ type: 'regenerated', verdict: result.verdict, version: newVersion.version });
+    } else if (result.strategyImpact.changes && core && input) {
       // A strategic shift → regenerate a fresh Proposal (append-only; NEVER auto-adopted). If the input is not
       // yet persisted, recordFounderInput appends it first; otherwise the caller's primitive already wrote it
       // into the state the strategy engine reads, so regenerate over the current state without double-writing.
@@ -126,7 +159,7 @@ export class ImpactService {
         : await this.deps.strategy.regenerate(businessId, businessName, language);
       result.strategyImpact.newVersion = { id: newVersion.id, version: newVersion.version, status: newVersion.status, strategy: newVersion.bundle };
       this.deps.log?.({ type: 'regenerated', verdict: result.verdict, version: newVersion.version });
-    } else if (input) {
+    } else if (input && !isOutcome) {
       // No strategic change → persist the input as founder-owned state (never regenerate) so it is not lost and
       // Today/plan derivation can read it. Skip ONLY a business_correction from Add Context, which its own
       // submitCorrection primitive already wrote. A TUNE constraint that conflicts with the current move is
@@ -134,9 +167,7 @@ export class ImpactService {
       // otherwise it is scoped to the arriving surface and surfaced as general Today context.
       const alreadyWrittenByDrawer = source === 'add_context' && kind === 'business_correction';
       if (!alreadyWrittenByDrawer) {
-        const scope = (kind === 'constraint' && signal.conflictsWithCurrentMove && opts.currentMove?.actionId)
-          ? opts.currentMove.actionId
-          : source;
+        const scope = blocksCurrentMove && opts.currentMove ? opts.currentMove.actionId : source;
         await this.deps.state.append({ id: generateId(), businessId, founderId, kind, statement: input, scope, language, sourceTurnId: null });
       }
     }

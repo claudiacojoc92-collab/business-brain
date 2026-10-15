@@ -561,3 +561,24 @@ export async function readArcContainer(db: KyselyDB, businessId: string, account
     return { answeredKey: m.answeredKey, answered: m.answered.map((a: any) => ({ index: Number(a?.index), answer: String(a?.answer ?? '') })) };
   } catch { return null; }
 }
+
+/**
+ * Result Loop V1: the latest verdict on a RESULT report, if it argued for a strategy change the founder has not acted on
+ * yet (no strategy adoption since). Today shows one line for it; nothing else.
+ */
+export async function readResultReview(db: KyselyDB, businessId: string): Promise<{ verdict: 'REVISE' | 'RECONSIDER' } | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any = await sql`
+      SELECT event_type, metadata, occurred_at FROM app.founder_event
+      WHERE business_id = ${businessId} AND ((event_type = 'impact_evaluated' AND surface = 'outcome_report') OR event_type = 'strategy_adopted')
+      ORDER BY occurred_at DESC LIMIT 1
+    `.execute(db);
+    const r = rows.rows?.[0];
+    if (!r || r.event_type !== 'impact_evaluated') return null;
+    const v = (typeof r.metadata === 'string' ? JSON.parse(r.metadata) : r.metadata)?.verdict;
+    return v === 'REVISE' || v === 'RECONSIDER' ? { verdict: v } : null;
+  } catch {
+    return null;
+  }
+}

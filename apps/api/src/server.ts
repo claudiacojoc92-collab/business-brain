@@ -3,6 +3,7 @@ import type { KyselyDB } from '@bb/infrastructure';
 import type { RedisClient } from '@bb/infrastructure';
 import type { Logger } from '@bb/infrastructure';
 import type { CommandBus, QueryBus, JwtService, PasswordService, PgPhotoLedRepository, QueueRegistry } from '@bb/infrastructure';
+import type { ResultLoopService, CommunicationService, IResultReportModel, TodayMove } from '@bb/application';
 import type {
   BusinessService,
   FounderAccountService,
@@ -77,6 +78,12 @@ export interface ServerDeps {
     | { status: 'produced'; moveDraft: MoveDraft }
   >;
   reachService: ReachService;
+  /** Result Loop V1 (optional so older route tests need not build them). */
+  resultLoopService?: ResultLoopService;
+  /** BUS-82: the canonical Today move (due follow-up → selected plan move → blocked fallback). Absent (tests) ⇒ plan only. */
+  canonicalToday?: (businessId: string) => Promise<TodayMove | null>;
+  communicationService?: CommunicationService;
+  resultReportModel?: IResultReportModel;
 }
 
 /**

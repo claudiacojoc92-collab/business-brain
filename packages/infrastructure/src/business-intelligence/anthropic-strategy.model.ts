@@ -142,6 +142,8 @@ function userBlock(input: StrategyModelInput): string {
     '', 'FOUNDER OBSERVATIONS (optional):', ...(input.observations.length ? input.observations.map((e) => `${e.ref}: ${e.behavior}`) : ['(none)']),
     '', 'AHA 1 (support):', ...(input.aha1.length ? input.aha1.map((a, i) => `${i + 1}. ${a.finding}`) : ['(none)']),
     '', 'AHA 2 (constraint/tension — synthesis context, NOT the diagnosis):', ...(input.aha2.length ? input.aha2.map((a, i) => `${i + 1}. ${a.implication}`) : ['(none)']),
+    ...(input.observedResults?.length ? ['', 'OBSERVED RESULTS (counted from the founder\'s logged outreach; what actually happened, cite as R-refs;',
+      '  evidence about the current bet, never a founder preference):', ...input.observedResults.map((r) => `${r.ref}: ${r.statement}`)] : []),
   ].join('\n');
 }
 

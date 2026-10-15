@@ -65,7 +65,7 @@ function TalkDrawer({ onClose }: { onClose: () => void }) {
   // Resume the ONE persisted thread on open (survives close/reopen, navigation, refresh).
   useEffect(() => {
     if (!businessId) return;
-    (async () => { try { setView(await startConversation(businessId)); } catch { setLoadErr(true); } })();
+    (async () => { try { setView(await startConversation(businessId, 'talk')); } catch { setLoadErr(true); } })();
   }, [businessId]);
 
   // Build a compact, high-signal snapshot of the current surface (fetched once per open). Not shown to the founder.
@@ -86,8 +86,12 @@ function TalkDrawer({ onClose }: { onClose: () => void }) {
         }
         if (surface === 'today') {
           const td = await getToday(businessId);
+          // BUS-82: the canonical Today move (the same one the Today page, Home and the week show).
           const move = (td.ready ?? [])[0];
-          if (move) { lines.push(`Today's move: ${clip(move.what, 260)}`); if (move.whyNow) lines.push(`Why now: ${clip(move.whyNow, 220)}`); }
+          const current = td.current ?? null;
+          if (current) lines.push(`Today's move: ${clip(current.what, 260)}`);
+          else if (move) lines.push(`Today's move: ${clip(move.what, 260)}`);
+          if (move?.whyNow && (!current || current.actionId === move.actionId)) lines.push(`Why now: ${clip(move.whyNow, 220)}`);
         }
         if (surface === 'create' && handoffId) {
           const a = await generateCarousel(businessId, handoffId);
@@ -110,7 +114,7 @@ function TalkDrawer({ onClose }: { onClose: () => void }) {
     // optimistic: show the founder's line immediately
     setView((v) => v ? { ...v, turns: [...v.turns, { id: 'tmp', role: 'founder', content: msg, language: locale, seq: -1, createdAt: '' }] } : v);
     try {
-      setView(await submitTurn(businessId, msg, contextRef.current || undefined));
+      setView(await submitTurn(businessId, msg, 'talk', contextRef.current || undefined));
     } catch (e) {
       // The send failed. Drop the optimistic turn, give the founder their words back in the box, and SAY it
       // failed (via the shared actionErrorKey mapping) — never leave the message sitting there as if BB

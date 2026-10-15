@@ -34,9 +34,10 @@ const STRAT: any = { id: 'v1', status: 'proposal', bundle: { core: {
   notNow: [{ item: 'paid social', reason: 'no proof yet' }],
   reconsiderTriggers: [{ condition: 'if fewer than 2 of 8–10 clinic conversations show interest' }],
 }, branch: { messagingDirection: 'warm, proof-led', ctaDirection: 'a short call' } } };
-const PLAN: any = { planVersionId: 'p1', priorities: [
-  { order: 1, title: 'Build the clinic list', actions: [{ what: 'Draft the clinic target list', leadsToCreate: false }] },
-  { order: 2, title: 'First outreach', actions: [] },
+const act = (actionId: string, priorityId: string, what: string, over: any = {}): any => ({ actionId, priorityId, what, why: '', doneDefinition: '', leadsToCreate: false, prerequisites: [], requiredMaterial: [], planTimeFeasible: true, ...over });
+const PLAN: any = { planVersionId: 'p1', currentFocusPriorityId: 'pr1', priorities: [
+  { priorityId: 'pr1', order: 1, title: 'Build the clinic list', actions: [act('a1', 'pr1', 'Draft the clinic target list')] },
+  { priorityId: 'pr2', order: 2, title: 'First outreach', actions: [] },
 ] };
 
 const Q = { ref: 'Homepage', page: 'Homepage', quote: 'The sentence on the page this claim is about.' };
@@ -325,6 +326,15 @@ describe('ArcService.view — each moment composes from the reused engines', () 
     expect(emailCalls[0].voiceBoundaries).toContain('warm, proof-led');
     expect(email.subject).toMatch(/Body Move/);
   });
+
+  it('Result Loop V1: the email is drafted from the move Today actually selected, not the plan\'s first action', async () => {
+    const { deps, emailCalls } = makeDeps({
+      strategy: { getCurrent: async () => ({ record: STRAT }), proposalOrGenerate: async () => STRAT },
+      plan: { getActive: async () => ({ plan: PLAN }), proposalOrGenerate: async () => PLAN, todayMove: async () => 'First outreach to two orthopaedic doctors' },
+    });
+    await new ArcService(deps).draftEmail('B', 'Body Move', 'en');
+    expect(emailCalls[0].todaysMove).toBe('First outreach to two orthopaedic doctors');
+  });
 });
 
 describe('ArcService.view — strategy after the conversation cap (operator, 2026-10-12)', () => {
@@ -475,5 +485,42 @@ describe('ArcService.view — NO QUOTE, NO CLAIM (BUS-73)', () => {
       evidence: [{ ref: 'Homepage', page: 'Homepage', quote: long }] } });
     expect(u.tensions[0]!.evidence[0]!.quote).toBe('Over 200 organisations are in our pipeline across more than 50 countries...');
   });
-});
 
+  // BUS-82: the Day One week and the arc email use the canonical Today, never the plan's first action.
+  describe('Day One / Today consistency (BUS-82)', () => {
+    const SPLIT: any = { planVersionId: 'p2', currentFocusPriorityId: 'pr1', priorities: [
+      { priorityId: 'pr1', order: 1, title: 'Show the work', actions: [
+        act('b1', 'pr1', 'Publish the landing page', { requiredMaterial: ['testimonials'] }),
+        act('b2', 'pr1', 'Write to two orthopaedic doctors'),
+      ] },
+    ] };
+    const f = () => flags({ pourInDone: true, understandingConfirmed: true, mirrorSeen: true });
+
+    it('week_day "today" = the canonical move (the first action is blocked), and the story is told for that move', async () => {
+      const tells: any[] = [];
+      const { deps } = makeDeps({ strategy: { getCurrent: async () => ({ record: STRAT }), proposalOrGenerate: async () => STRAT },
+        plan: { getActive: async () => null, proposalOrGenerate: async () => SPLIT }, weekStory: { tell: async (i: any) => { tells.push(i); return null; } } });
+      const v = await new ArcService(deps).view('B', 'Body Move', 'en', f(), [], null);
+      expect(v.weekDay).toMatchObject({ today: 'Write to two orthopaedic doctors', todayKind: 'plan' });
+      expect(tells[0].today.what).toBe('Write to two orthopaedic doctors');
+      expect(v.weekDay?.story?.today).toMatchObject({ actionId: 'b2' });
+      // A story saved for the same plan but told for a different "today" is not reused.
+      await new ArcService(deps).view('B', 'Body Move', 'en', f(), [], null, false, null, { ...v.weekDay!.story!, today: { ...v.weekDay!.story!.today, actionId: 'b1' } });
+      expect(tells).toHaveLength(2);
+    });
+
+    it('a due follow-up is the week\'s "today" too (same selection as the Today page and Home)', async () => {
+      const { deps } = makeDeps({ strategy: { getCurrent: async () => ({ record: STRAT }), proposalOrGenerate: async () => STRAT },
+        plan: { getActive: async () => null, proposalOrGenerate: async () => SPLIT, dueMoves: async () => [{ followUpId: 'f1', what: 'Trimite broșura pe email', contactName: 'Spitalul Clinic' }] } });
+      const v = await new ArcService(deps).view('B', 'Body Move', 'en', f(), [], null);
+      expect(v.weekDay).toMatchObject({ today: 'Trimite broșura pe email (Spitalul Clinic)', todayKind: 'follow_up', canCreate: false });
+    });
+
+    it('the arc email is drafted from the canonical move, not the plan\'s first action', async () => {
+      const { deps, emailCalls } = makeDeps({ strategy: { getCurrent: async () => ({ record: STRAT }), proposalOrGenerate: async () => STRAT },
+        plan: { getActive: async () => ({ plan: SPLIT }), proposalOrGenerate: async () => SPLIT } });
+      await new ArcService(deps).draftEmail('B', 'Body Move', 'en');
+      expect(emailCalls[0].todaysMove).toBe('Write to two orthopaedic doctors');
+    });
+  });
+});

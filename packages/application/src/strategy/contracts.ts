@@ -116,6 +116,12 @@ export interface StrategyModelInput {
    * inferred understanding. Only ACTIVE corrections appear here; superseded ones never do.
    */
   readonly businessCorrections: { ref: string; subject: string; statement: string }[];
+  /**
+   * Result Loop V1 (2026-10-14): counted results from the founder's logged outreach (touches / outcomes), as plain
+   * statements ("12 clinics contacted; 2 asked for material; 0 referrals"). FACTS about what happened, never founder
+   * preferences or corrections; present only when a result report triggered the regeneration.
+   */
+  readonly observedResults?: { ref: string; statement: string }[];
 }
 
 export interface StrategyModelOutput { readonly strategy: StrategyBundle; }
