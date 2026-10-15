@@ -53,7 +53,9 @@ export interface ArcUnderstanding {
   // sourceRefs back the tension behind a collapsed "why I'm saying this" disclosure (the proof, on demand).
   /** `evidence`: the exact source sentences behind the tension ("Why I'm saying this"), each cut to 200 chars at a
    *  clean boundary. Never empty: a tension without a verified quote is not shown (BUS-73). */
-  readonly tensions: { readonly tension: string; readonly grounding: string; readonly sourceRefs: string[]; readonly evidence: { readonly page: string; readonly quote: string }[] }[];
+  readonly tensions: { readonly tension: string; readonly grounding: string; readonly sourceRefs: string[]; readonly evidence: { readonly page: string; readonly quote: string }[];
+    /** About something NOT visible in the sources read: shown as such, never as a fact about the business. */
+    readonly absence?: boolean }[];
   readonly confident: string[]; // still projected (BusinessPage + provenance); NOT rendered in the arc understanding moment
   readonly inferring: string[]; // still projected; NOT rendered in the arc understanding moment
   readonly unanswered: string[];
@@ -63,6 +65,23 @@ export interface ArcUnderstanding {
    * `stage`: the stage with its evidence, or undetermined; null = older snapshot.
    */
   readonly constraint: { readonly decided: true; readonly text: string } | { readonly decided: false } | null;
+  /**
+   * 2026-10-15 — the diagnosis as EARNED: `constraint` only when governance established every check (then `constraint`
+   * above is decided too); otherwise a `hypothesis` worth testing. Older snapshots' "decided" constraints were never
+   * earned, so they show as hypotheses. null = nothing to say yet.
+   */
+  readonly diagnosis?: { readonly state: 'hypothesis' | 'constraint'; readonly text: string } | null;
+  /** v2 read (absent on older snapshots): what BB knows per dimension, what it will not conclude, what it does not trust,
+   *  and why each question is worth asking. */
+  readonly read?: {
+    readonly model: { readonly dimension: string; readonly lines: { readonly text: string; readonly basis: 'observed' | 'declared' | 'inferred' | 'contradicted' }[] }[];
+    readonly unknownDimensions: string[];
+    /** `reason` set when code (not the model) drew the line: the card words it in the business's language. */
+    readonly notConcluding: { readonly claim: string; readonly why: string; readonly reason?: 'no_goal' | 'not_established' }[];
+    readonly untrusted: { readonly finding: string; readonly why: string; readonly reason?: 'sitemap' | 'technical' | 'sitemap_only' | 'unread' }[];
+    /** `parts`: separate answers inside one question (metrics that can diverge, e.g. clients vs revenue). */
+    readonly asks: { readonly question: string; readonly why: string; readonly parts?: string[] }[];
+  };
   readonly stage: {
     readonly stage: 'validating' | 'growth' | 'plateau'; readonly evidence: string[];
     /** A named part of the business at a different stage than the core (e.g. "the medical channel": validating). */

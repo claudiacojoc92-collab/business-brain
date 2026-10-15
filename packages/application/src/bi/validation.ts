@@ -113,6 +113,9 @@ export interface ValidatedFinding {
   finding: string;
   implication?: string;
   sourceRefs: SourceRef[];
+  /** Why it matters, and the strategic decisions it could change (2026-10-15). */
+  matters?: string;
+  changes?: string[];
 }
 
 export interface ValidatedAha {
@@ -159,7 +162,8 @@ export function validateAha(aha: AhaResult, observations: PageObservation[]): Va
     // unlicensed claim type, drop the implication while keeping the source-supported finding.
     const rawImpl = (f.implication ?? '').trim();
     const implication = rawImpl && !makesUnlicensedClaim(rawImpl) ? rawImpl : '';
-    findings.push({ finding, ...(implication ? { implication } : {}), sourceRefs: refs });
+    const matters = (f.matters ?? '').trim();
+    findings.push({ finding, ...(implication ? { implication } : {}), sourceRefs: refs, ...(matters ? { matters } : {}), ...(f.changes?.length ? { changes: [...f.changes] } : {}) });
   }
   const bounded = findings.slice(0, 4);
   return { status: bounded.length > 0 ? 'produced' : 'insufficient', findings: bounded };

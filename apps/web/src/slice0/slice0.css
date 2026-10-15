@@ -562,6 +562,15 @@
 .s0-u-list li { position: relative; padding-left: 20px; font-size: 16px; line-height: 1.6; font-weight: 400; color: var(--s0-ink); max-width: 60ch; }
 .s0-u-list li::before { content: ''; position: absolute; left: 3px; top: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--s0-clay); }
 
+/* Understanding v2 (2026-10-15): sub-labels inside a card, the business-model lines, the diagnosis block */
+.s0-u-card-sublabel { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--s0-muted, var(--s0-ink)); opacity: .75; font-weight: 600; margin: 18px 0 10px; }
+.s0-u-diagnosis .s0-u-card-sublabel { margin-top: 0; }
+.s0-u-model { margin-top: 16px; }
+.s0-u-ask-why { display: block; margin-top: 2px; }
+.s0-u-ask-parts { margin: 6px 0 0; padding-left: 22px; }
+.s0-u-ask-parts li { padding-left: 0; font-size: 15px; }
+.s0-u-ask-parts li::before { content: none; }
+
 /* variants — color with meaning */
 .s0-u-card--primary { border-left: 3px solid var(--s0-clay); }
 .s0-u-card--assumed { border-left: 3px solid var(--s0-clay); }

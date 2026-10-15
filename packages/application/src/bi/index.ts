@@ -11,3 +11,6 @@ export {
   type LearnBusinessResult,
 } from './learn-business.use-case';
 export * from './evidence-anchor';
+export * from './source-trust';
+export * from './understanding-governance';
+export * from './numeric-grounding';

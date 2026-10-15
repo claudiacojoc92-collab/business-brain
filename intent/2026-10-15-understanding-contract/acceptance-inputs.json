@@ -1,0 +1,63 @@
+{
+ "crawl": {
+  "state": "from-production-fragments"
+ },
+ "pages": [
+  {
+   "ref": "Homepage",
+   "url": "https://bodymovestudio.ro/",
+   "chars": 3915
+  },
+  {
+   "ref": "Post-sitemap.xml",
+   "url": "https://bodymovestudio.ro/post-sitemap.xml",
+   "chars": 218
+  },
+  {
+   "ref": "Page-sitemap.xml",
+   "url": "https://bodymovestudio.ro/page-sitemap.xml",
+   "chars": 11694
+  },
+  {
+   "ref": "Product-sitemap.xml",
+   "url": "https://bodymovestudio.ro/product-sitemap.xml",
+   "chars": 2660
+  },
+  {
+   "ref": "Category-sitemap.xml",
+   "url": "https://bodymovestudio.ro/category-sitemap.xml",
+   "chars": 229
+  },
+  {
+   "ref": "Product_cat-sitemap.xml",
+   "url": "https://bodymovestudio.ro/product_cat-sitemap.xml",
+   "chars": 487
+  },
+  {
+   "ref": "Author-sitemap.xml",
+   "url": "https://bodymovestudio.ro/author-sitemap.xml",
+   "chars": 219
+  },
+  {
+   "ref": "Despre noi - Body Move Studio",
+   "url": "https://bodymovestudio.ro/despre-noi/",
+   "chars": 4845
+  },
+  {
+   "ref": "Servicii - Body Move Studio",
+   "url": "https://bodymovestudio.ro/servicii/",
+   "chars": 992
+  },
+  {
+   "ref": "Clase & Personal Training - Body Move St",
+   "url": "https://bodymovestudio.ro/servicii/clase-personal-training/",
+   "chars": 4237
+  }
+ ],
+ "sourcesBlockHeaders": [
+  "### OBSERVED-PAGE ref=\"Homepage\" url=\"https://bodymovestudio.ro/\" title=\"Acasă - Body Move Studio\" read=\"2026-10-13\"",
+  "### OBSERVED-PAGE ref=\"Despre noi - Body Move Studio\" url=\"https://bodymovestudio.ro/despre-noi/\" title=\"Despre noi - Body Move Studio\" read=\"2026-10-13\"",
+  "### OBSERVED-PAGE ref=\"Servicii - Body Move Studio\" url=\"https://bodymovestudio.ro/servicii/\" title=\"Servicii - Body Move Studio\" read=\"2026-10-13\"",
+  "### OBSERVED-PAGE ref=\"Clase & Personal Training - Body Move St\" url=\"https://bodymovestudio.ro/servicii/clase-personal-training/\" title=\"Clase & Personal Training - Body Move Studio\" read=\"2026-10-13\""
+ ]
+}

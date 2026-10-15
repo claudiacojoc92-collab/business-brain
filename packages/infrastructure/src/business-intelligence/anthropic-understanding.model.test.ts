@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { PageObservation } from '@bb/application';
-import type { SynthesisOutput, GovernedUnderstanding } from '@bb/application';
-import { systemPrompt, AnthropicUnderstandingModel, extractJson, refineConstraint, restatedTension, deeperConstraintPrompt, visibilityPhrased, levelProblem } from './anthropic-understanding.model';
+import { systemPrompt, AnthropicUnderstandingModel, extractJson, visibilityPhrased, buildSourcesBlock } from './anthropic-understanding.model';
 
 /**
  * The understanding output is split by "prose BB composes vs items BB lifts": composed prose (written FOR the
@@ -57,7 +56,6 @@ describe('understanding systemPrompt — compose-vs-lift language split', () => 
     expect(systemPrompt('en')).toContain('English');
     expect(systemPrompt('it')).toContain('Italian');
     expect(p).toContain('MIXED-LANGUAGE SOURCE');
-    expect(p).toMatch(/ghișeu unic/);          // the founder's own term is preserved verbatim
     expect(p).toMatch(/original language/i);    // proper nouns kept in both halves
     expect(p).toMatch(/NO DRIFT/i);
   });
@@ -100,48 +98,76 @@ describe('understanding — LIVE language split (real model)', () => {
   }, 90_000);
 });
 
-describe('understanding systemPrompt — strategic lens (business, not website audit)', () => {
+describe('understanding systemPrompt — the reasoning contract (2026-10-15: a strategist, not a website auditor)', () => {
   const p = systemPrompt('en');
-  it('runs the capability check and makes a capability gap the primary contradiction', () => {
-    expect(p).toMatch(/CAPABILITY CHECK/);
-    expect(p).toMatch(/MUST be contradictions\[0\]/);
-    expect(p).toMatch(/"capability_gap"/);
+  it('builds the business model first, across all nine dimensions, before tensions and diagnosis', () => {
+    expect(p).toMatch(/ORDER OF WORK[\s\S]*Build the BUSINESS MODEL[\s\S]*tensions[\s\S]*diagnosis, which must be EARNED/);
+    for (const d of ['offer', 'customer', 'acquisition', 'conversion', 'retention', 'capacity', 'economics', 'performance', 'intent']) expect(p).toContain(`- ${d}:`);
   });
-  it('keeps website housekeeping (legal-page dates, vague copy) out of contradictions and aha', () => {
-    expect(p).toMatch(/legal pages \(Privacy, Terms, Data Deletion/);
-    expect(p).toMatch(/NEVER\s+'?,?\s*'?\s*appear in ANY field you compose/);
-    expect(p).toMatch(/ANY CRITIQUE OF A PHRASE ON THE SITE/);
+  it('marks every assertion observed / declared / inferred / contradicted, and treats absence as about the sources', () => {
+    expect(p).toMatch(/observed: it is in what you read[\s\S]*declared[\s\S]*inferred[\s\S]*contradicted/);
+    expect(p).toMatch(/ABSENCE IS ABOUT THE SOURCES, NOT THE BUSINESS/);
+    expect(p).toMatch(/NEVER "X does not\s+exist"/);
+    expect(p).toMatch(/An absence item has an EMPTY soWhat/);
   });
-  it('asks for 3-4 tensions on different dimensions, second person, consequence so-whats, observations not questions', () => {
-    expect(p).toMatch(/3 to 4 real tensions/);
-    expect(p).toMatch(/SECOND PERSON, PRESENT TENSE/);
-    expect(p).toMatch(/CONSEQUENCE, never a paraphrase/);
-    expect(p).toMatch(/A GAP YOU CAN SEE IS AN OBSERVATION, NEVER A QUESTION/);
-    expect(p).toMatch(/"customer_proof", "channel_mismatch"/);
+  it('keeps technical / hygiene findings and stale pages out of the reasoning', () => {
+    expect(p).toMatch(/Kind C goes ONLY in read\.websiteNotes/);
+    expect(p).toMatch(/STALE OR UNVERIFIED[\s\S]*read\.untrusted/);
   });
-  it('requires the so-what and a ranked list', () => {
-    expect(p).toMatch(/THE SO-WHAT TEST/);
-    expect(p).toMatch(/RANK, do not list/);
+  it('never forces a constraint: it is earned by five checks, and never from a website alone', () => {
+    expect(p).not.toMatch(/DECIDE, DO NOT LIST|a strategist commits|ROOT-CAUSE ORDER/);
+    expect(p).toMatch(/exists[\s\S]*causal[\s\S]*blocks[\s\S]*alternativesWeaker[\s\S]*evidenceSufficient/);
+    expect(p).toMatch(/Never a constraint from a website alone/);
+    expect(p).toMatch(/several audiences is NOT a constraint by itself/);
   });
-  it('forces ONE constraint (cause, not symptom) and a stage from evidence', () => {
-    expect(p).toMatch(/CONSTRAINT — DECIDE, DO NOT LIST/);
-    expect(p).toMatch(/"constraint": \{"decided": true, "level": "users\|target\|offer\|time", "levelCheck"/);
-    expect(p).toMatch(/constraint\.level = the FIRST level whose passed is false/);
-    expect(p).toMatch(/"stage": \{"stage": "validating\|growth\|plateau\|undetermined"/);
-    expect(p).toMatch(/stage\.evidence = 2 to 4 concrete observations/);
-    // the root cause is searched in a fixed order, in the first reading AND the retry
-    expect(p).toMatch(/ROOT-CAUSE ORDER[\s\S]*1\. USERS[\s\S]*2\. TARGET[\s\S]*3\. OFFER/);
-    expect(deeperConstraintPrompt('en')).toMatch(/ROOT-CAUSE ORDER[\s\S]*1\. USERS[\s\S]*2\. TARGET[\s\S]*3\. OFFER/);
-    // users exist (members, clients, placements) → the users level is passed; the core stage = most evidence of sales
-    expect(p).toMatch(/Members, clients, customers, placements[\s\S]*this level is PASSED/);
-    expect(deeperConstraintPrompt('en')).toMatch(/this level is PASSED/);
-    expect(p).toMatch(/the offer with the MOST EVIDENCE OF SALES/);
+  it('no tension quota and no mandatory capability check', () => {
+    expect(p).not.toMatch(/3 to 4 real tensions|CAPABILITY CHECK \(always run it\)|NEVER A QUESTION/);
+    expect(p).toMatch(/0 to 3[\s\S]*No quota/);
   });
-  it('does not contain the Business Brain test case itself (the dogfood run must find it, not echo it)', () => {
+  it('questions carry the strategic decisions their answer could change, about business reality not the website', () => {
+    expect(p).toMatch(/"changes" lists the strategic decisions its answer could change/);
+    expect(p).toMatch(/Ask about business reality, never the website/);
+  });
+  it('website positioning is how the site presents the business, never a founder choice; no behaviour, no guessed economics', () => {
+    expect(p).toMatch(/positioning\.summary = ONE sentence[\s\S]*how the SOURCES present the business[\s\S]*never "you bet on", "you chose" or "your strategy"/);
+    expect(p).toMatch(/NEVER PREDICT BEHAVIOUR/);
+    expect(p).toMatch(/Unit economics the sources do not show[\s\S]*are UNKNOWN/);
+    expect(p).toMatch(/aha\.findings: 0 to 3, each an OBSERVED fact/);
+    expect(p).toMatch(/An ABSENCE is a tension ONLY when it connects to a goal or mechanism the founder declared/);
+  });
+  it('strategy-critical unknowns get a question; a fact is not an insight; one source owner per claim', () => {
+    expect(p).toMatch(/STRATEGY-CRITICAL: for an operating business[\s\S]*performance[\s\S]*acquisition/);
+    expect(p).toContain('"fills": [');
+    expect(p).toMatch(/A FACT IS NOT AN INSIGHT[\s\S]*"matters"[\s\S]*"changes"/);
+    expect(p).toMatch(/SOURCE VOICE — one owner per claim[\s\S]*Never "The site declares that you serve…"/);
+  });
+  it('every number is grounded (entity, qualifier, verbatim line) or an explicit calculation; why it matters is business-specific', () => {
+    expect(p).toMatch(/NUMBERS — every digit you write[\s\S]*qualifier[\s\S]*"calculations"[\s\S]*Never pair a number with a neighbouring offer or package/);
+    expect(p).toMatch(/"matters" must be about THIS business[\s\S]*would fit thousands of businesses[\s\S]*session duration, trainer time, utilisation/);
+  });
+  it('metrics that can diverge stay separate answers', () => {
+    expect(p).toMatch(/two metrics can DIVERGE[\s\S]*"a\) … b\) …"[\s\S]*"parts"/);
+    expect(p).toContain('"parts": []');
+  });
+  it('contains no real business: no test case, no Body Move example, no withheld initiative', () => {
     expect(p).not.toMatch(/decision system/i);
+    expect(p).not.toMatch(/karate|Ballet|Automasaj|kineto|Body Move|medical-referral|referral protocol|ghișeu/i);
   });
 });
 
+describe('sources block — how each page was found, and technical pages left out (2026-10-15)', () => {
+  const page = (ref: string, url: string, discoveredVia?: PageObservation['discoveredVia']): PageObservation => ({ ref, url, pageType: 'page', title: null, text: `${ref} text`, lang: 'en', provenance: 'observed', sourceKind: 'website', ...(discoveredVia ? { discoveredVia } : {}) });
+  it('labels sitemap-only pages, orders linked pages first, and never shows sitemap XML or maintenance pages', () => {
+    const block = buildSourcesBlock([
+      page('Old page', 'https://a.ro/old/', 'sitemap'), page('Home', 'https://a.ro/', 'entry'), page('Page-sitemap.xml', 'https://a.ro/page-sitemap.xml', 'sitemap'),
+      page('Maintenance', 'https://a.ro/maintenance/', 'link'), page('Services', 'https://a.ro/services/', 'link'),
+    ]);
+    expect(block.indexOf('ref="Home"')).toBeLessThan(block.indexOf('ref="Services"'));
+    expect(block.indexOf('ref="Services"')).toBeLessThan(block.indexOf('ref="Old page"'));
+    expect(block).toMatch(/ref="Old page"[^\n]*listed ONLY in the sitemap/);
+    expect(block).not.toMatch(/sitemap\.xml|Maintenance/);
+  });
+});
 
 describe('extractJson — a lifted „…" quote closed with a straight quote (Body Move, 2026-10-12)', () => {
   it('repairs the typographic pair instead of failing the whole synthesis', () => {
@@ -161,76 +187,11 @@ describe('extractJson — a lifted „…" quote closed with a straight quote (B
   });
 });
 
-describe('refineConstraint — one retry when the constraint restates a tension (Strategic Depth W1)', () => {
-  const base = (statement: string): SynthesisOutput => ({ modelId: 'm', aha: { status: 'produced', findings: [] }, understanding: {
-    offer: { summary: 'x' }, positioning: { summary: '' }, audience: { addressed: [] },
-    contradictions: [{ kind: 'customer_proof', tension: 'You describe a full product. No source shows a single founder who used it or a result it produced.', soWhat: 's', sourceRefs: [] }],
-    capabilityCheck: { shown: true, insight: '' },
-    stage: { stage: 'validating', evidence: [], sourceRefs: [] },
-    constraint: { decided: true, statement, why: 'w', sourceRefs: ['Home'], level: 'users', levelCheck: { users: { passed: false, evidence: 'no customer named' } } } } } as unknown as SynthesisOutput);
-  const restating = 'You have not shown a single founder who used it or a result it produced.';
-  const deeper = 'You have not yet put the product in front of a single founder outside your own circle.';
-
-  it('re-asks once and keeps the deeper cause, flagged retried', async () => {
-    const calls: string[] = [];
-    const out = await refineConstraint(base(restating), 'en', async (_s, u) => { calls.push(u); return JSON.stringify({ decided: true, statement: deeper, why: 'w2', sourceRefs: ['Home'] }); });
-    expect(calls).toHaveLength(1);
-    expect(JSON.parse(calls[0]!).problem).toMatch(/No source shows a single founder/);
-    expect(out.understanding.constraint).toEqual({ decided: true, statement: deeper, why: 'w2', sourceRefs: ['Home'], retried: true });
-    expect(restatedTension(out.understanding)).toBeNull();
-  });
+describe('visibilityPhrased (kept for the arc projection)', () => {
   it('flags visibility phrasing, not facts', () => {
     expect(visibilityPhrased('You have not yet shown that a founder can go through the flow.')).toBe(true);
     expect(visibilityPhrased("You haven't demonstrated the method.")).toBe(true);
     expect(visibilityPhrased('No founder has gone through the flow and gotten a result.')).toBe(false);
     expect(visibilityPhrased('You have not chosen who it is for.')).toBe(false);
-  });
-  it('makes no call when the constraint is already distinct', async () => {
-    let n = 0;
-    const out = await refineConstraint(base(deeper), 'en', async () => { n++; return '{}'; });
-    expect(n).toBe(0);
-    expect(out.understanding.constraint?.statement).toBe(deeper);
-  });
-  it('keeps the retry whenever it is decided, even if it still overlaps (the card merges that tension)', async () => {
-    const users = 'No founder has used it yet and got a result from it.';
-    const out = await refineConstraint(base(restating), 'en', async () => JSON.stringify({ decided: true, statement: users, why: 'w', sourceRefs: [] }));
-    expect(out.understanding.constraint).toMatchObject({ statement: users, retried: true });
-  });
-  it('re-asks a visibility-phrased constraint even when it overlaps no tension', async () => {
-    let n = 0;
-    const out = await refineConstraint(base('You have not yet shown that a client can complete the programme.'), 'en',
-      async (_s, u) => { n++; expect(JSON.parse(u).problem).toMatch(/visible/); return JSON.stringify({ decided: true, statement: 'No client has completed the programme and got a result.', why: '', sourceRefs: [] }); });
-    expect(n).toBe(1);
-    expect(out.understanding.constraint?.statement).toBe('No client has completed the programme and got a result.');
-  });
-  it('keeps the first constraint when the retry is undecided or throws', async () => {
-    for (const reply of [JSON.stringify({ decided: false, statement: '', why: '', sourceRefs: [] })]) {
-      expect((await refineConstraint(base(restating), 'en', async () => reply)).understanding.constraint?.statement).toBe(restating);
-    }
-    expect((await refineConstraint(base(restating), 'en', async () => { throw new Error('boom'); })).understanding.constraint?.statement).toBe(restating);
-  });
-});
-
-describe('levelProblem — the constraint level must match the model\'s own level check (Strategic Depth W1)', () => {
-  const u = (constraint: object, stage = 'validating'): GovernedUnderstanding => ({ stage: { stage }, constraint: { decided: true, statement: 's', why: '', sourceRefs: [], ...constraint } }) as unknown as GovernedUnderstanding;
-  const passed = (evidence: string) => ({ passed: true, evidence });
-  const failed = (evidence: string) => ({ passed: false, evidence });
-  it('accepts the first failing level', () => {
-    expect(levelProblem(u({ level: 'users', levelCheck: { users: failed('no customer') } }))).toBeNull();
-    expect(levelProblem(u({ level: 'target', levelCheck: { users: passed('members'), target: failed('three audiences') } }, 'growth'))).toBeNull();
-    expect(levelProblem(u({ level: 'time', levelCheck: { users: passed('a'), target: passed('b'), offer: passed('c') } }, 'growth'))).toBeNull();
-  });
-  it('rejects a missing level, a skipped level, and users at growth/plateau (BIZZ.CLUB run a)', () => {
-    expect(levelProblem(u({}))).toMatch(/does not say/);
-    expect(levelProblem(u({ level: 'offer', levelCheck: { users: passed('members'), target: failed('three audiences') } }, 'growth'))).toMatch(/"target"/);
-    expect(levelProblem(u({ level: 'users', levelCheck: { users: failed('no published member result') } }, 'growth'))).toMatch(/stage is growth/);
-  });
-  it('re-asks when the level is inconsistent, and keeps a retry only if its level is consistent', async () => {
-    const first = { understanding: { contradictions: [], stage: { stage: 'growth' }, constraint: { decided: true, statement: 'No member has a published result.', why: '', sourceRefs: [], level: 'users', levelCheck: { users: failed('no published result') } } } } as unknown as SynthesisOutput;
-    const good = { decided: true, level: 'target', levelCheck: { users: passed('hundreds of members'), target: failed('three audiences') }, statement: 'You have not chosen who the club is for.', why: '', sourceRefs: [] };
-    const out = await refineConstraint(first, 'en', async (_s, body) => { expect(JSON.parse(body).problem).toMatch(/stage is growth/); return JSON.stringify(good); });
-    expect(out.understanding.constraint).toMatchObject({ statement: 'You have not chosen who the club is for.', level: 'target', retried: true });
-    const stillBad = await refineConstraint(first, 'en', async () => JSON.stringify({ ...good, level: 'users', levelCheck: { users: failed('x') } }));
-    expect(stillBad.understanding.constraint?.statement).toBe('No member has a published result.');
   });
 });

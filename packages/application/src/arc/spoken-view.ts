@@ -33,6 +33,14 @@ export function spokenView(v: ArcView): ArcView {
       tensions: u.tensions.map((t) => ({ ...t, tension: s(t.tension), grounding: s(t.grounding) })),
       confident: ss(u.confident)!, inferring: ss(u.inferring)!, unanswered: ss(u.unanswered)!,
       constraint: u.constraint && 'text' in u.constraint ? { ...u.constraint, text: s(u.constraint.text) } : u.constraint,
+      ...(u.diagnosis ? { diagnosis: { ...u.diagnosis, text: s(u.diagnosis.text) } } : {}),
+      ...(u.read ? { read: {
+        ...u.read,
+        model: u.read.model.map((d) => ({ ...d, lines: d.lines.map((l) => ({ ...l, text: s(l.text) })) })),
+        notConcluding: u.read.notConcluding.map((n) => ({ ...n, claim: s(n.claim), why: s(n.why) })),
+        untrusted: u.read.untrusted.map((x) => ({ ...x, finding: s(x.finding), why: s(x.why) })),
+        asks: u.read.asks.map((a) => ({ ...a, question: s(a.question), why: s(a.why), ...(a.parts ? { parts: a.parts.map((x) => s(x)) } : {}) })),
+      } } : {}),
       // Stage evidence lines are fragments joined into one "Why: a; b." sentence: no closing punctuation of their own.
       stage: u.stage && 'evidence' in u.stage ? { ...u.stage, evidence: u.stage.evidence.map((e) => s(e).trim().replace(/[.;,:]+$/, '')) } : u.stage,
     } } : {}),

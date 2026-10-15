@@ -6,13 +6,14 @@
 import { makeFragment, type EvidenceFragment, type IEvidenceRepository } from '@bb/domain';
 import { normalizeUrl } from './url';
 import { fetchDocument, fetchRobots, isAllowed } from './fetcher';
-import { discoverKeyPages, DEFAULT_PAGE_BUDGET } from './discovery';
+import { discoverKeyPagesWithSource, DEFAULT_PAGE_BUDGET, type PageDiscovery } from './discovery';
 import { extractPage, extractBlocks, type Extracted } from './extract';
 
 export type ConnectionState = 'connecting' | 'reading' | 'synced' | 'partial' | 'empty' | 'failed';
 export interface Capabilities { read: boolean; insights: boolean; publish: boolean }
 
-export interface RawPage { url: string; html: string }
+/** `via`: how the crawl found the page (entry, a link on it, only the sitemap, a guessed path). */
+export interface RawPage { url: string; html: string; via?: PageDiscovery }
 export interface ProgressEvent { phase: ConnectionState; message: string; url?: string }
 
 export interface WebsiteReadResult {
@@ -85,6 +86,7 @@ export class WebsiteConnector {
           og: ex.og,
           jsonld: ex.jsonld,
           lang: ex.lang,
+          ...(page.via ? { discoveredVia: page.via } : {}),
         },
       }));
       // BLOCK fragments — additional REAL observed evidence (same honesty gate, still
@@ -148,22 +150,22 @@ export async function readWebsite(args: {
   const entry = await fetchDocument(norm.url, { timeoutMs: PAGE_TIMEOUT_MS });
   if (!entry.ok || !entry.body) return fail(`I couldn't reach that URL (${entry.error ?? 'no response'}).`, norm.url);
 
-  // Discover key pages (sitemap → nav → common paths), bounded.
+  // Discover key pages (links on the homepage → sitemap → common paths), bounded, each with how it was found.
   const sitemap = await fetchDocument(`${norm.origin}/sitemap.xml`, { timeoutMs: 3000, accept: 'application/xml,text/xml' });
-  const keyPages = discoverKeyPages(
+  const keyPages = discoverKeyPagesWithSource(
     { entryUrl: entry.finalUrl, origin: norm.origin, entryHtml: entry.body, sitemapXml: sitemap.ok ? sitemap.body : null },
     args.budget ?? DEFAULT_PAGE_BUDGET,
   );
 
-  const pages: RawPage[] = [{ url: entry.finalUrl, html: entry.body }];
+  const pages: RawPage[] = [{ url: entry.finalUrl, html: entry.body, via: 'entry' }];
   const gaps: string[] = [];
-  for (const pageUrl of keyPages) {
+  for (const { url: pageUrl, via } of keyPages) {
     if (pageUrl.replace(/\/$/, '') === entry.finalUrl.replace(/\/$/, '')) continue;
     if (Date.now() - started > TOTAL_BUDGET_MS) { gaps.push(pageUrl); continue; } // time budget → honest gap
     if (!isAllowed(robots, new URL(pageUrl).pathname)) continue;
     progress({ phase: 'reading', message: `Reading ${new URL(pageUrl).pathname}…`, url: pageUrl });
     const res = await fetchDocument(pageUrl, { timeoutMs: PAGE_TIMEOUT_MS });
-    if (res.ok && res.body) pages.push({ url: res.finalUrl, html: res.body });
+    if (res.ok && res.body) pages.push({ url: res.finalUrl, html: res.body, via });
     else gaps.push(pageUrl); // one page failing never fails the run
   }
 

@@ -1,0 +1,263 @@
+{
+ "_comment": "Production understanding of \"Body Move – Blind Test\" (2026-10-15, old prompt), from public website input only. Regression fixture for the 2026-10-15 understanding redesign: do not edit.",
+ "sourceRefsRead": [
+  "Clase & Personal Training - Body Move St",
+  "Despre noi - Body Move Studio",
+  "Homepage",
+  "Page-sitemap.xml",
+  "Product-sitemap.xml",
+  "Servicii - Body Move Studio"
+ ],
+ "understanding": {
+  "offer": {
+   "summary": "Vinzi servicii de mișcare, recuperare și wellbeing — clase, kinetoterapie, masaj și programe pre/postpartum — în două locații din Cluj-Napoca.",
+   "unclear": [
+    "Câți ani de experiență are studioul — contorul de pe site arată '0 +', ceea ce pare un element nefinalizat tehnic",
+    "Ce include exact pagina 'o-comunitate-de-oameni-motivati-sa-experimenteze-starea-de-bine' și dacă este un serviciu sau o pagină editorială",
+    "Ce este 'Ballet Lab for Latin Artists' și cui se adresează exact"
+   ],
+   "explicit": [
+    "Pilates, Functional Training, Aerial Yoga, Balet Adulți, Balet & Dans Copii, Personal Training, Group Training",
+    "Kinetoterapie (individual și grup)",
+    "Gimnastică Prenatală & Recuperare Postpartum",
+    "Masaj de relaxare (general/parțial), Masaj terapeutic",
+    "Ballet Lab for Latin Artists",
+    "Atelier Automasaj Facial",
+    "Voucher cadou"
+   ],
+   "sourceRefs": [
+    "Homepage",
+    "Clase & Personal Training - Body Move St",
+    "Page-sitemap.xml",
+    "Product-sitemap.xml"
+   ]
+  },
+  "stage": {
+   "stage": "growth",
+   "evidence": [
+    "Shop online funcțional cu peste 20 de produse/abonamente cumpărabile, inclusiv pachete multi-ședință",
+    "Două locații fizice distincte în Cluj-Napoca (Bună Ziua și Decebal) cu pagini și liste de prețuri separate per locație",
+    "Echipă numită pe pagina Despre noi (Raluca Bratan, Giulia Pes și alții)",
+    "Servicii noi adăugate recent în sitemap: Ballet Lab for Latin Artists și Atelier Automasaj Facial (iulie 2025)"
+   ],
+   "secondary": {
+    "area": "Ballet Lab for Latin Artists și Atelier Automasaj Facial",
+    "stage": "validating",
+    "evidence": [
+     "Ambele au pagini de prețuri adăugate în iulie 2025, fără prezență în meniul principal sau în categoriile de servicii de pe homepage",
+     "Niciun produs cumpărabil în shop pentru aceste două servicii nu apare în product-sitemap.xml"
+    ]
+   },
+   "sourceRefs": [
+    "Homepage",
+    "Page-sitemap.xml",
+    "Product-sitemap.xml",
+    "Despre noi - Body Move Studio"
+   ]
+  },
+  "audience": {
+   "summary": "Adulți activi sau în recuperare, mame și copii din Cluj-Napoca care caută mișcare cu scop medical sau de wellbeing",
+   "unknown": [
+    "Care segment aduce cel mai mare volum de clienți activi — adulți în recuperare, mame sau copii",
+    "Dacă există clienți corporate sau trimiteri medicale ca sursă de clienți"
+   ],
+   "addressed": [
+    "persoane care vor să îmbunătățească mobilitatea, postura și condiția fizică",
+    "persoane cu dureri, limitări de mișcare sau afecțiuni care necesită recuperare",
+    "femei însărcinate care caută programe sigure de mișcare",
+    "femei în perioada postpartum care au nevoie de recuperare specializată",
+    "copii aflați la începutul dezvoltării",
+    "persoane care vor să reducă tensiunile acumulate"
+   ],
+   "sourceRefs": [
+    "Homepage",
+    "Despre noi - Body Move Studio",
+    "Page-sitemap.xml",
+    "Product-sitemap.xml"
+   ],
+   "appearsTargeted": [
+    "Adulți din Cluj-Napoca cu nevoi de recuperare sau prevenție, nu sportivi de performanță",
+    "Mame (pre și post naștere) ca segment distinct cu pagini și produse dedicate",
+    "Copii — prin Balet & Dans Copii, Karate Copii și pachete Family"
+   ]
+  },
+  "unknowns": [
+   "Care este segmentul tău principal ca volum de clienți activi acum — adulți în recuperare, mame sau copii — și pe care vrei să construiești în continuare?",
+   "Karate Copii, Ballet Lab for Latin Artists și Atelier Automasaj Facial sunt servicii active cu clienți plătitori sau sunt în fază de lansare?"
+  ],
+  "messaging": {
+   "sourceRefs": [
+    "Homepage",
+    "Despre noi - Body Move Studio",
+    "Servicii - Body Move Studio"
+   ],
+   "recurringThemes": [
+    "Mișcare cu sens. Grijă pentru oameni. Rezultate care contează.",
+    "Abordare personalizată și adaptată fiecărei persoane",
+    "Prevenție și cauze, nu simptome",
+    "Comunitate, respect și grijă autentică",
+    "Soluții pentru toate etapele vieții"
+   ]
+  },
+  "constraint": {
+   "why": "De aici vin toate celelalte tensiuni: servicii cu pagini de prețuri proprii ascunse în sitemap fără loc în meniu, niciun client real arătat pentru niciun segment, și un mesaj de poziționare care încearcă să acopere toate etapele vieții simultan.",
+   "level": "target",
+   "decided": true,
+   "statement": "Nu ai ales pentru cine ești în primul rând: studioul de recuperare pentru adulți cu afecțiuni, centrul de activități pentru copii sau spațiul de wellbeing pentru mame.",
+   "levelCheck": {
+    "offer": {
+     "passed": true,
+     "evidence": "Oferta este completă și cumpărabilă online cu prețuri publice pentru toate serviciile principale."
+    },
+    "users": {
+     "passed": true,
+     "evidence": "Shop-ul are abonamente și produse cumpărabile, există pagini de prețuri per locație și un sistem de programare activ — semne că există clienți plătitori."
+    },
+    "target": {
+     "passed": false,
+     "evidence": "Site-ul vorbește simultan cu adulți în recuperare, mame gravide, copii la balet, copii la karate și practicanți de Aerial Yoga, fără nicio prioritate vizibilă între aceste segmente."
+    }
+   },
+   "sourceRefs": [
+    "Homepage",
+    "Page-sitemap.xml",
+    "Servicii - Body Move Studio",
+    "Despre noi - Body Move Studio"
+   ]
+  },
+  "acquisition": {
+   "sourceRefs": [
+    "Homepage",
+    "Page-sitemap.xml",
+    "Product-sitemap.xml"
+   ],
+   "visiblePaths": [
+    "Programare online prin aplicația Evo Beauty",
+    "Contactarea recepției (pagina /receptie/ există în sitemap)",
+    "Shop online cu produse/abonamente cumpărabile direct (/shop/, /cos/, /finalizare/)",
+    "Voucher cadou disponibil în shop",
+    "Pagini de prețuri dedicate per serviciu (karate, dans, personal trainer, group training etc.)"
+   ]
+  },
+  "positioning": {
+   "implied": [
+    "Te poziționezi între un studio de fitness obișnuit și o clinică de recuperare, fără să revendici explicit niciunul dintre cele două",
+    "Accentul pe 'comunitate' și 'grijă autentică' sugerează că pariezi pe retenție și relație pe termen lung, nu pe achiziție de volum"
+   ],
+   "summary": "Pariezi pe abordarea integrată și personalizată a sănătății, nu pe fitness de masă.",
+   "sourceRefs": [
+    "Homepage",
+    "Despre noi - Body Move Studio",
+    "Servicii - Body Move Studio"
+   ],
+   "evidenceBacked": [
+    "Nu tratăm simptome. Ne concentrăm pe cauze, prevenție și rezultate pe termen lung.",
+    "Echipă multidisciplinară — instructorii, kinetoterapeuții și terapeuții colaborează",
+    "Două locații moderne în Cluj-Napoca",
+    "Programe adaptate obiectivelor și particularităților fiecărei persoane."
+   ]
+  },
+  "contradictions": [
+   {
+    "kind": "customer_proof",
+    "soWhat": "Asta înseamnă că un vizitator nou trebuie să ia pe cuvânt toate promisiunile, fără să vadă pe cineva care a trecut deja prin proces și a obținut ce caută.",
+    "tension": "Promiți rezultate reale și o comunitate vie. Niciun client real nu apare nicăieri pe site — niciun nume, niciun testimonial, niciun număr de membri.",
+    "evidence": [
+     {
+      "ref": "Homepage",
+      "page": "Homepage",
+      "quote": "O comunitate construită pe respect, profesionalism și grijă autentică pentru oameni."
+     },
+     {
+      "ref": "Despre noi - Body Move Studio",
+      "page": "Despre noi",
+      "quote": "Înseamnă oameni care se mișcă mai ușor, au mai multă încredere în propriul corp și își recapătă libertatea de a face lucrurile care contează pentru ei."
+     }
+    ],
+    "sourceRefs": [
+     "Homepage",
+     "Despre noi - Body Move Studio",
+     "Servicii - Body Move Studio"
+    ],
+    "statementA": "Site-ul promite 'rezultate care contează', 'oameni care se mișcă mai ușor' și 'comunitate construită pe respect și grijă autentică'",
+    "statementB": "Nicio pagină nu arată un client real, un testimonial cu nume, un număr de membri activi sau un rezultat concret al unui client"
+   },
+   {
+    "kind": "priority_vs_effort",
+    "soWhat": "Asta înseamnă că un vizitator care caută karate pentru copilul său sau un atelier de automasaj nu are cum să le găsească din meniu, deci aceste servicii există practic doar pentru cine știe deja să le caute.",
+    "tension": "Prezinți patru categorii principale pe homepage. În spate există cel puțin opt servicii cu pagini de prețuri proprii — Karate Copii, Ballet Lab for Latin Artists, Atelier Automasaj Facial, Pachet Family, dans contemporan și balet copii — care nu apar în nicio categorie vizibilă.",
+    "evidence": [],
+    "sourceRefs": [
+     "Homepage",
+     "Page-sitemap.xml",
+     "Servicii - Body Move Studio"
+    ],
+    "statementA": "Homepage-ul prezintă patru categorii de servicii ca egale: Clase & Personal Training, Kinetoterapie, Gimnastică Prenatală & Recuperare Postpartum, Masaj",
+    "statementB": "Sitemapul arată că există pagini de prețuri separate pentru Karate Copii (două locații), Ballet Lab for Latin Artists, Atelier Automasaj Facial, Pachet Family (două locații), dans contemporan și balet copii (două locații) — servicii care nu apar în meniul principal și nici în cele patru categorii de pe homepage"
+   },
+   {
+    "kind": "capability_gap",
+    "soWhat": "Asta înseamnă că un om cu o afecțiune reală nu poate judeca dacă metoda ta se potrivește cazului său, deci decizia de programare se ia complet pe baza descrierilor generice.",
+    "tension": "Vinzi kinetoterapie și recuperare ca servicii specializate cu echipă multidisciplinară. Nicio pagină nu arată cum arată un program de recuperare, ce include o evaluare sau ce rezultat a obținut un pacient.",
+    "evidence": [
+     {
+      "ref": "Servicii - Body Move Studio",
+      "page": "Servicii",
+      "quote": "Kinetoterapie Servicii dedicate persoanelor care se confruntă cu dureri, limitări de mișcare, afecțiuni musculo-scheletale sau care au nevoie de recuperare și reabilitare fizică."
+     },
+     {
+      "ref": "Despre noi - Body Move Studio",
+      "page": "Despre noi",
+      "quote": "Colaborarea dintre specialiștii noștri ne permite să privim fiecare situație într-un mod integrat și să construim soluții personalizate, orientate către rezultate sustenabile și îmbunătățirea calității vieții."
+     }
+    ],
+    "sourceRefs": [
+     "Homepage",
+     "Servicii - Body Move Studio",
+     "Despre noi - Body Move Studio",
+     "Product-sitemap.xml"
+    ],
+    "statementA": "Site-ul vinde kinetoterapie, recuperare postpartum și masaj terapeutic ca servicii specializate, cu accent pe 'echipă multidisciplinară' și 'abordare integrată'",
+    "statementB": "Nicio pagină și niciun produs din shop nu arată un protocol de tratament, un plan de recuperare, o evaluare inițială sau un rezultat clinic concret"
+   },
+   {
+    "kind": "commercial_path",
+    "soWhat": "Asta înseamnă că un vizitator care vrea să verifice cât de experimentat ești vede un număr care pare nefinalizat, ceea ce pune sub semnul întrebării cât de mult din ce prezinți este gata de folosit.",
+    "tension": "Ai un shop funcțional și prețuri publice clare. Contorul de ani de experiență arată '0 +' pe două pagini, iar pagina /maintenance/ este încă indexată.",
+    "evidence": [
+     {
+      "ref": "Homepage",
+      "page": "Homepage",
+      "quote": "Ani de experientă 0 +"
+     }
+    ],
+    "sourceRefs": [
+     "Homepage",
+     "Despre noi - Body Move Studio",
+     "Page-sitemap.xml"
+    ],
+    "statementA": "Site-ul are un shop funcțional cu abonamente și produse cumpărabile online, pagini de prețuri detaliate per serviciu și un sistem de programare prin Evo Beauty",
+    "statementB": "Contorul 'Ani de experiență' afișează '0 +' pe atât homepage cât și pe pagina Despre noi, iar sitemapul include o pagină /maintenance/ activă"
+   }
+  ],
+  "capabilityCheck": {
+   "sells": "kinetoterapie și recuperare specializată cu abordare multidisciplinară",
+   "shown": false,
+   "soWhat": "Asta înseamnă că un om cu o afecțiune reală nu poate judeca metoda ta înainte de prima programare, deci toată convingerea se face la telefon sau la recepție.",
+   "insight": "Vinzi kinetoterapie și recuperare specializată. Nicio pagină și niciun post nu arată un protocol, un plan de tratament, o evaluare sau un rezultat concret al unui pacient.",
+   "evidence": [
+    {
+     "ref": "Servicii - Body Move Studio",
+     "page": "Servicii",
+     "quote": "Kinetoterapie Servicii dedicate persoanelor care se confruntă cu dureri, limitări de mișcare, afecțiuni musculo-scheletale sau care au nevoie de recuperare și reabilitare fizică."
+    }
+   ],
+   "sourceRefs": [
+    "Homepage",
+    "Servicii - Body Move Studio",
+    "Despre noi - Body Move Studio",
+    "Product-sitemap.xml"
+   ]
+  }
+ }
+}
