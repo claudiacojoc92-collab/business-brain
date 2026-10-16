@@ -1,6 +1,6 @@
 import { createAnthropicClient } from '../llm/anthropic-client';
 import { VOICE_RULES } from '@bb/application';
-import type { IMirrorModelPort, MirrorContrastInput, MirrorContrastOutput, MirrorMismatch } from '@bb/application';
+import type { IMirrorModelPort, MirrorContrastInput, MirrorContrastOutput, MirrorMismatch, MirrorReadInput, MirrorReadOutput, MirrorReadField, HypothesisMovement } from '@bb/application';
 
 /**
  * THE MIRROR contrast adapter. Given three lanes of the founder's OWN inputs (observed / told-about-business /
@@ -86,6 +86,110 @@ function extractJson(text: string): unknown {
 
 const LANES = new Set(['observed', 'business', 'self', 'strategy']);
 
+// ── UPDATED READ (2026-10-16): the payoff of the Understanding questions ─────────────────────────────────────────────
+const READ_SHAPE = `{
+  "hypotheses": [{ "index": 0, "status": "strengthened | weakened | reversed | unresolved | sharpened", "because": "one internal sentence: which answer moved it and how" }],
+  "fields": [
+    { "field": "now", "text": "...", "answers": [0], "evidence": ["S", "H0"] },
+    { "field": "changed", "text": "...", "answers": [0], "evidence": ["H0"] },
+    { "field": "next", "text": "...", "answers": [1], "evidence": ["S", "F2"] }
+  ]
+}`;
+
+/** The updated-read contract: consequence over summary, grounded on both sides, change only when it happened. */
+export function readRules(l: string): string {
+  return [
+    `You are Business Brain, a sharp business strategist. You read the founder's business, held a structural read with`,
+    'reversible hypotheses, and asked a few questions chosen because their answers decide between readings. The founder',
+    'has now answered. Write the UPDATED READ: show that the answers changed or sharpened your understanding.',
+    `LANGUAGE: write every "text" in ${l} (this business's content language), whatever language the material is in.`,
+    'Return ONLY valid JSON in exactly this shape (no prose around it):',
+    READ_SHAPE,
+    '',
+    'FIRST, for EACH prior hypothesis (H0, H1, ...), decide honestly how the answers moved it: strengthened, weakened,',
+    'reversed, sharpened (now more precise), or unresolved (the answers do not decide it). A question the founder SKIPPED',
+    'leaves what it was meant to decide unresolved: never present that fork as settled. These labels are YOUR reasoning:',
+    'never write them, nor the word "hypothesis", in any text.',
+    '',
+    'THE FIELDS. Short: a premium strategist across the table, not a report. The value is fact + consequence + the next',
+    'diagnostic move.',
+    '- now (required, at most 2 sentences): a FACT SYNTHESIS ONLY. Combine what the founder told you with the grounded',
+    '  business facts into a clear picture of how the business works today, at exactly the strength stated. NO',
+    '  interpretation here: no conclusions about scalability or controllability, no judgement of a channel\'s quality,',
+    '  no causes ("because", "which means"), no recommendation. Every judgement belongs in "next".',
+    '  FACT SYNTHESIS RULE: never add an attribute, qualifier, magnitude, commercial status, timing, frequency, channel',
+    '  property or causal detail unless it is explicitly present in a founder answer or in the evidence below. Forbidden',
+    '  unless explicitly grounded: paid / free, exclusive / mainly, scalable / controllable, growing / stagnating, high /',
+    '  low. If the founder said "an event", it is "an event", not "a paid event".',
+    '- changed (optional, at most 2 sentences): ONLY when an answer genuinely changed a prior reading: what you thought',
+    '  before, in plain words, and what you think now. It must not rest on a fork whose question was skipped. If nothing',
+    '  genuinely moved, OMIT it. Never manufacture change.',
+    '- next (at most 2 sentences): the one thing you would investigate before proposing a strategy, as YOUR next move',
+    '  ("I would look first at...", never a command to the founder), with ONE concrete diagnostic fork: "if X, then A is',
+    '  the more likely constraint; if not, B". Prefer the sharpest fork the evidence supports. When the sources show a',
+    '  paid first step (an assessment or consultation) before a package or subscription, the sharp fork is usually what',
+    '  happens AFTER that step: if it converts well into packages, entry volume becomes the next constraint to investigate',
+    '  (never call a constraint proven before it is measured); if it',
+    '  converts weakly, bringing in more people before fixing the path after the first step would be premature. Never',
+    '  state an actual rate or result you were not given. When the fork points to a direction (e.g. the founder\'s goal),',
+    '  present it as the next thing to TEST or a logical CANDIDATE ("...becomes the next thing to test, and X a logical',
+    '  candidate"), never as the right strategy already decided.',
+    '',
+    'FACT VERSUS INTERPRETATION (the most important rule):',
+    '- A FACT is only what the sources show or the founder literally said. State it at exactly that strength: "brings',
+    '  less" stays "brings less"; "from referrals and organic content" never becomes "mainly", "exclusively", "no',
+    '  controllable channel" or a growth direction.',
+    '- An INTERPRETATION is yours and lives in "next": make it visibly yours and never wider than its facts. Never',
+    '  conclude what something is NOT ("the problem is not visibility") without evidence for it.',
+    '- ONE event is evidence worth checking, never a pattern and never a diagnosis.',
+    '- Never attribute an expectation, assumption or feeling to the founder that they did not state (no "less than you',
+    '  might expect"). No dramatic conclusions, no consultant filler, no "probably" in every sentence: say what is known',
+    '  plainly and mark the one thing that is a reading.',
+    '',
+    'THE QUALITY BAR: explain the CONSEQUENCE of the answers for the prior read. Never just repeat what the founder said.',
+    'BAD: "You told me most new clients come from referrals." (a summary)',
+    'GOOD: "Referrals already bring clients in, so acquisition is not starting from zero: the open question is whether',
+    '  that can be made repeatable." (a fact, then its consequence)',
+    '',
+    'GROUNDING (internal, never shown): every field lists "answers" (the A-numbers of the founder answers it rests on,',
+    'at least one; a skipped answer cannot ground anything) and "evidence" (S synthesis, H<n> a hypothesis, O<n>',
+    'observed, F<n> a founder fact, G the goal). A field you cannot ground in at least one answer must be omitted.',
+    '',
+    'NEVER: invent numbers, results, customer behaviour or demand the material does not state; claim trust, loyalty,',
+    'uniqueness or competitive advantage the founder did not state; give a strategy, a channel plan or tactics; write a',
+    'question; mention the website, pages or "sources"; use labels, refs (A1, H0, S) or brackets in any text.',
+    'Speak to the founder in second person, as a strategist across the table: concise, specific, plain words.',
+  ].join('\n');
+}
+
+export function readUserBlock(input: MirrorReadInput): string {
+  const list = (xs: string[], p: string): string[] => (xs.length ? xs.map((x, i) => `${p}${i + 1}: ${x}`) : ['(none)']);
+  return [
+    `BUSINESS: ${input.businessName}`,
+    '', 'S — THE STRUCTURAL READ I SHOWED THE FOUNDER:', input.synthesis,
+    '', 'MY READINGS BEFORE THE ANSWERS:',
+    ...(input.hypotheses.length ? input.hypotheses.flatMap((h, i) => [
+      `H${i}: ${h.interpretation}${(input.unresolved ?? []).includes(i) ? ' (ITS DECIDING QUESTION WAS SKIPPED: it stays unresolved; never write as if its fork were settled)' : ''}`,
+      ...(h.evidence.length ? [`  evidence: ${h.evidence.map((e) => `"${e}"`).join('; ')}`] : []),
+      ...(h.alternative ? [`  what else could explain it: ${h.alternative}`] : []),
+      ...(h.unknown ? [`  what I did not know: ${h.unknown}`] : []),
+      ...(h.question ? [`  the question that decides it: ${h.question}`] : []),
+      ...(h.reversal ? [`  what would weaken or reverse it: ${h.reversal}`] : []),
+    ]) : ['(none)']),
+    '', 'THE QUESTIONS I CHOSE TO ASK:', ...(input.questions.length ? input.questions.map((q, i) => `${i + 1}. ${q}`) : ['(none)']),
+    '', 'WHAT I ASKED IN THE CONVERSATION → WHAT THE FOUNDER ANSWERED:',
+    ...input.exchanges.map((e, i) => `A${i}: asked: ${e.asked}\n    answered: ${/^\(skip\)$/i.test(e.answer.trim()) ? '(SKIPPED: the founder did not answer; what this question decides stays unresolved)' : e.answer}`),
+    '', `G — THE FOUNDER'S GOAL: ${input.goal ?? '(not confirmed)'}`,
+    '', 'O — WHAT THE SOURCES SHOW:', ...list(input.observed, 'O'),
+    '', 'F — OTHER FACTS THE FOUNDER TOLD ME:', ...list(input.business, 'F'),
+    '', 'Write the updated read. Ground every field in at least one A-number. Omit any field you cannot fill well.',
+  ].join('\n');
+}
+
+const READ_FIELDS = new Set<MirrorReadField>(['now', 'changed', 'next']);
+const MOVES = new Set<HypothesisMovement>(['strengthened', 'weakened', 'reversed', 'unresolved', 'sharpened']);
+const ints = (x: unknown): number[] => (Array.isArray(x) ? x.map((n) => Number(String(n).replace(/^A/i, ''))).filter((n) => Number.isInteger(n)) : []);
+
 export class AnthropicMirrorModel implements IMirrorModelPort {
   private readonly modelId: string;
   constructor(private readonly apiKey: string, modelId?: string) {
@@ -118,6 +222,33 @@ export class AnthropicMirrorModel implements IMirrorModelPort {
       return { mismatches };
     } catch {
       return { mismatches: [] };
+    }
+  }
+
+  /** The updated read. Fails safe to null (the contrast mirror stays); governance in the application re-checks it. */
+  async readUpdate(input: MirrorReadInput): Promise<MirrorReadOutput | null> {
+    if (!this.apiKey) return null;
+    try {
+      const client = createAnthropicClient(this.apiKey);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const resp: any = await client.messages.create({
+        model: this.modelId, max_tokens: 1800, temperature: 0,
+        system: `${readRules(LANG[input.interfaceLanguage] ?? 'English')}\n\n${VOICE_RULES}`,
+        messages: [{ role: 'user', content: readUserBlock(input) }],
+      });
+      const block = Array.isArray(resp?.content) ? resp.content.find((c: { type?: string }) => c?.type === 'text') : null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const p = extractJson((block as { text?: string } | null)?.text ?? '') as any;
+      return {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        hypotheses: (Array.isArray(p?.hypotheses) ? p.hypotheses : []).map((h: any) => ({ index: Number(String(h?.index ?? '').replace(/^H/i, '')), status: h?.status, because: String(h?.because ?? '').trim() }))
+          .filter((h: { index: number; status: HypothesisMovement }) => Number.isInteger(h.index) && MOVES.has(h.status)),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        fields: (Array.isArray(p?.fields) ? p.fields : []).map((f: any) => ({ field: f?.field, text: String(f?.text ?? '').trim(), answers: ints(f?.answers), evidence: Array.isArray(f?.evidence) ? f.evidence.map(String) : [] }))
+          .filter((f: { field: MirrorReadField; text: string }) => READ_FIELDS.has(f.field) && f.text),
+      };
+    } catch {
+      return null;
     }
   }
 }

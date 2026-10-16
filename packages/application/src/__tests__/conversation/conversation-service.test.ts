@@ -281,95 +281,60 @@ describe('ConversationService', () => {
     expect(site.map((n) => n.whatMissing)).toEqual(UNKNOWNS);                          // seeded text == card text (one derivation)
   });
 
-  it('continuity: BB opens on site_1, then walks site_2, site_3 in order — the forced need equals the agenda', async () => {
-    // Model answers whatever it was just forced to ask and never volunteers a nextNeedKey (null). With the continuity
-    // backstop, answering the forced item immediately re-steps to the NEXT open agenda item — so the agenda converges
-    // one item per turn, in order, driven solely by the enforced agenda force.
-    const m = withAgenda({});
-    (m.deps as any).model = { step: async (input: any) => {
-      m.stepInputs.push(input);
-      // simulate the founder having answered the need this turn was forced onto (except the opener, latest===null)
-      const answered = input.latestFounderMessage !== null && input.forcedNeedKey ? [input.forcedNeedKey] : [];
-      return { ...EMPTY_STEP, answeredNeedKeys: answered, nextNeedKey: null };
-    } };
-    const svc = new ConversationService(m.deps);
-
-    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
-    expect(m.stepInputs.at(-1).forcedNeedKey).toBe('site_1');                          // the OPENER is forced onto agenda item 1
-    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'about partnerships…', P.language);
-    expect(m.stepInputs.at(-1).forcedNeedKey).toBe('site_2');                          // site_1 answered → backstop advances to item 2
-    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'what they value…', P.language);
-    expect(m.stepInputs.at(-1).forcedNeedKey).toBe('site_3');                          // → item 3, in order
-    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'best channel…', P.language);
-    const openSite = (await (m.deps as any).needs.listOpen('')).filter((n: any) => n.key.startsWith('site_'));
-    expect(openSite).toHaveLength(0);                                                  // all three agenda items covered, in order
-  });
-
-  // Queue-driven model: each step() shifts the next scripted output (opener consumes the first). Lets us script the
-  // model OVERRIDING the advisory agenda force, then complying on the re-step.
+  // AGENDA FIDELITY (2026-10-16, replaces the advisory force + re-step backstop): the questions the card showed are
+  // asked one per answer, in order, word for word; the model's own pick never displaces them.
   function queueModel(m: any, outputs: Partial<ConversationStepOutput>[]) {
     const q = outputs.slice();
     (m.deps as any).model = { step: async (input: any) => { m.stepInputs.push(input); return { ...EMPTY_STEP, ...(q.shift() ?? {}) }; } };
   }
+  const bbKeys = (m: any) => m.turns.filter((t: any) => t.role === 'bb').map((t: any) => t.infoNeedKey);
 
-  it('continuity backstop: when the model overrides the agenda force, the service re-steps and BB asks the open agenda item', async () => {
+  it('continuity: BB opens on site_1, then asks site_2 and site_3 in order, word for word', async () => {
     const m = withAgenda({});
-    queueModel(m, [
-      {},                                                                   // opener
-      { answeredNeedKeys: [], nextNeedKey: 'acquisition_today', nextQuestion: 'How do people find you?' }, // DRIFT off site_1
-      { nextNeedKey: 'site_1', nextQuestion: 'Do those clinic referrals convert?' },                      // re-step complies
-    ]);
+    queueModel(m, [{}, {}, {}]);
+    const svc = new ConversationService(m.deps);
+    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
+    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'about partnerships…', P.language);
+    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'what they value…', P.language);
+    expect(bbKeys(m)).toEqual(['site_1', 'site_2', 'site_3']);
+    const bb = m.turns.filter((t: any) => t.role === 'bb');
+    expect(bb[1].content.endsWith(UNKNOWNS[1]!)).toBe(true);
+    expect(bb[2].content.endsWith(UNKNOWNS[2]!)).toBe(true);
+  });
+
+  it('continuity: a model that drifts to another need does not displace the next shown question, and costs no re-step', async () => {
+    const m = withAgenda({});
+    queueModel(m, [{}, { answeredNeedKeys: [], nextNeedKey: 'acquisition_today', nextQuestion: 'How do people find you?' }]);
     const svc = new ConversationService(m.deps);
     await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
     const before = m.stepInputs.length;
     await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'ask me anything', P.language);
-    expect(m.stepInputs.length - before).toBe(2);                          // exactly ONE re-step (bounded)
-    expect(m.stepInputs.at(-1).forcedNeedKey).toBe('site_1');              // re-step forced the open agenda item
-    expect(m.turns.filter((t: any) => t.role === 'bb').at(-1).infoNeedKey).toBe('site_1'); // BB asks the promised item
+    expect(m.stepInputs.length - before).toBe(1);                          // one call per answer
+    expect(bbKeys(m).at(-1)).toBe('site_2');
+    expect(m.turns.at(-1).content).not.toContain('How do people find you?');
   });
 
-  it('continuity backstop: NEVER re-asks an item the founder volunteered — it skips to the next OPEN agenda item', async () => {
+  it('continuity: every shown question is asked even when the model marks it answered early (the founder sees what was promised)', async () => {
     const m = withAgenda({});
-    queueModel(m, [
-      {},                                                                   // opener (forced site_1)
-      // founder's reply volunteered items 1 AND 2; model marks both answered but drifts to a core question
-      { answeredNeedKeys: ['site_1', 'site_2'], nextNeedKey: 'acquisition_today', nextQuestion: 'How do people find you?' },
-      { nextNeedKey: 'site_3', nextQuestion: 'Which channel brings the best-fit members?' },              // re-step
-    ]);
+    queueModel(m, [{}, { answeredNeedKeys: ['site_1', 'site_2'], nextNeedKey: 'site_3', nextQuestion: 'Which channel brings the best-fit members?' }]);
     const svc = new ConversationService(m.deps);
     await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
     await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'partnerships are untracked, and members value recovery focus', P.language);
-    expect(m.stepInputs.at(-1).forcedNeedKey).toBe('site_3');              // skipped the volunteered site_2 → item 3
-    expect(m.turns.filter((t: any) => t.role === 'bb').at(-1).infoNeedKey).toBe('site_3');
+    expect(bbKeys(m).at(-1)).toBe('site_2');
   });
 
-  it('continuity backstop: does NOT re-step when the model already asks the open agenda item (bounded — no wasted call)', async () => {
-    const m = withAgenda({});
-    queueModel(m, [{}, { answeredNeedKeys: [], nextNeedKey: 'site_1', nextQuestion: 'Do clinic referrals convert?' }]);
-    const svc = new ConversationService(m.deps);
-    await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
-    const before = m.stepInputs.length;
-    await svc.submitResponse(P.businessId, P.founderId, P.businessName, 'go', P.language);
-    expect(m.stepInputs.length - before).toBe(1);                          // single call — no re-step needed
-    expect(m.turns.filter((t: any) => t.role === 'bb').at(-1).infoNeedKey).toBe('site_1');
-  });
-
-  it('continuity: an open agenda item is never preempted by the depth cap (agendaForce wins over depthForce)', async () => {
-    // Simulate the model going down an invented side-thread (its own newNeeds, never answering the agenda). Even past
-    // the depth cap, the forced need must stay the OPEN agenda item — the founder gets asked what they were shown.
+  it('continuity: a side-thread past the depth cap never preempts the shown questions', async () => {
     let side = 0;
     const m = withAgenda({});
     (m.deps as any).model = { step: async (input: any) => {
       m.stepInputs.push(input);
       side += 1;
-      // never answer a site_ need; keep spawning a side need and pointing at it
       return { ...EMPTY_STEP, answeredNeedKeys: [], newNeeds: [{ key: `side_${side}`, whatMissing: 'x', whyMatters: 'y' }], nextNeedKey: `side_${side}` };
     } };
     const svc = new ConversationService(m.deps);
     await svc.startOrResume(P.businessId, P.founderId, P.businessName, P.language);
-    for (let i = 0; i < 5; i++) await svc.submitResponse(P.businessId, P.founderId, P.businessName, `tangent ${i}`, P.language);
-    // site_1 was never answered → every forced key is still site_1, no matter how deep the side-thread ran
-    expect(m.stepInputs.at(-1).forcedNeedKey).toBe('site_1');
+    for (let i = 0; i < 2; i++) await svc.submitResponse(P.businessId, P.founderId, P.businessName, `tangent ${i}`, P.language);
+    expect(bbKeys(m)).toEqual(['site_1', 'site_2', 'site_3']);
   });
 
   it('pause sets status paused', async () => {

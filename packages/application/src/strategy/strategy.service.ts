@@ -12,6 +12,7 @@ import type {
   StrategyVersionRecord,
   StrategyModelInput,
   StrategyGateResult,
+  StrategyUnderstandingRead,
 } from './contracts';
 import { validateStrategy, type StrategyContextForGate } from './validation';
 
@@ -91,12 +92,14 @@ export class StrategyService {
    * conversation cap without stating one (operator, 2026-10-12). It joins the founder state as an explicitly assumed
    * goal and is recorded on the bundle (core.assumedGoal) so the card flags it. A held goal always wins.
    */
-  async generate(businessId: string, businessName: string, language: string, opts: { assumedGoal?: string | null; observedResults?: readonly string[] } = {}): Promise<StrategyVersionRecord> {
+  async generate(businessId: string, businessName: string, language: string, opts: { assumedGoal?: string | null; observedResults?: readonly string[]; understandingRead?: StrategyUnderstandingRead | null } = {}): Promise<StrategyVersionRecord> {
     const loaded = await this.loadInput(businessId, businessName, language);
     const { ctx } = loaded;
     // Observed results (Result Loop) join as their own R-refs: citable business evidence for the gates, never founder state.
     const results = (opts.observedResults ?? []).map((s) => s.trim()).filter(Boolean).map((statement, i) => ({ ref: `R${i + 1}`, statement }));
-    const input: StrategyModelInput = results.length ? { ...loaded.input, observedResults: results } : loaded.input;
+    const withResults: StrategyModelInput = results.length ? { ...loaded.input, observedResults: results } : loaded.input;
+    // The read the founder just saw (2026-10-16): context to stay consistent with, never a new citable ref.
+    const input: StrategyModelInput = opts.understandingRead ? { ...withResults, understandingRead: opts.understandingRead } : withResults;
     if (results.length) ctx.business.push(...results.map((r) => ({ ref: r.ref, text: `Observed result: ${r.statement}` })));
     const assumed = !loaded.hasGoal ? (opts.assumedGoal ?? '').trim() : '';
     if (assumed) {

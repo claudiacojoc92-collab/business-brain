@@ -2,6 +2,8 @@ import type { StrategyVersionRecord } from '../strategy/index';
 import type { Action, DueMoveRef, PlanVersion, TodayMove, TodayResult } from '../plan/index';
 import { canonicalTodayMove, deriveAllReadiness, selectToday, todayPlanAction } from '../plan/index';
 import type { GovernedUnderstanding, ClaimEvidence, StructuralHypothesis } from '../bi/index';
+import type { MirrorExchange, MirrorRead } from '../mirror/contracts';
+import type { StrategyUnderstandingRead } from '../strategy/contracts';
 import { clipQuote } from '../bi/evidence-anchor';
 import { normalizeUnderstandingShapes, stringList } from '../bi/model-shapes';
 import { agendaUnknowns, performanceEvidence, isHousekeeping, critiquesWording, factOnly, restatesNotShown, makesUnlicensedClaim, makesUnlicensedSoWhatClaim, sameInsight, firstSentence } from '../bi/index';
@@ -28,10 +30,10 @@ export interface ArcDeps {
     awaitingGoal(businessId: string): Promise<boolean>;
     coverage(businessId: string): Promise<{ key: string; covered: boolean }[]>;
   };
-  mirror: { build(businessId: string, businessName: string, language: string): Promise<{ contrasts: { founderWords: string; against: string; tension: string }[] }> };
+  mirror: { build(businessId: string, businessName: string, language: string, context?: { exchanges?: MirrorExchange[] }): Promise<{ contrasts: { founderWords: string; against: string; tension: string }[]; read?: MirrorRead }> };
   strategy: {
     getCurrent(businessId: string): Promise<{ record: StrategyVersionRecord } | null>;
-    proposalOrGenerate(businessId: string, businessName: string, language: string, assumedGoal?: string | null): Promise<StrategyVersionRecord>;
+    proposalOrGenerate(businessId: string, businessName: string, language: string, assumedGoal?: string | null, read?: StrategyUnderstandingRead | null): Promise<StrategyVersionRecord>;
   };
   plan: {
     getActive(businessId: string): Promise<{ plan: PlanVersion } | null>;
@@ -126,9 +128,12 @@ export class ArcService {
         // Wrapped so a model failure is a PER-MOMENT error, never a whole-arc failure.
         if (savedMirror) return { ...base, mirror: savedMirror };
         try {
-          const m = await this.deps.mirror.build(businessId, businessName, language);
+          // The founder's answers, paired to what BB asked: the updated read holds them against the prior read.
+          const exchanges = pairExchanges(await this.deps.conversation.turns(businessId).catch(() => [] as ArcTurn[]));
+          const m = await this.deps.mirror.build(businessId, businessName, language, { exchanges });
           const c = m.contrasts[0] ?? null;
-          return { ...base, mirror: c ? { founderWords: c.founderWords, against: c.against, tension: c.tension } : null };
+          const read = m.read ? { read: m.read } : {};
+          return { ...base, mirror: c ? { founderWords: c.founderWords, against: c.against, tension: c.tension, ...read } : m.read ? { founderWords: '', against: '', tension: '', ...read } : null };
         } catch (e) {
           this.deps.log?.({ type: 'arc_moment_threw', detail: JSON.stringify({ businessId, moment: 'mirror', err: errText(e) }) });
           return { ...base, error: { kind: 'generation' } };
@@ -144,7 +149,9 @@ export class ArcService {
           assumedGoal = c?.decided && (c.statement ?? '').trim() ? factOnly(firstSentence(c.statement)) : null;
         }
         let rec;
-        try { rec = await this.deps.strategy.proposalOrGenerate(businessId, businessName, language, assumedGoal); }
+        // Strategy continuity: the structural read, the answers and the updated read the founder just saw.
+        const read = strategyRead(u, pairExchanges(await this.deps.conversation.turns(businessId).catch(() => [] as ArcTurn[])), savedMirror?.read ?? null);
+        try { rec = await this.deps.strategy.proposalOrGenerate(businessId, businessName, language, assumedGoal, read); }
         catch (e) {
           this.deps.log?.({ type: 'arc_moment_threw', detail: JSON.stringify({ businessId, moment: 'strategy', err: errText(e) }) });
           return { ...base, error: { kind: 'generation' } }; // a real throw is genuinely transient — retry is right
@@ -606,4 +613,34 @@ function teamGap(h: StructuralHypothesis, places: string[], synthesis: string[])
     if (service) return { placeTeam: { place, role: role.toLowerCase(), service: service.toLowerCase() } };
   }
   return {};
+}
+
+/** BB's question text: the opener is stored as JSON (its invitation is the question); a turn keeps its last sentences. */
+function askedText(content: string): string {
+  const t = (content ?? '').trim();
+  if (t.startsWith('{')) {
+    try { const o = (JSON.parse(t) as { __arcOpener?: { invitation?: string; lead?: string } }).__arcOpener; return (o?.invitation || o?.lead || '').trim(); } catch { return ''; }
+  }
+  return t.length > 400 ? t.slice(-400).replace(/^[^.!?]*[.!?]\s*/, '') : t;
+}
+
+/** Each founder answer paired with the BB turn that asked it, in conversation order (at most five). */
+export function pairExchanges(turns: ArcTurn[]): MirrorExchange[] {
+  const out: MirrorExchange[] = [];
+  for (let i = 1; i < turns.length && out.length < 5; i++) {
+    if (turns[i]!.role === 'founder' && turns[i - 1]!.role === 'bb') out.push({ asked: askedText(turns[i - 1]!.content), answer: turns[i]!.content.trim() });
+  }
+  return out;
+}
+
+/** What strategy needs to stay consistent with the read the founder just saw (null when there is no structural read). */
+export function strategyRead(u: GovernedUnderstanding | null, exchanges: MirrorExchange[], read: MirrorRead | null): StrategyUnderstandingRead | null {
+  const st = u?.read?.structure;
+  if (!st?.synthesis.trim()) return null;
+  return {
+    synthesis: st.synthesis.trim(),
+    readings: st.hypotheses.map((h) => h.interpretation.trim()).filter(Boolean),
+    exchanges: exchanges.filter((e) => e.answer.trim() && !/^\(skip\)$/i.test(e.answer.trim())).map((e) => ({ question: e.asked, answer: e.answer })),
+    ...(read ? { updatedRead: read } : {}),
+  };
 }

@@ -523,10 +523,10 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
       awaitingGoal: (bid) => conversationService.awaitingGoal(bid),
       coverage: (bid) => conversationService.coverage(bid),
     },
-    mirror: { build: (bid, name, lang) => mirrorService.build(bid, name, lang) },
+    mirror: { build: (bid, name, lang, context) => mirrorService.build(bid, name, lang, context) },
     strategy: {
       getCurrent: (bid) => strategyService.getCurrent(bid),
-      proposalOrGenerate: async (bid, name, lang, assumedGoal) => (await strategyService.getProposal(bid)) ?? (await strategyService.generate(bid, name, lang, { assumedGoal })),
+      proposalOrGenerate: async (bid, name, lang, assumedGoal, read) => (await strategyService.getProposal(bid)) ?? (await strategyService.generate(bid, name, lang, { assumedGoal, understandingRead: read })),
     },
     plan: {
       getActive: (bid) => planService.getActivePlan(bid),

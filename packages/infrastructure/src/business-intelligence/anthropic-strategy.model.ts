@@ -144,7 +144,25 @@ function userBlock(input: StrategyModelInput): string {
     '', 'AHA 2 (constraint/tension — synthesis context, NOT the diagnosis):', ...(input.aha2.length ? input.aha2.map((a, i) => `${i + 1}. ${a.implication}`) : ['(none)']),
     ...(input.observedResults?.length ? ['', 'OBSERVED RESULTS (counted from the founder\'s logged outreach; what actually happened, cite as R-refs;',
       '  evidence about the current bet, never a founder preference):', ...input.observedResults.map((r) => `${r.ref}: ${r.statement}`)] : []),
+    ...(input.understandingRead ? readBlock(input.understandingRead) : []),
   ].join('\n');
+}
+
+/**
+ * The read the founder saw just before this strategy (2026-10-16): the strategy must be CONSISTENT with it (build on
+ * what it says matters most, never contradict what the answers changed). Context, not evidence: cite B/F/O/C refs.
+ */
+function readBlock(r: NonNullable<StrategyModelInput['understandingRead']>): string[] {
+  const u = r.updatedRead;
+  return [
+    '', 'THE READ THE FOUNDER JUST SAW (stay consistent with it; it is context, NOT a citable ref, so keep citing B/F/O/C refs):',
+    `Structural synthesis: ${r.synthesis}`,
+    ...(r.readings.length ? ['Readings BB held before the answers:', ...r.readings.map((x, i) => `- (${i + 1}) ${x}`)] : []),
+    ...(r.exchanges.length ? ['BB asked → the founder answered:', ...r.exchanges.map((e) => `- Q: ${e.question}\n  A: ${e.answer}`)] : []),
+    ...(u ? ['Updated read shown to the founder:', `- What I understand now: ${u.now}`,
+      ...(u.changed ? [`- What changed my read: ${u.changed}`] : []), ...(u.matters ? [`- What matters most: ${u.matters}`] : []),
+      ...(u.next ? [`- What I'd look at next: ${u.next}`] : [])] : []),
+  ];
 }
 
 function extractJson(text: string): unknown {

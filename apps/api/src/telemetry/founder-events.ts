@@ -389,12 +389,13 @@ export async function readArcCorrectionReflection(db: KyselyDB, businessId: stri
 }
 
 /** Persist the mirror contrast (Moment 5) so it is STABLE across refresh and never re-generated on every view. */
-export function recordArcMirror(db: KyselyDB, accountId: string, businessId: string, m: { founderWords: string; against: string; tension: string }): void {
-  recordContentEvent(db, { accountId, businessId, eventType: 'arc_mirror_built', surface: 'arc', metadata: { founderWords: m.founderWords, against: m.against, tension: m.tension } });
+type ArcMirrorRead = { now: string; changed?: string; matters?: string; next?: string };
+export function recordArcMirror(db: KyselyDB, accountId: string, businessId: string, m: { founderWords: string; against: string; tension: string; read?: ArcMirrorRead }): void {
+  recordContentEvent(db, { accountId, businessId, eventType: 'arc_mirror_built', surface: 'arc', metadata: { founderWords: m.founderWords, against: m.against, tension: m.tension, ...(m.read ? { read: m.read } : {}) } });
 }
 
 /** The most recent persisted mirror contrast (null if none built yet). */
-export async function readArcMirror(db: KyselyDB, businessId: string, accountId: string): Promise<{ founderWords: string; against: string; tension: string } | null> {
+export async function readArcMirror(db: KyselyDB, businessId: string, accountId: string): Promise<{ founderWords: string; against: string; tension: string; read?: ArcMirrorRead } | null> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const r: any = await sql`SELECT metadata FROM app.founder_event WHERE business_id=${businessId} AND account_id=${accountId} AND event_type='arc_mirror_built' ORDER BY occurred_at DESC LIMIT 1`.execute(db);
@@ -403,6 +404,11 @@ export async function readArcMirror(db: KyselyDB, businessId: string, accountId:
     const founderWords = String(meta.founderWords ?? '').trim();
     const against = String(meta.against ?? '').trim();
     const tension = String(meta.tension ?? '').trim();
+    // The updated read (2026-10-16) is stored beside the contrast; either one alone is a valid saved mirror.
+    const saved = meta.read && typeof meta.read === 'object' ? meta.read : null;
+    const str = (x: unknown): string => (typeof x === 'string' ? x.trim() : '');
+    const read: ArcMirrorRead | null = saved && str(saved.now) ? { now: str(saved.now), ...(str(saved.changed) ? { changed: str(saved.changed) } : {}), ...(str(saved.matters) ? { matters: str(saved.matters) } : {}), ...(str(saved.next) ? { next: str(saved.next) } : {}) } : null;
+    if (read) return { founderWords, against, tension, read };
     return founderWords && against && tension ? { founderWords, against, tension } : null;
   } catch { return null; }
 }
