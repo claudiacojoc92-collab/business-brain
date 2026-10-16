@@ -1,10 +1,18 @@
-import type { IUnderstandingSnapshotRepository, GovernedUnderstanding } from '../bi/index';
+import { agendaUnknowns, claimTermsIn, type IUnderstandingSnapshotRepository, type GovernedUnderstanding } from '../bi/index';
 import type { IFounderStateRepository, FounderStateItem } from '../conversation/index';
+import { isHeldGoal } from '../conversation/goal-candidate';
 import type { StrategyVersionRecord } from '../strategy/index';
 import type {
   IMirrorModelPort,
+  MirrorExchange,
+  MirrorHypothesisUpdate,
   MirrorLaneItem,
   MirrorMismatch,
+  MirrorRead,
+  MirrorReadField,
+  MirrorReadGrounding,
+  MirrorReadInput,
+  MirrorReadOutput,
   MirrorView,
 } from './contracts';
 
@@ -89,7 +97,7 @@ export class MirrorService {
    * finds only REAL mismatches; the service then hard-guards that BOTH cited sides and the tension are present
    * (never a one-sided or fabricated contrast) and caps the count — quality over quantity.
    */
-  async build(businessId: string, businessName: string, language: string): Promise<MirrorView> {
+  async build(businessId: string, businessName: string, language: string, context: { exchanges?: MirrorExchange[] } = {}): Promise<MirrorView> {
     const snap = await this.deps.understanding.latest(businessId);
     const states = await this.deps.state.listActive(businessId);
     const held = await this.deps.strategy.getCurrent(businessId);
@@ -102,6 +110,12 @@ export class MirrorService {
     const heldStrategy = core
       ? { bet: core.coreBet.priority, notNow: (core.notNow ?? []).map((n) => n.item).filter(Boolean), reconsider: (core.reconsiderTriggers ?? []).map((r) => r.condition).filter(Boolean) }
       : null;
+
+    // The UPDATED READ runs beside the contrast (never instead of it): its failure leaves the contrast standing.
+    const readInput = updatedReadInput(snap?.understanding ?? null, states, context.exchanges ?? [], businessName, language, observed, business);
+    const readOut = readInput && this.deps.model.readUpdate
+      ? this.deps.model.readUpdate(readInput).catch(() => null)
+      : Promise.resolve(null);
 
     let contrasts: MirrorMismatch[] = [];
     // A contrast needs at least the founder's own words on one side and something to hold them against.
@@ -129,6 +143,136 @@ export class MirrorService {
         .slice(0, MAX_CONTRASTS);
     }
 
-    return { observed, business, self, contrasts, hasSelf: self.length > 0 };
+    const governed = readInput ? governReadUpdate(await readOut, readInput) : null;
+    if (governed) this.deps.log?.({ type: 'mirror_read', detail: JSON.stringify({ businessId, fields: Object.keys(governed.read ?? {}), audit: governed.audit }) });
+    return {
+      observed, business, self, contrasts, hasSelf: self.length > 0,
+      ...(governed?.read ? { read: governed.read } : {}),
+      ...(governed ? { readAudit: governed.audit } : {}),
+    };
   }
+}
+
+// ── UPDATED READ (2026-10-16) ────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The read input from stored state only: the structural synthesis and kept hypotheses the understanding card showed,
+ * the questions it asked, the founder's answers paired to them, the held goal and the facts already in the lanes.
+ * null when there is nothing to update (no structural read, or the founder answered nothing).
+ */
+export function updatedReadInput(
+  u: GovernedUnderstanding | null, states: FounderStateItem[], exchanges: MirrorExchange[], businessName: string, language: string,
+  observed: MirrorLaneItem[], business: MirrorLaneItem[],
+): MirrorReadInput | null {
+  const st = u?.read?.structure;
+  const answered = exchanges.filter((e) => e.answer.trim() && !/^\(skip\)$/i.test(e.answer.trim()));
+  if (!st || !st.synthesis.trim() || !answered.length) return null;
+  const goal = states.find((x) => isHeldGoal(x))?.statement.trim() || null;
+  // A skipped question leaves the hypothesis it was asked to decide (its B tier `resolves`) unresolved.
+  const skipped = exchanges.filter((e) => /^\(skip\)$/i.test(e.answer.trim()));
+  const unresolved = [...new Set((u?.read?.questionTiers ?? [])
+    .filter((t) => t.tier === 'B' && t.resolves !== undefined && skipped.some((e) => e.asked.trim().endsWith(t.question.trim())))
+    .map((t) => t.resolves!))];
+  return {
+    businessName, interfaceLanguage: language,
+    synthesis: st.synthesis.trim(),
+    hypotheses: st.hypotheses.map((h) => ({
+      interpretation: h.interpretation, evidence: (h.evidence ?? []).map((e) => e.quote).filter(Boolean),
+      alternative: h.alternative, unknown: h.discriminator?.unknown ?? '', question: h.discriminator?.question ?? '', reversal: h.reversal,
+    })),
+    questions: agendaUnknowns(u).slice(0, 3),
+    exchanges,
+    goal,
+    observed: observed.map((i) => i.statement),
+    business: business.filter((i) => !goal || i.statement !== goal).map((i) => i.statement),
+    ...(unresolved.length ? { unresolved } : {}),
+  };
+}
+
+/**
+ * CONSERVATIVE LANGUAGE (2026-10-16): escalations beyond what the founder established. "Brings less" is a fact;
+ * "stagnates / is not growing" is not. "Comes from referrals" is a fact; "exclusively / no channel at all" is not. Also
+ * "the biggest potential", "in the right place", and magnitude words. A sentence using one is removed unless the
+ * founder's OWN words used it. Word-start match, so a term never fires inside a longer unrelated word.
+ */
+const ESCALATIONS = [
+  // performance direction
+  'stagn', 'nu crește', 'nu creste', 'nu mai crește', 'nu mai creste', 'în scădere', 'in scadere', 'declin',
+  'not growing', "isn't growing", 'is not growing', 'shrink', 'non cresce', 'in calo', 'ristagn', 'wächst nicht', 'schrumpf',
+  // exclusivity from an absence of named channels
+  'exclusiv', 'numai din', 'only from', 'solely', 'esclusivamente', 'solo da', 'ausschließlich', 'nur aus',
+  'niciun canal', 'fără niciun', 'fara niciun', 'no channel', 'nessun canale', 'kein kanal', 'nu există nimeni', 'nu exista nimeni', 'nobody', 'nessuno', 'niemand',
+  // potential / placement / magnitude
+  'cel mai mare potențial', 'cel mai mare potential', 'potențialul cel mai mare', 'highest potential', 'biggest potential', 'most potential',
+  'maggior potenziale', 'potenziale più alto', 'größte potenzial', 'unde trebuie', 'locul potrivit', 'right place', 'where it should be',
+  'al posto giusto', 'am richtigen ort', 'cel mai mare gap', 'biggest gap', 'enorm', 'masiv', 'uriaș', 'urias', 'huge', 'massive', 'riesig',
+];
+const startsAt = (t: string, term: string): boolean => {
+  for (let i = t.indexOf(term); i !== -1; i = t.indexOf(term, i + 1)) if (i === 0 || !/[\p{L}\p{N}]/u.test(t[i - 1]!)) return true;
+  return false;
+};
+const escalationsIn = (text: string): string[] => { const t = text.toLowerCase(); return ESCALATIONS.filter((e) => startsAt(t, e)); };
+const sentencesOf = (t: string): string[] => (t.match(/[^.!?]+(?:[.!?]+["”»)]*|$)/gu) ?? []).map((x) => x.trim()).filter(Boolean);
+/** Launch length per section (sentences). "matters" is folded into "next" and not shown at launch. */
+const MAX_SENTENCES: Record<MirrorReadField, number> = { now: 2, changed: 2, matters: 0, next: 2 };
+
+const MOVED = new Set(['strengthened', 'weakened', 'reversed', 'sharpened']);
+const STATUSES = new Set([...MOVED, 'unresolved']);
+const FIELD_ORDER: MirrorReadField[] = ['now', 'changed', 'matters', 'next'];
+const contentWords = (t: string): string[] => (t.toLowerCase().match(/\p{L}{4,}/gu) ?? []);
+/** A field that only restates what the founder said (most of its words are the founder's own) is not a read. */
+function restatesAnswers(text: string, answers: string): boolean {
+  const own = new Set(contentWords(answers));
+  const w = contentWords(text);
+  return w.length > 0 && w.filter((x) => own.has(x)).length / w.length >= 0.7;
+}
+
+/**
+ * Deterministic governance of the updated read. A field is kept only when it is real text (not a question, not a
+ * label), grounded in at least one real founder answer, not a restatement of the answers, and uses no claim term
+ * (trust, retention, unique…) the founder's own words did not license. "What changed" additionally needs a prior
+ * hypothesis the answers actually moved. Without "now" there is no read (the contrast stays the fallback).
+ */
+export function governReadUpdate(out: MirrorReadOutput | null, input: MirrorReadInput): { read?: MirrorRead; audit: NonNullable<MirrorView['readAudit']> } | null {
+  if (!out) return null;
+  const dropped: { field: string; reason: string }[] = [];
+  // A hypothesis whose deciding question was skipped stays unresolved, whatever the model concluded.
+  const hypotheses: MirrorHypothesisUpdate[] = (out.hypotheses ?? [])
+    .filter((h) => Number.isInteger(h.index) && h.index >= 0 && h.index < input.hypotheses.length && STATUSES.has(h.status))
+    .map((h) => ((input.unresolved ?? []).includes(h.index) && h.status !== 'unresolved' ? { ...h, status: 'unresolved' as const, because: `deciding question skipped (model said ${h.status}): ${h.because}` } : h));
+  const valid = new Set(input.exchanges.map((e, i) => (e.answer.trim() && !/^\(skip\)$/i.test(e.answer.trim()) ? i : -1)).filter((i) => i >= 0));
+  const founderWords = [...input.exchanges.map((e) => e.answer), input.goal ?? '', ...input.business].join(' ');
+  const licensed = new Set(claimTermsIn(founderWords));
+  // Escalations are licensed only by what the founder literally said (answers, goal), never by BB's own paraphrases.
+  const founderSaid = new Set(escalationsIn([...input.exchanges.map((e) => e.answer), input.goal ?? ''].join(' ')));
+  const grounding: MirrorReadGrounding[] = [];
+  const read: Partial<Record<MirrorReadField, string>> = {};
+  for (const f of out.fields ?? []) {
+    if (!FIELD_ORDER.includes(f.field) || read[f.field]) continue;
+    if (!MAX_SENTENCES[f.field]) { dropped.push({ field: f.field, reason: 'not shown at launch (folded into next)' }); continue; }
+    // Conservative pass: drop only the sentences that escalate beyond what the founder said, then cap the length.
+    // Claim terms (trust, retention, conversion…) are claims in a reading; in "next" they are what BB would check.
+    const kept = sentencesOf((f.text ?? '').trim()).filter((x) => {
+      const over = escalationsIn(x).filter((e) => !founderSaid.has(e));
+      if (over.length) dropped.push({ field: f.field, reason: `escalation (${over.join(', ')}): ${x}` });
+      const claims = f.field === 'next' ? [] : claimTermsIn(x).filter((t) => !licensed.has(t));
+      if (claims.length) dropped.push({ field: f.field, reason: `a claim the founder did not license (${claims.join(', ')}): ${x}` });
+      return !over.length && !claims.length;
+    });
+    const text = kept.slice(0, MAX_SENTENCES[f.field]).join(' ');
+    const answers = (f.answers ?? []).filter((i) => valid.has(i));
+    const why = !text ? 'empty'
+      : /\?\s*$/.test(text) ? 'a question'
+        : /\b(hypothes|ipotez|ipotes|hypothès)\p{L}*/iu.test(text) || /\b(strengthened|weakened|reversed|unresolved|sharpened)\b/i.test(text) ? 'exposes the reasoning labels'
+          : !answers.length ? 'not grounded in a founder answer'
+            : restatesAnswers(text, input.exchanges.map((e) => e.answer).join(' ')) ? 'restates the answers'
+              : f.field === 'changed' && !hypotheses.some((h) => MOVED.has(h.status)) ? 'no prior read actually moved'
+                  : '';
+    if (why) { dropped.push({ field: f.field, reason: why }); continue; }
+    read[f.field] = text;
+    grounding.push({ field: f.field, answers, evidence: (f.evidence ?? []).filter((x) => typeof x === 'string') });
+  }
+  const audit = { grounding, hypotheses, dropped };
+  if (!read.now) return { audit };
+  return { read: { now: read.now, ...(read.changed ? { changed: read.changed } : {}), ...(read.next ? { next: read.next } : {}) }, audit };
 }

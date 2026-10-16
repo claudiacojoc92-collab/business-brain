@@ -140,7 +140,10 @@ export interface ICorrectionReflectionModel {
   reflect(input: CorrectionReflectionInput): Promise<CorrectionReflection>;
 }
 export interface ArcTurn { readonly id: string; readonly role: 'founder' | 'bb'; readonly content: string }
-export interface ArcMirror { readonly founderWords: string; readonly against: string; readonly tension: string }
+export interface ArcMirror { readonly founderWords: string; readonly against: string; readonly tension: string;
+  /** The UPDATED READ (2026-10-16): when present the card leads with it; the contrast stays the fallback (it may be
+   *  empty when only the read stood). */
+  readonly read?: { readonly now: string; readonly changed?: string; readonly matters?: string; readonly next?: string } }
 export interface ArcStrategy { readonly bet: string; readonly over: string; readonly horizon: string; readonly tradeOffs: string[]; readonly notNow: string[]; readonly reconsider: string[]; readonly proposalId: string | null; readonly adoptable: boolean;
   /** The constraint the strategy ASSUMED as the goal (the founder gave none before the cap); null when the goal is the founder's. */
   readonly assumedGoal?: string | null }

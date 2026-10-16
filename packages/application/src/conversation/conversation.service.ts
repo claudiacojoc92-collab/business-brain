@@ -25,8 +25,10 @@ import { selectGoalCandidate, type GoalCandidate, isHeldGoal } from './goal-cand
  * otherwise fall back to the prose interpretation + question. One definition, used by startOrResume/reopen.
  */
 export const ARC_OPENER_MARKER = '__arcOpener';
-function openerTurnContent(out: ConversationStepOutput): string {
-  if (out.opener) return JSON.stringify({ [ARC_OPENER_MARKER]: out.opener });
+function openerTurnContent(out: ConversationStepOutput, firstAgenda?: string | null): string {
+  // AGENDA FIDELITY (2026-10-16): the opener asks the FIRST question the understanding card showed, word for word.
+  if (out.opener) return JSON.stringify({ [ARC_OPENER_MARKER]: firstAgenda ? { ...out.opener, invitation: firstAgenda } : out.opener });
+  if (firstAgenda) return [withoutQuestions(out.interpretation ?? ''), firstAgenda].filter(Boolean).join('\n\n');
   return joinReply(out.interpretation, out.nextQuestion) || (out.nextQuestion ?? '') || (out.interpretation ?? '');
 }
 
@@ -177,6 +179,19 @@ export function withoutQuestions(text: string): string {
   return sentences.filter((x) => !/\?["”»)]*\s*$/.test(x.trim())).join('').trim();
 }
 
+/** The acknowledgement after the last agenda answer: ONE plain sentence (the updated read after the goal is the
+ *  synthesis moment, so no "Synthesis / Diagnosis" here). Headers ("Sinteza:") and bullets are not an acknowledgement. */
+const CAP_ACK: Record<string, string> = {
+  en: 'Thank you, that fills in the picture.', ro: 'Mulțumesc, asta îmi completează imaginea.',
+  it: 'Grazie, questo completa il quadro.', de: 'Danke, das vervollständigt das Bild.',
+};
+export function briefAck(interpretation: string | null | undefined, language: string): string {
+  const lines = withoutQuestions(interpretation ?? '').split('\n').map((l) => l.trim())
+    .filter((l) => l && !/^[•\-*·]/.test(l) && !/^\p{L}[\p{L} ]{0,24}:/u.test(l));
+  const first = (lines.join(' ').match(/[^.!?]+[.!?]+/u)?.[0] ?? '').trim();
+  return first && first.length <= 220 ? first : (CAP_ACK[language.slice(0, 2)] ?? CAP_ACK['en']!);
+}
+
 // FIX 2a — join an interpretation with its follow-up question WITHOUT duplicating: if the model already ended the
 // interpretation with the question, don't append it again.
 function joinReply(interpretation?: string | null, nextQuestion?: string | null): string {
@@ -207,9 +222,10 @@ export class ConversationService {
     let turns = await this.deps.conversations.listTurns(session.id);
     if (turns.length === 0) {
       const out = await this.deps.model.step(await this.buildStepInput(businessId, founderId, businessName, language, session.id, null));
-      const opener = openerTurnContent(out);
+      const first = (await this.agenda(businessId))[0] ?? null;
+      const opener = openerTurnContent(out, first);
       if (opener) {
-        await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: opener, language, infoNeedKey: null, surface });
+        await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: opener, language, infoNeedKey: first ? 'site_1' : null, surface });
         turns = await this.deps.conversations.listTurns(session.id);
       }
     }
@@ -295,6 +311,22 @@ export class ConversationService {
       .filter((x) => x.role === 'founder' && x.infoNeedKey !== ANSWER_MODE_TURN).length;
     if (answered >= MAX_DISCOVERY_ANSWERS) return this.closeAtCap(session, businessId, language, out.interpretation, answered, surface);
 
+    // AGENDA FIDELITY (2026-10-16): the questions the understanding card showed are asked IN ORDER, WORD FOR WORD, one per
+    // discovery answer (a skip moves on and leaves that question unresolved); the goal comes after them. The model's
+    // acknowledgement stays; its own next question is not used while an agenda question remains.
+    const agenda = await this.agenda(businessId);
+    if (answered < agenda.length) {
+      const lastAsked = [...(await this.deps.conversations.listTurns(session.id))].reverse().find((t) => t.role === 'bb')?.infoNeedKey ?? null;
+      if (lastAsked?.startsWith('site_')) await this.deps.needs.markAnswered(session.id, [lastAsked]);
+      const next = agenda[answered]!;
+      await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: [withoutQuestions(out.interpretation ?? ''), next].filter(Boolean).join('\n\n'), language, infoNeedKey: `site_${answered + 1}`, surface });
+      await this.deps.conversations.setStatus(session.id, 'active', next);
+      this.deps.log?.({ type: 'conversation_agenda', detail: JSON.stringify({ businessId, answered, asked: `site_${answered + 1}` }) });
+      const turns = await this.deps.conversations.listTurns(session.id);
+      const updated = await this.deps.conversations.getByBusiness(businessId);
+      return { session: updated ?? session, turns, readyForAha2: false };
+    }
+
     // FIX 3 — coverage gate. A strategy is only honest once the required-core is covered: goal (a persisted goal
     // row), horizon, whats_working, acquisition_today. `coveredCore` = the forceable three are no longer open.
     const openNeeds = await this.deps.needs.listOpen(session.id);
@@ -364,7 +396,8 @@ export class ConversationService {
    * an assumed goal from the named constraint and says so.
    */
   private async closeAtCap(session: ConversationSession, businessId: string, language: string, interpretation: string | null | undefined, answered: number, surface: ConversationSurface | null): Promise<ConversationView> {
-    const ack = withoutQuestions(interpretation ?? '');
+    // A brief acknowledgement only (2026-10-16): the updated read after the goal is the synthesis moment.
+    const ack = briefAck(interpretation, language);
     if (ack) await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: ack, language, infoNeedKey: null, surface });
     const active = await this.deps.state.listActive(businessId);
     const hasGoal = active.some(isHeldGoal);
@@ -523,6 +556,11 @@ export class ConversationService {
 
   /** FIX 3 / Addition 1 — DECLINE the current question in one tap: mark the need the last question targeted as
    * covered (declined) so the depth cap never re-forces it and the founder is never walled in. */
+  /** The questions the understanding card showed, in display order (seeded as site_1..site_3). */
+  private async agenda(businessId: string): Promise<string[]> {
+    return agendaUnknowns((await this.deps.understanding.latest(businessId))?.understanding ?? null).slice(0, MAX_DISCOVERY_ANSWERS);
+  }
+
   async declineCurrentNeed(businessId: string): Promise<void> {
     const session = await this.deps.conversations.getByBusiness(businessId);
     if (!session) return;

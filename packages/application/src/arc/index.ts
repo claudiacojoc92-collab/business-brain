@@ -1,6 +1,6 @@
 export * from './contracts';
 export { computeArcMoment } from './moment';
-export { ArcService, type ArcDeps } from './arc.service';
+export { ArcService, pairExchanges, strategyRead, type ArcDeps } from './arc.service';
 export { guardWeekStory, weekStoryInput, fallbackStory, jargonIn, storyJargon } from './week-story';
 export { projectContainer, guardAnswers, containerKey, type FounderSaid, type ContainerAnswer, type ContainerAnswersInput, type IContainerAnswerModel } from './container';
 export { spokenView } from './spoken-view';

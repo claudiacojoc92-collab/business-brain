@@ -56,7 +56,9 @@ export function spokenView(v: ArcView): ArcView {
       stage: u.stage && 'evidence' in u.stage ? { ...u.stage, evidence: u.stage.evidence.map((e) => s(e).trim().replace(/[.;,:]+$/, '')) } : u.stage,
     } } : {}),
     ...(v.turns ? { turns: v.turns.map((t) => (t.role === 'bb' ? { ...t, content: bbTurn(t.content) } : t)) } : {}),
-    ...(v.mirror ? { mirror: { ...v.mirror, against: s(v.mirror.against), tension: s(v.mirror.tension) } } : {}),
+    ...(v.mirror ? { mirror: { ...v.mirror, against: s(v.mirror.against), tension: s(v.mirror.tension),
+      ...(v.mirror.read ? { read: { now: s(v.mirror.read.now), ...(v.mirror.read.changed ? { changed: s(v.mirror.read.changed) } : {}),
+        ...(v.mirror.read.matters ? { matters: s(v.mirror.read.matters) } : {}), ...(v.mirror.read.next ? { next: s(v.mirror.read.next) } : {}) } } : {}) } } : {}),
     ...(v.strategy ? { strategy: {
       ...v.strategy, bet: s(v.strategy.bet), over: s(v.strategy.over), horizon: s(v.strategy.horizon),
       tradeOffs: ss(v.strategy.tradeOffs)!, notNow: ss(v.strategy.notNow)!, reconsider: ss(v.strategy.reconsider)!,

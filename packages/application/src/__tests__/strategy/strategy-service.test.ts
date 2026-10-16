@@ -92,6 +92,18 @@ function makeDeps(opts: {
 
 const P = { businessId: 'B', businessName: 'thoughtbot', language: 'en' };
 
+describe('StrategyService — continuity with the read the founder just saw (2026-10-16)', () => {
+  it('the structural read, the answers and the updated read reach the strategy model as context', async () => {
+    const m = makeDeps({ generate: async () => ({ strategy: validBundle() }) });
+    const understandingRead = { synthesis: 'S', readings: ['R'], exchanges: [{ question: 'Q', answer: 'A' }], updatedRead: { now: 'N', matters: 'M' } };
+    await new StrategyService(m.deps).generate(P.businessId, P.businessName, P.language, { understandingRead });
+    expect(m.lastInput().understandingRead).toEqual(understandingRead);
+    const plain = makeDeps({ generate: async () => ({ strategy: validBundle() }) });
+    await new StrategyService(plain.deps).generate(P.businessId, P.businessName, P.language);
+    expect(plain.lastInput().understandingRead).toBeUndefined();
+  });
+});
+
 describe('StrategyService — lifecycle + repair + adoption', () => {
   it('a valid first candidate becomes a Proposal (never silently Current)', async () => {
     const m = makeDeps({ generate: async () => ({ strategy: validBundle() }) });

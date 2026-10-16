@@ -534,6 +534,20 @@ describe('ArcSurface — one surface, eight moments', () => {
     expect(screen.getByText('arc.question.label')).toBeInTheDocument();
   });
 
+  it('Moment 5, updated read (2026-10-16): only the sections with content, the contrast held back, a correction box', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'mirror', mirror: { founderWords: 'recovery is the priority', against: 'six categories equally', tension: 't',
+      read: { now: 'Each studio carries a different part of the business.', next: 'I would look first at how many assessments become memberships.' } } }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    expect(await screen.findByText('arc.mirror.read.h')).toBeInTheDocument();
+    expect(screen.getByText('Each studio carries a different part of the business.')).toBeInTheDocument();
+    expect(screen.getByText('arc.mirror.read.next')).toBeInTheDocument();
+    for (const k of ['arc.mirror.read.changed', 'arc.mirror.read.matters', 'arc.mirror.yousaid', 'arc.mirror.which']) expect(screen.queryByText(k)).toBeNull();
+    expect(screen.queryByText(/recovery is the priority/)).toBeNull();
+    expect(screen.getByText('arc.mirror.read.ask')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('arc.mirror.read.ph')).toBeInTheDocument();
+    expect(screen.getByText('arc.mirror.read.continue')).toBeInTheDocument();
+  });
+
   it('Enter submits the conversation input; Shift+Enter and empty do not', async () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'conversation', turns: [{ id: 't1', role: 'bb', content: 'What matters?' }] }));
     vi.mocked(api.arcConversation).mockResolvedValue(v({ moment: 'conversation', turns: [{ id: 't1', role: 'bb', content: 'next' }] }));

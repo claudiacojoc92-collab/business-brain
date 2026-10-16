@@ -41,6 +41,52 @@ export interface MirrorView {
   readonly contrasts: MirrorMismatch[];
   /** true once the founder has answered at least one self lane — the mirror needs Lane 3 to be meaningful. */
   readonly hasSelf: boolean;
+  /** The UPDATED READ (2026-10-16): absent when the founder answered nothing, the model gave nothing usable, or every
+   *  field failed governance. The single contrast above stays the fallback. */
+  readonly read?: MirrorRead;
+  /** Internal only (log / audit, never on a surface): what grounded each field and how each hypothesis moved. */
+  readonly readAudit?: { readonly grounding: MirrorReadGrounding[]; readonly hypotheses: MirrorHypothesisUpdate[]; readonly dropped: { readonly field: string; readonly reason: string }[] };
+}
+
+// ── UPDATED READ (2026-10-16): the payoff of the Understanding questions ───────────────────────────────────────────
+/** One question the founder was asked and what they answered (paired in conversation order). */
+export interface MirrorExchange { readonly asked: string; readonly answer: string }
+
+/** What the founder sees: a strategist's updated read. Every field optional except `now`; 2–3 strong ones beat 4 weak. */
+export interface MirrorRead {
+  readonly now: string;
+  readonly changed?: string;
+  readonly matters?: string;
+  readonly next?: string;
+}
+export type MirrorReadField = 'now' | 'changed' | 'matters' | 'next';
+/** How an answer moved a prior hypothesis. Internal reasoning only: never shown as a label. */
+export type HypothesisMovement = 'strengthened' | 'weakened' | 'reversed' | 'unresolved' | 'sharpened';
+export interface MirrorHypothesisUpdate { readonly index: number; readonly status: HypothesisMovement; readonly because: string }
+/** `answers`: indexes into the exchanges; `evidence`: refs to prior evidence (S synthesis, H<n> hypothesis, O<n>
+ *  observed, F<n> founder fact, G goal). */
+export interface MirrorReadGrounding { readonly field: MirrorReadField; readonly answers: number[]; readonly evidence: string[] }
+
+export interface MirrorReadInput {
+  readonly businessName: string;
+  readonly interfaceLanguage: string;
+  /** The structural synthesis BB showed on the understanding card. */
+  readonly synthesis: string;
+  /** The kept hypotheses, each with its evidence and the fork it left open. */
+  readonly hypotheses: { readonly interpretation: string; readonly evidence: string[]; readonly alternative: string; readonly unknown: string; readonly question: string; readonly reversal: string }[];
+  /** The (≤ 3) questions the understanding card showed. */
+  readonly questions: string[];
+  /** Each question as BB asked it in the conversation, paired with the founder's answer. */
+  readonly exchanges: MirrorExchange[];
+  readonly goal: string | null;
+  readonly observed: string[];
+  readonly business: string[];
+  /** Hypotheses whose deciding question the founder SKIPPED: they stay unresolved, whatever else moved. */
+  readonly unresolved?: number[];
+}
+export interface MirrorReadOutput {
+  readonly hypotheses: MirrorHypothesisUpdate[];
+  readonly fields: { readonly field: MirrorReadField; readonly text: string; readonly answers: number[]; readonly evidence: string[] }[];
 }
 
 export interface MirrorContrastInput {
@@ -59,4 +105,6 @@ export interface MirrorContrastOutput {
 export interface IMirrorModelPort {
   /** Find REAL mismatches only. Never throw, never fabricate — on any failure return { mismatches: [] }. */
   contrast(input: MirrorContrastInput): Promise<MirrorContrastOutput>;
+  /** The updated read: the founder's answers held against the prior read. Optional; fails safe to null. */
+  readUpdate?(input: MirrorReadInput): Promise<MirrorReadOutput | null>;
 }

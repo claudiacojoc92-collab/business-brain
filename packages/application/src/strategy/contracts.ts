@@ -122,6 +122,19 @@ export interface StrategyModelInput {
    * preferences or corrections; present only when a result report triggered the regeneration.
    */
   readonly observedResults?: { ref: string; statement: string }[];
+  /**
+   * 2026-10-16: the read the founder just saw before this strategy (structural synthesis, the kept readings, the
+   * founder's answers to BB's questions, and the updated read). Context the strategy must stay CONSISTENT with; the
+   * citable evidence remains the B/F/O/C refs above.
+   */
+  readonly understandingRead?: StrategyUnderstandingRead;
+}
+
+export interface StrategyUnderstandingRead {
+  readonly synthesis: string;
+  readonly readings: string[];
+  readonly exchanges: { readonly question: string; readonly answer: string }[];
+  readonly updatedRead?: { readonly now: string; readonly changed?: string; readonly matters?: string; readonly next?: string };
 }
 
 export interface StrategyModelOutput { readonly strategy: StrategyBundle; }

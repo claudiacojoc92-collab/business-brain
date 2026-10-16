@@ -789,6 +789,25 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
           <div className="s0-u"><div className="s0-u-hero"><div className="s0-u-hero-eyebrow">{t('arc.mirror.eyebrow')}</div><p className="s0-u-hero-title">{t('arc.mirror.none')}</p></div></div>
           {!ro ? <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={() => act(() => arcMirrorSeen(businessId), 'arc.working.strategy')}>{t('arc.continue')} →</button></div> : null}
         </>);
+        // The UPDATED READ (2026-10-16): the payoff of the understanding questions. Only the sections that hold content.
+        if (mm.read) {
+          const r = mm.read;
+          const section = (key: string, text: string | undefined, attr: string) => (text ? (
+            <div className="s0-u-card" data-mirror-read-section={attr}><div className="s0-u-card-label">{t(key)}</div><p className="s0-u-card-lead">{text}</p></div>
+          ) : null);
+          return (<>
+            <div className="s0-u" data-mirror-read="">
+              <div className="s0-u-card s0-u-card--read"><div className="s0-u-card-label">{t('arc.mirror.read.h')}</div><p className="s0-u-card-lead">{r.now}</p></div>
+              {section('arc.mirror.read.changed', r.changed, 'changed')}
+              {section('arc.mirror.read.next', r.next, 'next')}
+              {!ro ? <ArcQuestion text={t('arc.mirror.read.ask')} t={t} /> : null}
+            </div>
+            {!ro ? (<>
+              <ArcInput ph={t('arc.mirror.read.ph')} onSend={(ans) => arcMirrorSeen(businessId, ans)} cta={t('arc.send')} t={t} text={text} setText={setText} busy={busy} act={act} workingKey="arc.working.strategy" />
+              <div className="s0-strat-actions"><button type="button" className="s0-btn-ghost" disabled={busy} onClick={() => act(() => arcMirrorSeen(businessId), 'arc.working.strategy')}>{t('arc.mirror.read.continue')}</button></div>
+            </>) : null}
+          </>);
+        }
         return (<>
           <div className="s0-u">
             <div className="s0-u-hero"><div className="s0-u-hero-eyebrow">{t('arc.mirror.eyebrow')}</div><p className="s0-u-hero-title">{t('arc.mirror.intro')}</p></div>

@@ -514,7 +514,8 @@ export interface ArcView {
   correctionReflection?: { reflection: string; changes: string; holds: string };
   turns?: ArcTurn[];
   coverage?: { key: string; covered: boolean }[]; // conversation — quiet progress map
-  mirror?: { founderWords: string; against: string; tension: string } | null;
+  /** `read` (2026-10-16): the updated read after the founder's answers; the contrast is the fallback (may be empty). */
+  mirror?: { founderWords: string; against: string; tension: string; read?: { now: string; changed?: string; matters?: string; next?: string } } | null;
   strategy?: { bet: string; over: string; horizon: string; tradeOffs: string[]; notNow: string[]; reconsider: string[]; proposalId: string | null; adoptable: boolean; assumedGoal?: string | null };
   weekDay?: { week: string[]; today: string | null; canCreate: boolean; todayKind?: 'follow_up' | 'plan' | 'blocked' | null;
     // The week told as a chapter (2026-10-12); null/absent on an older api.
