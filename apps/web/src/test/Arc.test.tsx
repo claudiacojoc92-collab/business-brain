@@ -264,7 +264,7 @@ describe('ArcSurface — one surface, eight moments', () => {
     expect(pos('arc.u2.couldChange').compareDocumentPosition(pos('arc.u2.need')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('founder view (2026-10-16): built → stands out → where I would look first → questions; alternatives and reversals stay internal', async () => {
+  it('first read (2026-10-16): my first read → one thing I am watching → questions; alternatives and reversals stay internal', async () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: {
       does: 'INVENTORY: You sell classes and physio in two studios.', serves: '', standsOut: '',
       tensions: [], confident: [], inferring: [], unanswered: [],
@@ -285,11 +285,11 @@ describe('ArcSurface — one surface, eight moments', () => {
       },
     } }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
-    const order = ['arc.u3.h.built', 'arc.u3.h.standsOut', 'arc.u3.h.lookFirst', 'arc.u2.need', 'arc.u2.whatIRead'];
+    const order = ['arc.u5.h.read', 'arc.u5.h.watching', 'arc.u2.need', 'arc.u2.whatIRead'];
     for (const k of order) expect(await screen.findByText(k)).toBeInTheDocument();
     for (let i = 1; i < order.length; i++) expect(screen.getByText(order[i - 1]!).compareDocumentPosition(screen.getByText(order[i]!)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // the earlier synthesis layout, the alternative and the reversal are not on the founder view
-    for (const k of ['arc.u2.whatItIs', 'arc.u2.noticed', 'arc.u2.couldChange']) expect(screen.queryByText(k)).toBeNull();
+    for (const k of ['arc.u2.whatItIs', 'arc.u2.noticed', 'arc.u2.couldChange', 'arc.u3.h.built', 'arc.u3.h.standsOut', 'arc.u3.h.lookFirst']) expect(screen.queryByText(k)).toBeNull();
     expect(screen.queryByText(/rooms or equipment/)).toBeNull();
     expect(screen.queryByText('Clients booking freely at both.')).toBeNull();
     expect(screen.getByText(/Physio is listed only at Hilltop\./)).toBeInTheDocument();
@@ -297,7 +297,7 @@ describe('ArcSurface — one surface, eight moments', () => {
     expect(screen.getByText(/arc\.u2\.whyAsk:arc\.u3\.why\.acquisition/)).toBeInTheDocument();
     expect(screen.queryByText(/scattered and unpredictable/)).toBeNull();
     expect(screen.getByText(/arc\.u2\.whyAsk:arc\.u3\.why\.performance/)).toBeInTheDocument();
-    expect(screen.getByText(/arc\.u2\.whyAsk:It tells me whether to plan them as one or two\./)).toBeInTheDocument();
+    expect(screen.getByText(/arc\.u2\.whyAsk:arc\.u5\.why\.places/)).toBeInTheDocument(); // the locations fork: deliberate or only operational
     expect(screen.getByText(/INVENTORY/).closest('details')).not.toBeNull();
   });
 
