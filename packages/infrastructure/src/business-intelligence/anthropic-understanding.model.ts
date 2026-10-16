@@ -6,6 +6,7 @@ import { VOICE_RULES,
   type UnderstandingModelInput,
   type SynthesisOutput,
   type PageObservation,
+  type StructureRepairInput,
 } from '@bb/application';
 
 /**
@@ -168,11 +169,14 @@ function systemPromptBase(lang: string): string {
     'STRUCTURE (read.structure) — the step that turns reading into understanding. Facts the founder already knows (what',
     'is sold, where, at what price) are the model; STRUCTURE is how those facts RELATE: where offers, locations, people,',
     'prices, schedules and ways in line up or diverge, and what that says about how the business is built.',
-    '- synthesis = ONE or TWO sentences: what this business actually is, structurally. Stronger than a list of facts,',
-    '  weaker than a conclusion the evidence has not earned: name the operating models the evidence shows (how each is',
-    '  sold, delivered, booked) and say what you do NOT yet know about how they relate. Never "N businesses", never "is',
-    '  really / de fapt", no numbers. Shape: "Your offer appears to combine several operating models under one brand: …',
-    '  I don\'t yet know whether they behave as one business economically or as distinct engines."',
+    '- synthesis = TWO to FOUR short sentences: what this business actually is, structurally. Stronger than a list of facts,',
+    '  weaker than a conclusion the evidence has not earned. RELATE the mechanisms instead of listing categories: how the',
+    '  parts are sold, delivered or entered (exactly as the sources say), what that difference may mean, and the one thing',
+    '  you do NOT yet know that decides it. Never "N businesses", never "is really / de fapt", no numbers, no inventory.',
+    '  Shape: "Not every service seems to be sold the same way: <some> are <mechanism A>; <others> <mechanism B>. That may',
+    '  mean <the relationship>. I don\'t yet know <the deciding unknown>."',
+    '- PURCHASE / ENTRY wording is exactly what the sources show: per session, multi-session packages, a paid evaluation',
+    '  first, booking by appointment. Never "directly", "on the spot" or "without an appointment" unless a page says so.',
     '- OPERATING MODEL = a different MECHANISM: delivery (group vs one-to-one), purchase (packages vs single sessions vs',
     '  a paid first step), capacity, cadence, acquisition motion, pricing architecture, sales process or resources. A',
     '  different audience, life stage or service name alone is NOT an operating model. Name only the models the evidence',
@@ -218,7 +222,8 @@ function systemPromptBase(lang: string): string {
     '  - reversal = NEW evidence that would weaken or reverse your reading: something the founder can answer or the',
     '    business can show (how clients move between places, why something was set up). Never something on the pages',
     '    you just read ("if X appeared in the timetable / on the team page"): check it is not already true there and does',
-    '    not contradict them.',
+    '    not contradict them. No thresholds or percentages ("most clients", "over 30%") unless a source gives one: name the',
+    '    kind of evidence instead (e.g. meaningful cross-use between two lines).',
     '  - COMPARE LIKE WITH LIKE: tag each evidence item with its surface. A timetable lists scheduled sessions, not',
     '    appointments; a price list says what can be bought, not what is bought. Never argue from what a page does NOT',
     '    show ("invisible", "missing from", "not in any timetable"): code rejects it. If you compare two different kinds',
@@ -388,6 +393,52 @@ export class AnthropicUnderstandingModel implements IUnderstandingModelPort {
     const parsed = extractJson(raw) as SynthesisOutput;
     return { ...parsed, modelId: this.modelId };
   }
+
+  /**
+   * BOUNDED REPAIR (salvage before reject): rewrite ONE field of ONE structural hypothesis that governance emptied. The
+   * model sees only the surviving hypothesis, the field, the exact reason and the trusted evidence; it never regenerates
+   * anything else. Governance re-checks the answer. Fails safe to '' (the hypothesis is then simply not kept).
+   */
+  async repairStructureField(input: StructureRepairInput): Promise<string> {
+    const client = createAnthropicClient(this.apiKey);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const resp: any = await client.messages.create({
+      model: this.modelId,
+      max_tokens: 400,
+      temperature: 0,
+      system: repairPrompt(input.language),
+      messages: [{ role: 'user', content: JSON.stringify({ field: input.field, reason: input.reason, hypothesis: input.surviving, evidence: input.evidence }) }],
+    });
+    const block = Array.isArray(resp?.content) ? resp.content.find((c: { type?: string }) => c?.type === 'text') : null;
+    try {
+      const out = extractJson((block as { text?: string } | null)?.text ?? '') as { value?: unknown };
+      return typeof out?.value === 'string' ? out.value.trim() : '';
+    } catch { return ''; }
+  }
+}
+
+/** The repair contract: one field, the same rules the synthesis follows, nothing invented. */
+export function repairPrompt(lang: string): string {
+  const langName = LANG_NAME[lang] ?? 'English';
+  return [
+    'You repair ONE field of a business-structure hypothesis that a deterministic check rejected. You get the field name,',
+    'the exact reason it was rejected, what survives of the hypothesis, and the evidence (exact quotes from the business\'s',
+    'own pages). Rewrite ONLY that field so it passes; change nothing else, add no new claim, invent nothing.',
+    `Write in ${langName}, second person, plainly, one or two short sentences.`,
+    '- alternative: what ELSE could explain the same evidence. While several materially different explanations remain',
+    '  plausible (space, equipment, staff capacity or availability, a deliberate choice, history), name the set, hedged',
+    '  ("may"), never only one, never a restatement of the reading.',
+    '- unknown: the one thing the founder could tell you that separates the reading from its alternative.',
+    '- question: the ONE question to the founder that settles the fork: it offers the reading\'s side (a deliberate choice or',
+    '  role) AND the alternative\'s explanations ("…by choice, or because of space, equipment or availability?"). It never',
+    '  presupposes a future the founder has not stated (adding, expanding, fixing, changing, "what would have to change").',
+    '- reversal: NEW evidence that would weaken or reverse the reading: something the founder can answer or the business can',
+    '  show (how clients move between offers or places, why something was set up). Never something on the pages (never "if',
+    '  X appeared / were listed"), never something the evidence already shows, never a threshold or percentage.',
+    'Never: customer behaviour, profit or demand claims, judgements (under-used, potential), advice, or a choice attributed',
+    'to the founder. If you cannot write a valid field, return an empty string.',
+    'Return ONLY JSON: {"value": "<the field>"}',
+  ].join('\n');
 }
 
 /**

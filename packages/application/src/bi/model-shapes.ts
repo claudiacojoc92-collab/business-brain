@@ -44,6 +44,7 @@ function normalizeStructure(x: unknown): BusinessStructure {
         ...(h['counts'] !== undefined ? { counts: objectList<Record<string, unknown>>(h['counts']).map((c) => ({ ...(c as unknown as CountClaim), items: objectList(c['items']) })) } : {}),
         ...(h['numbers'] !== undefined ? { numbers: objectList(h['numbers']) } : {}),
         ...(h['calculations'] !== undefined ? { calculations: objectList(h['calculations']) } : {}),
+        ...(h['repairedFields'] !== undefined ? { repairedFields: stringList(h['repairedFields']) as NonNullable<StructuralHypothesis['repairedFields']> } : {}),
       };
     }),
     ...(s['audit'] !== undefined ? { audit: objectList(s['audit']) } : {}),
@@ -97,6 +98,7 @@ export function normalizeUnderstandingShapes(u: GovernedUnderstanding): Governed
       ...(read.structure !== undefined ? { structure: normalizeStructure(read.structure) } : {}),
       ...(read.questionTiers !== undefined ? { questionTiers: objectList(read.questionTiers) } : {}),
       ...(read.structureAudit !== undefined ? { structureAudit: objectList(read.structureAudit) } : {}),
+      ...(obj(read.structureCandidates) ? { structureCandidates: { ...obj<NonNullable<NonNullable<GovernedUnderstanding['read']>['structureCandidates']>>(read.structureCandidates)!, hypotheses: objectList(obj<{ hypotheses?: unknown }>(read.structureCandidates)!.hypotheses), outcomes: objectList(obj<{ outcomes?: unknown }>(read.structureCandidates)!.outcomes) } } : {}),
     } } : {}),
   };
 }

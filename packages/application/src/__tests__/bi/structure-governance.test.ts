@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect } from 'vitest';
-import { agendaUnknowns, checkAttributePropagation, governRationale, governStructure, governUnderstanding, groundCounts, verifiedMechanisms, type GovernedUnderstanding, type PageObservation, type StructuralHypothesis } from '../../bi/index';
+import { agendaUnknowns, checkAttributePropagation, checkReversal, governRationale, governStructure, governUnderstanding, governUnderstandingWithRepair, groundCounts, verifiedMechanisms, type GovernedUnderstanding, type PageObservation, type StructuralHypothesis } from '../../bi/index';
 import { ArcService } from '../../arc/index';
 
 /**
@@ -40,7 +40,8 @@ const H: StructuralHypothesis = {
 };
 const SYNTHESIS = 'Your offer appears to combine several operating models under one brand: scheduled classes, physiotherapy and massage. I don\'t yet know whether they behave as one business economically or as separate engines.';
 const govern = (h: Partial<StructuralHypothesis>, synthesis = SYNTHESIS) => governStructure({ synthesis, hypotheses: [{ ...H, ...h }] }, OBS, CTX)!;
-const rejected = (h: Partial<StructuralHypothesis>) => { const g = govern(h); expect(g.hypotheses).toHaveLength(0); return g.audit!.find((a) => a.verdict === 'rejected')!.reason; };
+// Not kept: everything governance removed or rejected for this hypothesis, as recorded in its outcome (salvage first).
+const rejected = (h: Partial<StructuralHypothesis>) => { const g = govern(h); expect(g.hypotheses).toHaveLength(0); const o = g.outcomes!.find((x) => x.candidate === 0)!; return [...o.reasons, ...g.audit!.filter((a) => a.verdict === 'rejected').map((a) => a.reason)].join(' | '); };
 
 describe('structural hypotheses: synthesis, not inventory', () => {
   it('keeps a reversible two-location reading with anchored evidence; the section heading travels as context', () => {
@@ -65,9 +66,9 @@ describe('structural hypotheses: synthesis, not inventory', () => {
   });
 
   it('is reversible: an alternative that is not a paraphrase, a discriminator and a reversal are required', () => {
-    expect(rejected({ alternative: '' })).toMatch(/no real alternative/);
-    expect(rejected({ alternative: 'The two locations may play different roles.' })).toMatch(/no real alternative/);
-    expect(rejected({ discriminator: { unknown: '', question: '' } })).toMatch(/discriminating/);
+    expect(rejected({ alternative: '' })).toMatch(/no alternative explanation remains/);
+    expect(rejected({ alternative: 'The two locations may play different roles.' })).toMatch(/restates the reading/);
+    expect(rejected({ discriminator: { unknown: '', question: '' } })).toMatch(/no discriminating unknown/);
     expect(rejected({ reversal: '' })).toMatch(/no valid reversal/);
   });
 
@@ -75,7 +76,7 @@ describe('structural hypotheses: synthesis, not inventory', () => {
     expect(rejected({ pattern: 'The Riverside timetable contains no physiotherapy session.' })).toMatch(/category confusion/);
     const g = govern({ pattern: `${H.pattern} The Riverside timetable does not include physiotherapy.` });
     expect(g.hypotheses[0]!.pattern).toBe(H.pattern);
-    expect(g.audit!.find((a) => a.verdict === 'kept')!.reason).toMatch(/dropped sentences: category confusion/);
+    expect(g.audit!.find((a) => a.verdict === 'kept')!.reason).toMatch(/dropped sentences: pattern: category confusion/);
     expect(rejected({ compares: ['timetable', 'price_list'], comparisonBasis: '' })).toMatch(/compares a timetable with a price_list/);
   });
 
@@ -83,7 +84,10 @@ describe('structural hypotheses: synthesis, not inventory', () => {
     expect(govern({ interpretation: 'The two locations may play different roles; it seems deliberate.' }).hypotheses).toHaveLength(1);
     expect(rejected({ interpretation: 'Riverside may have higher demand than Hilltop.' })).toMatch(/demand, volume or occupancy/);
     expect(rejected({ interpretation: 'Clients at Riverside may leave when they cannot find physiotherapy.' })).toMatch(/behaviour/);
-    expect(rejected({ whyItMatters: 'You should move physiotherapy to Riverside.' })).toMatch(/outcome, gives advice/);
+    // advice in the decision line is removed; the reading itself still stands (salvage before reject)
+    const advice = govern({ whyItMatters: 'You should move physiotherapy to Riverside.' });
+    expect(advice.hypotheses[0]!.whyItMatters).toBe('');
+    expect(advice.outcomes!.find((o) => o.candidate === 0)!.reasons.join(' ')).toMatch(/why it matters: an outcome, advice/);
   });
 
   it('a transcribed schedule, a customer trait read from a schedule, or a market claim does not stand', () => {
@@ -128,7 +132,7 @@ describe('synthesis integrity: reversals fact-checked, alternatives open, operat
 
   it('a reversal clause about what the pages show is dropped; a clause the founder can answer stays', () => {
     const g = govern({ reversal: 'Clients booking freely at both locations, or if physiotherapy appeared in the Riverside timetable.' });
-    expect(g.hypotheses[0]!.reversal).toBe('Clients booking freely at both locations');
+    expect(g.hypotheses[0]!.reversal).toBe('Clients booking freely at both locations.');
     expect(g.hypotheses[0]!.reversalCheck!.checked).toBe(true);
     expect(g.hypotheses[0]!.reversalCheck!.dropped).toHaveLength(1);
     expect(g.hypotheses[0]!.reversalCheck!.dropped[0]!.reason).toMatch(/already true in the pages|about what the pages show/);
@@ -303,7 +307,7 @@ describe('final integrity: no attribute propagation, every stored field governed
     expect(JSON.stringify(g.read!.structure)).not.toMatch(STORED_LEAKS);
     expect(JSON.stringify(g.read!.structureAudit)).toMatch(/under-utilised/);
     expect(rejected({ reversal: 'If Riverside is in fact below its potential.' })).toMatch(/no valid reversal/);
-    expect(rejected({ discriminator: { unknown: 'Whether Riverside has strong demand.', question: H.discriminator.question } })).toMatch(/no discriminating unknown/);
+    expect(rejected({ discriminator: { unknown: 'Whether Riverside has strong demand.', question: H.discriminator.question } })).toMatch(/performance judgement[\s\S]*no discriminating unknown/);
   });
 
   it('when the synthesis does not stand, the card names only verified mechanisms (never the inventory)', () => {
@@ -386,7 +390,7 @@ describe('final hardening: abstract groups resolve to offer families; rationales
     expect(rejected({ reversal: 'If there is another physiotherapist at Riverside who is not in the timetable.' })).toMatch(/already true in the pages BB read/);
     // two conditions written without "or": each is checked; the already-true one is dropped, the answerable one stays
     const g = govern({ reversal: 'If Dan Rus also works at Riverside outside the published timetable, if there is another physiotherapist at Riverside.' });
-    expect(g.hypotheses[0]!.reversal).toBe('If Dan Rus also works at Riverside outside the published timetable');
+    expect(g.hypotheses[0]!.reversal).toBe('If Dan Rus also works at Riverside outside the published timetable.');
     expect(g.hypotheses[0]!.reversalCheck!.dropped[0]!.reason).toMatch(/already true/);
   });
 
@@ -405,5 +409,132 @@ describe('final hardening: abstract groups resolve to offer families; rationales
     const narrow = governUnderstanding({ ...u, read: { ...u.read!, structure: { synthesis: SYNTHESIS, hypotheses: [{ ...H, discriminator: { ...H.discriminator, question: 'Is physiotherapy at Hilltop because of the rooms?' } }] } } } as GovernedUnderstanding, OBS);
     expect(narrow.read!.structure!.hypotheses).toHaveLength(1);
     expect(narrow.read!.questionTiers!.some((t) => t.tier === 'B')).toBe(false);
+  });
+});
+
+describe('salvage before reject (Blind Test 3, 2026-10-16)', () => {
+  it('the Blind Test 3 reversal is about the business: "published" describes the timetable, nothing depends on appearing', () => {
+    const bt3 = 'Dacă kinetoterapia se desfășoară și la Bună Ziua prin programări individuale care nu apar în orarul de clase publicat.';
+    const pages = ['body move studio buna ziua orar clase echipa body move buna ziua ioana urs kinetoterapeut'];
+    expect(checkReversal(bt3, pages)).toEqual({ kept: bt3, dropped: [] });
+    // a condition that DEPENDS on something appearing is still a page condition
+    expect(checkReversal('Dacă kinetoterapia ar apărea în orarul de la Bună Ziua.', pages).kept).toBe('');
+    expect(checkReversal('If physiotherapy were listed on the Riverside page.', pages).kept).toBe('');
+  });
+
+  it('the Blind Test 3 synthesis: one audience item is dropped, the structure stands', () => {
+    const bt3 = 'Oferta ta pare să combine mai multe modele operaționale sub un singur brand: clase de grup cu orar fix, servicii individuale cu programare (kinetoterapie, personal training, masaj) și programe structurate pe etape de viață (prenatal, postpartum). Nu știu încă dacă cele două locații funcționează ca un singur motor economic sau dacă fiecare are o compoziție de servicii și o echipă distinctă.';
+    const g = governStructure({ synthesis: bt3, hypotheses: [] }, OBS, CTX)!;
+    expect(g.synthesis).toBe('Oferta ta pare să combine mai multe modele operaționale sub un singur brand: clase de grup cu orar fix și servicii individuale cu programare (kinetoterapie, personal training, masaj). Nu știu încă dacă cele două locații funcționează ca un singur motor economic sau dacă fiecare are o compoziție de servicii și o echipă distinctă.');
+    expect(g.outcomes![0]).toMatchObject({ candidate: 'synthesis', verdict: 'salvaged', removed: ['programe structurate pe etape de viață (prenatal, postpartum)'] });
+  });
+
+  it('a synthesis left with fewer than two structural items still falls back (the fallback is for genuinely weak structure)', () => {
+    const weak = 'Your offer appears to combine several operating models under one brand: group classes and activities for children. I don\'t yet know how they relate.';
+    expect(governStructure({ synthesis: weak, hypotheses: [] }, OBS, CTX)!.synthesis).toBe('');
+  });
+
+  it('a hypothesis whose pattern sentences all fail survives on its interpretation and evidence', () => {
+    const interpretation = 'Riverside and Hilltop may play different roles.';
+    const g = govern({ interpretation, pattern: 'The Riverside timetable lists Anna at 09:00 Monday, 10:00 Monday and 09:00 Tuesday.' });
+    expect(g.hypotheses).toHaveLength(1);
+    expect(g.hypotheses[0]!).toMatchObject({ pattern: '', interpretation });
+    expect(g.outcomes!.find((o) => o.candidate === 0)).toMatchObject({ verdict: 'salvaged' });
+  });
+
+  it('no arbitrary thresholds; no "directly" without evidence', () => {
+    expect(govern({ reversal: 'If clients book freely at both locations. If most of the clients use both locations.' }).hypotheses[0]!.reversal).toBe('If clients book freely at both locations.');
+    const own: PageObservation[] = [...OBS, page('Massage', 'Massage 50 min 1 session 180 lei Package 4 600 lei')];
+    const r = checkAttributePropagation('Your offer appears to combine group classes, Massage bought directly per session, and packages.', own, trusted, new Set(['studio', 'north']));
+    expect(r.text).not.toMatch(/directly/);
+  });
+
+  const U2 = (): GovernedUnderstanding => ({ ...UQ(), read: { ...UQ().read!, structure: { synthesis: SYNTHESIS, hypotheses: [{ ...H, alternative: 'The split may simply reflect staff availability.' }] } } } as GovernedUnderstanding);
+  it('a required field that empties gets ONE bounded repair, re-governed; the reading survives', async () => {
+    const calls: string[] = [];
+    const g = await governUnderstandingWithRepair(U2(), OBS, async (r) => { calls.push(`${r.index}:${r.field}:${r.reason}`); expect(r.evidence.length).toBeGreaterThanOrEqual(2); return 'The split may follow rooms, equipment, staff availability or a deliberate choice.'; });
+    expect(calls).toEqual(['0:alternative:the alternative collapses the uncertainty into one explanation (staffing) while others remain plausible']);
+    expect(g.read!.structure!.hypotheses[0]).toMatchObject({ alternative: 'The split may follow rooms, equipment, staff availability or a deliberate choice.', repairedFields: ['alternative'] });
+    expect(g.read!.structureCandidates!.outcomes.find((o) => o.candidate === 0)).toMatchObject({ verdict: 'repaired' });
+  });
+
+  it('a repaired field that still fails rejects the reading: no second round, no open-ended regeneration', async () => {
+    let n = 0;
+    const g = await governUnderstandingWithRepair(U2(), OBS, async () => { n++; return 'It may be about staff.'; });
+    expect(n).toBe(1);
+    expect(g.read!.structure!.hypotheses).toHaveLength(0);
+    expect(g.read!.structureCandidates!.outcomes.find((o) => o.candidate === 0)!.reasons.join(' ')).toMatch(/still invalid after repair: alternative/);
+  });
+
+  it('the full pre-governance candidate is quarantined and never reaches the structure or the card', () => {
+    const g = governUnderstanding(U2(), OBS);
+    expect(g.read!.structureCandidates!.hypotheses[0]).toMatchObject({ alternative: 'The split may simply reflect staff availability.', pattern: H.pattern });
+    expect(g.read!.structureCandidates!.repairs![0]).toMatchObject({ index: 0, field: 'alternative' });
+    expect(Object.keys(g.read!.structure!)).not.toEqual(expect.arrayContaining(['outcomes']));
+    expect(g.read!.structure).not.toHaveProperty('repairs');
+    expect(g.read!.structure).not.toHaveProperty('audit');
+    const card = (new ArcService({} as any) as any).projectUnderstanding(g, []);
+    expect(JSON.stringify(card)).not.toMatch(/simply reflect staff availability/);
+  });
+});
+
+describe('salvage text surgery (Blind Test 3 fresh runs, 2026-10-16)', () => {
+  const FAM: PageObservation[] = [...OBS,
+    page('Classes', 'Classes Pilates 1 session 90 lei Package 4 240 lei Package 12 500 lei. Group classes on the weekly timetable.'),
+    page('Physiotherapy', 'Physiotherapy Every programme starts with an assessment. Assessment 1 session 200 lei.')];
+  const g = (synthesis: string) => governStructure({ synthesis, hypotheses: [] }, FAM, CTX)!;
+
+  it('"A, while B" is one contrast: an ungrounded number is stripped from it, never leaving a dangling "while"', () => {
+    const r = g('Not every service seems to be sold the same way: group classes run on a fixed timetable with packages of 4–12 sessions, while physiotherapy starts with a paid assessment. I don\'t yet know which one carries the business.');
+    expect(r.synthesis).toBe('Not every service seems to be sold the same way: group classes run on a fixed timetable with packages, while physiotherapy starts with a paid assessment. I don\'t yet know which one carries the business.');
+    expect(r.synthesis).not.toMatch(/: while/);
+  });
+
+  it('an unsupported inline word ("directly") is removed alone; the rest of the item stays', () => {
+    const r = checkAttributePropagation('Not every service seems to be sold the same way: Classes are booked directly from the weekly timetable, while physiotherapy starts with an assessment.', FAM, trusted, new Set(['studio', 'north']));
+    expect(r.text).toContain('Classes are booked from the weekly timetable');
+  });
+
+  it('a trimmed hypothesis reads as sentences again (no lowercase restart after a dropped clause)', () => {
+    const h = govern({ pattern: 'The locations page lists Physiotherapy at Hilltop and not at Riverside; the Riverside timetable lists Anna at 09:00 Monday, 10:00 Monday and 09:00 Tuesday; the Riverside team lists Anna Pop as Physiotherapist.' }).hypotheses[0]!;
+    expect(h.pattern).toBe('The locations page lists Physiotherapy at Hilltop and not at Riverside. The Riverside team lists Anna Pop as Physiotherapist.');
+  });
+});
+
+describe('salvage, last pass (Blind Test 3, 2026-10-16)', () => {
+  it('an untouched reversal keeps its own "or" exactly as written', () => {
+    const r = 'If clients book freely at both locations, or if the founder says the split follows the rooms.';
+    expect(govern({ reversal: r }).hypotheses[0]!.reversal).toBe(r);
+  });
+
+  it('a kept reading whose question does not settle its fork gets ONE bounded question repair, then competes for slot 3', async () => {
+    const u = UQ();
+    const narrow = { ...u, read: { ...u.read!, structure: { synthesis: SYNTHESIS, hypotheses: [{ ...H, discriminator: { ...H.discriminator, question: 'What determined that physiotherapy is only at Hilltop?' } }] } } } as GovernedUnderstanding;
+    const calls: string[] = [];
+    const g = await governUnderstandingWithRepair(narrow, OBS, async (r) => { calls.push(r.field); return 'Is physiotherapy only at Hilltop by deliberate choice, or because of rooms, equipment or availability?'; });
+    expect(calls).toEqual(['question']);
+    expect(g.read!.questionTiers!.map((q) => q.tier)).toEqual(['A', 'A', 'B', 'C']);
+    expect(agendaUnknowns(g)[2]).toBe('Is physiotherapy only at Hilltop by deliberate choice, or because of rooms, equipment or availability?');
+    // a repaired question that still does not settle the fork: the reading stays, without a slot; no second round
+    let n = 0;
+    const still = await governUnderstandingWithRepair(narrow, OBS, async () => { n++; return 'Why is physiotherapy only at Hilltop?'; });
+    expect(n).toBe(1);
+    expect(still.read!.structure!.hypotheses).toHaveLength(1);
+    expect(still.read!.questionTiers!.some((q) => q.tier === 'B')).toBe(false);
+  });
+
+  it('a rationale may not presuppose that the current state should change', () => {
+    expect(governRationale('This decides whether the distribution between locations can be changed with existing resources.', ['Is the split deliberate, or set by rooms?'])).toBe('');
+  });
+});
+
+describe('salvage text surgery, last fixes', () => {
+  it('a relative-clause continuation is never cut as a category (no truncated sentence)', () => {
+    const FAM: PageObservation[] = [...OBS, page('Physiotherapy', 'Physiotherapy Every programme starts with an assessment. Assessment 1 session 200 lei. Package 8 1000 lei')];
+    const t = 'Not every service is entered the same way: classes are bought per session, while physiotherapy starts with a paid assessment, which works as a first step before any package. I don\'t yet know which one carries the business.';
+    expect(checkAttributePropagation(t, FAM, trusted, new Set(['studio', 'north'])).text).toContain('before any package.');
+  });
+  it('"unused capacity" in a rationale is utilisation framing the question did not license', () => {
+    expect(governRationale('This tells me whether the locations are deliberately specialised or whether there is unused capacity at Riverside.', ['Is the split deliberate, or set by rooms?'])).toBe('This tells me whether the locations are deliberately specialised.');
   });
 });

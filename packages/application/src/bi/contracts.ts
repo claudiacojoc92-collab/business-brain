@@ -161,6 +161,10 @@ export interface UnderstandingRead {
   /** Why each ranked question holds its place: A = strategy-critical for readiness, B = discriminates a structural
    *  hypothesis, C = remaining information value. Same order as the stored unknowns. */
   readonly questionTiers?: { readonly question: string; readonly tier: QuestionTier; readonly reason: string; readonly resolves?: number }[];
+  /** QUARANTINE: the FULL pre-governance structure candidate (synthesis + every hypothesis as the model proposed it, plus
+   *  repaired fields), with what governance removed, why, and the salvage verdict. Debugging / quality review only: no
+   *  surface, conversation, strategy or later step reads it. */
+  readonly structureCandidates?: { readonly synthesis: string; readonly hypotheses: StructuralHypothesis[]; readonly outcomes: StructureOutcome[]; readonly repairs?: StructureRepairRequest[] };
   /** QUARANTINE: structural material governance rejected or trimmed, with why. Audit only: no surface reads it. */
   readonly structureAudit?: { readonly item: string; readonly verdict: 'kept' | 'rejected'; readonly reason: string }[];
   /** Questions not asked, and why (presupposes a future the founder did not state; does not settle its fork). */
@@ -224,6 +228,26 @@ export interface StructuralHypothesis {
   /** The reversal was checked against the pages BB read; clauses that were already true there, or only about the pages,
    *  were dropped (audit). */
   readonly reversalCheck?: { readonly checked: boolean; readonly dropped: { readonly reason: string }[] };
+  /** Fields a bounded repair call rewrote (input marker on the second governance pass, and audit on the result). */
+  readonly repairedFields?: RepairableField[];
+}
+/** The required hypothesis fields a bounded repair call may rewrite (one call per field, once). */
+export type RepairableField = 'alternative' | 'unknown' | 'reversal' | 'question';
+/** Governance asks for ONE field of ONE hypothesis to be repaired: the surviving hypothesis, the reason, the evidence. */
+export interface StructureRepairRequest {
+  readonly index: number;
+  readonly field: RepairableField;
+  readonly reason: string;
+  readonly surviving: { readonly pattern: string; readonly interpretation: string; readonly alternative: string; readonly unknown: string; readonly reversal: string };
+  readonly evidence: { readonly page: string; readonly quote: string }[];
+}
+/** What governance did with one candidate (the synthesis or a hypothesis by index). */
+export interface StructureOutcome {
+  readonly candidate: 'synthesis' | number;
+  readonly verdict: 'kept' | 'salvaged' | 'repaired' | 'awaiting repair' | 'rejected';
+  readonly removed: string[];
+  readonly reasons: string[];
+  readonly repairedFields?: RepairableField[];
 }
 export interface BusinessStructure {
   /** What the business actually is, structurally: stronger than extraction, weaker than an unearned conclusion. */
@@ -236,6 +260,9 @@ export interface BusinessStructure {
   /** Delivery / purchase mechanisms a trusted page actually shows: the only material the conservative fallback may name
    *  when the synthesis does not stand. */
   readonly mechanisms?: { readonly kind: 'group_timetable' | 'one_to_one' | 'paid_first_step' | 'packages'; readonly ref: string }[];
+  /** Governance output for the audit / orchestrator only (moved into read.structureCandidates; never on the structure). */
+  readonly outcomes?: StructureOutcome[];
+  readonly repairs?: StructureRepairRequest[];
 }
 
 // Narrow on purpose: "what is your priority: users, validation or a paid launch?" is a goal question and stays.
@@ -337,7 +364,14 @@ export interface UnderstandingModelInput {
 export interface IUnderstandingModelPort {
   /** Propose-only synthesis; the application layer validates + grounds the result deterministically. */
   synthesize(input: UnderstandingModelInput): Promise<SynthesisOutput>;
+  /**
+   * BOUNDED REPAIR: rewrite ONE required field of ONE structural hypothesis that governance emptied, given the surviving
+   * hypothesis, the exact reason and the trusted evidence. Returns the field's new text (or '' to give up). Governance
+   * re-checks the result; nothing else is regenerated. Optional: without it, such a hypothesis is not kept.
+   */
+  repairStructureField?(input: StructureRepairInput): Promise<string>;
 }
+export interface StructureRepairInput extends StructureRepairRequest { readonly language: string }
 
 // ── persistence ports (infrastructure adapters) ──
 

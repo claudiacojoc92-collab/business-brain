@@ -1,4 +1,4 @@
-import type { AhaResult, BusinessStructure, ClaimEvidence, DiagnosisCheck, EvidenceBasis, GovernedUnderstanding, ModelClaim, ModelDimension, PageObservation, QuestionTier, StrategicDecision, StructuralHypothesis, UnderstandingRead, UntrustedReason } from './contracts';
+import type { AhaResult, BusinessStructure, ClaimEvidence, DiagnosisCheck, RepairableField, StructureOutcome, StructureRepairRequest, EvidenceBasis, GovernedUnderstanding, ModelClaim, ModelDimension, PageObservation, QuestionTier, StrategicDecision, StructuralHypothesis, UnderstandingRead, UntrustedReason } from './contracts';
 import { DIAGNOSIS_CHECKS, EVIDENCE_SURFACES, MODEL_DIMENSIONS, STRATEGIC_DECISIONS, STRUCTURE_RELATIONSHIPS } from './contracts';
 import { isHousekeeping, sameInsight } from './insight-text';
 import { isWebsiteHygiene, trustByRef } from './source-trust';
@@ -129,13 +129,23 @@ function kindsOf(text: string, names: readonly string[] = []): Set<string> {
  * A question that presupposes a future the founder never asked for (expanding, adding, fixing, improving, removing,
  * introducing, "what would have to change"): it steers instead of telling two readings apart.
  */
-const PRESUPPOSES = /(?<!\p{L})(ce ar trebui|ce trebuie s[ăa] se schimbe|what would (it take|have to change)|what needs to change|extinde\p{L}*|extinz\p{L}*|extinder\p{L}*|extins\p{L}*|extended|expand\p{L}*|expansion|ad[ăa]ug\p{L}*|\badd(ing)?\b|introduc\p{L}*|îmbun[ăa]t[ăa][țt]\p{L}*|imbunatat\p{L}*|improv\p{L}*|repar\p{L}*|\bfix(ing)?\b|elimin\p{L}*|remov\p{L}*|planuri (s[ăa]|de)|plans? to|inten[țt]ia de a|ar trebui|should|ampliar\p{L}*|aggiung\p{L}*|erweiter\p{L}*)(?!\p{L})/iu;
+const PRESUPPOSES = /(?<!\p{L})(ce ar trebui|ce trebuie s[ăa] se schimbe|what would (it take|have to change)|what needs to change|extinde\p{L}*|extinz\p{L}*|extinder\p{L}*|extins\p{L}*|extended|expand\p{L}*|expansion|ad[ăa]ug\p{L}*|\badd(ing)?\b|introduc\p{L}*|îmbun[ăa]t[ăa][țt]\p{L}*|imbunatat\p{L}*|improv\p{L}*|repar\p{L}*|\bfix(ing)?\b|elimin\p{L}*|remov\p{L}*|planuri (s[ăa]|de)|plans? to|(poate|pot|ar putea) fi (schimbat|mutat|modificat)\p{L}*|can be (changed|moved)|could be (changed|moved)|inten[țt]ia de a|ar trebui|should|ampliar\p{L}*|aggiung\p{L}*|erweiter\p{L}*)(?!\p{L})/iu;
 /**
  * A reversal condition about what the PAGES show ("if X appeared in the timetable / on the team page"). BB has already
  * read those pages: such a condition is either already true (then it contradicts the reading) or a change to the website,
  * not new evidence about the business. A reversal must be something the founder can answer or the business can show.
  */
+/** An appearance verb: the condition is that something APPEARS (or would) in a source. */
+const APPEARS = /(?<!\p{L})(apare|apar|ap[ăa]rea|ar ap[ăa]rea|appear\p{L}*|shows? up)(?!\p{L})/iu;
+/** A passive listing: something IS / WOULD BE listed, displayed, published, mentioned or included (an auxiliary first).
+ *  "the published timetable" (a participle used as an adjective) is not a condition. */
+const LISTED = /(?<!\p{L})(este|e|ar fi|a fost|au fost|sunt|fi|is|are|was|were|be|been|being|gets?|got)\s+(\p{L}+\s+)?(listat\p{L}*|listed|afi[șs]at\p{L}*|displayed|publicat\p{L}*|published|men[țt]ionat\p{L}*|mentioned|inclus\p{L}*|included|shown)(?!\p{L})/iu;
+/** The words a page condition is made of (stripped before judging whether the condition is already true). */
 const SOURCE_CONDITION = /(?<!\p{L})(apare|apar|ap[ăa]rea|ar ap[ăa]rea|appear\p{L}*|listat\p{L}*|listed|afi[șs]at\p{L}*|publicat\p{L}*|published|displayed|shown on|men[țt]ionat\p{L}*|mentioned on|inclus\p{L}* (în|pe)|included (in|on))(?!\p{L})/iu;
+/** A page condition DEPENDS on something appearing / being listed in a source; merely mentioning a page does not. */
+const isPageCondition = (clause: string): boolean => { const c = clause.replace(NEGATED_APPEARANCE, ' '); return APPEARS.test(c) || LISTED.test(c); };
+/** An arbitrary threshold ("most clients", "over 30%") the evidence does not give. */
+const THRESHOLD = /(\d+\s*%|(?<!\p{L})(percent|procent\p{L}*|per ?cent|majoritat\p{L}*|majority|most of (the )?(clients|customers)|cei mai mul[țt]i clien\p{L}*)(?!\p{L}))/iu;
 /** A presence condition: something exists / works / is available somewhere. */
 const PRESENCE = /(?<!\p{L})(exist\p{L}*|exists?|there (is|are)|lucreaz\p{L}* (la|și la|si la)|works? at|is (also )?at|este (și )?la|e la|disponibil\p{L}* (și )?la|available at|are (un|o|și)|has an?|includ\p{L}*|includes?)(?!\p{L})/iu;
 const NEGATED_APPEARANCE = /(?<!\p{L})(nu|not|n't|never|niciodat[ăa]|nicht)\s+(\p{L}+\s+)?(apar\p{L}*|ap[ăa]rea|appear\p{L}*|listat\p{L}*|listed|afi[șs]at\p{L}*|publicat\p{L}*|published|displayed|men[țt]ionat\p{L}*|inclus\p{L}*|included)(?!\p{L})/giu;
@@ -147,10 +157,11 @@ const JUDGEMENT = /(?<!\p{L})(sub-?utiliz\p{L}*|subutiliz\p{L}*|under-?utili[sz]
 /** A catch-all option ("or something else", "another operational decision"): it names no explanation. */
 const CATCH_ALL = /(?<!\p{L})(alt\p{L}* (decizi\p{L}*|motiv\p{L}*|constr[âa]ng\p{L}*|factor\p{L}*|cauz\p{L}*|limit\p{L}*)( operațional\p{L}*| operational\p{L}*)?|altceva|alt ceva|something else|another (\p{L}+ )?(reason|decision|factor|constraint)|other (\p{L}+ )?(reasons?|factors?|constraints?)|qualcos'altro|altro motivo|etwas anderes|anderer grund)(?!\p{L})/giu;
 /** Mechanism attributes a synthesis may attach to a group of offers; each needs evidence for EVERY member it covers. */
-const ATTRIBUTES: { name: string; claim: RegExp; evidence: RegExp }[] = [
+const ATTRIBUTES: { name: string; claim: RegExp; evidence: RegExp; inline?: boolean }[] = [
   { name: 'evaluation first', claim: /(?<!\p{L})(evaluar\p{L}*|evaluation|assessment|consulta[țt]i\p{L}*|consultation|valutazion\p{L}*|bewertung|erstgespr[äa]ch)(?!\p{L})/iu, evidence: /(?<!\p{L})(evaluar\p{L}*|evaluation|assessment|consulta[țt]i\p{L}*|consultation|valutazion\p{L}*|bewertung|erstgespr[äa]ch)(?!\p{L})/iu },
   { name: 'packages', claim: /(?<!\p{L})(abonament\p{L}*|pachet\p{L}*|packages?|subscriptions?|memberships?|abbonament\p{L}*|pacchett\p{L}*|abo\p{L}*)(?!\p{L})/iu, evidence: /(?<!\p{L})(abon\.|abonament\p{L}*|pachet\p{L}*|packages?|subscriptions?|memberships?|abbonament\p{L}*|pacchett\p{L}*|abo\p{L}*)/iu },
   { name: 'single sessions', claim: /(?<!\p{L})(per ședin[țt][ăa]|ședin[țt][ăa] unic[ăa]|single sessions?|per session|drop-?in|singola sessione|einzelstunde)(?!\p{L})/iu, evidence: /(1 ședin[țt][ăa]|single session|per session|drop-?in|singola|einzel)/iu },
+  { name: 'direct purchase', inline: true, claim: /(?<!\p{L})(direct\p{L}*|walk-?in|drop-?in|on the spot|fără programare|f[ăa]r[ăa] evaluare|without (an )?(appointment|assessment|evaluation))(?!\p{L})/iu, evidence: /(?<!\p{L})(direct\p{L}*|walk-?in|drop-?in|fără programare|without (an )?appointment|cump[ăa]r[ăa] online|buy online|add to cart|adaug[ăa] în co[șs])(?!\p{L})/iu },
   { name: 'timetable', claim: /(?<!\p{L})(orar\p{L}*|timetable|schedule\p{L}*|calendario|stundenplan)(?!\p{L})/iu, evidence: /(?<!\p{L})(orar\p{L}*|timetable|schedule\p{L}*|calendario|stundenplan)(?!\p{L})/iu },
 ];
 /** Delivery / purchase mechanisms the fallback may name: only when a trusted page shows them. */
@@ -168,6 +179,8 @@ const AUDIENCE_MODEL = /(?<!\p{L})((programe|activit[ăa][țt]i|servicii|clase|l
 
 /** How many items a sentence lists ("A, B, C and D" → 4). Six or more is a transcription of a page, not a relationship. */
 const listItems = (t: string): number => (t ?? '').split(/,|·|•|\s(?:și|si|and|e|ed|und)\s/u).filter((x) => x.trim()).length;
+/** Kept sentences back into text: a piece that ended a clause (";") now ends a sentence, and each one starts upper case. */
+const joinSentences = (parts: string[]): string => parts.map((x) => x.trim().replace(/[;,:]$/, '.')).filter(Boolean).map((x) => x.charAt(0).toUpperCase() + x.slice(1)).join(' ');
 const sentencesOf = (t: string): string[] => (t ?? '').split(/(?<=[.!?;])\s+/).map((x) => x.trim()).filter(Boolean);
 const wordsOf = (s: string): string[] => fold(s).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
 /**
@@ -246,33 +259,43 @@ export function governStructure(
 ): BusinessStructure | undefined {
   if (!raw) return undefined;
   const audit: NonNullable<BusinessStructure['audit']>[number][] = [];
+  const outcomes: StructureOutcome[] = [];
+  const repairs: StructureRepairRequest[] = [];
   const pages = observations.filter((o) => ctx.trusted(o.ref)).map((o) => fold(o.text));
   const unsupportedClaim = (t: string): boolean => BEHAVIOUR.test(t) || ECONOMICS.test(t) || JUDGEMENT.test(t) || mixesSourceVoice(t) || makesUnlicensedClaim(t)
     || (!ctx.hasDeclared && FOUNDER_CHOICE.test(t));
   // The same discipline for every STORED reasoning field, shown or not (alternative, reversal, unknown, rationale): no
-  // behaviour, economics, performance judgement, customer trait or founder choice. Hedged mentions of a possible cause
-  // ("local demand may explain it") stay; an evaluative claim ("strong demand", "under-utilised") does not.
+  // behaviour, economics, performance judgement, customer trait, founder choice or arbitrary threshold. Hedged mentions of
+  // a possible cause ("local demand may explain it") stay; an evaluative claim ("strong demand", "under-utilised") does not.
   const storedFault = (t: string): string => BEHAVIOUR.test(t) || ECONOMICS.test(t) ? 'claims behaviour or economics'
     : JUDGEMENT.test(t) ? 'a performance judgement (under-utilised, potential, demand level, value) the evidence does not earn'
       : CUSTOMER_TRAIT.test(t) ? 'a customer trait read from footprint'
-        : !ctx.hasDeclared && FOUNDER_CHOICE.test(t) ? 'a founder choice read from the website' : '';
+        : THRESHOLD.test(t) ? 'an arbitrary threshold the evidence does not give'
+          : !ctx.hasDeclared && FOUNDER_CHOICE.test(t) ? 'a founder choice read from the website' : '';
   const brand = brandWords(observations, ctx.trusted);
 
-  // The synthesis: what the business is, without overstating it. A sentence that says what BB does NOT know yet
-  // ("I don't yet know whether they behave as one business economically") is an unknown, not a claim.
-  let synthesis = (raw.synthesis ?? '').trim();
-  const asserted = synthesis.split(/(?<=[.!?])\s+/).filter((x) => !NOT_KNOWING.test(x)).join(' ');
-  const synthesisWhy = !synthesis ? ''
-    : isWebsiteHygiene(synthesis) || isHousekeeping(synthesis) ? 'about the website, not the business'
-      : unsupportedClaim(asserted) ? 'claims behaviour, economics or a founder choice the sources cannot support'
-        : OVERCLAIM.test(asserted) ? 'overstates the structure (more than the evidence earns)'
-          : VISIBILITY.test(synthesis) ? 'argues from what a page does not show'
-            : AUDIENCE_MODEL.test(asserted) ? 'names an operating model by audience or life stage, not by how it is sold, delivered, booked or priced'
-            : numbersIn(synthesis).length && !groundNumbers([synthesis], raw.synthesisNumbers, [], observations, ctx.entities, ctx.trusted).ok ? 'a number that is not grounded'
+  // ── The synthesis, SALVAGED before it is rejected. A list-shaped synthesis ("…combines: A, B and C") is governed item by
+  // item: an item that names a model by audience, overstates, argues from absence, claims behaviour / economics or shows
+  // an ungrounded number is dropped; the synthesis stands while at least two structural items remain. A sentence that
+  // says what BB does not know yet is an unknown, not a claim. Only when no structural statement survives does it fall.
+  const proposedSynthesis = (raw.synthesis ?? '').trim();
+  let synthesis = proposedSynthesis;
+  const synthesisFault = (part: string): string => isWebsiteHygiene(part) || isHousekeeping(part) ? 'about the website, not the business'
+    : unsupportedClaim(part) ? 'claims behaviour, economics or a founder choice the sources cannot support'
+      : OVERCLAIM.test(part) ? 'overstates the structure (more than the evidence earns)'
+        : VISIBILITY.test(part) ? 'argues from what a page does not show'
+          : AUDIENCE_MODEL.test(part) ? 'names an operating model by audience or life stage, not by how it is sold, delivered, booked or priced'
+            : numbersIn(part).length && !groundNumbers([part], raw.synthesisNumbers, [], observations, ctx.entities, ctx.trusted).ok ? 'a number that is not grounded'
               : '';
-  if (synthesisWhy) { audit.push({ item: synthesis, verdict: 'rejected', reason: `synthesis: ${synthesisWhy}` }); synthesis = ''; }
+  if (synthesis) {
+    const salvage = salvageSynthesis(synthesis, synthesisFault);
+    synthesis = salvage.text;
+    if (!synthesis) audit.push({ item: proposedSynthesis, verdict: 'rejected', reason: `synthesis: ${salvage.removed.map((r) => `${r.reason}: "${r.part}"`).join(' | ') || 'no structural statement'}` });
+    else if (salvage.removed.length) audit.push({ item: proposedSynthesis, verdict: 'kept', reason: `synthesis salvaged: ${salvage.removed.map((r) => `${r.reason}: "${r.part}"`).join(' | ')}` });
+    outcomes.push({ candidate: 'synthesis', verdict: !synthesis ? 'rejected' : salvage.removed.length ? 'salvaged' : 'kept', removed: salvage.removed.map((r) => r.part), reasons: salvage.removed.map((r) => r.reason) });
+  }
   // An attribute attached to a group of offers must hold for EACH member: unsupported members are removed from the group;
-  // if none would remain, the synthesis does not stand.
+  // if none would remain, the attribute (not the synthesis) goes; only an unresolvable claim with nothing left fails it.
   if (synthesis) {
     const prop = checkAttributePropagation(synthesis, observations, ctx.trusted, brand);
     if (prop.failed.length) { audit.push({ item: synthesis, verdict: 'rejected', reason: `synthesis: "${prop.failed.join(', ')}" applied to a group none of whose members the evidence shows it for` }); synthesis = ''; }
@@ -285,15 +308,26 @@ export function governStructure(
     }
   }
 
-  // Brand words: what every page title shares ("<Brand> Studio"), never what distinguishes one named thing from another.
+  // ── Hypotheses, SALVAGED before they are rejected. Only the CORE rejects: no interpretation, fewer than two anchored
+  // facts, fewer than two dimensions or named things, generic language, an unjustified cross-surface comparison. A pattern
+  // sentence, a consequence clause, a reversal clause or an unverifiable count is removed and the rest re-evaluated; the
+  // evidence carries the facts when the pattern empties. A REQUIRED field that empties (alternative, discriminating
+  // unknown, reversal) gets ONE bounded repair request (the orchestrator calls the model for that field only, then
+  // governs again); a field that was already repaired and still fails rejects the hypothesis.
   const kept: StructuralHypothesis[] = [];
   const trustedTexts = observations.filter((o) => ctx.trusted(o.ref)).map((o) => o.text);
-  for (const h of raw.hypotheses ?? []) {
+  (raw.hypotheses ?? []).forEach((h, index) => {
     const proposedPattern = (h.pattern ?? '').trim();
     const proposedInterpretation = (h.interpretation ?? '').trim();
-    const reject = (reason: string): void => { audit.push({ item: proposedInterpretation || proposedPattern, verdict: 'rejected', reason }); };
-    if (!proposedPattern || !proposedInterpretation) { reject('no pattern or no interpretation'); continue; }
-    if (isWebsiteHygiene(`${proposedPattern} ${proposedInterpretation}`) || isHousekeeping(`${proposedPattern} ${proposedInterpretation}`) || SITEMAP.test(`${proposedPattern} ${proposedInterpretation}`)) { reject('about the website, not the business'); continue; }
+    const removed: string[] = [];
+    const reasons: string[] = [];
+    const repaired = new Set(h.repairedFields ?? []);
+    const reject = (reason: string): void => {
+      audit.push({ item: proposedInterpretation || proposedPattern, verdict: 'rejected', reason });
+      outcomes.push({ candidate: index, verdict: 'rejected', removed, reasons: [...reasons, reason], ...(repaired.size ? { repairedFields: [...repaired] } : {}) });
+    };
+    if (!proposedInterpretation) { reject('no interpretation'); return; }
+    if (isWebsiteHygiene(`${proposedPattern} ${proposedInterpretation}`) || isHousekeeping(`${proposedPattern} ${proposedInterpretation}`) || SITEMAP.test(`${proposedPattern} ${proposedInterpretation}`)) { reject('about the website, not the business'); return; }
     // Synthesis, not restatement: two distinct anchored facts, two dimensions, two of the business's own things.
     // Each named thing must be on a page and in the claim. Words every page title shares (a brand prefix such as
     // "<Brand> Studio") are not what distinguishes them: the claim may use the distinctive part alone.
@@ -307,17 +341,18 @@ export function governStructure(
       const a = anchorEvidence(e, observations, ctx.trusted, named.flatMap((n) => [fold(n), distinctive(n)]).filter((x) => x.length >= 3));
       return a ? [{ ...a, ...(e.surface && EVIDENCE_SURFACES.includes(e.surface) ? { surface: e.surface } : {}) }] : [];
     }).filter((e, i, all) => !all.some((x, j) => j < i && (fold(x.quote).includes(fold(e.quote)) || fold(e.quote).includes(fold(x.quote)))));
-    if (evidence.length < 2) { reject('fewer than two distinct anchored facts: a restatement, not synthesis'); continue; }
+    if (evidence.length < 2) { reject('fewer than two distinct anchored facts: a restatement, not synthesis'); return; }
     const dimensions = [...new Set(h.dimensions ?? [])].filter((d) => MODEL_DIMENSIONS.includes(d));
-    if (dimensions.length < 2) { reject('it connects fewer than two business-model dimensions'); continue; }
+    if (dimensions.length < 2) { reject('it connects fewer than two business-model dimensions'); return; }
     const compares = [...new Set(h.compares ?? [])].filter((s) => EVIDENCE_SURFACES.includes(s));
-    if (compares.length >= 2 && !(h.comparisonBasis ?? '').trim()) { reject(`category confusion: it compares a ${compares[0]} with a ${compares[1]} without saying why they are comparable`); continue; }
-    // Counts the model listed must recount exactly: a wrong count is a false statement, not a trimmable sentence.
-    const counts = groundCounts(h.counts, observations, ctx.trusted);
-    if (!counts.ok) { reject(`count not grounded: ${counts.problems.join('; ')}`); continue; }
-    // Sentence by sentence (as stage lines are): a sentence that argues from what a page does not show, reads demand or
-    // volume from footprint, claims behaviour / economics / a founder choice, or shows an ungrounded number is DROPPED;
-    // the hypothesis stands only if a pattern and an interpretation remain and everything below still holds.
+    if (compares.length >= 2 && !(h.comparisonBasis ?? '').trim()) { reject(`category confusion: it compares a ${compares[0]} with a ${compares[1]} without saying why they are comparable`); return; }
+    // A count that does not recount is not shown: its sentences are judged like any other ungrounded number below.
+    const proposedCounts = groundCounts(h.counts, observations, ctx.trusted);
+    const counts = proposedCounts.ok ? proposedCounts : { ok: true, problems: [], values: [] as number[] };
+    if (!proposedCounts.ok) { removed.push('counts'); reasons.push(`count not grounded: ${proposedCounts.problems.join('; ')}`); }
+    // Sentence by sentence (as stage lines are): a sentence that argues from what a page does not show, transcribes a
+    // schedule or a list, reads demand from footprint, claims behaviour / economics / a founder choice, or shows an
+    // ungrounded number is DROPPED, and the rest is re-evaluated.
     const quotes = [...evidence.map((e) => e.quote), ...trustedTexts];
     const numbersOk = (sentence: string): boolean => {
       const numeric = withNumberWords(withoutPageTimes(sentence, trustedTexts), pages);
@@ -332,61 +367,160 @@ export function governStructure(
         : unsupportedClaim(sentence) ? 'claims behaviour, economics or a founder choice the sources cannot support'
           : !numbersOk(sentence) ? 'a number that is not grounded' : '';
     const trimmed: string[] = [];
-    const keep = (text: string): string => sentencesOf(text).filter((x) => { const r = faultOf(x); if (r) trimmed.push(`${r}: "${x}"`); return !r; }).join(' ');
-    const pattern = keep(proposedPattern);
-    const interpretation = keep(proposedInterpretation);
-    if (!pattern || !interpretation) { reject(trimmed.length ? trimmed.join(' | ') : 'nothing left'); continue; }
+    const drop = (label: string, reason: string, part: string): void => { trimmed.push(`${label}: ${reason}: "${part}"`); removed.push(part); reasons.push(`${label}: ${reason}`); };
+    const keep = (text: string, label: string): string => joinSentences(sentencesOf(text).filter((x) => { const r = faultOf(x); if (r) drop(label, r, x); return !r; }));
+    // The pattern may empty: the anchored evidence then carries the facts. The interpretation is the core.
+    const pattern = keep(proposedPattern, 'pattern');
+    const interpretation = keep(proposedInterpretation, 'interpretation');
+    if (!interpretation) { reject('the interpretation itself is unsupported'); return; }
     const claim = `${pattern} ${interpretation}`;
     const between = named.filter((x) => {
       const d = distinctive(x);
-      return d.length >= 3 && pages.some((p) => mentions(p, d)) && mentions(fold(claim), d);
+      return d.length >= 3 && pages.some((p) => mentions(p, d)) && mentions(fold(`${claim} ${evidence.map((e) => `${e.context ?? ''} ${e.quote}`).join(' ')}`), d);
     });
-    if (between.length < 2) { reject('it names fewer than two of this business\'s own things (generic)'); continue; }
-    if (GENERIC.test(claim) && !between.some((x) => mentions(fold(interpretation), distinctive(x)))) { reject('generic strategy language'); continue; }
-    // Reversible: an alternative that is not a paraphrase, what tells them apart, and what would reverse it.
-    const storedTrim = (text: string, label: string): string => sentencesOf(text).filter((x) => { const r = storedFault(x); if (r) trimmed.push(`${label}: ${r}: "${x}"`); return !r; }).join(' ').replace(/[;,:]\s*$/, '.');
+    if (between.length < 2) { reject('it names fewer than two of this business\'s own things (generic)'); return; }
+    if (GENERIC.test(claim) && !between.some((x) => mentions(fold(interpretation), distinctive(x)))) { reject('generic strategy language'); return; }
+    const storedTrim = (text: string, label: string): string => joinSentences(sentencesOf(text).filter((x) => { const r = storedFault(x); if (r) drop(label, r, x); return !r; }));
+    // Required fields: a field that empties is REPAIRED once (not a reason to lose the hypothesis); a field already repaired
+    // that still fails rejects it.
+    const missing: { field: RepairableField; reason: string }[] = [];
+    const require = (field: RepairableField, ok: boolean, reason: string): void => { if (!ok) missing.push({ field, reason }); };
+    // Reversible: an alternative that is not a paraphrase and keeps the meaningful set of explanations open.
     const alternative = storedTrim((h.alternative ?? '').trim(), 'alternative');
-    if (!alternative || sameInsight(alternative, interpretation, 0.6)) { reject('no real alternative explanation'); continue; }
-    // An alternative keeps the meaningful set of explanations open: one named cause (only staffing, only space) where
-    // several remain plausible collapses the uncertainty before any evidence narrowed it.
     const altKinds = kindsOf(alternative, [...named, ...ctx.entities]);
-    if (altKinds.size === 1) { reject(`the alternative collapses the uncertainty into one explanation (${[...altKinds][0]}) while others remain plausible`); continue; }
-    const question = (h.discriminator?.question ?? '').trim();
+    require('alternative', Boolean(alternative) && !sameInsight(alternative, interpretation, 0.6) && altKinds.size !== 1,
+      !alternative ? 'no alternative explanation remains' : altKinds.size === 1 ? `the alternative collapses the uncertainty into one explanation (${[...altKinds][0]}) while others remain plausible` : 'the alternative restates the reading');
     const unknown = storedTrim((h.discriminator?.unknown ?? '').trim(), 'discriminating unknown');
-    if (!question || !unknown || isWebsiteHygiene(question)) { reject('no discriminating unknown or question'); continue; }
-    // A reversal is checked against the same trusted evidence: a condition about what the pages show is either already
-    // true (it would contradict the reading) or a website change, never new evidence; it is dropped clause by clause.
+    require('unknown', Boolean(unknown), 'no discriminating unknown remains');
+    // A reversal is checked against the same trusted evidence, clause by clause: a clause that DEPENDS on something
+    // appearing on a page, or that the pages already make true, is dropped; the rest stands.
     const reversalCheck = checkReversal((h.reversal ?? '').trim(), pages, brand);
+    for (const d of reversalCheck.dropped) { removed.push(d.clause); reasons.push(`reversal: ${d.reason}`); }
     const reversal = storedTrim(reversalCheck.kept, 'reversal');
-    if (!reversal) { reject(`no valid reversal remains${reversalCheck.dropped.length ? `: ${reversalCheck.dropped.map((d) => `${d.reason}: "${d.clause}"`).join(' | ')}` : ''}`); continue; }
-    // Decision-relevant: a decision it informs, never an outcome.
-    // The decision line, fork by fork ("decides whether A, or whether B"): a branch that predicts an outcome, advises or
-    // judges performance is dropped; the line stands only if its first branch is clean.
+    require('reversal', Boolean(reversal), `no valid reversal remains${reversalCheck.dropped.length ? `: ${reversalCheck.dropped.map((d) => `${d.reason}: "${d.clause}"`).join(' | ')}` : ''}`);
+    const needRepair = missing.filter((m) => !repaired.has(m.field));
+    if (needRepair.length) {
+      for (const m of needRepair) repairs.push({ index, field: m.field, reason: m.reason, surviving: { pattern, interpretation, alternative, unknown, reversal }, evidence: evidence.map((e) => ({ page: [e.page ?? e.ref, e.context].filter(Boolean).join(' · '), quote: e.quote })) });
+      audit.push({ item: interpretation, verdict: 'rejected', reason: `awaiting repair of ${needRepair.map((m) => `${m.field} (${m.reason})`).join('; ')}` });
+      outcomes.push({ candidate: index, verdict: 'awaiting repair', removed, reasons: [...reasons, ...needRepair.map((m) => `${m.field}: ${m.reason}`)] });
+      return;
+    }
+    if (missing.length) { reject(`still invalid after repair: ${missing.map((m) => `${m.field} (${m.reason})`).join('; ')}`); return; }
+    // Decision-relevant: the decision line, fork by fork ("decides whether A, or whether B"); a branch that predicts an
+    // outcome, advises, judges performance or brings unlicensed framing is dropped. An empty line is not fatal: the
+    // reading still stands, it simply names no decision of its own.
     const proposedWhy = (h.whyItMatters ?? '').trim();
     const branches = proposedWhy.split(/,?\s(?=(?:sau dac[ăa]|or whether|or if|o se|oder ob)\s)/iu);
     const licensedBy = `${pattern} ${interpretation} ${alternative}`;
     const whyFault = (t: string): boolean => BEHAVIOUR.test(t) || ECONOMICS.test(t) || CONSEQUENCE.test(t) || JUDGEMENT.test(t) || makesUnlicensedClaim(t)
       || FRAMING.some((f) => f.claim.test(t) && !f.license.test(licensedBy));
-    const whyItMatters = whyFault(branches[0] ?? '') ? '' : branches.filter((b) => { const bad = whyFault(b); if (bad) trimmed.push(`why it matters: an outcome, advice, performance judgement or unlicensed framing: "${b}"`); return !bad; }).join(' ').replace(/\s*[,;]?\s*$/, '').trim().replace(/([^.!?])$/, '$1.');
+    const whyItMatters = !proposedWhy || whyFault(branches[0] ?? '') ? '' : branches.filter((b) => { const bad = whyFault(b); if (bad) drop('why it matters', 'an outcome, advice, performance judgement or unlicensed framing', b); return !bad; }).join(' ').replace(/\s*[,;]?\s*$/, '').trim().replace(/([^.!?])$/, '$1.');
+    if (proposedWhy && !whyItMatters) { removed.push(proposedWhy); reasons.push('why it matters: an outcome, advice, performance judgement or unlicensed framing'); }
     const changes = [...new Set(h.changes ?? [])].filter((x) => STRATEGIC_DECISIONS.includes(x));
-    if (!proposedWhy || !changes.length) { reject('it names no decision it informs'); continue; }
-    if (!whyItMatters) { reject('why it matters predicts an outcome, gives advice or judges performance'); continue; }
-    if (kept.some((k) => sameInsight(k.interpretation, interpretation, 0.5))) { reject('the same reading as one already kept'); continue; }
-    if (kept.length >= 3) { reject('more than three: lower impact'); continue; }
-    const why = governRationale((h.discriminator.why ?? '').trim(), [question, interpretation, alternative]);
+    if (kept.some((k) => sameInsight(k.interpretation, interpretation, 0.5))) { reject('the same reading as one already kept'); return; }
+    if (kept.length >= 3) { reject('more than three: lower impact'); return; }
+    const question = (h.discriminator?.question ?? '').trim();
+    const why = question ? governRationale((h.discriminator.why ?? '').trim(), [question, interpretation, alternative]) : '';
     const comparisonBasis = storedTrim((h.comparisonBasis ?? '').trim(), 'comparison basis');
     kept.push({
       pattern, interpretation, alternative, reversal, whyItMatters, changes, dimensions, between, evidence,
       relationship: STRUCTURE_RELATIONSHIPS.includes(h.relationship) ? h.relationship : 'asymmetry',
-      discriminator: { unknown, question, ...(why ? { why } : {}) },
+      // A reading may stand without a question of its own (it then simply does not compete for a slot).
+      discriminator: { unknown, question: question && !isWebsiteHygiene(question) ? question : '', ...(why ? { why } : {}) },
       ...(compares.length ? { compares } : {}), ...(comparisonBasis ? { comparisonBasis } : {}),
-      ...(h.counts?.length ? { counts: h.counts } : {}), ...(h.numbers?.length ? { numbers: h.numbers } : {}), ...(h.calculations?.length ? { calculations: h.calculations } : {}),
+      ...(proposedCounts.ok && h.counts?.length ? { counts: h.counts } : {}), ...(h.numbers?.length ? { numbers: h.numbers } : {}), ...(h.calculations?.length ? { calculations: h.calculations } : {}),
       // Only the verdicts are stored with the hypothesis; the dropped clauses themselves live in the audit.
       reversalCheck: { checked: true, dropped: reversalCheck.dropped.map((d) => ({ reason: d.reason })) },
+      ...(repaired.size ? { repairedFields: [...repaired] } : {}),
     });
     audit.push({ item: interpretation, verdict: 'kept', reason: `synthesis across facts, specific, reversible, decision-relevant${trimmed.length ? `; dropped sentences: ${trimmed.join(' | ')}` : ''}${reversalCheck.dropped.length ? `; dropped reversal clauses: ${reversalCheck.dropped.map((d) => `${d.reason}: "${d.clause}"`).join(' | ')}` : ''}` });
+    outcomes.push({ candidate: index, verdict: repaired.size ? 'repaired' : removed.length ? 'salvaged' : 'kept', removed, reasons, ...(repaired.size ? { repairedFields: [...repaired] } : {}) });
+  });
+  return { synthesis, hypotheses: kept, mechanisms: verifiedMechanisms(observations, ctx.trusted), audit, outcomes, ...(repairs.length ? { repairs } : {}) };
+}
+
+/**
+ * Salvage a synthesis part by part. A sentence with a list after a colon ("…combines several models: A, B and C") is
+ * governed item by item: failing items are dropped and the list rejoined; the sentence stands while at least two items
+ * remain (fewer is no longer a structure). A sentence without a list stands or falls whole. Sentences that say what BB
+ * does not know yet are kept as they are. Nothing structural left → empty (the card's fallback takes over).
+ */
+export function salvageSynthesis(text: string, fault: (part: string) => string): { text: string; removed: { part: string; reason: string }[] } {
+  const removed: { part: string; reason: string }[] = [];
+  const out: string[] = [];
+  for (const sentence of sentencesOf(text)) {
+    if (NOT_KNOWING.test(sentence)) { out.push(sentence); continue; }
+    const colon = depth0Index(sentence, ':');
+    if (colon === -1) {
+      const r = fault(sentence);
+      if (r) removed.push({ part: sentence, reason: r }); else out.push(sentence);
+      continue;
+    }
+    const lead = sentence.slice(0, colon + 1);
+    const leadFault = fault(lead);
+    if (leadFault) { removed.push({ part: sentence, reason: leadFault }); continue; }
+    const body = sentence.slice(colon + 1).replace(/[.!?]\s*$/, '');
+    const end = /[.!?]\s*$/.exec(sentence)?.[0]?.trim() ?? '.';
+    const { items, conjunction } = splitListItems(body);
+    // An item failing only on a number keeps its words without the number ("packages of 4–12 sessions" → "packages").
+    const salvaged = items.map((item) => {
+      const r = fault(item);
+      if (!r) return item;
+      if (/\d/.test(item)) { const bare = item.replace(NUMBER_PHRASE, '').replace(/\s{2,}/g, ' ').trim(); if (bare && !fault(bare)) { removed.push({ part: item, reason: `${r} (the number removed, the item kept)` }); return bare; } }
+      removed.push({ part: item, reason: r });
+      return '';
+    });
+    const keptItems = salvaged.filter(Boolean);
+    if (keptItems.length === items.length && salvaged.every((x, i) => x === items[i])) { out.push(sentence); continue; }
+    if (keptItems.length === items.length) { out.push(`${lead} ${rejoin(keptItems, conjunction)}${end}`); continue; }
+    if (keptItems.length < 2) { if (items.length >= 2) removed.push({ part: sentence, reason: 'fewer than two structural items remain' }); else if (!fault(sentence)) out.push(sentence); continue; }
+    out.push(`${lead} ${rejoin(keptItems, conjunction)}${end}`);
   }
-  return { synthesis, hypotheses: kept, mechanisms: verifiedMechanisms(observations, ctx.trusted), audit };
+  const structural = out.filter((x) => !NOT_KNOWING.test(x));
+  return { text: structural.length ? out.join(' ') : '', removed };
+}
+
+/** Items back into a list: "A, B and C" (a contrast item keeps its own comma inside). */
+const rejoin = (items: string[], conjunction: string): string => (items.length === 1 ? items[0]! : `${items.slice(0, -1).join(', ')} ${conjunction} ${items[items.length - 1]}`);
+const CONTRAST = /^\s*(în timp ce|in timp ce|iar|dar|însă|insa|while|whereas|but|mentre|ma|während|aber)(?!\p{L})/iu;
+/** A number phrase ("de 4–12 ședințe", "of 3 sessions"): salvage removes it from an item before dropping the item. */
+const NUMBER_PHRASE = /\s*(?:(?:de|of|cu|with|din|from|da|von)\s+)?\d+(?:[.,]\d+)?(?:\s*[–-]\s*\d+(?:[.,]\d+)?)?\s*(?:%|\p{L}+)?/gu;
+/** Index of a character outside parentheses, or -1. */
+function depth0Index(text: string, ch: string): number {
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '(') depth++; else if (c === ')') depth = Math.max(0, depth - 1); else if (c === ch && depth === 0) return i;
+  }
+  return -1;
+}
+/**
+ * The items of a list: split on commas outside parentheses; the last segment also on its final " and / și / e / und "
+ * when what follows is an item of its own (two words or more), as lists are written ("A, B and C").
+ */
+function splitListItems(body: string): { items: string[]; conjunction: string } {
+  const parts: string[] = [];
+  let depth = 0; let from = 0;
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (c === '(') depth++; else if (c === ')') depth = Math.max(0, depth - 1); else if ((c === ',' || c === ';') && depth === 0) { parts.push(body.slice(from, i)); from = i + 1; }
+  }
+  parts.push(body.slice(from));
+  let conjunction = 'și';
+  const last = parts.pop() ?? '';
+  const depthAt = (t: string, at: number): number => [...t.slice(0, at)].reduce((d, c) => (c === '(' ? d + 1 : c === ')' ? Math.max(0, d - 1) : d), 0);
+  const conj = [...last.matchAll(/\s(și|si|and|e|und)\s/giu)].filter((m) => depthAt(last, m.index!) === 0).pop();
+  if (conj && last.slice(conj.index! + conj[0].length).trim().split(/\s+/).length >= 2 && last.slice(0, conj.index!).trim()) {
+    conjunction = conj[1]!;
+    parts.push(last.slice(0, conj.index!), last.slice(conj.index! + conj[0].length));
+  } else parts.push(last);
+  // "A, while B" is ONE contrast, not two items: a segment opening with a contrast connector stays with the one before.
+  const merged: string[] = [];
+  for (const part of parts) {
+    if (merged.length && CONTRAST.test(part)) merged[merged.length - 1] = `${merged[merged.length - 1]},${part}`;
+    else merged.push(part);
+  }
+  return { items: merged.map((x) => x.replace(/^\s*(și|si|and|e|und)\s+/iu, '').trim()).filter(Boolean), conjunction };
 }
 
 /**
@@ -457,21 +591,23 @@ export function checkReversal(reversal: string, pages: readonly string[], brand:
     return false;
   });
   const kept = clauses.filter((clause) => {
-    if (PRESENCE.test(clause)) {
+    if (PRESENCE.test(clause) && !isPageCondition(clause)) {
       const words = presenceWords(clause.replace(NEGATED_APPEARANCE, ' '));
       if (words.length >= 2 && together(words)) { dropped.push({ clause, reason: 'already true in the pages BB read (its business words appear together on one page)' }); return false; }
       return true;
     }
     // "…appointments that do not appear in the timetable" DESCRIBES the page (the fact itself is about the business);
     // only a condition that something WOULD appear / be listed is a page condition.
-    if (!SOURCE_CONDITION.test(clause.replace(NEGATED_APPEARANCE, ' '))) return true;
+    if (!isPageCondition(clause)) return true;
     const words = [...new Set(wordsOf(clause.replace(new RegExp(SOURCE_CONDITION.source, 'giu'), ' ')).filter(vocabulary).map(stem))];
     const alreadyTrue = words.length >= 2 && together(words);
     dropped.push({ clause, reason: alreadyTrue ? 'already true in the pages BB read (its business words appear together on one page)' : 'about what the pages show, not new evidence about the business' });
     return false;
   });
-  const text = kept.join(' ').trim();
-  return { kept: text ? text.charAt(0).toUpperCase() + text.slice(1) : '', dropped };
+  // Nothing dropped: the reversal stands exactly as written (its own "or" kept). Otherwise the surviving conditions.
+  if (!dropped.length) return { kept: reversal.trim(), dropped };
+  const text = kept.map((x) => x.replace(/[.;,]\s*$/, '')).join('; ').trim();
+  return { kept: text ? `${text.charAt(0).toUpperCase()}${text.slice(1)}.` : '', dropped };
 }
 
 /** Words most page titles share ("<Brand> Studio"): never what distinguishes one named thing from another. */
@@ -550,6 +686,8 @@ export function checkAttributePropagation(synthesis: string, observations: reado
     const items = sentence.split(/(?<=[:;])|,(?![^()]*\))/u);
     return items.map((item) => {
       if (/\(/.test(item)) return item;
+      // A continuation ("which works as a first step…", "while…") belongs to the item before it: not a category.
+      if (/^\s*(care|ce|which|that|who|che|die|der|das|iar|dar|însă|while|whereas|but|în timp ce|ceea ce)(?!\p{L})/iu.test(item)) return item;
       const claimed = ATTRIBUTES.filter((a) => a.claim.test(item));
       if (!claimed.length) return item;
       const cut = Math.min(...[
@@ -565,7 +703,18 @@ export function checkAttributePropagation(synthesis: string, observations: reado
       const descriptors = significant(subject, brand).filter((w) => !GENERIC_CATEGORY.has(w));
       const covered = named.length ? named
         : descriptors.length ? families.filter((f) => descriptors.every((d) => fold(f.page.text).includes(stemOf(d)))) : [];
-      const drop = (reason: string): string => { for (const a of claimed) removed.push({ subject: subject.trim(), attribute: a.name, reason }); return subject.replace(/\s+$/, ''); };
+      // An inline attribute word ("booked DIRECTLY from the timetable") goes alone; a clause attribute ("which start with a
+      // paid evaluation") goes with its tail.
+      // Only the attributes that actually fail are removed. An inline attribute word ("booked DIRECTLY from the timetable")
+      // goes alone; a clause attribute ("which start with a paid evaluation") goes with its tail.
+      const failing = (fams: typeof families): typeof claimed => claimed.filter((x) => !fams.length || !fams.every((f) => x.evidence.test(f.page.text)));
+      const drop = (reason: string, fams: typeof families = covered): string => {
+        const bad = failing(fams);
+        for (const a of bad) removed.push({ subject: subject.trim(), attribute: a.name, reason });
+        return bad.length && bad.every((x) => x.inline)
+          ? bad.reduce((t, x) => t.replace(new RegExp(x.claim.source, 'iu'), ''), item).replace(/\s{2,}/g, ' ').replace(/\s+([,.;])/g, '$1')
+          : subject.replace(/\s+$/, '');
+      };
       if (!covered.length) return drop('the category cannot be resolved to the business\'s offers, so no shared attribute can be verified');
       let keep = covered;
       for (const a of claimed) keep = keep.filter((f) => a.evidence.test(f.page.text));
@@ -626,7 +775,7 @@ function settlesFork(question: string, h: StructuralHypothesis, names: readonly 
  */
 const FRAMING: { name: string; claim: RegExp; license: RegExp }[] = [
   { name: 'size', claim: /(?<!\p{L})(mai mic\p{L}*|mai mari?|smaller|bigger|larger|m[ăa]rime|dimensiun\p{L}*|size|scal[ăae]\p{L}*|scale|pi[ùu] piccol\p{L}*|kleiner|gr[öo][ßs]er)(?!\p{L})/iu, license: /(?<!\p{L})(mai mic\p{L}*|mai mari?|smaller|bigger|larger|m[ăa]rime|dimensiun\p{L}*|size|scal[ăae]\p{L}*|scale|c[âa][țt]i|c[âa]te|how many|num[ăa]r\p{L}*)(?!\p{L})/iu },
-  { name: 'utilisation', claim: /(?<!\p{L})(utiliz\p{L}*|ocupa\p{L}*|occupan\p{L}*|pline|full|locuri libere|spare capacity|capacitate liber\p{L}*|auslast\p{L}*)(?!\p{L})/iu, license: /(?<!\p{L})(utiliz\p{L}*|ocupa\p{L}*|occupan\p{L}*|pline|full|locuri|spots?|places?|capacit\p{L}*)(?!\p{L})/iu },
+  { name: 'utilisation', claim: /(?<!\p{L})(utiliz\p{L}*|neutiliz\p{L}*|nefolosit\p{L}*|unused|idle|ocupa\p{L}*|occupan\p{L}*|pline|full|locuri libere|spare capacity|capacitate liber\p{L}*|auslast\p{L}*)(?!\p{L})/iu, license: /(?<!\p{L})(utiliz\p{L}*|ocupa\p{L}*|occupan\p{L}*|pline|full|locuri|spots?|places?|capacit\p{L}*)(?!\p{L})/iu },
   { name: 'maturity', claim: /(?<!\p{L})(matur\p{L}*|consacrat\p{L}*|established|în cre[șs]tere|growing|în declin|declining|stagn\p{L}*)(?!\p{L})/iu, license: /(?<!\p{L})(matur\p{L}*|cre[șs]t\p{L}*|grow\p{L}*|declin\p{L}*|stagn\p{L}*|ultimele|last \d+|over time)(?!\p{L})/iu },
   { name: 'demand', claim: /(?<!\p{L})(cerer\p{L}*|demand|domanda|nachfrage)(?!\p{L})/iu, license: /(?<!\p{L})(cerer\p{L}*|demand|domanda|nachfrage)(?!\p{L})/iu },
   { name: 'performance', claim: /(?<!\p{L})(motor\p{L}*|driver\p{L}*|miz[ăa]\p{L}*|performan\p{L}*|importan\p{L}*|principal\p{L}*|main|key|cheie)(?!\p{L})/iu, license: /(?<!\p{L})(venit\p{L}*|revenue|volum\p{L}*|num[ăa]r\p{L}*|clien[țt]i activi|ședin[țt]e|sedinte|sessions?|bookings?|rezerv\p{L}*|program[ăa]ri|aduc\p{L}*|bring\p{L}*|drive\p{L}*|genereaz\p{L}*)(?!\p{L})/iu },
@@ -770,7 +919,7 @@ export function governUnderstanding(raw: GovernedUnderstanding, observations: re
   // separate audit record that no surface reads (the card, the conversation and Strategy never see it).
   const governedStructure = governStructure(u.read.structure, observations, { hasDeclared, trusted: (r) => trust(r).trusted, entities });
   const structureAudit = governedStructure?.audit;
-  const structure: BusinessStructure | undefined = governedStructure ? (({ audit: _audit, ...rest }) => rest)(governedStructure) : undefined;
+  const structure: BusinessStructure | undefined = governedStructure ? (({ audit: _audit, outcomes: _outcomes, repairs: _repairs, ...rest }) => rest)(governedStructure) : undefined;
 
   // 4. The diagnosis, earned.
   const diagnosis = earnDiagnosis(u.read.diagnosis, { hasDeclared, trustedRefs });
@@ -834,6 +983,7 @@ export function governUnderstanding(raw: GovernedUnderstanding, observations: re
   const tiers = new Map<Question, { tier: QuestionTier; reason: string; resolves?: number }>();
   for (const q of reserved) tiers.set(q, { tier: 'A', reason: `strategy-critical for readiness: ${missing.find((d) => covers(q, d)) ?? q.dimension} is unknown` });
   const discriminating: Question[] = [];
+  const questionRepairs: StructureRepairRequest[] = [];
   // A B question must settle THE fork (the hypothesis's reading vs its alternative), without steering. The hypothesis's
   // own question is used when it does; otherwise a candidate question that does; otherwise no slot is spent on it.
   const names = [...entities, ...(structure?.hypotheses ?? []).flatMap((h) => h.between)];
@@ -842,10 +992,19 @@ export function governUnderstanding(raw: GovernedUnderstanding, observations: re
     const own = h.discriminator.question;
     const fork = `"${h.interpretation}" vs "${h.alternative}"`;
     const ownCheck = settlesFork(own, h, names, brand);
-    const ownOk = ownCheck.ok && !leading(own);
-    if (!ownOk) excludedQuestions.push({ question: own, reason: leading(own) ? 'presupposes a future the founder has not stated' : `does not settle the fork of hypothesis ${i + 1} (offers: ${ownCheck.offers.join(', ') || 'no explanation'})` });
+    const ownOk = Boolean(own) && ownCheck.ok && !leading(own);
+    if (own && !ownOk) excludedQuestions.push({ question: own, reason: leading(own) ? 'presupposes a future the founder has not stated' : `does not settle the fork of hypothesis ${i + 1} (offers: ${ownCheck.offers.join(', ') || 'no explanation'})` });
     const candidate = ownOk ? own : questions.find((q) => !reserved.includes(q) && !discriminating.includes(q) && settlesFork(q.question, h, names, brand).ok)?.question;
-    if (!candidate) return;
+    if (!candidate) {
+      // Salvage: the reading stands, but its question does not settle its fork. ONE bounded repair of the question is
+      // requested (never twice); until then the reading simply has no slot.
+      if (!(h.repairedFields ?? []).includes('question')) {
+        questionRepairs.push({ index: i, field: 'question', reason: own ? (leading(own) ? 'the question presupposes a future the founder has not stated' : `the question does not offer both sides of the fork (offers: ${ownCheck.offers.join(', ') || 'no explanation'})`) : 'no question',
+          surviving: { pattern: h.pattern, interpretation: h.interpretation, alternative: h.alternative, unknown: h.discriminator.unknown, reversal: h.reversal },
+          evidence: h.evidence.map((e) => ({ page: [e.page ?? e.ref, e.context].filter(Boolean).join(' · '), quote: e.quote })) });
+      }
+      return;
+    }
     const viaA = reserved.find((q) => sameInsight(q.question, candidate, 0.5));
     if (viaA) { tiers.set(viaA, { ...tiers.get(viaA)!, resolves: i }); return; }
     // The candidate itself, or a near-identical question that ALSO settles the fork (never a weaker look-alike).
@@ -878,11 +1037,17 @@ export function governUnderstanding(raw: GovernedUnderstanding, observations: re
     if (finding) untrusted.push({ finding, refs: clean(x.refs), why: (x.why ?? '').trim(), ...((x.why ?? '').trim() ? {} : { reason: reasonOf(clean(x.refs)) }) });
   }
 
+  const allRepairs = [...(governedStructure?.repairs ?? []), ...questionRepairs];
+  const structureCandidates: UnderstandingRead['structureCandidates'] = u.read.structure ? {
+    synthesis: (u.read.structure.synthesis ?? '').trim(), hypotheses: u.read.structure.hypotheses ?? [], outcomes: governedStructure?.outcomes ?? [],
+    ...(allRepairs.length ? { repairs: allRepairs } : {}),
+  } : undefined;
   const read: UnderstandingRead = {
     model, notConcluding, questions, diagnosis, strategyReadiness, questionTiers,
     ...(excludedQuestions.length ? { excludedQuestions } : {}),
     ...(structure ? { structure } : {}),
     ...(structureAudit?.length ? { structureAudit } : {}),
+    ...(structureCandidates ? { structureCandidates } : {}),
     ...(u.read.observations?.length ? { observations: u.read.observations } : {}),
     untrusted: dedupeBy(untrusted, (x) => x.finding),
     websiteNotes: [...new Set(websiteNotes)],
@@ -901,6 +1066,39 @@ export function governUnderstanding(raw: GovernedUnderstanding, observations: re
       ? { decided: true, statement: diagnosis.statement, why: diagnosis.checks.causal?.note ?? '', sourceRefs: diagnosis.sourceRefs }
       : { decided: false, statement: '', why: '', sourceRefs: [] },
   };
+}
+
+/**
+ * SALVAGE-FIRST governance with ONE bounded repair round: govern; for every required hypothesis field governance emptied
+ * (alternative, discriminating unknown, reversal) ask the model to rewrite THAT field only (surviving hypothesis, exact
+ * reason, trusted evidence); put the answer in place, mark the field repaired, and govern again. A repaired field that
+ * still fails rejects the hypothesis; there is no second round and no open-ended regeneration.
+ */
+export async function governUnderstandingWithRepair(
+  raw: GovernedUnderstanding,
+  observations: readonly PageObservation[],
+  repair?: (request: StructureRepairRequest) => Promise<string>,
+  maxRepairs = 6,
+): Promise<GovernedUnderstanding> {
+  const first = governUnderstanding(raw, observations);
+  // Question repairs name the KEPT hypothesis; map them back to the candidate the model proposed.
+  const kept = first.read?.structure?.hypotheses ?? [];
+  const rawHyps = raw.read?.structure?.hypotheses ?? [];
+  const requests = (first.read?.structureCandidates?.repairs ?? []).slice(0, maxRepairs).map((r) => (r.field !== 'question' ? r
+    : { ...r, index: rawHyps.findIndex((h) => sameInsight(h.interpretation ?? '', kept[r.index]?.interpretation ?? '', 0.6) || (h.interpretation ?? '').includes(kept[r.index]?.interpretation ?? '\u0000')) })).filter((r) => r.index >= 0);
+  if (!requests.length || !repair || !raw.read?.structure) return first;
+  const hypotheses = [...(raw.read.structure.hypotheses ?? [])].map((h) => ({ ...h, discriminator: { ...(h.discriminator ?? { unknown: '', question: '' }) } })) as (StructuralHypothesis & { repairedFields?: RepairableField[] })[];
+  for (const r of requests) {
+    const value = (await repair(r).catch(() => '')).trim();
+    const h = hypotheses[r.index];
+    if (!h) continue;
+    const marked = { ...h, repairedFields: [...new Set([...(h.repairedFields ?? []), r.field])] };
+    hypotheses[r.index] = r.field === 'unknown' ? { ...marked, discriminator: { ...marked.discriminator, unknown: value } }
+      : r.field === 'question' ? { ...marked, discriminator: { ...marked.discriminator, question: value } }
+        : { ...marked, [r.field]: value };
+  }
+  // Fields already valid on the first pass are carried over as they are (the second pass re-checks everything).
+  return governUnderstanding({ ...raw, read: { ...raw.read, structure: { ...raw.read.structure, hypotheses } } }, observations);
 }
 
 /**

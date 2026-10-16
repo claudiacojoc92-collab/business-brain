@@ -208,7 +208,7 @@ function UnderstandingReadView({ u, t }: { u: NonNullable<ArcView['understanding
           {hyps.length ? (
             <ul className="s0-u-list s0-u-hyps">{hyps.map((h, i) => (
               <li key={i} data-understanding-hypothesis="">
-                <strong>{h.interpretation}</strong> {h.pattern}
+                <strong>{h.interpretation}</strong>{h.pattern ? ` ${h.pattern}` : null}
                 <span className="s0-talk-note s0-u-hyp-alt"> {t('arc.u2.alt', { alt: h.alternative })}</span>
                 {h.evidence.length ? (
                   <details className="s0-u-why">
@@ -224,12 +224,12 @@ function UnderstandingReadView({ u, t }: { u: NonNullable<ArcView['understanding
         </div>
       ) : null}
 
-      {hyps.length || s.stageNotNamed ? (
+      {/* Only real forks: what would weaken or reverse a reading. Never a stage disclaimer; hidden when there is none. */}
+      {hyps.some((h) => h.reversal) ? (
         <div className="s0-u-card" data-understanding-could-change="">
           <div className="s0-u-card-label">{t('arc.u2.couldChange')}</div>
           <ul className="s0-u-list">
             {hyps.map((h, i) => (h.reversal ? <li key={i}>{h.reversal}</li> : null))}
-            {s.stageNotNamed ? <li>{t('arc.u2.stageNotNamed')}</li> : null}
           </ul>
         </div>
       ) : null}
