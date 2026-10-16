@@ -6,24 +6,19 @@ type Ask = Read['asks'][number];
 type T = (key: string, vars?: Record<string, string>) => string;
 
 /**
- * FOUNDER VIEW (2026-10-16, projection only). Composes the governed signals the api sends (verified mechanisms, the two
- * places a kept hypothesis compares, the synthesis clauses governance kept, each question's tier and dimension) into four
- * short sections, with fixed sentences in the business's language. It never adds a fact: every business-specific word
- * comes from governed state; the fixed sentences only relate them. Uncertainty is said once, where it matters.
+ * FIRST READ (2026-10-16, projection only). The initial screen gives a point of view and the questions, nothing more:
+ * the deeper read comes after the founder answers (the updated mirror). Composed from the governed signals the api
+ * sends (verified mechanisms, the routes clause, the two places a kept hypothesis compares, each question's tier and
+ * dimension) with fixed sentences in the business's language. It never adds a fact.
  */
 export interface FounderView {
-  /** What you've built: recognition of the structure, not the menu. */
-  readonly built: string;
-  /** What stands out: at most two readings, each with its "so what" or its one open fork. */
-  readonly standsOut: string[];
-  /** Where I'd look first: what BB would establish before advising (from the questions it is about to ask). */
-  readonly lookFirst: string;
-  /** The rationale shown under a question (a fixed, neutral one for the acquisition question). */
+  /** My first read: the strongest structural relationship, then what BB needs to know (≤ 3 sentences). */
+  readonly firstRead: string;
+  /** One thing I'm watching: the fork the B question settles, not yet treated as strategy (≤ 2 sentences), or ''. */
+  readonly watching: string;
+  /** The rationale shown under a question (fixed, neutral ones for the strategy-critical questions). */
   readonly whyOf: (a: Ask) => string;
 }
-
-const PARTS = ['group_timetable', 'one_to_one', 'paid_first_step'] as const;
-const LOOK = new Set(['performance', 'acquisition', 'intent', 'retention', 'conversion', 'economics']);
 
 /** "a", "a and b", "a, b and c" in the business's language. */
 export function joinList(items: string[], t: T): string {
@@ -31,44 +26,49 @@ export function joinList(items: string[], t: T): string {
   return t('arc.u3.list', { rest: items.slice(0, -1).join(', '), last: items[items.length - 1]! });
 }
 const firstSentence = (x: string): string => (x.match(/^[^.!?]+[.!?]?/)?.[0] ?? x).trim();
+const capital = (x: string): string => x.charAt(0).toUpperCase() + x.slice(1);
 
 /** null when the api sent no founder signals (an older api or snapshot): the card keeps its earlier layout. */
-export function composeFounderView(s: Structure, asks: Ask[], fallbackBuilt: string, t: T): FounderView | null {
+export function composeFounderView(s: Structure, asks: Ask[], fallback: string, t: T): FounderView | null {
   const f = s.founder;
   if (!f || !s.synthesis) return null;
+  const has = (k: (typeof f.mechanisms)[number]) => f.mechanisms.includes(k);
   const places = f.places && f.places.length === 2 ? { a: f.places[0]!, b: f.places[1]! } : null;
 
-  // 1. WHAT YOU'VE BUILT: the parts the verified mechanisms show, where they run, and how clients continue.
-  const parts = PARTS.filter((k) => f.mechanisms.includes(k)).map((k) => t(`arc.u3.part.${k}`));
-  const where = places ? t('arc.u3.built.places', places) : '';
-  const built = parts.length >= 2
-    ? [t(f.mechanisms.includes('group_timetable') ? 'arc.u3.built.more' : 'arc.u3.built.combine', { parts: joinList(parts, t), places: where }),
-      ...(f.mechanisms.includes('packages') ? [t('arc.u3.built.packages')] : [])].join(' ')
-    : fallbackBuilt;
+  // 1. MY FIRST READ — one brand, several commercial paths (when the verified mechanisms show it), then what BB needs.
+  const split = has('group_timetable') && (has('paid_first_step') || has('one_to_one'));
+  const how = f.routes ? capital(f.routes)
+    : has('group_timetable') && has('paid_first_step') ? t('arc.u5.read.mech', { packages: has('packages') ? t('arc.u5.read.mech.packages') : '' })
+      : split ? t('arc.u5.read.mech2') : '';
+  const needs = [...new Set(asks.slice(0, 3).filter((a) => a.tier === 'A' && a.dimension).flatMap((a) => {
+    const d = a.dimension!;
+    if (d === 'performance' || d === 'acquisition') return [t(`arc.u5.need.${d}${split ? '.split' : ''}`)];
+    return d === 'intent' ? [t('arc.u5.need.intent')] : [];
+  }))];
+  const need = needs.length ? t('arc.u5.read.need', { list: joinList(needs, t) }) : '';
+  // Without a commercial split, the synthesis's first sentence leads, unless it is the places fork (shown below);
+  // never the offer catalogue. `fallback` only stands in when nothing else is left to say.
+  const synthLead = firstSentence(s.synthesis);
+  const lead = split ? [t('arc.u5.read.split'), how]
+    : [places && [places.a, places.b].every((p) => synthLead.includes(p)) ? '' : synthLead];
+  if (!lead.filter(Boolean).length && !need) lead.push(fallback);
+  const firstRead = [...lead, need].filter(Boolean).join(' ');
 
-  // 2. WHAT STANDS OUT: the commercial routes (with why they matter), then the places (observation, meaning, one fork).
-  const standsOut: string[] = [];
-  const clause = f.routes ?? (f.mechanisms.length >= 2 ? `${joinList(f.mechanisms.map((m) => t(`arc.u2.mech.${m}`)), t)}.` : '');
-  if (clause) standsOut.push(`${t('arc.u3.routes', { clause })} ${t('arc.u3.routes.why')}`);
-  // One clean fact for the places: the team / public-offer gap when the evidence shows it, else the governed facts.
-  const placeFacts = f.placeTeam ? [t('arc.u3.places.team', f.placeTeam)] : f.placeFacts ?? [];
-  if (places && placeFacts.length) standsOut.push([t('arc.u3.places.lead', places), ...placeFacts, t('arc.u3.places.fork')].join(' '));
-  else {
-    const h = s.hypotheses.find((x) => x.interpretation.trim());
-    if (h) standsOut.push(`${firstSentence(h.interpretation)} ${t('arc.u3.fork')}`);
+  // 2. ONE THING I'M WATCHING — only the fork a B question will settle; stated, not yet strategy.
+  const b = asks.slice(0, 3).find((a) => a.tier === 'B' && a.resolves !== undefined);
+  let watching = '';
+  if (b && places && b.resolves === f.placeHypothesis) {
+    const fact = f.placeTeam ? t('arc.u3.places.team', f.placeTeam) : f.placeFacts?.[0] ?? '';
+    if (fact) watching = `${fact} ${t('arc.u5.watch.fork')}`;
+  } else if (b) {
+    const h = s.hypotheses[b.resolves!];
+    if (h?.interpretation.trim()) watching = `${firstSentence(h.interpretation)} ${t('arc.u5.watch.forkGeneric')}`;
   }
 
-  // 3. WHERE I'D LOOK FIRST: what the shown questions would establish, in their order.
-  const shown = asks.slice(0, 3);
-  const looks = [...new Set(shown.flatMap((a) => {
-    if (a.tier === 'A' && a.dimension && LOOK.has(a.dimension)) return [t(`arc.u3.look.${a.dimension}`)];
-    if (a.tier === 'B') return [places && a.resolves === f.placeHypothesis ? t('arc.u3.look.places', places) : t('arc.u3.look.fork')];
-    return [];
-  }))];
-  const lookFirst = looks.length ? t('arc.u3.look', { list: joinList(looks, t) }) : '';
-
-  // The strategy-critical rationales are BB's own, neutral sentences: they never name or label the business's lines in
-  // the model's words (which paths are real vs new bets; which part already carries the business).
-  const whyOf = (a: Ask): string => (a.tier === 'A' && (a.dimension === 'acquisition' || a.dimension === 'performance') ? t(`arc.u3.why.${a.dimension}`) : a.why);
-  return { built, standsOut: standsOut.slice(0, 2), lookFirst, whyOf };
+  // BB's own neutral rationales (never the model's labels for the lines): the strategy-critical questions, and the
+  // locations fork (deliberate or only operational).
+  const placesFork = (a: Ask) => a.tier === 'B' && places !== null && a.resolves === f.placeHypothesis;
+  const whyOf = (a: Ask): string => (a.tier === 'A' && (a.dimension === 'acquisition' || a.dimension === 'performance') ? t(`arc.u3.why.${a.dimension}`)
+    : placesFork(a) ? t('arc.u5.why.places') : a.why);
+  return { firstRead, watching, whyOf };
 }

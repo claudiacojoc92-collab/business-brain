@@ -2,69 +2,65 @@ import { describe, it, expect } from 'vitest';
 import { composeFounderView, joinList } from '../slice0/understanding-founder';
 import { contentT } from '../i18n/content';
 
-// FOUNDER VIEW (2026-10-16, projection only): the governed signals the api projected from the stored Blind Test 4
-// snapshot (01M51NHZ…), composed with the Romanian content strings. No model call; every business word is governed.
+// FIRST READ (2026-10-16, projection only): the governed signals the api projected from stored snapshots, composed with
+// the Romanian content strings. No model call; every business word is governed.
 const ro = (k: string, v?: Record<string, string>) => contentT('ro', k, v);
 const en = (k: string, v?: Record<string, string>) => contentT('en', k, v);
-const structure = {
-  synthesis: 'Nu toate serviciile par să funcționeze după același mecanism de intrare: …',
-  hypotheses: [{ pattern: '', interpretation: 'Cele două locații par să aibă roluri parțial diferite în portofoliu.', alternative: 'Spațiu, echipă.', reversal: 'r', evidence: [] }],
-  stageNotNamed: true,
-  founder: {
-    mechanisms: ['group_timetable', 'one_to_one', 'paid_first_step', 'packages'] as ('group_timetable' | 'one_to_one' | 'paid_first_step' | 'packages')[],
-    places: ['Bună Ziua', 'Decebal'], placeHypothesis: 0,
-    routes: 'clasele de grup se rezervă din orar, în timp ce kinetoterapia și recuperarea postpartum încep cu o evaluare inițială plătită separat.',
-    placeTeam: { place: 'Bună Ziua', role: 'kinetoterapeut', service: 'kinetoterapia' },
-    placeFacts: ['Kinetoterapia apare listată la Decebal, dar nu la Bună Ziua.', 'Orarul de la Bună Ziua include Ioana Urs listată ca Kinetoterapeut în echipă, dar fără clase de kinetoterapie în orar.'],
-  },
-};
+type Mech = 'group_timetable' | 'one_to_one' | 'paid_first_step' | 'packages';
+const ALL: Mech[] = ['group_timetable', 'one_to_one', 'paid_first_step', 'packages'];
+const hyp = { pattern: '', interpretation: 'Cele două locații par să aibă oferte parțial diferite.', alternative: 'a', reversal: 'r', evidence: [] };
 const asks = [
-  { question: 'Care servicii sau linii aduc cel mai mare număr de clienți activi azi și care aduc cel mai mare venit lunar?', why: 'Aceasta îmi spune dacă motorul real al studioului este recuperarea clinică, clasele de grup sau maternitatea, ceea ce schimbă unde merită investit.', tier: 'A' as const, dimension: 'performance' },
-  { question: 'De unde vin clienții noi azi?', why: 'Aceasta îmi spune dacă achiziția se bazează pe un canal deja funcțional sau dacă este dispersată și impredictibilă.', tier: 'A' as const, dimension: 'acquisition' },
-  { question: 'Kinetoterapia este disponibilă și la Bună Ziua sau exclusiv la Decebal?', why: 'Aceasta îmi spune dacă cele două locații au roluri diferite în portofoliu.', tier: 'B' as const, dimension: 'capacity', resolves: 0 },
+  { question: 'q1', why: 'Aceasta îmi spune dacă motorul real este maternitatea.', tier: 'A' as const, dimension: 'performance' },
+  { question: 'q2', why: 'w2', tier: 'A' as const, dimension: 'acquisition' },
+  { question: 'q3', why: 'Răspunsul decide dacă locațiile sunt specializate.', tier: 'B' as const, dimension: 'offer', resolves: 0 },
 ];
 
-describe('founder view (Blind Test 4 stored state, Romanian)', () => {
-  const fv = composeFounderView(structure, asks, 'Vinzi clase, kinetoterapie și masaj.', ro)!;
+describe('first read: Body Move – Launch E2E stored snapshot (01M51Z3T…)', () => {
+  const fv = composeFounderView({ synthesis: 'Cele două locații nu au oferte identice: Kinetoterapia apare la Decebal dar nu în lista de servicii a locației Bună Ziua. Nu știu încă de ce.', hypotheses: [hyp], stageNotNamed: true,
+    founder: { mechanisms: ALL, places: ['Bună Ziua', 'Decebal'], placeHypothesis: 0, placeFacts: ['Kinetoterapia apare la Decebal dar nu în lista de servicii a locației Bună Ziua.'] } }, asks, 'CATALOG', ro)!;
 
-  it('what you have built: the structure, not the menu', () => {
-    expect(fv.built).toBe('Ai construit mai mult decât un studio de clase: combini clase de grup pe orar, lucru individual și programe care încep cu o evaluare plătită, în două locații: Bună Ziua și Decebal. Unele servicii se vând și în abonamente pe mai multe ședințe.');
+  it('my first read: one brand, several commercial paths (from the verified mechanisms), then what BB needs to know', () => {
+    expect(fv.firstRead).toBe('Lucrezi sub un singur brand, dar nu printr-un singur traseu comercial. Unele servicii se rezervă din orar și continuă prin abonamente, în timp ce altele încep cu o evaluare plătită. Înainte să recomand mai mult marketing, vreau să știu care dintre aceste trasee susține de fapt business-ul azi și cum intră clienții în fiecare.');
+    expect(fv.firstRead).not.toContain('CATALOG');
+    expect(fv.firstRead).not.toContain('individual'); // no inferred link between the evaluation and one-to-one work
   });
 
-  it('what stands out: a positive lead, the so-what, and one concise fork for the places', () => {
-    expect(fv.standsOut).toEqual([
-      'Serviciile tale folosesc trasee comerciale diferite: clasele de grup se rezervă din orar, în timp ce kinetoterapia și recuperarea postpartum încep cu o evaluare inițială plătită separat. Fiecare traseu poate cere altă logică de atragere și de creștere.',
-      'Bună Ziua și Decebal merită privite separat, înainte să le tratez ca același business la două adrese. Bună Ziua are un kinetoterapeut în echipă, dar kinetoterapia nu apare în portofoliul public al locației. Vreau să înțeleg dacă e o alegere intenționată sau pur și simplu operațională.',
-    ]);
-    for (const x of fv.standsOut) expect(x).not.toMatch(/^Nu /); // never opens with a negation
+  it('one thing I am watching: the grounded difference, not yet strategy, settled by the founder answer', () => {
+    expect(fv.watching).toBe('Kinetoterapia apare la Decebal dar nu în lista de servicii a locației Bună Ziua. Nu o tratez încă drept strategie: răspunsul tău de mai jos îmi spune dacă e o alegere deliberată sau una operațională.');
   });
 
-  it('where I would look first: what the three questions establish, never a strategy', () => {
-    expect(fv.lookFirst).toBe('Înainte să recomand mai mult marketing, aș afla ce parte a business-ului îl susține deja, de unde vin clienții noi și dacă Bună Ziua și Decebal joacă același rol.');
-  });
-
-  it('the strategy-critical rationales are neutral (no model label such as "maternitatea"); the fork one is stored', () => {
-    expect(fv.whyOf(asks[1]!)).toBe('Asta îmi spune care căi de atragere sunt deja reale și care ar fi pariuri noi.');
+  it('the rationales stay BB\'s neutral sentences, the locations fork included', () => {
     expect(fv.whyOf(asks[0]!)).toBe('Asta îmi spune ce parte susține deja business-ul și, deci, unde merită investit.');
-    expect(fv.whyOf(asks[2]!)).toBe(asks[2]!.why);
+    expect(fv.whyOf(asks[2]!)).toBe('Asta îmi spune dacă diferența dintre locații e o alegere deliberată sau doar operațională.');
   });
 });
 
-describe('founder view, degraded signals', () => {
+describe('first read: Blind Test 4 signals (a routes clause and a team gap)', () => {
+  it('uses the governed routes clause and the team/public-offer gap', () => {
+    const fv = composeFounderView({ synthesis: 'S.', hypotheses: [hyp], stageNotNamed: true, founder: { mechanisms: ALL, places: ['Bună Ziua', 'Decebal'], placeHypothesis: 0,
+      routes: 'clasele de grup se rezervă din orar, în timp ce kinetoterapia începe cu o evaluare plătită.', placeTeam: { place: 'Bună Ziua', role: 'kinetoterapeut', service: 'kinetoterapia' } } }, asks, 'x', ro)!;
+    expect(fv.firstRead.split('. ')[1]).toBe('Clasele de grup se rezervă din orar, în timp ce kinetoterapia începe cu o evaluare plătită');
+    expect(fv.watching.startsWith('Bună Ziua are un kinetoterapeut în echipă, dar kinetoterapia nu apare în portofoliul public al locației.')).toBe(true);
+  });
+});
+
+describe('first read, degraded signals', () => {
   it('no founder signals (older api) or no synthesis → null: the card keeps its earlier layout', () => {
-    expect(composeFounderView({ ...structure, founder: undefined }, asks, 'x', en)).toBeNull();
-    expect(composeFounderView({ ...structure, synthesis: '' }, asks, 'x', en)).toBeNull();
+    expect(composeFounderView({ synthesis: 'S', hypotheses: [], stageNotNamed: true }, asks, 'x', en)).toBeNull();
+    expect(composeFounderView({ synthesis: '', hypotheses: [], stageNotNamed: true, founder: { mechanisms: ALL } }, asks, 'x', en)).toBeNull();
   });
 
-  it('fewer than two parts → the offer summary; no places → the first reading with a generic fork; a C question adds no look', () => {
-    const fv = composeFounderView({ ...structure, founder: { mechanisms: ['group_timetable'] } }, [{ question: 'q', why: 'w', tier: 'C', dimension: 'offer' }], 'You sell classes.', en)!;
-    expect(fv.built).toBe('You sell classes.');
-    expect(fv.standsOut).toEqual(['Cele două locații par să aibă roluri parțial diferite în portofoliu. I want to know what is behind that difference.']);
-    expect(fv.lookFirst).toBe('');
+  it('no commercial split: the synthesis leads (never the catalogue when the synthesis is the places fork); no B question → nothing watched', () => {
+    const one = composeFounderView({ synthesis: 'Classes are the core. I do not know more.', hypotheses: [], stageNotNamed: true, founder: { mechanisms: ['group_timetable'] } },
+      [{ question: 'q', why: 'w', tier: 'A', dimension: 'acquisition' }], 'CATALOG', en)!;
+    expect(one.firstRead).toBe("Classes are the core. Before I recommend more marketing, I want to know where new customers come from.");
+    expect(one.watching).toBe('');
+    const placesOnly = composeFounderView({ synthesis: 'Hilltop and Harbour differ: physio is only at Hilltop.', hypotheses: [], stageNotNamed: true, founder: { mechanisms: [], places: ['Hilltop', 'Harbour'] } },
+      [{ question: 'q', why: 'w', tier: 'A', dimension: 'performance' }], 'CATALOG', en)!;
+    expect(placesOnly.firstRead).toBe('Before I recommend more marketing, I want to know what actually carries the business today.');
   });
 
   it('lists read naturally', () => {
-    expect(joinList(['a'], en)).toBe('a');
     expect(joinList(['a', 'b', 'c'], en)).toBe('a, b and c');
     expect(joinList(['a', 'b'], ro)).toBe('a și b');
   });

@@ -190,24 +190,18 @@ function UnderstandingReadView({ u, t }: { u: NonNullable<ArcView['understanding
   if (r.structure) {
     const s = r.structure;
     const hyps = s.hypotheses;
-    // Founder view (2026-10-16): the same governed state, told as recognition → what stands out → where BB would look
-    // first → the questions. Alternatives and reversals stay in the stored read; the inventory stays under "What I read".
+    // First read (2026-10-16): a point of view + the one fork BB is watching + the questions; the deeper read comes
+    // after the founder answers (the updated mirror). Alternatives and reversals stay in the stored read; the inventory stays under "What I read".
     const fv = composeFounderView(s, r.asks, u.does, t);
     if (fv) return (<>
-      <div className="s0-u-card s0-u-card--read" data-understanding-built="">
-        <div className="s0-u-card-label">{t('arc.u3.h.built')}</div>
-        <p className="s0-u-card-lead">{fv.built}</p>
+      <div className="s0-u-card s0-u-card--read" data-understanding-first-read="">
+        <div className="s0-u-card-label">{t('arc.u5.h.read')}</div>
+        <p className="s0-u-card-lead">{fv.firstRead}</p>
       </div>
-      {fv.standsOut.length ? (
-        <div className="s0-u-card" data-understanding-stands-out="">
-          <div className="s0-u-card-label">{t('arc.u3.h.standsOut')}</div>
-          <ul className="s0-u-list s0-u-hyps">{fv.standsOut.map((x, i) => <li key={i} data-understanding-reading="">{x}</li>)}</ul>
-        </div>
-      ) : null}
-      {fv.lookFirst ? (
-        <div className="s0-u-card" data-understanding-look-first="">
-          <div className="s0-u-card-label">{t('arc.u3.h.lookFirst')}</div>
-          <p className="s0-u-card-lead">{fv.lookFirst}</p>
+      {fv.watching ? (
+        <div className="s0-u-card" data-understanding-watching="">
+          <div className="s0-u-card-label">{t('arc.u5.h.watching')}</div>
+          <p className="s0-u-card-lead">{fv.watching}</p>
         </div>
       ) : null}
       {asksCard(fv.whyOf)}
