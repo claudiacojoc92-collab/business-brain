@@ -80,7 +80,10 @@ export interface ArcUnderstanding {
     readonly notConcluding: { readonly claim: string; readonly why: string; readonly reason?: 'no_goal' | 'not_established' }[];
     readonly untrusted: { readonly finding: string; readonly why: string; readonly reason?: 'sitemap' | 'technical' | 'sitemap_only' | 'unread' }[];
     /** `parts`: separate answers inside one question (metrics that can diverge, e.g. clients vs revenue). */
-    readonly asks: { readonly question: string; readonly why: string; readonly parts?: string[] }[];
+    readonly asks: { readonly question: string; readonly why: string; readonly parts?: string[];
+      /** Why the question holds its place (A strategy-critical / B settles hypothesis `resolves` / C information value)
+       *  and the dimension it fills: the founder view words "where I'd look first" from these, never from new facts. */
+      readonly tier?: 'A' | 'B' | 'C'; readonly dimension?: string; readonly resolves?: number }[];
     /** Structural synthesis (2026-10-15; absent on older snapshots): what BB thinks the business is, the reversible
      *  hypotheses behind it (each with what else could explain it and what would change BB's mind), and whether BB is
      *  deliberately not naming a stage. When present, the card leads with it and the model above goes behind "What I read". */
@@ -92,6 +95,20 @@ export interface ArcUnderstanding {
        *  purchase mechanisms a trusted page shows (≥ 2 → "several mechanisms, not yet how they work together"); fewer →
        *  BB says it is not ready to form a structural read and goes to the questions. Never the inventory. */
       readonly fallback?: { readonly mechanisms: ('group_timetable' | 'one_to_one' | 'paid_first_step' | 'packages')[] };
+      /**
+       * FOUNDER VIEW (2026-10-16, projection only): the governed signals the card composes into "What you've built /
+       * What stands out / Where I'd look first". No new fact: `mechanisms` = verified mechanism kinds; `places` = the two
+       * locations a kept hypothesis compares (shared name prefix removed); `routes` = the synthesis clause that relates
+       * the mechanisms; `placeFacts` = the governed sentences (synthesis, pattern) that show the location difference;
+       * `placeHypothesis` = that hypothesis's index (the one a B question `resolves`).
+       */
+      readonly founder?: {
+        readonly mechanisms: ('group_timetable' | 'one_to_one' | 'paid_first_step' | 'packages')[];
+        readonly places?: string[]; readonly routes?: string; readonly placeFacts?: string[]; readonly placeHypothesis?: number;
+        /** The team / public-offer gap at one place, in the source's words (role from the team page, service as the
+         *  governed synthesis names it). When set, the card shows it instead of `placeFacts`. */
+        readonly placeTeam?: { readonly place: string; readonly role: string; readonly service: string };
+      };
     };
   };
   readonly stage: {

@@ -142,13 +142,26 @@ describe('TodayPage — Living State (return loop + outcome report)', () => {
     expect(screen.getByText('impact.strategy.tooEarly')).toBeInTheDocument();
   });
 
+  // Dates relative to the run, the same way TodayPage computes "today": a hard-coded date turns overdue once it passes.
+  const isoDay = (offsetDays: number) => new Date(Date.now() + offsetDays * 86_400_000).toISOString().slice(0, 10);
+  const dueResults = (dueOn: string): TodayResp['results'] => ({ due: [{ followUpId: 'f1', contactId: 'c1', contactName: 'Dr. Ana Pop', role: 'ortoped', what: 'Email the brochure', reason: 'asked for the brochure by email', dueOn }], line: { code: 'results.line.awaiting', vars: { n: '3' } } });
+
   it('due follow-ups are the move on Today, with one result line; "Write it" opens the composer for that person', async () => {
     vi.mocked(api.getToday).mockResolvedValue({ state: 'active', ready: [readyMove], blocked: null, sinceLastHere: noSince, constraints: [], todayNote: null,
-      results: { due: [{ followUpId: 'f1', contactId: 'c1', contactName: 'Dr. Ana Pop', role: 'ortoped', what: 'Email the brochure', reason: 'asked for the brochure by email', dueOn: '2026-10-15' }], line: { code: 'results.line.awaiting', vars: { n: '3' } } } });
+      results: dueResults(isoDay(0)) });
     render(<TodayPage />);
     expect(await screen.findByText('results.due.item:Email the brochure,Dr. Ana Pop')).toBeInTheDocument();
+    expect(screen.queryByText(/results\.due\.overdue/)).toBeNull(); // due today is not overdue
     expect(screen.getByText('results.line.awaiting:3')).toBeInTheDocument();
     fireEvent.click(screen.getByText('results.due.write'));
     expect(await screen.findByText('composer:Dr. Ana Pop')).toBeInTheDocument();
+  });
+
+  it('a follow-up whose day has passed is marked overdue with its date', async () => {
+    const past = isoDay(-3);
+    vi.mocked(api.getToday).mockResolvedValue({ state: 'active', ready: [readyMove], blocked: null, sinceLastHere: noSince, constraints: [], todayNote: null,
+      results: dueResults(past) });
+    render(<TodayPage />);
+    expect(await screen.findByText(`results.due.item:Email the brochure,Dr. Ana Pop · results.due.overdue:${past}`)).toBeInTheDocument();
   });
 });

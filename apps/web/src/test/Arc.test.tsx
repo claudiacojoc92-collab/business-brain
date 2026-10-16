@@ -264,6 +264,43 @@ describe('ArcSurface — one surface, eight moments', () => {
     expect(pos('arc.u2.couldChange').compareDocumentPosition(pos('arc.u2.need')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it('founder view (2026-10-16): built → stands out → where I would look first → questions; alternatives and reversals stay internal', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: {
+      does: 'INVENTORY: You sell classes and physio in two studios.', serves: '', standsOut: '',
+      tensions: [], confident: [], inferring: [], unanswered: [],
+      constraint: { decided: false }, diagnosis: null, stage: { stage: 'undetermined' },
+      read: {
+        model: [], unknownDimensions: [], notConcluding: [], untrusted: [],
+        asks: [
+          { question: 'Which offers bring the most visits and revenue?', why: 'It tells me what carries the business.', tier: 'A', dimension: 'performance' },
+          { question: 'Where do new clients come from today?', why: 'Whether it is scattered and unpredictable.', tier: 'A', dimension: 'acquisition' },
+          { question: 'Is the split between the studios deliberate?', why: 'It tells me whether to plan them as one or two.', tier: 'B', dimension: 'capacity', resolves: 0 },
+        ],
+        structure: {
+          synthesis: 'Not every service is entered the same way: classes from the timetable, physio after a paid assessment.',
+          hypotheses: [{ pattern: '', interpretation: 'The studios may play different roles.', alternative: 'rooms or equipment', reversal: 'Clients booking freely at both.', evidence: [] }],
+          stageNotNamed: true,
+          founder: { mechanisms: ['group_timetable', 'paid_first_step'], places: ['Hilltop', 'Harbour'], placeHypothesis: 0, routes: 'classes from the timetable, physio after a paid assessment.', placeFacts: ['Physio is listed only at Hilltop.'] },
+        },
+      },
+    } }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    const order = ['arc.u3.h.built', 'arc.u3.h.standsOut', 'arc.u3.h.lookFirst', 'arc.u2.need', 'arc.u2.whatIRead'];
+    for (const k of order) expect(await screen.findByText(k)).toBeInTheDocument();
+    for (let i = 1; i < order.length; i++) expect(screen.getByText(order[i - 1]!).compareDocumentPosition(screen.getByText(order[i]!)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // the earlier synthesis layout, the alternative and the reversal are not on the founder view
+    for (const k of ['arc.u2.whatItIs', 'arc.u2.noticed', 'arc.u2.couldChange']) expect(screen.queryByText(k)).toBeNull();
+    expect(screen.queryByText(/rooms or equipment/)).toBeNull();
+    expect(screen.queryByText('Clients booking freely at both.')).toBeNull();
+    expect(screen.getByText(/Physio is listed only at Hilltop\./)).toBeInTheDocument();
+    // the acquisition rationale is the neutral one; the others are stored
+    expect(screen.getByText(/arc\.u2\.whyAsk:arc\.u3\.why\.acquisition/)).toBeInTheDocument();
+    expect(screen.queryByText(/scattered and unpredictable/)).toBeNull();
+    expect(screen.getByText(/arc\.u2\.whyAsk:arc\.u3\.why\.performance/)).toBeInTheDocument();
+    expect(screen.getByText(/arc\.u2\.whyAsk:It tells me whether to plan them as one or two\./)).toBeInTheDocument();
+    expect(screen.getByText(/INVENTORY/).closest('details')).not.toBeNull();
+  });
+
   it('a synthesis that did not stand: verified mechanisms (or "not ready yet"), never the inventory as the first card', async () => {
     const base = {
       does: 'INVENTORY: You sell classes, physio and massage.', serves: '', standsOut: '', tensions: [], confident: [], inferring: [], unanswered: [],

@@ -11,6 +11,7 @@ import {
   arcMirrorSeen, arcAdoptStrategy, arcChallengeStrategy, arcAdoptWeekDay, arcGenerateEmail,
   arcSaveEmail, arcExportEmail, arcContainerSeen, arcConfirmGoal, arcSkipQuestion, type ArcView, type ArcSourceItem,
 } from '../api/client';
+import { composeFounderView } from './understanding-founder';
 // Instagram is back in the pour-in (2026-10-08) via the DIRECT Instagram Login connector: it authorizes whatever
 // Instagram account the browser is logged into (no Business-vs-personal picker). The Page-picker flow via Facebook
 // Login for Business is the later Option B, see docs/sources/instagram-arc-connector-later.md.
@@ -169,18 +170,19 @@ function UnderstandingReadView({ u, t }: { u: NonNullable<ArcView['understanding
       <ul className="s0-u-list">{r.untrusted.map((x, i) => <li key={i}>{x.finding}{(x.reason || x.why) ? <span className="s0-talk-note"> — {x.reason ? t(`arc.u2.reason.${x.reason}`) : x.why}</span> : null}</li>)}</ul>
     </>) : null}
   </>);
-  const asks = r.asks.length ? (
+  const asksCard = (whyOf: (a: (typeof r.asks)[number]) => string = (a) => a.why) => (r.asks.length ? (
     <div className="s0-u-card s0-u-card--question">
       <div className="s0-u-card-label"><span className="s0-u-ic" aria-hidden="true">→</span>{t('arc.u2.need')}</div>
       <ul className="s0-u-list">{r.asks.slice(0, 3).map((a, i) => (
         <li key={i}>{a.question}
           {/* Metrics that can diverge stay separate answers (clients vs revenue): one line each. */}
           {a.parts && a.parts.length > 1 ? <ol className="s0-u-ask-parts" type="a">{a.parts.map((p, j) => <li key={j}>{p}</li>)}</ol> : null}
-          {a.why ? <span className="s0-talk-note s0-u-ask-why"> {t('arc.u2.whyAsk', { why: a.why })}</span> : null}
+          {whyOf(a) ? <span className="s0-talk-note s0-u-ask-why"> {t('arc.u2.whyAsk', { why: whyOf(a) })}</span> : null}
         </li>
       ))}</ul>
     </div>
-  ) : null;
+  ) : null);
+  const asks = asksCard();
 
   // Structural synthesis (2026-10-15): the founder sees what BB thinks the business IS, what it noticed (reversible
   // hypotheses with their alternative), what would change its read, and at most three questions. The business-model
@@ -188,6 +190,35 @@ function UnderstandingReadView({ u, t }: { u: NonNullable<ArcView['understanding
   if (r.structure) {
     const s = r.structure;
     const hyps = s.hypotheses;
+    // Founder view (2026-10-16): the same governed state, told as recognition → what stands out → where BB would look
+    // first → the questions. Alternatives and reversals stay in the stored read; the inventory stays under "What I read".
+    const fv = composeFounderView(s, r.asks, u.does, t);
+    if (fv) return (<>
+      <div className="s0-u-card s0-u-card--read" data-understanding-built="">
+        <div className="s0-u-card-label">{t('arc.u3.h.built')}</div>
+        <p className="s0-u-card-lead">{fv.built}</p>
+      </div>
+      {fv.standsOut.length ? (
+        <div className="s0-u-card" data-understanding-stands-out="">
+          <div className="s0-u-card-label">{t('arc.u3.h.standsOut')}</div>
+          <ul className="s0-u-list s0-u-hyps">{fv.standsOut.map((x, i) => <li key={i} data-understanding-reading="">{x}</li>)}</ul>
+        </div>
+      ) : null}
+      {fv.lookFirst ? (
+        <div className="s0-u-card" data-understanding-look-first="">
+          <div className="s0-u-card-label">{t('arc.u3.h.lookFirst')}</div>
+          <p className="s0-u-card-lead">{fv.lookFirst}</p>
+        </div>
+      ) : null}
+      {asksCard(fv.whyOf)}
+      <details className="s0-u-card s0-u-whatiread" data-understanding-what-i-read="">
+        <summary className="s0-u-card-label">{t('arc.u2.whatIRead')}</summary>
+        {lead}
+        {serves}
+        {model}
+        {notReady}
+      </details>
+    </>);
     return (<>
       <div className="s0-u-card s0-u-card--read" data-understanding-synthesis="">
         <div className="s0-u-card-label">{t('arc.u2.whatItIs')}</div>
