@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { anchorUnderstandingEvidence } from './evidence-anchor';
-import { businessEntities, governFindingsDetailed, governUnderstanding } from './understanding-governance';
+import { businessEntities, governFindingsDetailed, governUnderstandingWithRepair } from './understanding-governance';
 import { normalizeUnderstandingShapes } from './model-shapes';
 import { generateId } from '@bb/shared';
 import { detectMaterialLanguage, detectTextLanguage, toLocale, type IContentLanguageStore } from '../business/content-language';
@@ -343,6 +343,12 @@ export class LearnBusinessService {
 
     // Aha governance first: what it demotes (true facts that change no decision) is kept as observations in the read.
     const ahaGov = governFindingsDetailed(out.aha, observations, { requireDecision: Boolean(out.understanding?.read), entities: businessEntities(out.understanding) });
+    // Salvage before reject: governance, then ONE bounded repair round for any required structural field it emptied.
+    const model = this.deps.model;
+    const governed = await governUnderstandingWithRepair(
+      anchorUnderstandingEvidence(normalizeUnderstandingShapes(out.understanding), observations), observations,
+      model.repairStructureField ? (r) => model.repairStructureField!({ ...r, language }) : undefined,
+    );
     const snap = await this.deps.understanding.save({
       id: generateId(),
       businessId,
@@ -352,7 +358,7 @@ export class LearnBusinessService {
       sourceLanguage: out.sourceLanguage ?? observations[0]?.lang ?? null,
       // BUS-73: every claim keeps only the source sentences that anchor verbatim in what was read. Then governance
       // (2026-10-15): untrusted sources, website hygiene, absence-as-fact and an unearned constraint are lowered in code.
-      understanding: withObservations(governUnderstanding(anchorUnderstandingEvidence(normalizeUnderstandingShapes(out.understanding), observations), observations), ahaGov.demoted),
+      understanding: withObservations(governed, ahaGov.demoted),
       modelId,
     });
 

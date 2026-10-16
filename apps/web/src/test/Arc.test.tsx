@@ -251,7 +251,7 @@ describe('ArcSurface — one surface, eight moments', () => {
     expect(screen.getByText('The studios may play different roles.')).toBeInTheDocument();
     expect(screen.getByText(/arc\.u2\.alt:rooms or equipment/)).toBeInTheDocument();
     expect(screen.getByText('Clients booking freely at both.')).toBeInTheDocument();
-    expect(screen.getByText('arc.u2.stageNotNamed')).toBeInTheDocument();
+    expect(screen.queryByText('arc.u2.stageNotNamed')).toBeNull(); // a stage disclaimer is not a fork
     expect(screen.queryByText('A fourth question never shows.')).toBeNull();
     // the inventory card is gone; the model is inside a closed <details>
     expect(screen.queryByText('arc.u2.understand')).toBeNull();
@@ -284,6 +284,8 @@ describe('ArcSurface — one surface, eight moments', () => {
     vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: { ...base, read: read([]) } }));
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
     expect(await screen.findByText('arc.u2.fallback.notReady')).toBeInTheDocument();
+    // no reading, no real fork: "What could change my read" is hidden (never filled with a stage disclaimer)
+    expect(screen.queryByText('arc.u2.couldChange')).toBeNull();
   });
 
   it('Strategic Depth W1: a split stage names the core and the one area at a different stage, each with its implication', async () => {
