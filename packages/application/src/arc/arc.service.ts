@@ -1,7 +1,7 @@
 import type { StrategyVersionRecord } from '../strategy/index';
 import type { Action, DueMoveRef, PlanVersion, TodayMove, TodayResult } from '../plan/index';
 import { canonicalTodayMove, deriveAllReadiness, selectToday, todayPlanAction } from '../plan/index';
-import type { GovernedUnderstanding, ClaimEvidence } from '../bi/index';
+import type { GovernedUnderstanding, ClaimEvidence, StructuralHypothesis } from '../bi/index';
 import { clipQuote } from '../bi/evidence-anchor';
 import { normalizeUnderstandingShapes, stringList } from '../bi/model-shapes';
 import { agendaUnknowns, performanceEvidence, isHousekeeping, critiquesWording, factOnly, restatesNotShown, makesUnlicensedClaim, makesUnlicensedSoWhatClaim, sameInsight, firstSentence } from '../bi/index';
@@ -499,6 +499,9 @@ function projectRead(r: NonNullable<GovernedUnderstanding['read']>, asked: strin
   const find = (q: string) => r.questions.find((x) => x.question.trim().toLowerCase() === q.trim().toLowerCase());
   const whyOf = (q: string): string => find(q)?.why ?? '';
   const partsOf = (q: string): string[] => find(q)?.parts ?? [];
+  const tierOf = (q: string) => (r.questionTiers ?? []).find((x) => x.question.trim().toLowerCase() === q.trim().toLowerCase());
+  // Separate answers are listed under the question (a, b): the same enumeration inline after the "?" is a duplicate.
+  const askText = (q: string): string => (partsOf(q).length > 1 ? q.replace(/\?\s*a\)\s.+\bb\)\s.+$/su, '?') : q);
   return {
     model,
     unknownDimensions,
@@ -507,7 +510,12 @@ function projectRead(r: NonNullable<GovernedUnderstanding['read']>, asked: strin
     notConcluding: r.notConcluding.filter((n) => ok(n.claim) && n.reason !== 'unsupported').slice(0, 4)
       .map(({ claim, why, reason }) => ({ claim, why, ...(reason === 'no_goal' || reason === 'not_established' ? { reason } : {}) })),
     untrusted: r.untrusted.filter((x) => x.finding.trim()).slice(0, 3).map(({ finding, why, reason }) => ({ finding, why, ...(reason ? { reason } : {}) })),
-    asks: asked.map((question) => ({ question, why: whyOf(question), ...(partsOf(question).length ? { parts: partsOf(question) } : {}) })),
+    asks: asked.map((question) => {
+      const tier = tierOf(question);
+      const dimension = find(question)?.dimension;
+      return { question: askText(question), why: whyOf(question), ...(partsOf(question).length ? { parts: partsOf(question) } : {}),
+        ...(tier ? { tier: tier.tier } : {}), ...(dimension ? { dimension } : {}), ...(tier?.resolves !== undefined ? { resolves: tier.resolves } : {}) };
+    }),
     // Governance kept only reversible, specific, multi-fact hypotheses; the card shows them with their evidence.
     // A read with a structure step leads with it even when governance kept nothing: the card then falls back to the offer
     // summary as "what it is", never to the inventory view.
@@ -523,6 +531,79 @@ function projectRead(r: NonNullable<GovernedUnderstanding['read']>, asked: strin
       stageNotNamed,
       // The synthesis did not stand: say what the governed facts DO show (verified mechanisms), never the inventory.
       ...(!r.structure.synthesis.trim() ? { fallback: { mechanisms: [...new Set((r.structure.mechanisms ?? []).map((m) => m.kind))] } } : {}),
+      founder: founderSignals(r.structure),
     } } : {}),
   };
+}
+
+const sentencesOf = (t: string): string[] => (t.match(/[^.!?]+(?:[.!?]+|$)/g) ?? []).map((x) => x.trim()).filter(Boolean);
+const afterColon = (t: string): string => { const i = t.indexOf(':'); const rest = i >= 0 ? t.slice(i + 1).trim() : t.trim(); return rest.charAt(0).toUpperCase() + rest.slice(1); };
+const mentions = (t: string, name: string): boolean => t.toLowerCase().includes(name.toLowerCase());
+
+/** Two names that share a leading brand ("<Brand> Bună Ziua", "<Brand> Decebal") read as the part that differs. */
+function distinctNames(names: string[]): string[] {
+  const words = names.map((n) => n.trim().split(/\s+/));
+  let k = 0;
+  while (words.every((w) => w.length > k + 1 && w[k]!.toLowerCase() === words[0]![k]!.toLowerCase())) k++;
+  return words.map((w) => w.slice(k).join(' '));
+}
+
+/**
+ * FOUNDER VIEW signals (2026-10-16, projection only): picked from governed state, never written. The card composes them
+ * with fixed sentences in the business's language. A signal that is not clearly there is left out (the card then uses
+ * the older wording for that section).
+ */
+function founderSignals(st: NonNullable<NonNullable<GovernedUnderstanding['read']>['structure']>): NonNullable<NonNullable<NonNullable<ArcUnderstanding['read']>['structure']>['founder']> {
+  const mechanisms = [...new Set((st.mechanisms ?? []).map((m) => m.kind))];
+  const synthesis = sentencesOf(st.synthesis ?? '');
+  // The location hypothesis: two named things compared on a location page.
+  const placeHypothesis = st.hypotheses.findIndex((h) => (h.between ?? []).length === 2 && (h.evidence ?? []).some((e) => e.surface === 'location_page'));
+  const h = placeHypothesis >= 0 ? st.hypotheses[placeHypothesis]! : undefined;
+  const places = h ? distinctNames(h.between).filter(Boolean) : [];
+  const placed = places.length === 2;
+  const placeFacts = !placed ? [] : [
+    // the synthesis sentence that names both places, without its lead-in
+    ...synthesis.filter((x) => places.every((p) => mentions(x, p))).map(afterColon),
+    // the pattern sentence that carries the other evidence (e.g. the team page), when it is about one of the places
+    ...(h!.evidence ?? []).filter((e) => e.surface !== 'location_page').flatMap((e) => {
+      const key = (e.quote ?? '').match(/\p{L}{3,}/u)?.[0];
+      return key ? sentencesOf(h!.pattern ?? '').filter((x) => mentions(x, key) && places.some((p) => mentions(x, p))).slice(0, 1) : [];
+    }),
+  ].filter((x, i, all) => all.indexOf(x) === i).slice(0, 2);
+  // The clause that relates the mechanisms: the synthesis's first "<lead>: <how each part is sold>" sentence that is not
+  // about the places. A closing relative clause (", which …") is detail the card does not need.
+  const routesSentence = mechanisms.length >= 2 ? synthesis.find((x) => x.includes(':') && !places.some((p) => mentions(x, p))) : undefined;
+  const routes = routesSentence?.slice(routesSentence.indexOf(':') + 1).trim()
+    .replace(/,\s+(care|which|that|che|die|der|das)\s[^,]+([.!?])$/iu, '$2');
+  return {
+    mechanisms,
+    ...(placed ? { places, placeHypothesis } : {}),
+    // kept in its own case: it continues the card's lead-in after a colon
+    ...(routes ? { routes } : {}),
+    ...(placeFacts.length ? { placeFacts } : {}),
+    ...(placed ? teamGap(h!, places, synthesis) : {}),
+  };
+}
+
+/**
+ * "<place> has a <role> on the team, but <service> is not in that location's public offer", only when the governed
+ * state shows all of it: a team-page quote at that place ending in the role; a location page of the OTHER place listing
+ * the service (same word stem as the role); no location page of this place listing it; and the governed synthesis
+ * sentence that names the service and both places (its wording of the service is used).
+ */
+function teamGap(h: StructuralHypothesis, places: string[], synthesis: string[]): { placeTeam?: { place: string; role: string; service: string } } {
+  const ev = h.evidence ?? [];
+  const where = (e: (typeof ev)[number]) => places.find((p) => mentions(`${e.context ?? ''} ${e.page ?? ''}`, p));
+  for (const team of ev.filter((e) => e.surface === 'team_page')) {
+    const place = where(team);
+    const role = (team.quote ?? '').trim().match(/(\p{L}+)$/u)?.[1];
+    if (!place || !role || role.length < 6) continue;
+    const stem = role.slice(0, 6).toLowerCase();
+    const lists = (e: (typeof ev)[number]) => e.surface === 'location_page' && (e.quote ?? '').toLowerCase().includes(stem);
+    if (!ev.some((e) => lists(e) && where(e) && where(e) !== place) || ev.some((e) => lists(e) && where(e) === place)) continue;
+    const said = synthesis.find((x) => places.every((p) => mentions(x, p)) && x.toLowerCase().includes(stem));
+    const service = said?.match(new RegExp(`(?<!\\p{L})${stem}\\p{L}*`, 'iu'))?.[0];
+    if (service) return { placeTeam: { place, role: role.toLowerCase(), service: service.toLowerCase() } };
+  }
+  return {};
 }

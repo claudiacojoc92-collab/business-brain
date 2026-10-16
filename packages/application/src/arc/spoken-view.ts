@@ -45,6 +45,11 @@ export function spokenView(v: ArcView): ArcView {
           synthesis: s(u.read.structure.synthesis),
           // evidence quotes are the source's own words: never rewritten
           hypotheses: u.read.structure.hypotheses.map((h) => ({ ...h, pattern: s(h.pattern), interpretation: s(h.interpretation), alternative: s(h.alternative), reversal: s(h.reversal) })),
+          ...(u.read.structure.founder ? { founder: {
+            ...u.read.structure.founder,
+            ...(u.read.structure.founder.routes ? { routes: s(u.read.structure.founder.routes) } : {}),
+            ...(u.read.structure.founder.placeFacts ? { placeFacts: u.read.structure.founder.placeFacts.map((x) => s(x)) } : {}),
+          } } : {}),
         } } : {}),
       } } : {}),
       // Stage evidence lines are fragments joined into one "Why: a; b." sentence: no closing punctuation of their own.

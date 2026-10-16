@@ -499,7 +499,7 @@ describe('ArcService.view — NO QUOTE, NO CLAIM (BUS-73)', () => {
     expect(u.read!.model).toEqual([{ dimension: 'offer', lines: [{ text: 'You sell settlement checks to banks.', basis: 'observed' }] }]);
     expect(u.read!.unknownDimensions).toEqual(['acquisition']);
     expect(u.read!.untrusted).toEqual([{ finding: 'Eight services are hidden.', why: '', reason: 'sitemap' }]);
-    expect(u.read!.asks).toEqual([{ question: 'Where do your first customers come from today?', why: 'It decides the channel.', parts: ['new clients', 'returning clients'] }]);
+    expect(u.read!.asks).toEqual([{ question: 'Where do your first customers come from today?', why: 'It decides the channel.', parts: ['new clients', 'returning clients'], dimension: 'acquisition' }]);
     expect(u.read!.notConcluding.map((n) => n.claim)).toEqual(['You have not chosen your segment.']); // unsupported claims stay off the card
     expect(JSON.stringify(u)).not.toMatch(/0 \+/); // website notes never reach the card
   });
