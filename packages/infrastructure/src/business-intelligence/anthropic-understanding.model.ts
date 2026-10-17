@@ -1,6 +1,8 @@
 import { createAnthropicClient } from '../llm/anthropic-client';
 import { VOICE_RULES,
   isTechnicalUrl,
+  sameInsight,
+  type GovernedUnderstanding,
   visibilityPhrased,
   type IUnderstandingModelPort,
   type UnderstandingModelInput,
@@ -74,6 +76,28 @@ export function buildSourcesBlock(observations: PageObservation[]): string {
  * tensions, and EARN a diagnosis last (code lowers whatever the evidence does not earn). The website is one source,
  * not the business. No real business appears in these instructions (a test enforces it): examples are invented.
  */
+/**
+ * The fixed order in which a constraint's root cause is searched (operator, 2026-10-12): users → target → offer → time.
+ * Shared by the first reading and the retry, so both land on the same cause instead of two plausible different ones.
+ */
+const ROOT_CAUSE_ORDER = [
+  '  1. USERS: has anyone actually bought or used it? If the sources show no paying or named customer, user or',
+  '     result for the core offer, the constraint is that (e.g. "You have not yet had a customer use X and get a result.").',
+  '     Members, clients, customers, placements, students, named participants or a member list ALL count as users. If the',
+  '     sources show users exist, this level is PASSED: "no published result / testimonial / success story" is then a',
+  '     proof tension, NOT the constraint. Go to 2.',
+  '  2. TARGET: if there are users, have you chosen who it is for? If the sources speak to several audiences or',
+  '     directions with no priority, the constraint is that choice.',
+  '  3. OFFER: if users and target are clear, is the offer finished? If it is still changing, incomplete or not buyable,',
+  '     the constraint is that.',
+  '  4. Only if none of these is supported: where your time and effort go instead.',
+  '  Stop at the FIRST level the sources support. Do not skip to a later level because it sounds more interesting.',
+  '  WRITE IT DOWN: constraint.levelCheck answers each level\'s question with passed (true = this level is NOT the',
+  '  problem) and one short piece of evidence from the sources (e.g. users: {"passed": true, "evidence": "hundreds of',
+  '  members listed"}). constraint.level = the FIRST level whose passed is false ("time" only if all three passed).',
+  '  A business whose stage is growth or plateau has users, so its users level is passed.',
+];
+
 function systemPromptBase(lang: string): string {
   const langName = LANG_NAME[lang] ?? 'English';
   return [
@@ -116,6 +140,8 @@ function systemPromptBase(lang: string): string {
     '      "structure": {"synthesis": "", "hypotheses": [{"pattern": "", "relationship": "asymmetry|divergence|sequence|concentration|dependency|mismatch", "between": ["<named thing>", "<named thing>"], "dimensions": ["<dimension>", "<dimension>"], "interpretation": "", "whyItMatters": "", "changes": ["segment|bet|channel|offer|capacity|retention|resources|sequencing"], "alternative": "", "discriminator": {"unknown": "", "question": "", "why": ""}, "reversal": "", "evidence": [{"ref": "", "quote": "", "context": "", "surface": "offer_list|price_list|timetable|location_page|team_page|about|faq|booking|social|founder|other"}], "compares": [], "comparisonBasis": "", "counts": [{"value": 0, "of": "", "items": [{"ref": "", "quote": ""}]}], "numbers": [], "calculations": []}]}',
     '    },',
     '    "contradictions": [{"kind": "", "statementA": "", "statementB": "", "tension": "", "soWhat": "", "basis": "observed|declared|inferred|contradicted", "absence": false, "sourceRefs": [], "evidence": [{"ref": "", "quote": ""}]}],',
+    '    "capabilityCheck": {"sells": "", "shown": true, "insight": "", "soWhat": "", "sourceRefs": [], "evidence": [{"ref": "", "quote": ""}]},',
+    '    "constraint": {"decided": true, "level": "users|target|offer|time", "levelCheck": {"users": {"passed": true, "evidence": ""}, "target": {"passed": true, "evidence": ""}, "offer": {"passed": true, "evidence": ""}}, "statement": "", "why": "", "sourceRefs": []},',
     '    "unknowns": [],',
     '    "stage": {"stage": "validating|growth|plateau|undetermined", "evidence": ["<observation>", "<observation>"], "sourceRefs": [], "numbers": [], "calculations": [], "secondary": {"stage": "", "area": "", "evidence": ["<observation>"], "numbers": [], "calculations": []}}',
     '  },',
@@ -124,9 +150,7 @@ function systemPromptBase(lang: string): string {
     '',
     'ORDER OF WORK — do it in this order, and never let a later step run ahead of an earlier one:',
     '  1. Build the BUSINESS MODEL (read.model). 2. Mark what is known, inferred and unknown. 3. RELATE the facts: the',
-    '  STRUCTURE (read.structure). 4. Only then name the tensions the evidence supports.',
-    '  5. Last, the diagnosis, which must be EARNED. A conclusion that needs a fact you listed as unknown is not a',
-    '  conclusion: put it in read.notConcluding.',
+    '  STRUCTURE (read.structure). 4. Name the 3 to 4 tensions, ranked. 5. Then DECIDE the ONE constraint behind them.',
     '',
     'BUSINESS MODEL (read.model) — one entry per dimension, all nine, even when mostly unknown:',
     '- offer: what is actually sold, the offer families, prices and recurring vs one-off where known, which location or',
@@ -151,17 +175,20 @@ function systemPromptBase(lang: string): string {
     '  of a pattern (say what it rests on). contradicted: the sources disagree. Unknowns go in the unknown lists.',
     '- observed means ONLY what a source says. A conclusion you add ("which discourages…", "which suggests…") makes the',
     '  claim inferred: keep the observed fact on its own, or mark the whole claim inferred.',
-    '- ABSENCE IS ABOUT THE SOURCES, NOT THE BUSINESS. If you did not see something (testimonials, a protocol, prices),',
-    '  the observation is "I could not see X in the pages I read", basis observed, absence true. NEVER "X does not',
-    '  exist", and NEVER a conclusion about how the business works because of it ("so all selling happens by phone" is',
-    '  unsupported). An absence item has an EMPTY soWhat.',
+    '- ABSENCE IS ABOUT THE SOURCES, NOT THE BUSINESS. If you did not see something, say it is not in your sources',
+    '  ("No page and no post shows…"), basis observed, absence true. NEVER "X does not exist", and NEVER a conclusion about',
+    '  how the business operates because of it ("so all selling happens by phone" is unsupported).',
+    '- Two kinds of absence. About the WEBSITE\'s structure (a menu entry, a button, a link, a counter): website notes only.',
+    '  About the BUSINESS (it sells or promises X and its own sources never show X: a result, a client, an example of the',
+    '  work): a sold-vs-shown tension, and its so-what may say what a customer cannot see, judge or check because of it.',
     '',
     'WEBSITE EVIDENCE — sort what the site shows into three kinds:',
     '- A. business facts: a service exists, a location exists, a price is shown, a team is named.',
     '- B. positioning and communication: headlines, how audiences are addressed, what is emphasised.',
     '- C. technical and hygiene: counters, unfinished widgets, maintenance or test pages, sitemap entries, indexing, broken',
-    '  pages, menus and page structure. Kind C goes ONLY in read.websiteNotes. Never a tension, a question, a stage',
-    '  signal or part of the diagnosis.',
+    '  pages, menus and page structure, legal pages and their dates, a missing link, footer or contact details, typos,',
+    '  vague or generic copy, and any critique of a phrase on the site. Kind C goes ONLY in read.websiteNotes: never a',
+    '  tension, a finding, a question, a stage signal or part of the constraint.',
     '- STALE OR UNVERIFIED: a page listed only in the sitemap, an old-looking page, maintenance or test content, or',
     '  material that contradicts the main pages may be outdated. Never use it as a strong fact. It goes in read.untrusted',
     '  with why ("something I found but don\'t trust yet").',
@@ -169,12 +196,10 @@ function systemPromptBase(lang: string): string {
     'STRUCTURE (read.structure) — the step that turns reading into understanding. Facts the founder already knows (what',
     'is sold, where, at what price) are the model; STRUCTURE is how those facts RELATE: where offers, locations, people,',
     'prices, schedules and ways in line up or diverge, and what that says about how the business is built.',
-    '- synthesis = TWO to FOUR short sentences: what this business actually is, structurally. Stronger than a list of facts,',
-    '  weaker than a conclusion the evidence has not earned. RELATE the mechanisms instead of listing categories: how the',
-    '  parts are sold, delivered or entered (exactly as the sources say), what that difference may mean, and the one thing',
-    '  you do NOT yet know that decides it. Never "N businesses", never "is really / de fapt", no numbers, no inventory.',
-    '  Shape: "Not every service seems to be sold the same way: <some> are <mechanism A>; <others> <mechanism B>. That may',
-    '  mean <the relationship>. I don\'t yet know <the deciding unknown>."',
+    '- synthesis = TWO to FOUR short sentences, in your own words for THIS business: what it is and how its parts fit.',
+    '  RELATE the mechanisms instead of listing categories (how the parts are sold, delivered or entered, exactly as the',
+    '  sources say) and say what that means. Never a fixed opening formula: if your first sentence could open the read of',
+    '  another business, rewrite it. Never "N businesses", no numbers, no inventory.',
     '- PURCHASE / ENTRY wording is exactly what the sources show: per session, multi-session packages, a paid evaluation',
     '  first, booking by appointment. Never "directly", "on the spot" or "without an appointment" unless a page says so.',
     '- OPERATING MODEL = a different MECHANISM: delivery (group vs one-to-one), purchase (packages vs single sessions vs',
@@ -207,10 +232,11 @@ function systemPromptBase(lang: string): string {
     '    schedule (days and times) or a long list into the pattern: name the relationship ("one person leads every class of',
     '    line Y in the X timetable") and let the evidence carry the lines. Never a trait of the customers (when they are',
     '    free, what they prefer) read from a schedule.',
-    '    interpretation = your reading of it, hedged ("may", "seems"), never stated as fact. Never demand, volume,',
-    '    occupancy or success read from a timetable, a team or a service list.',
-    '  - whyItMatters = the decision that depends on it, shaped "This decides whether … or …" (changes lists them).',
-    '    Never an outcome (revenue, retention, growth), a prediction or advice ("should").',
+    '    interpretation = your reading of it, as YOUR reading ("My reading is…"), as strongly as the evidence carries it;',
+    '    never dressed as an observed fact. Never demand, volume, occupancy or success read from a timetable, a team or a',
+    '    service list.',
+    '  - whyItMatters = what it means for the business and the decision that depends on it (changes lists them). Never a',
+    '    prediction of customer behaviour, never advice ("should").',
     '  - alternative = what ELSE explains the same evidence. While several materially different explanations remain',
     '    plausible (for example space, equipment, staff capacity or availability, a deliberate choice), name the set, not',
     '    one of them: one plausible explanation is not the only one. Never dismiss one with a single weak fact (one',
@@ -234,43 +260,127 @@ function systemPromptBase(lang: string): string {
     '  - Never generic ("different audiences have different needs", "pricing matters", "retention is important", "multiple',
     '    locations add complexity"): if it would fit a thousand businesses unchanged, it is not structure. Never customer',
     '    behaviour, profitability or margins, never a strategic choice attributed to the founder from website copy.',
-    '- Invented example (a bakery): synthesis "Your offer appears to combine different operating models under one brand:',
-    '  counter sales, standing wholesale orders for cafés and custom cakes made to order. I don\'t yet know whether they',
-    '  behave as one business economically or as separate engines." Hypothesis: pattern "Wholesale is sold only to cafés',
+    '- Invented example (a bakery): synthesis "You run three businesses on one set of ovens: the counter, standing',
+    '  wholesale orders for cafés and custom cakes made to order. The wholesale side sets your week; the counter and the',
+    '  cakes fit around it." Hypothesis: pattern "Wholesale is sold only to cafés',
     '  on a weekly standing order; custom cakes are taken by consultation, with a notice period.", interpretation "The',
     '  bakery may run two production calendars: a fixed weekly one and a project one.", alternative "Both may share the',
     '  same ovens and staff day to day, with no real separation.", discriminator "How much of the week\'s baking is',
     '  committed to standing orders?", reversal "Standing orders being a small, irregular part of production."',
     '',
-    'TENSIONS (contradictions) — 0 to 3, about the BUSINESS: misalignment between offer, customer, channel, capacity and',
-    'positioning that the evidence shows. No quota: fewer is better than padding, and none is a valid answer.',
-    '- SOURCE VOICE — one owner per claim, never two in one sentence. Website evidence belongs to the site ("The site says',
-    '  the studio serves…", "The pages read present…"); what the founder supplied belongs to the founder ("You told me…");',
-    '  your own reading belongs to you ("From what I read, it seems…"). Never "The site declares that you serve…".',
-    '- tension = the observation in plain second person, two short sentences; soWhat = the consequence in one sentence,',
-    '  only when it follows from evidence (empty for absence items and when you cannot support one).',
-    '- kind = "customer_proof" | "channel_mismatch" | "commercial_path" | "audience_mismatch" | "priority_vs_effort" |',
-    '  "story_vs_reality" | "capability_gap" | "other"; basis and absence as above.',
-    '- Name the concrete particulars (the real service names, numbers, pages), never categories.',
-    '- EVIDENCE — NO QUOTE, NO CLAIM: each tension carries 1 to 3 {"ref", "quote"}, the quote ONE sentence copied from',
-    '  that block character for character (never paraphrased, translated, joined or cut with "..."). For an absence item,',
-    '  quote what the page DOES say about the thing. A claim you cannot quote, do not make.',
-    '- An ABSENCE is a tension ONLY when it connects to a goal or mechanism the founder declared. Without that, it goes in',
-    '  read.websiteNotes (or an unknown), never in the tensions.',
-    '- NEVER PREDICT BEHAVIOUR: no "visitors leave", "parents move on", "people get confused", "customers hesitate", "they',
-    '  won\'t trust it", "it stops the decision". No source shows behaviour; such a consequence is not written at all.',
-    '- Invented example (a language school): tension "You sell exam preparation and conversation clubs. Every page',
-    '  speaks to exam candidates.", soWhat "The conversation clubs depend on people who never meet them on the site."',
+    'STRATEGIC LENS — you are reading a BUSINESS, not auditing a website. This decides what goes in contradictions',
+    'and aha.findings:',
+    '- Ask first: what does this business sell or promise, to whom, and what is it actually betting on? Then find where',
+    '  that does not line up with what its own sources show or do. Those gaps are the contradictions.',
+    '- The contradictions worth naming are about the BUSINESS. Typical shapes:',
+    '    • sold vs shown: it sells X, but its own sources never show X (no example, no case, no sample of the work);',
+    '    • promised vs demonstrated: it promises an outcome or a method, but nothing in the sources demonstrates it;',
+    '    • stated priority vs where the effort goes: the site says X is the core, but the posts/pages/space go to Y;',
+    '    • public story vs supplied reality: what the site or Instagram says vs what the founder supplied;',
+    '    • who it says it serves vs who it actually speaks to.',
+    '- CAPABILITY CHECK (always run it): if the business sells a capability (a method, expertise, a service, a system,',
+    '  a result), check whether its own sources demonstrate that capability anywhere. A business that sells X and',
+    '  never shows X is the PRIMARY contradiction: when the check finds this gap, it MUST be contradictions[0] and',
+    '  aha.findings[0], ahead of every other tension (including ones about the founder\'s social accounts).',
+    '  State it ONCE, at the level of the CORE offer and across ALL sources together ("its site and its posts show no',
+    '  X"), never per channel. Only this core, all-sources gap gets kind "capability_gap"; at most ONE item.',
+    '- WEBSITE HOUSEKEEPING is never a contradiction (see kind C above): it goes in read.websiteNotes.',
+    '- THE DIMENSIONS — check each one against the sources; every contradiction is about a DIFFERENT one:',
+    '    • capability: you sell X; do your sources show X (an example, a sample of the output, a result)?',
+    '    • customer proof: does any source show a real PERSON who bought or used it (a named customer, a testimonial, a',
+    '      number of users, a before/after of one client)? This is about people, not about your output.',
+    '    • channel: does your most active public channel (usually Instagram) speak about what you sell, to the people',
+    '      you sell to? A channel with most of your public activity and nothing about your offer is a tension.',
+    '    • commercial path: how does this make money? A free period, trial or pilot with no stated path to paid, or',
+    '      no visible price or way to buy, is a strategic gap, not a detail.',
+    '    • audience: who you say you serve vs who your sources actually speak to.',
+    '    • priority vs effort: what you say is core vs where the space, detail and posts actually go.',
+    '- A GAP YOU CAN SEE IS AN OBSERVATION, NEVER A QUESTION. If the sources show a free trial and no price, write the',
+    '  observation ("You offer a free trial and show no price or way to pay."), not "What will you charge after the',
+    '  trial?". Once a contradiction states a gap, NO question may ask about that gap again.',
+    '- TENSION FORM: contradictions[].tension states the observation ONLY, in two short sentences, second person:',
+    '  "You sell X. Your site and your posts never show X." No consequence in the tension; it goes in soWhat.',
+    '- THE SO-WHAT TEST: contradictions[].soWhat is the CONSEQUENCE, never a paraphrase of the tension. One sentence,',
+    '  shaped "This means <what your customers cannot see, judge or do>, so <what that leaves you with or what you are',
+    '  really betting on>." If it repeats the tension in other words, it is wrong; the "so" half names what this leaves',
+    '  YOU with (what has to carry the sale instead, what you are betting on without saying so). If you cannot write a',
+    '  consequence, drop the item. A so-what MAY say what your customers have to take on trust or on your word because',
+    '  they cannot check it.',
+    '- NO BEHAVIOUR PREDICTIONS: never claim how people FEEL, whether they CONVERT, or what they WILL DO ("visitors',
+    '  leave", "parents move on", "customers hesitate", "they won\'t trust it"). ALLOWED, because it is about the',
+    '  information available, not a prediction: what a customer CANNOT see, judge or check from your sources ("a patient',
+    '  cannot judge the programme before booking").',
+    '    • BAD (audit): "The Privacy Policy and the Terms carry different last-updated dates."',
+    '    • BAD (paraphrase so-what): tension "You sell rehab programmes. No page shows one.", soWhat "No programme',
+    '      appears anywhere on the site."',
+    '    • GOOD: tension "You sell personalised rehab programmes. No page and no post shows one programme, one',
+    '      before/after or one patient story.", soWhat "This means a patient cannot judge the programme before booking,',
+    '      so the first session has to do all the explaining."',
+    '    • GOOD: tension "You sell a pricing method to restaurants. You name no restaurant client, and your posts are',
+    '      about your travels.", soWhat "This means a restaurant owner never sees the method applied to a menu like',
+    '      theirs, so every sale starts from zero."',
+    '- contradictions[].kind classifies each one by its dimension: "capability_gap", "customer_proof", "channel_mismatch",',
+    '  "commercial_path", "audience_mismatch", "priority_vs_effort", "story_vs_reality", or "other". At most ONE item per',
+    '  kind (except "other"). basis and absence as above.',
+    '- contradictions[0] and aha.findings[0] are the SAME primary insight (the tension form and the finding form of it).',
+    '- capabilityCheck = your answer to the CAPABILITY CHECK, always filled: "sells" = what the business sells, in',
+    '  one phrase; "shown" = true only if its own sources (site AND posts) actually show it; "insight" = when shown is',
+    '  false, the gap across all sources in the tension form (empty when shown is true); "soWhat" = the consequence (same',
+    '  rules as contradictions[].soWhat); sourceRefs as usual.',
+    '- NO DUPLICATES: two items on the same dimension, or making the same point in other words, are ONE item. Different',
+    '  dimensions are different items even when both are about something missing.',
+    '- EVIDENCE — NO QUOTE, NO CLAIM. Every contradiction and the capabilityCheck carries "evidence": 1 to 3 items,',
+    '  each {"ref": the exact ref of the block, "quote": ONE sentence copied from that block character for character}.',
+    '  For a claim about something MISSING, quote what the page says instead. Never paraphrase, summarise, translate,',
+    '  join two sentences, or cut with "..."; a quote that is not on the page word for word is discarded, and a claim',
+    '  left without a quote is never shown. If you cannot copy an exact sentence that supports a claim, do NOT make it.',
+    '- contradictions: 3 to 4 real tensions about the BUSINESS, each on a DIFFERENT dimension, RANKED by severity:',
+    '  contradictions[0] is the single biggest, the one that most changes how the founder sees their own business and',
+    '  that they are least likely to have noticed. Fewer than 3 only when the sources genuinely hold fewer.',
     '',
-    'DIAGNOSIS (read.diagnosis) — LAST, and EARNED. A constraint is something that, if it changed, would change the most',
-    'for the founder\'s goal. You may call it a constraint ONLY when all five checks pass, each with a note:',
-    '  exists (the condition is shown by the evidence), causal (it is tied to the founder\'s goal or problem), blocks (it',
-    '  materially blocks progress), alternativesWeaker (competing explanations are weaker, say which), evidenceSufficient.',
-    '- Without the founder\'s goal (no founder-supplied intent), "causal" cannot pass: the state is "hypothesis" (a',
-    '  tension worth testing, phrased as a hypothesis) or "not_ready". Never a constraint from a website alone.',
-    '- Segment breadth, many services or several audiences is NOT a constraint by itself: it is a tension until you know',
-    '  which segment drives volume and profit and which one the founder wants to grow.',
-    '- "not_ready" with an empty statement is a strong, honest answer at the first read.',
+    'SPECIFICITY — this is the difference between a WOW and a shrug. A contradiction anyone could see by glancing at',
+    'the site is worthless; a contradiction the founder did NOT see about their OWN business is the whole product.',
+    'Every contradiction MUST name the CONCRETE particulars from the sources (the actual service names, the actual',
+    'numbers, the actual page titles), never a category. Invented examples:',
+    '  • WEAK (banned): "There are services with their own price lists that the main offer never mentions."',
+    '  • STRONG (required): tension "You sell four workshop formats with their own price lists. Your homepage and your',
+    '    posts only ever talk about the weekly class."',
+    '  • WEAK (banned): "A B2B channel exists but is not visible."',
+    '  • STRONG (required): tension "You have built a full corporate-wellness offer in your brochure: packages, a',
+    '    contract template, a team. Your website speaks only to individuals and never to an employer."',
+    'PLAIN WORDS, not consultant-academic: name the real thing and use plain verbs, no stacked-noun abstraction. A tired',
+    'founder should understand the line instantly.',
+    '',
+    'DIAGNOSTIC PRIORITY (this is what makes you a strategist, not a summarizer):',
+    '- Do NOT just describe what each page says. Read ACROSS the sources for what STANDS OUT and what does NOT fit.',
+    '- Prominence/detail asymmetry IS a tension: if one offering is described in far more depth or given far more space',
+    '  than the others, surface it (kind "priority_vs_effort"): a real structural signal about what the business may',
+    '  actually center on.',
+    '',
+    'CONSTRAINT — DECIDE, DO NOT LIST. This is the most important field. After the contradictions, name the ONE',
+    'constraint: the single thing that, if it changed, would change the most for this business. The contradictions',
+    'are its SYMPTOMS. The constraint is the CAUSE behind them, not one of them restated and not a summary of all of',
+    'them. Ask: which one thing, if solved, would make most of the contradictions go away or stop mattering?',
+    '- constraint.statement = ONE sentence, second person, plain words, at most 30 words. No hedging ("may", "seems").',
+    '- constraint.why = ONE sentence: which of the contradictions follow from it, and how.',
+    '- Example (a bakery): contradictions "wholesale has no page", "every post is about the café", "the price list is',
+    '  retail only" → constraint "You have not decided whether you are a café or a wholesale supplier, so your sources',
+    '  serve the café and the wholesale side runs on nothing." Not "your wholesale offer is invisible" (that is a symptom).',
+    '- The constraint must be a cause the tensions REVEAL, not a restatement of any one of them. Test it against every',
+    '  contradiction: if your constraint says the same thing as one of them in other words, you have named a symptom. Dig',
+    '  one level deeper and ask WHY the tensions exist. ROOT-CAUSE ORDER: check these IN THIS ORDER and name the FIRST one',
+    '  the sources support:',
+    ...ROOT_CAUSE_ORDER,
+    '  Use only what the sources show or clearly lack; when the deeper cause is an inference, say what it rests on in why.',
+    '- The constraint is NEVER about what your sources show, display, demonstrate or make visible: that is what the',
+    '  contradictions already say. It is about the BUSINESS itself: who it is for, whether anyone has bought or used it,',
+    '  whether the offer is finished, which of several directions you have chosen, where your time goes. The constraint',
+    '  is the FACT, not its visibility. BAD: "You have not yet shown that a client can complete the programme." GOOD: "No',
+    '  client has completed the programme and got a result." Never "not shown", "not visible", "not demonstrated".',
+    '- decided = false ONLY when the sources are too thin to see any cause, or two different causes are equally',
+    '  supported; then statement and why are empty. Being careful is not a reason to be undecided: a strategist commits.',
+    '- read.diagnosis mirrors your decision: state "constraint" with the same statement when decided is true, each check',
+    '  answered with a note; "hypothesis" only when decided is false and one cause is still the likelier one.',
     '',
     'QUESTIONS (read.questions) — questions are expensive: the founder answers about three. Propose 3 to 6 candidates.',
     '- For each, "changes" lists the strategic decisions its answer could change (segment, bet, channel, offer, capacity,',
@@ -296,23 +406,29 @@ function systemPromptBase(lang: string): string {
     'NOT CONCLUDING (read.notConcluding) — the important conclusions you deliberately do NOT draw yet, each with why',
     '(e.g. "which segment drives revenue: the site lists five offers with equal weight and no numbers").',
     '',
-    'STAGE — only from PERFORMANCE evidence about the core offer: volume, trend over time, how full it is, as the founder',
-    '  declared it or the sources show it. FOOTPRINT IS NOT STAGE EVIDENCE: locations, team size, number of services, a',
-    '  published or busy timetable fit a growing, stable, under-used, contracting or over-extended business equally.',
-    '- "validating" (still proving people will pay), "growth" (demonstrably works and is expanding), "plateau" (long-',
-    '  established, same offer, nothing new), else "undetermined" with evidence = what is missing to tell. Without',
-    '  performance evidence (usually, at a first read) the stage is "undetermined".',
-    '- stage.evidence = a LIST (JSON array) of 2 to 4 short observations, with sourceRefs. stage.secondary.evidence = a LIST',
-    '  (JSON array) of 1 to 2 observations, never a single string. A number in any stage line obeys NUMBERS (grounded in',
-    '  stage.numbers / stage.calculations, or the secondary\'s own), else write the line without it. Never from technical pages, sitemaps, publication',
-    '  dates in a sitemap, or how polished the site looks. stage.secondary only for ONE named part clearly at another',
-    '  stage, from business evidence; otherwise null.',
+    'STAGE — where the business is, from EVIDENCE in the sources:',
+    '- "validating" = still proving that people want it and will pay: no named paying customer, no repeat buying shown,',
+    '  a free period, trial or pilot, the offer still being shaped, few or no results shown.',
+    '- "growth" = it demonstrably works and is expanding: named customers or visible volume, several locations, teams or',
+    '  offers added over time, hiring, a channel that visibly brings people in.',
+    '- "plateau" = established for years with the same offer and audience and nothing new: long-running, stable offer,',
+    '  old or repeated content, no new channel or offer in a long time.',
+    '- stage.stage is the stage of the CORE: the offer with the MOST EVIDENCE OF SALES in the sources (named clients,',
+    '  placements, members, volume, prices actually charged, staff serving it), not the offer listed first, described',
+    '  most, or most expensive. Judge the core ONLY on evidence about the core. Something new, on paper only, or not yet',
+    '  sold NEVER changes the core stage; it goes in stage.secondary.',
+    '- stage.secondary = {"stage", "area": the named part, "evidence"} when ONE named part of the business is clearly at a',
+    '  different stage than the core (typically a new channel or offer still being validated next to a growing core);',
+    '  otherwise null. At most one, never the same stage as the core.',
+    '- stage.evidence = a LIST (JSON array) of 2 to 4 concrete observations about the CORE, with sourceRefs.',
+    '  stage.secondary.evidence = a LIST of 1 to 2 observations, never a single string. A number in any stage line obeys',
+    '  NUMBERS (grounded in stage.numbers / stage.calculations, or the secondary\'s own), else write the line without it.',
+    '  Never from technical pages, sitemaps, publication dates in a sitemap, or how polished the site looks.',
+    '- "undetermined" only when the evidence does not support one core stage; then evidence = what is missing to tell.',
     '',
     'OTHER FIELDS:',
     '- offer.summary = ONE sentence, at most 25 words: what you sell and to whom.',
-    '- positioning.summary = ONE sentence, at most 20 words: how the SOURCES present the business ("The site presents',
-    '  the studio as…", "From the pages read, the offer is framed as…"). Website language is how the site positions you,',
-    '  NOT a choice you made: never "you bet on", "you chose" or "your strategy" unless the founder supplied it.',
+    '- positioning.summary = ONE sentence, at most 20 words: what you are betting on.',
     `- audience.summary = a short LABEL in ${langName}, at most 12 words.`,
     '- offer.unclear and audience.unknown hold BUSINESS unknowns only (never counters, page details or other website notes).',
     '- NUMBERS — every digit you write in read.model, an aha finding, its "matters" or its implication must be grounded:',
@@ -329,10 +445,10 @@ function systemPromptBase(lang: string): string {
     '  would fit thousands of businesses ("segments have different needs", "pricing matters", "retention is important") is',
     '  not a reason. Nor is one that needs data you do not have: session duration, trainer time, utilisation, occupancy,',
     '  demand, costs, profitability. Then the fact is an observation, not a finding.',
-    '- aha.findings: 0 to 3, each an OBSERVED fact (or plain arithmetic on observed numbers) about the business, with a',
-    '  valid sourceRef. Never speculation ("could be", "probably"), never unit economics the sources do not show, never a',
-    '  behaviour prediction, never an absence before the founder\'s goal is known, never website hygiene, never generic',
-    '  advice ("post more", "build trust", "improve SEO"). No finding is better than a speculative one.',
+    '- aha.findings: 2 to 3 findings, RANKED (the first is the most important and is the same insight as',
+    '  contradictions[0]), each SPECIFIC to THIS business and tied to source specifics or a real tension, with a valid',
+    '  sourceRef. Never unit economics the sources do not show, never a behaviour prediction (see NO BEHAVIOUR',
+    '  PREDICTIONS), never website hygiene, never generic advice ("post more", "build trust", "improve SEO").',
     '- At most 5 items per array (model dimensions excepted); short phrases, not paragraphs. Output must be complete JSON.',
     '',
     'VOICE — you are talking TO the founder: every sentence you compose is SECOND PERSON, PRESENT TENSE ("You sell X."),',
@@ -340,10 +456,13 @@ function systemPromptBase(lang: string): string {
     'consultant abstractions. This is the READING step: no recommendations ("you should"), that is the strategy\'s job.',
     '',
     'CLAIM-TYPE DISCIPLINE — you have the business\'s own sources only: no market, competitor or customer-behaviour data.',
-    'NOT ALLOWED, even hedged ("may/could/appears"): market or competitive claims (rare, unique, better than others);',
-    'trust or credibility claims; claims that something deepens loyalty or increases conversion, leads or revenue; claims about how',
-    'visitors, parents or customers feel, respond or will behave; strategic choices attributed to the founder from website',
-    'copy; strategic recommendations. Recast as an observation, move to unknowns, or drop it.',
+    '- ALLOWED: source observations, structural inconsistencies (two pages disagree), visible conversion-path observations',
+    '  (there is / is no way to buy), message and audience tensions, sold-vs-shown gaps, what a customer cannot see, judge',
+    '  or check from your sources, and the constraint you decide.',
+    '- NOT ALLOWED, even hedged ("may/could/appears"): market or competitive claims (rare, unique, better than others);',
+    '  trust or credibility claims; claims that something deepens loyalty or increases conversion, leads or revenue;',
+    '  claims about how people feel or what they will do; strategic recommendations. Recast as an observation, move to',
+    '  unknowns, or drop it.',
     'Romanian, Italian and German keep the bounded meaning (poate/pare, può/sembra, kann/scheint), never stronger.',
   ].join('\n');
 }
@@ -354,6 +473,95 @@ export function systemPrompt(lang: string): string {
 }
 
 export { visibilityPhrased };
+
+const LEVELS = ['users', 'target', 'offer'] as const;
+/**
+ * Why a decided constraint's level is inconsistent with the model's own notes, or null (Strategic Depth W1, operator
+ * 2026-10-12): the level must be the FIRST level its levelCheck marks as not passed ("time" when all pass), and a
+ * business at the growth or plateau stage has users, so it can't stop at the users level.
+ */
+export function levelProblem(u: GovernedUnderstanding | null | undefined): string | null {
+  const c = u?.constraint;
+  if (!c?.decided) return null;
+  const level = c.level;
+  if (!level || !['users', 'target', 'offer', 'time'].includes(level)) return 'It does not say which root-cause level it stopped at.';
+  const check = c.levelCheck ?? {};
+  const firstFailing = LEVELS.find((l) => check[l] && check[l]!.passed === false) ?? (LEVELS.every((l) => check[l]?.passed === true) ? 'time' : null);
+  if (firstFailing && firstFailing !== level) return `Its own level check says the first level that is not passed is "${firstFailing}", but it stopped at "${level}".`;
+  const stage = u?.stage?.stage;
+  if (level === 'users' && (stage === 'growth' || stage === 'plateau')) return `It stopped at "users", but the stage is ${stage}: a business at that stage has users, so the users level is passed.`;
+  return null;
+}
+
+/** The tension a decided constraint restates (word overlap ≥ 0.45, the "same insight" bar), or null. */
+export function restatedTension(u: GovernedUnderstanding | null | undefined): string | null {
+  const c = u?.constraint;
+  const statement = (c?.statement ?? '').trim();
+  if (!c?.decided || !statement) return null;
+  const tensions = [
+    ...(u?.contradictions ?? []).map((x) => (x.tension ?? '').trim()),
+    u?.capabilityCheck?.shown === false ? (u.capabilityCheck.insight ?? '').trim() : '',
+  ].filter(Boolean);
+  return tensions.find((t) => sameInsight(statement, t)) ?? null;
+}
+
+export function deeperConstraintPrompt(lang: string): string {
+  const langName = LANG_NAME[lang] ?? 'English';
+  return [
+    'You are the analyst inside Business Brain. You already read a business and wrote its tensions and ONE constraint.',
+    'The constraint you wrote restates one of the tensions or describes what is visible instead of the fact behind it,',
+    'so it names a symptom, not the cause.',
+    'Dig one level deeper: ask WHY the tensions exist. ROOT-CAUSE ORDER: check these IN THIS ORDER and name the FIRST',
+    'one your reading supports (the same order the first reading used):',
+    ...ROOT_CAUSE_ORDER,
+    'It must not say the same thing as any tension, in any wording.',
+    'The constraint is the FACT, not its visibility. BAD: "You have not yet shown that a client can complete the',
+    'programme." GOOD: "No client has completed the programme and got a result." Never "not shown", "not yet shown",',
+    '"you haven\'t shown", "not visible", "not demonstrated".',
+    'Rules: ONE sentence, second person, present tense, plain words, at most 30 words, no hedging. Never about what the',
+    'sources show, display, demonstrate or make visible. No trust, credibility, conversion, revenue, loyalty, competitor',
+    `or recommendation claims. Write statement and why in ${langName}. "why" = one sentence linking it to the tensions.`,
+    'If nothing deeper is supported, return decided false with empty statement and why.',
+    'Return ONLY JSON: {"decided": true, "level": "users|target|offer|time", "levelCheck": {"users": {"passed": true, "evidence": ""}, "target": {"passed": true, "evidence": ""}, "offer": {"passed": true, "evidence": ""}}, "statement": "", "why": "", "sourceRefs": []}',
+  ].join('\n');
+}
+
+/**
+ * One retry when the constraint restates a tension or is phrased as visibility ("you have not shown …") — Strategic
+ * Depth W1. The retry's answer is kept whenever it is decided (operator, 2026-10-12): when the root cause is at the
+ * users level its customer-proof symptom always shares words with it, and the arc projection merges any tension it
+ * still overlaps off the card. Undecided or a failed call keeps the first. Never fails the synthesis.
+ */
+export async function refineConstraint(
+  out: SynthesisOutput,
+  lang: string,
+  call: (system: string, user: string) => Promise<string>,
+): Promise<SynthesisOutput> {
+  const u = out?.understanding;
+  const restated = restatedTension(u);
+  const visibility = u?.constraint?.decided && visibilityPhrased(u.constraint.statement ?? '');
+  const level = levelProblem(u);
+  if (!u || (!restated && !visibility && !level)) return out;
+  try {
+    const reading = {
+      offer: u.offer?.summary, positioning: u.positioning?.summary, audience: u.audience?.addressed,
+      tensions: (u.contradictions ?? []).map((c) => ({ tension: c.tension, soWhat: c.soWhat, sourceRefs: c.sourceRefs })),
+      capabilityCheck: u.capabilityCheck, stage: u.stage,
+      yourConstraint: u.constraint,
+      problem: level ?? (restated ? `It restates this tension: ${restated}` : 'It describes what is visible (shown / demonstrated), not the fact behind it.'),
+    };
+    const next = extractJson(await call(deeperConstraintPrompt(lang), JSON.stringify(reading, null, 2))) as GovernedUnderstanding['constraint'];
+    if (!next?.decided || !(next.statement ?? '').trim()) return out;
+    const constraint = { decided: true, statement: next.statement.trim(), why: (next.why ?? '').trim(), sourceRefs: next.sourceRefs ?? [],
+      ...(next.level ? { level: next.level } : {}), ...(next.levelCheck ? { levelCheck: next.levelCheck } : {}), retried: true };
+    // A retry asked to fix the level must come back with a consistent one; otherwise the first answer stays.
+    if (level && levelProblem({ ...u, constraint })) return out;
+    return { ...out, understanding: { ...u, constraint } };
+  } catch {
+    return out;
+  }
+}
+
 
 export class AnthropicUnderstandingModel implements IUnderstandingModelPort {
   private readonly modelId: string;
@@ -388,10 +596,15 @@ export class AnthropicUnderstandingModel implements IUnderstandingModelPort {
       ? resp.content.find((c: { type?: string }) => c?.type === 'text')
       : null;
     const raw: string = (block as { text?: string } | null)?.text ?? '';
-    // No constraint retry (2026-10-15): a constraint is no longer forced, so there is nothing to "dig deeper" into. The
-    // diagnosis is earned in code (governUnderstanding), never pushed by a second call.
     const parsed = extractJson(raw) as SynthesisOutput;
-    return { ...parsed, modelId: this.modelId };
+    // The constraint retry (restored 2026-10-17): when the decided constraint restates a tension, is phrased as visibility
+    // or stops at the wrong root-cause level, ONE call digs one level deeper. Never fails the synthesis.
+    const refined = await refineConstraint(parsed, input.interfaceLanguage, async (system, user) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const r: any = await client.messages.create({ model: this.modelId, max_tokens: 1024, temperature: 0, system, messages: [{ role: 'user', content: user }] });
+      return (Array.isArray(r?.content) ? r.content.find((c: { type?: string }) => c?.type === 'text')?.text : '') ?? '';
+    });
+    return { ...refined, modelId: this.modelId };
   }
 
   /**
