@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { thesisRules, thesisUserBlock } from './anthropic-theses.model';
+import { projectionRules, thesisRules, thesisUserBlock } from './anthropic-theses.model';
 
 // STRATEGIC THESES prompt (2026-10-16): generic for any founder-led business; interpretation yes, new facts no.
 describe('thesis prompt', () => {
@@ -13,5 +13,15 @@ describe('thesis prompt', () => {
     const r = thesisRules('Romanian');
     for (const x of ['STAY ABOVE THE SOLUTION', 'asks WHETHER the relationship exists before any HOW', 'model them as POSSIBLE until', 'A structural POSSIBILITY is never a behaviour FACT', 'driverQuestion', 'you may NEVER create a new FACT', 'typically 4 to 8, fewer when the business', 'Never invent a weak one to fill a quota', 'NOT an observation', '"none_observed" is a legitimate answer', 'in Romanian']) expect(r).toContain(x);
     expect(r).not.toMatch(/\b(Body Move|studios?|physio\w*|kineto\w*|pregnan\w*|classes|locations?|subscribers?|gym)\b/i);
+  });
+});
+
+describe('projection prompt examples are in the founder\'s language (2026-10-17)', () => {
+  it('a Romanian prompt quotes Romanian examples only', () => {
+    const ro = projectionRules('Romanian', 'ro');
+    expect(ro).toContain('în funcție de cât de des X duce la Y');
+    expect(ro).toContain('Nu știu încă dacă…');
+    expect(ro).not.toMatch(/depending on how often|I don't know yet|clients move from|which means|the only|changes the buying path|gateway or obstacle/);
+    expect(projectionRules('English', 'en')).not.toMatch(/singurul|ceea ce înseamnă/);
   });
 });

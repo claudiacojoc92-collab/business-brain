@@ -4,7 +4,7 @@ import { canonicalTodayMove, deriveAllReadiness, selectToday, todayPlanAction } 
 import type { GovernedUnderstanding, ClaimEvidence, StructuralHypothesis } from '../bi/index';
 import type { MirrorExchange, MirrorRead } from '../mirror/contracts';
 import type { StrategyUnderstandingRead } from '../strategy/contracts';
-import { compactRecord, governTheses, thesisInput, thesesWithStatus, type IThesisModelPort, type ThesisRecord, type ThesisStatus } from './theses';
+import { compactRecord, governProjection, governTheses, projectionInput, thesisInput, thesesWithStatus, type IThesisModelPort, type ThesisRecord, type ThesisStatus } from './theses';
 import { clipQuote } from '../bi/evidence-anchor';
 import { normalizeUnderstandingShapes, stringList } from '../bi/model-shapes';
 import { agendaUnknowns, performanceEvidence, isHousekeeping, critiquesWording, factOnly, restatesNotShown, makesUnlicensedClaim, makesUnlicensedSoWhatClaim, sameInsight, firstSentence } from '../bi/index';
@@ -489,7 +489,11 @@ export class ArcService {
     const input = thesisInput(u, businessName, language);
     if (!input || !this.deps.theses) return null;
     const out = await this.deps.theses.compose(input).catch(() => null);
-    const record = governTheses(out, input, u, snapshotId);
+    const governed = governTheses(out, input, u, snapshotId);
+    // The founder-facing synthesis is written after ranking, from the top theses only (2026-10-17); its governance falls
+    // back to the stored copy under the same rules when the projection is missing or fails.
+    const projection = governed && this.deps.theses.project ? await this.deps.theses.project(projectionInput(governed, input)).catch(() => null) : null;
+    const record = governed ? governProjection(projection, governed, input) : null;
     this.deps.log?.({ type: 'arc_theses', detail: JSON.stringify({ businessId, snapshotId, composed: Boolean(out), candidates: out?.theses?.length ?? 0, eligible: record?.theses.filter((t) => t.eligibility.pass).length ?? 0, top: record?.top ?? [], dropped: record?.dropped.length ?? 0 }) });
     return record ? compactRecord(record) : null;
   }
