@@ -114,6 +114,8 @@ export interface ArcUnderstanding {
   /** Founder-facing understanding (2026-10-16), written from the top strategic theses and re-checked: MY READ + WHAT I
    *  THINK MATTERS. Absent ⇒ the card composes its deterministic first read. The questions are in `read.asks`. */
   readonly founderRead?: { readonly snapshotId: string; readonly myRead: string; readonly matters: { readonly headline: string; readonly body: string }[] };
+  /** WHAT I UNDERSTAND ABOUT YOUR BUSINESS (2026-10-17): governed facts only, projected at view time (business-snapshot). */
+  readonly snapshot?: { readonly text: string };
   readonly stage: {
     readonly stage: 'validating' | 'growth' | 'plateau'; readonly evidence: string[];
     /** A named part of the business at a different stage than the core (e.g. "the medical channel": validating). */

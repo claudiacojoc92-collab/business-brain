@@ -512,6 +512,8 @@ export interface ArcView {
     };
     /** Founder-facing understanding (2026-10-16) from the top strategic theses; absent ⇒ the deterministic first read. */
     founderRead?: { snapshotId: string; myRead: string; matters: { headline: string; body: string }[] };
+    /** WHAT I UNDERSTAND ABOUT YOUR BUSINESS: governed facts, projected at view time (2026-10-17). */
+    snapshot?: { text: string };
     stage?: { stage: 'validating' | 'growth' | 'plateau'; evidence: string[]; secondary?: { stage: 'validating' | 'growth' | 'plateau'; area: string } | null } | { stage: 'undetermined' } | null };
   correctionReflection?: { reflection: string; changes: string; holds: string };
   turns?: ArcTurn[];

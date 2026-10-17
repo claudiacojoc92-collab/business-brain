@@ -221,3 +221,31 @@ Each slice: targeted tests → type-check → lint changed files → build → *
 - Ranking proxies are heuristics: the three-snapshot read is the check, and the weights are a tuning knob, not a promise.
 
 **Open decision for Claudia:** should S1–S3 apply only to new reads (old snapshots keep the fallback), or also run the thesis pass lazily on an existing snapshot when its card is opened? The lazy option avoids forcing a re-read, but adds latency to the first open.
+
+## 11. Launch ranking and post-launch evidence (2026-10-17)
+
+**Shipped for launch.**
+- **The Business Snapshot.** "What I understand about your business" sits above My first read. It is a view-time projection of governed facts: at most 90 words, no model call, no judgement.
+- **The simple ranking:** decision leverage → business consequence → non-obviousness → cross-dimension → reversibility → model priority → grounding (final tie-break).
+- **Unchanged:** grounding stays a gate, an observation-only thesis is never top, and duplicates are removed.
+- **Removed:** literal offer-name specificity.
+
+**What the founder sees.** The two "What I think matters here" items are the highest-value unresolved relationships BB currently thinks are worth understanding. They are not an exact #1/#2, and the founder sees no rank labels or scores.
+
+**Not shipped: the offline replay record.** Each was run on 5 Body Move candidate sets plus reconstructed QuFi and East Fork sets.
+- **Keyword discrimination.** It regressed QuFi and East Fork.
+- **Absolute 0–3 semantic score.** It moved 2 vs 3 across runs, and its branches drifted into strategy prescriptions.
+- **Relative total order.** Only 2 of 7 sets gave the same order across runs.
+- **Anchor + frontier + complementary secondary.**
+  - The anchor was stable in 7 of 7 sets across both candidate orders.
+  - The final pair was stable in only 4 of 7.
+  - The pairwise pair comparison was position-biased.
+
+**Conclusion.** Choosing the first thesis is stable. Choosing the second one is genuinely ambiguous on some businesses: location vs lifecycle (Body Move), registry vs values (East Fork). That ambiguity is not solved before launch, and there are no more synthetic replays.
+
+**Evidence to collect from real founder usage (post-launch).**
+1. Which insight founders engage with first.
+2. Which insight they call obvious vs valuable.
+3. Whether the second insight changes their answer or the later Strategy.
+4. Whether BB repeatedly surfaces low-value structural observations.
+5. Whether a different second thesis would materially change downstream decisions.
