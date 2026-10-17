@@ -54,7 +54,7 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
 
     // Strategic theses (2026-10-16): persist a freshly composed record per snapshot (composed once, stable across
     // refresh), then strip the internal fields: the founder-facing payload never carries the thesis machinery.
-    if (view.internal?.theses) recordThesisRecord(deps.db, founderId, businessId, view.internal.theses);
+    if (view.internal?.theses) await recordThesisRecord(deps.db, founderId, businessId, view.internal.theses);
 
     // Persist a freshly-built mirror contrast so it is STABLE across refresh and not re-generated on every view.
     if (view.moment === 'mirror' && !savedMirror && view.mirror) recordArcMirror(deps.db, founderId, businessId, view.mirror);

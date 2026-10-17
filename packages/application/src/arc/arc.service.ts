@@ -154,7 +154,7 @@ export class ArcService {
         const record = cached ?? (snapId && u ? await this.track(businessId, 'understanding', () => this.composeTheses(businessId, businessName, language, u, snapId)) : null);
         // Governed facts first (2026-10-17): what the business IS, projected now, so existing reads get it without a re-read.
         const facts = businessSnapshot(u, record ?? (snapId && savedTheses?.snapshotId === snapId ? savedTheses : null), businessName, language);
-        const snapshot = facts?.text ? { snapshot: { text: facts.text } } : {};
+        const snapshot = { ...(facts?.text ? { snapshot: { text: facts.text } } : {}), ...(snapId ? { snapshotId: snapId } : {}) };
         if (!record) return { ...base, understanding: { ...card, ...snapshot } };
         return {
           ...base,

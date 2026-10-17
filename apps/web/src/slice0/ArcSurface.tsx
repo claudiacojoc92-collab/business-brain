@@ -1179,14 +1179,43 @@ export function SourcesEditor({ businessId, onUpdated, onCancel, cancelLabel }: 
   }, [businessId]);
   useEffect(() => { void reload(); }, [reload]);
 
+  // A RE-READ OUTLIVES THE BROWSER'S WAIT (2026-10-17): re-fetching the site, the synthesis and the theses take longer
+  // than the ~5 min the edge keeps a request open, while the server keeps going and saves the new understanding. So, as
+  // in act(), a request still open after a short while is joined by a poll of the arc state (which answers "pending"
+  // and never starts a second read). The read finished when the arc shows an understanding with a NEW snapshot; it
+  // failed when nothing runs any more and the understanding is unchanged. Only the founder's click starts a read.
   async function update() {
     setBusy(true); setResult(null);
-    try {
-      const v = await arcPourInDone(businessId);
+    const shown = (v: ArcView | null): string | null => (v && v.moment === 'understanding' ? v.understanding?.snapshotId ?? '' : null);
+    let before: string | null = null;
+    try { before = shown(await getArc(businessId)); } catch { /* unknown: any finished read counts as the new one */ }
+    const started = Date.now();
+    let settled = false;
+    let failed = false;
+    const finish = (v: ArcView) => {
+      if (settled) return;
+      settled = true;
       if (v.error?.kind === 'pourin_empty' || v.error?.kind === 'pourin_failed') setResult(v.error);
       else onUpdated(v);
-    } catch { setResult({ kind: 'pourin_failed' }); }
-    finally { setBusy(false); }
+    };
+    const fail = () => { if (!settled) { settled = true; setResult({ kind: 'pourin_failed' }); } };
+    const request = arcPourInDone(businessId).then(finish, () => { failed = true; });
+    await Promise.race([request, sleep(RECOVER_START_MS)]);
+    let sawPending = false;
+    while (!settled && Date.now() - started < RECOVER_GIVE_UP_MS) {
+      let v: ArcView | null = null;
+      try { v = await getArc(businessId); } catch { /* a transient poll failure: try again */ }
+      if (settled) break;
+      if (v?.pending) sawPending = true;
+      if (v && !v.pending) {
+        const now = shown(v);
+        if (now !== null && now !== before) { finish(v); break; } // a new understanding is saved: show it
+        if (sawPending || failed) { fail(); break; }              // the read ended without one: a real failure
+      }
+      await Promise.race([request, sleep(RECOVER_POLL_MS)]);
+    }
+    fail(); // gave up waiting (no-op when already settled)
+    setBusy(false);
   }
 
   const back = onCancel ? (
