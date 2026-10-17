@@ -53,8 +53,7 @@ import {
   PgInternalBriefRepository,
   PgIntakeSessionRepository,
   PgFounderVoiceRepository,
-  createLogger,
-} from '@bb/infrastructure';
+  createLogger, readThesisRecord} from '@bb/infrastructure';
 import type { KyselyDB } from '@bb/infrastructure';
 import type { IInternalBriefRepository } from '@bb/domain';
 import { SystemClock as UnderstandingClock } from '@bb/domain';
@@ -135,7 +134,7 @@ import { AnthropicVoiceModel } from '@bb/infrastructure';
 import { AnthropicPlanModel } from '@bb/infrastructure';
 import { AnthropicImpactModel } from '@bb/infrastructure';
 import { AnthropicMirrorModel } from '@bb/infrastructure';
-import { AnthropicEmailModel, AnthropicCorrectionReflectionModel, AnthropicWeekStoryModel, AnthropicContainerAnswersModel } from '@bb/infrastructure';
+import { AnthropicEmailModel, AnthropicCorrectionReflectionModel, AnthropicThesisModel, AnthropicWeekStoryModel, AnthropicContainerAnswersModel } from '@bb/infrastructure';
 import { AnthropicCarouselModel } from '@bb/infrastructure';
 import { AnthropicObservationModel, AnthropicOpportunityModel } from '@bb/infrastructure';
 import { AnthropicVideoObservationModel, AnthropicReelOpportunityModel } from '@bb/infrastructure';
@@ -364,6 +363,8 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
   const founderStateRepo = new PgFounderStateRepository(db);
   const founderObsRepo = new PgFounderObservationRepository(db);
   const conversationService = new ConversationService({
+    // Strategic theses (2026-10-16): the agenda is the record's three questions for the current snapshot.
+    agendaFor: async (bid, sid) => { const r = await readThesisRecord(db, bid); return r && r.snapshotId === sid ? r.questions.map((q) => q.question) : null; },
     conversations: convRepo,
     needs: new PgInformationNeedRepository(db),
     state: founderStateRepo,
@@ -539,6 +540,7 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     founderContext: async (bid) => (await founderStateRepo.listActive(bid)).filter((s) => s.kind === 'resource' || s.kind === 'decision' || s.kind === 'preference').map((s) => s.statement.trim()).filter(Boolean),
     email: new AnthropicEmailModel(anthropicKey),
     reflect: new AnthropicCorrectionReflectionModel(anthropicKey),
+    theses: new AnthropicThesisModel(anthropicKey),
     weekStory: new AnthropicWeekStoryModel(anthropicKey),
     founderSaid: async (bid) => (await founderStateRepo.listSaid(bid)).map((s) => ({ kind: s.kind, statement: s.statement, status: s.status, sourceTurnId: s.sourceTurnId ?? null })),
     containerAnswers: new AnthropicContainerAnswersModel(anthropicKey),

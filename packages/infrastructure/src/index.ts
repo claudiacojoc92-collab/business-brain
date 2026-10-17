@@ -208,6 +208,8 @@ export { AnthropicVoiceModel } from './business-intelligence/anthropic-voice.mod
 export { AnthropicPlanModel, PLAN_SYSTEM } from './business-intelligence/anthropic-plan.model';
 export { AnthropicCarouselModel } from './business-intelligence/anthropic-carousel.model';
 export { AnthropicProofModel } from './business-intelligence/anthropic-proof.model';
+export { AnthropicThesisModel, thesisRules, thesisUserBlock } from './business-intelligence/anthropic-theses.model';
+export { readThesisRecord, recordThesisRecord, THESES_EVENT } from './database/repositories/pg-thesis-cache';
 export { AnthropicWebResearchAdapter, parseSearchResponse, parseFetchResponse } from './business-intelligence/anthropic-web-research.adapter';
 export { PgContactRepository, PgTouchRepository, PgOutcomeRepository, PgFollowUpRepository, PgWritingRepository, clearResultLoopForBusiness, RESULT_LOOP_TABLES } from './database/repositories/pg-result-loop.repository';
 export { AnthropicResultReportModel, AnthropicMessageModel, AnthropicSendabilityJudge, AnthropicClaimGrounder, AnthropicRelevanceModel, REPORT_SYSTEM, JUDGE_SYSTEM, GROUNDING_SYSTEM, RELEVANCE_SYSTEM, messageSystem, messageUser } from './business-intelligence/anthropic-result-loop.models';

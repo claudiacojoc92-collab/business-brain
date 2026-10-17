@@ -800,6 +800,25 @@ export function governRationale(why: string, context: readonly string[]): string
   return clauses.filter((c) => !fault(c)).join('').trim().replace(/\s*[,;:.]?\s*$/, '.');
 }
 
+/**
+ * STRATEGIC THESES (2026-10-16): the inference families a website read never licenses on its own, for text BB writes
+ * ABOUT the business (theses, the first read). '' when clean, else the family. Economics and performance judgement
+ * (margin, scalability, demand, potential, utilisation…) need the governed context to contain them; customer behaviour
+ * and predicted consequences are allowed only as a hedged INTERPRETATION ("may", "if"), never as a fact; unlicensed
+ * business framing is never allowed.
+ */
+const HEDGED = /(?<!\p{L})(may|might|could|if|whether|poate|pot|ar putea|dac[ăa]|potrebbe|potrebbero|se|kann|k[öo]nnte|wenn|ob)(?!\p{L})/iu;
+export function ungroundedInference(text: string, context: string, interpretive: boolean): string {
+  if (ECONOMICS.test(text) && !ECONOMICS.test(context)) return 'economics';
+  if (JUDGEMENT.test(text) && !JUDGEMENT.test(context)) return 'performance judgement';
+  if (BEHAVIOUR.test(text) && !BEHAVIOUR.test(context) && !(interpretive && HEDGED.test(text))) return 'customer behaviour';
+  if (CONSEQUENCE.test(text) && !(interpretive && HEDGED.test(text))) return 'predicted consequence';
+  const f = FRAMING.find((x) => x.claim.test(text) && !x.license.test(context));
+  return f ? `framing (${f.name})` : '';
+}
+/** A question that presupposes a future the founder has not stated (adding, expanding, fixing…). */
+export const presupposesFuture = (question: string): boolean => PRESUPPOSES.test(question);
+
 /** A question's "why": the decision the answer informs. A predicted outcome, behaviour or economics claim is blanked. */
 function governWhy(why: string): string {
   const w = (why ?? '').trim();

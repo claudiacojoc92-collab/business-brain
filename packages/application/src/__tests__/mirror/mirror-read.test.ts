@@ -35,7 +35,7 @@ describe('updated read governance', () => {
     const out: MirrorReadOutput = {
       hypotheses: [{ index: 0, status: 'sharpened', because: 'answer 0 shows each studio earns from different lines' }],
       fields: [
-        field('now', 'Each studio carries a different part of the business, so they behave like two engines under one name.'),
+        field('now', 'Each studio earns from different lines, and massage runs in both.'),
         field('changed', 'I read the studios as maybe playing different roles; now it is clear they earn from different lines.'),
         field('matters', 'Growth is not starting from zero: the open question is whether that word of mouth can be made repeatable.', [1]),
         field('next', 'Which line each studio should lead with before choosing any channel.', [0, 1]),
@@ -59,7 +59,7 @@ describe('updated read governance', () => {
       field('changed', 'Referrals and organic content bring clients; a prenatal event got no sign-ups.', [1]),
     ] }, input())!;
     expect(g.read).toEqual({ now: 'Each studio carries a different part of the business.' }); // the unlicensed sentence goes, the rest stays
-    expect(g.audit.dropped.map((d) => d.reason.split(' (')[0])).toEqual(['a claim the founder did not license', 'a question', 'restates the answers']);
+    expect(g.audit.dropped.map((d) => d.reason.split(' (')[0])).toEqual(['escalation', 'a claim the founder did not license', 'a question', 'restates the answers']); // "clearly" is an intensity the founder never stated
     expect(governReadUpdate({ hypotheses: [], fields: [field('now', 'A read with only the skipped answer.', [2])] }, input())!.read).toBeUndefined();
     expect(governReadUpdate({ hypotheses: [], fields: [field('now', 'The hypothesis was strengthened by your answer.')] }, input())!.read).toBeUndefined();
   });
@@ -77,6 +77,18 @@ describe('updated read governance', () => {
     ] }, input({ unresolved: [0] }))!;
     expect(g.audit.hypotheses[0]!.status).toBe('unresolved');
     expect(g.read!.changed).toBeUndefined();
+  });
+
+  it('anchored to the top theses: "next" must be about one of them (an H-ref), never a new topic', () => {
+    const g = governReadUpdate({ hypotheses: [], fields: [field('now', 'Each studio carries a different part of the business.'), field('next', 'I would look at how massage clients move to other services next.', [0], ['O3'])] }, input({ anchored: true }))!;
+    expect(g.read!.next).toBeUndefined();
+    expect(g.audit.dropped).toContainEqual({ field: 'next', reason: 'not anchored to a top thesis' });
+    const anchoredInput = input({ anchored: true, hypotheses: [{ interpretation: 'The paid assessment may gate entry into recovery programmes.', evidence: [], alternative: 'a', unknown: 'Whether the assessment is mandatory.', question: 'Is the assessment mandatory?', reversal: 'r' }] });
+    const ok = governReadUpdate({ hypotheses: [], fields: [field('now', 'Each studio carries a different part of the business.'), field('next', 'I would look first at whether the assessment is mandatory before any programme.', [0], ['H0'])] }, anchoredInput)!;
+    expect(ok.read!.next).toBe('I would look first at whether the assessment is mandatory before any programme.');
+    // citing a thesis is not enough: the move must be ABOUT it
+    const off = governReadUpdate({ hypotheses: [], fields: [field('now', 'Each studio carries a different part of the business.'), field('next', 'I would look at how massage clients move to other services next.', [0], ['H0'])] }, anchoredInput)!;
+    expect(off.audit.dropped).toContainEqual({ field: 'next', reason: 'not anchored to a top thesis' });
   });
 
   it('conservative language: an escalation the founder did not state is removed sentence by sentence; the facts stay', () => {

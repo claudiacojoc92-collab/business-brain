@@ -1,6 +1,6 @@
 import { generateId } from '@bb/shared';
 import type { IUnderstandingSnapshotRepository, IAhaRepository, GovernedUnderstanding } from '../bi/index';
-import { agendaUnknowns } from '../bi/index';
+import { agendaUnknowns, escalationsIn, ungroundedInference } from '../bi/index';
 import type {
   IConversationRepository,
   IInformationNeedRepository,
@@ -153,6 +153,9 @@ export interface ConversationDeps {
   aha1: IAhaRepository;
   // Reads the sources the founder poured in so the strategist references what it has ALREADY read (never re-asks).
   sources: IBusinessSourceReader;
+  /** Strategic theses (2026-10-16): the three questions selected from the theses for this snapshot, when composed. The
+   *  agenda is then exactly what the understanding card showed. Absent / null ⇒ the stored unknowns. */
+  agendaFor?: (businessId: string, snapshotId: string) => Promise<string[] | null>;
   /** Structured telemetry (mirrors carousel/arc). Absent ⇒ silent (tests). Logs the needs state, what each step
    * answered/added, and why readiness did or did not fire — the conversation had no server-side trace before. */
   log?: (e: { type: string; detail?: string }) => void;
@@ -185,6 +188,26 @@ const CAP_ACK: Record<string, string> = {
   en: 'Thank you, that fills in the picture.', ro: 'Mulțumesc, asta îmi completează imaginea.',
   it: 'Grazie, questo completa il quadro.', de: 'Danke, das vervollständigt das Bild.',
 };
+/**
+ * The acknowledgement after an answer is not a strategy moment: a plain reflection of what the founder said. A sentence
+ * is kept only if it adds no superlative, primacy or diagnosis ("actually…") and no economics, performance judgement or
+ * behaviour the founder did not state, in at most 25 words; otherwise a neutral "Got it." in the business's language.
+ */
+const ACK_JUDGEMENT = /(?<!\p{L})(cel mai|cea mai|cei mai|cele mai|most|best|biggest|largest|strongest|principal\p{L}*|main|primary|key|de fapt|actually|really|real[ăa]?|reali|in realt[àa]|eigentlich|probabil|probably|likely|ceea ce [îi]nseamn[ăa]|asta [îi]nseamn[ăa]|ceea ce face|which means|this means|that means|il che significa|das hei[ßs]t|was bedeutet)(?!\p{L})/iu;
+const PLAIN_ACK: Record<string, string> = { en: 'Got it.', ro: 'Înțeles.', it: 'Capito.', de: 'Verstanden.' };
+export function plainAck(interpretation: string | null | undefined, founderWords: string, language: string): string {
+  const sentences = withoutQuestions(interpretation ?? '').split('\n').map((l) => l.trim()).filter((l) => l && !/^[•\-*·]/.test(l) && !/^\p{L}[\p{L} ]{0,24}:/u.test(l))
+    .join(' ').match(/[^.!?]+[.!?]+/gu) ?? [];
+  const said = founderWords.toLowerCase();
+  const ok = sentences.map((x) => x.trim()).find((x) => {
+    const w = (x.match(/\p{L}+/gu) ?? []).length;
+    const j = x.match(ACK_JUDGEMENT)?.[0];
+    return w > 0 && w <= 25 && !(j && !said.includes(j.toLowerCase())) && !escalationsIn(x).some((e) => !said.includes(e))
+      && !ungroundedInference(x, founderWords, false);
+  });
+  return ok ?? (PLAIN_ACK[language.slice(0, 2)] ?? PLAIN_ACK['en']!);
+}
+
 export function briefAck(interpretation: string | null | undefined, language: string): string {
   const lines = withoutQuestions(interpretation ?? '').split('\n').map((l) => l.trim())
     .filter((l) => l && !/^[•\-*·]/.test(l) && !/^\p{L}[\p{L} ]{0,24}:/u.test(l));
@@ -212,7 +235,7 @@ export class ConversationService {
       // Continuity: seed the SAME ≤3 unknowns the understanding card showed ("What I'll ask you about") as needs, so
       // BB opens on exactly what it said it didn't know. Keyed site_1..site_3 (order = display order); the opening
       // questions are forced onto these first (see buildStepInput), so what the founder was shown is what gets asked.
-      const agenda = agendaUnknowns((await this.deps.understanding.latest(businessId))?.understanding ?? null);
+      const agenda = await this.agenda(businessId);
       const siteNeeds = agenda.map((text, i) => ({ key: `site_${i + 1}`, whatMissing: text, whyMatters: 'You flagged this as unknown from the site read and showed it to the founder as the agenda — ask it early.' }));
       if (siteNeeds.length) await this.deps.needs.seed(session.id, businessId, siteNeeds);
     }
@@ -319,7 +342,9 @@ export class ConversationService {
       const lastAsked = [...(await this.deps.conversations.listTurns(session.id))].reverse().find((t) => t.role === 'bb')?.infoNeedKey ?? null;
       if (lastAsked?.startsWith('site_')) await this.deps.needs.markAnswered(session.id, [lastAsked]);
       const next = agenda[answered]!;
-      await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: [withoutQuestions(out.interpretation ?? ''), next].filter(Boolean).join('\n\n'), language, infoNeedKey: `site_${answered + 1}`, surface });
+      // A skip is not an answer: BB moves on without reading anything into it (it stays unresolved).
+      const skipped = /^\(skip\)$/i.test(message.trim());
+      await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: [skipped ? '' : plainAck(out.interpretation, message, language), next].filter(Boolean).join('\n\n'), language, infoNeedKey: `site_${answered + 1}`, surface });
       await this.deps.conversations.setStatus(session.id, 'active', next);
       this.deps.log?.({ type: 'conversation_agenda', detail: JSON.stringify({ businessId, answered, asked: `site_${answered + 1}` }) });
       const turns = await this.deps.conversations.listTurns(session.id);
@@ -397,7 +422,10 @@ export class ConversationService {
    */
   private async closeAtCap(session: ConversationSession, businessId: string, language: string, interpretation: string | null | undefined, answered: number, surface: ConversationSurface | null): Promise<ConversationView> {
     // A brief acknowledgement only (2026-10-16): the updated read after the goal is the synthesis moment.
-    const ack = briefAck(interpretation, language);
+    // The close: a plain reflection of the last answer (or a neutral thank-you), never a synthesis or a judgement.
+    const lastSaid = (await this.deps.conversations.listTurns(session.id)).filter((t) => t.role === 'founder').map((t) => t.content).slice(-1)[0] ?? '';
+    const plain = /^\(skip\)$/i.test(lastSaid.trim()) ? '' : plainAck(interpretation, lastSaid, language);
+    const ack = plain && !Object.values(PLAIN_ACK).includes(plain) ? plain : briefAck('', language);
     if (ack) await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: ack, language, infoNeedKey: null, surface });
     const active = await this.deps.state.listActive(businessId);
     const hasGoal = active.some(isHeldGoal);
@@ -558,7 +586,9 @@ export class ConversationService {
    * covered (declined) so the depth cap never re-forces it and the founder is never walled in. */
   /** The questions the understanding card showed, in display order (seeded as site_1..site_3). */
   private async agenda(businessId: string): Promise<string[]> {
-    return agendaUnknowns((await this.deps.understanding.latest(businessId))?.understanding ?? null).slice(0, MAX_DISCOVERY_ANSWERS);
+    const snap = await this.deps.understanding.latest(businessId);
+    const fromTheses = snap?.id && this.deps.agendaFor ? await this.deps.agendaFor(businessId, snap.id).catch(() => null) : null;
+    return (fromTheses?.length ? fromTheses : agendaUnknowns(snap?.understanding ?? null)).slice(0, MAX_DISCOVERY_ANSWERS);
   }
 
   async declineCurrentNeed(businessId: string): Promise<void> {

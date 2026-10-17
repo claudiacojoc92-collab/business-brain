@@ -58,6 +58,7 @@ export type FounderEventType =
   | 'arc_understanding_confirmed' // Moment 3 → 4: the founder confirmed what BB understood
   | 'arc_correction_reflected' // Moment 3: the substantive reply to the LATEST correction (persisted so it survives refresh)
   | 'arc_mirror_built'       // Moment 5: the mirror contrast (persisted so it's stable across refresh, no re-generation)
+  | 'arc_theses_built'       // Moment 2: the strategic-thesis record of one understanding snapshot (infrastructure pg-thesis-cache)
   | 'arc_mirror_seen'        // Moment 5 → 6: the founder answered the mirror
   | 'arc_week_story_built'   // Moment 6: the week told as a chapter (persisted per plan version so a refresh never re-writes it)
   | 'arc_container_built'    // Moment 9: which unknowns the founder already answered (persisted per input fingerprint)
@@ -390,12 +391,13 @@ export async function readArcCorrectionReflection(db: KyselyDB, businessId: stri
 
 /** Persist the mirror contrast (Moment 5) so it is STABLE across refresh and never re-generated on every view. */
 type ArcMirrorRead = { now: string; changed?: string; matters?: string; next?: string };
-export function recordArcMirror(db: KyselyDB, accountId: string, businessId: string, m: { founderWords: string; against: string; tension: string; read?: ArcMirrorRead }): void {
-  recordContentEvent(db, { accountId, businessId, eventType: 'arc_mirror_built', surface: 'arc', metadata: { founderWords: m.founderWords, against: m.against, tension: m.tension, ...(m.read ? { read: m.read } : {}) } });
+type ArcMirrorMove = { thesisId: string; status: 'open' | 'strengthened' | 'weakened' | 'reversed' | 'sharpened' | 'unresolved'; because: string };
+export function recordArcMirror(db: KyselyDB, accountId: string, businessId: string, m: { founderWords: string; against: string; tension: string; read?: ArcMirrorRead; moves?: ArcMirrorMove[] }): void {
+  recordContentEvent(db, { accountId, businessId, eventType: 'arc_mirror_built', surface: 'arc', metadata: { founderWords: m.founderWords, against: m.against, tension: m.tension, ...(m.read ? { read: m.read } : {}), ...(m.moves?.length ? { moves: m.moves } : {}) } });
 }
 
 /** The most recent persisted mirror contrast (null if none built yet). */
-export async function readArcMirror(db: KyselyDB, businessId: string, accountId: string): Promise<{ founderWords: string; against: string; tension: string; read?: ArcMirrorRead } | null> {
+export async function readArcMirror(db: KyselyDB, businessId: string, accountId: string): Promise<{ founderWords: string; against: string; tension: string; read?: ArcMirrorRead; moves?: ArcMirrorMove[] } | null> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const r: any = await sql`SELECT metadata FROM app.founder_event WHERE business_id=${businessId} AND account_id=${accountId} AND event_type='arc_mirror_built' ORDER BY occurred_at DESC LIMIT 1`.execute(db);
@@ -408,7 +410,9 @@ export async function readArcMirror(db: KyselyDB, businessId: string, accountId:
     const saved = meta.read && typeof meta.read === 'object' ? meta.read : null;
     const str = (x: unknown): string => (typeof x === 'string' ? x.trim() : '');
     const read: ArcMirrorRead | null = saved && str(saved.now) ? { now: str(saved.now), ...(str(saved.changed) ? { changed: str(saved.changed) } : {}), ...(str(saved.matters) ? { matters: str(saved.matters) } : {}), ...(str(saved.next) ? { next: str(saved.next) } : {}) } : null;
-    if (read) return { founderWords, against, tension, read };
+    // Thesis movements (2026-10-16), persisted with the mirror for strategy.
+    const moves: ArcMirrorMove[] = Array.isArray(meta.moves) ? meta.moves.filter((x: ArcMirrorMove) => x && typeof x.thesisId === 'string' && typeof x.status === 'string') : [];
+    if (read) return { founderWords, against, tension, read, ...(moves.length ? { moves } : {}) };
     return founderWords && against && tension ? { founderWords, against, tension } : null;
   } catch { return null; }
 }

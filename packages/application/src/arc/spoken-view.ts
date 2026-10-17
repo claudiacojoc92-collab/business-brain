@@ -34,6 +34,7 @@ export function spokenView(v: ArcView): ArcView {
       confident: ss(u.confident)!, inferring: ss(u.inferring)!, unanswered: ss(u.unanswered)!,
       constraint: u.constraint && 'text' in u.constraint ? { ...u.constraint, text: s(u.constraint.text) } : u.constraint,
       ...(u.diagnosis ? { diagnosis: { ...u.diagnosis, text: s(u.diagnosis.text) } } : {}),
+      ...(u.founderRead ? { founderRead: { ...u.founderRead, myRead: s(u.founderRead.myRead), matters: u.founderRead.matters.map((m) => ({ headline: s(m.headline), body: s(m.body) })) } } : {}),
       ...(u.read ? { read: {
         ...u.read,
         model: u.read.model.map((d) => ({ ...d, lines: d.lines.map((l) => ({ ...l, text: s(l.text) })) })),
