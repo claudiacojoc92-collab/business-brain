@@ -19,22 +19,32 @@ function establishedEvidence(ctx: StrategyContextForGate): string {
   return [...ctx.business.map((b) => b.text).filter((t) => !/^(Unknown|Tension):/u.test(t)), ...ctx.founder.map((f) => f.statement)].join(' ');
 }
 
-const SUBJECT = /(?:^|(?:dac[ăa]|if|se|wenn)\s+)(.+?)\s+(?:nu\s+|not\s+|doesn't\s+|does not\s+|non\s+|nicht\s+)?(?:are|au|has|have|ha|hanno|hat|haben)\s+(?:\p{L}+\s+){0,2}?(?:capacit|capacity|locuri|sloturi|slots|disponibil|posti|kapazit)/iu;
-const ARTICLE_NOUN = /^(\p{L}+(?:ul|ului|a|le|ii|ele)|the|il|la|lo|der|die|das)$/iu;
-/** Who delivers, taken from the sentence that names the capacity ("Kinetoterapeutul de la X are capacitate…"). */
-function deliverer(sentence: string): string {
+const SUBJECT = /(?:^|(?:dac[ăa]|if|se|wenn)\s+)(.+?)\s+(?:nu\s+|not\s+|doesn't\s+|does not\s+|don't\s+|do not\s+|non\s+|nicht\s+)?(are|au|has|have|ha|hanno|hat|haben)\s+(?:\p{L}+\s+){0,2}?(?:capacit|capacity|locuri|sloturi|slots|disponibil|posti|kapazit)/iu;
+const ARTICLE_NOUN = /^(\p{L}+(?:ul|ului|a|le|ii|ele)|the|a|an|il|la|lo|i|gli|le|un|una|uno|der|die|das|ein|eine)$/iu;
+/**
+ * Who delivers, and the verb the evidence used for them ("Kinetoterapeuții de la X au capacitate…" → "kinetoterapeuții
+ * de la X", "au"). Reusing that verb keeps the check grammatical for any subject (2026-10-17: "are kinetoterapeuții").
+ * A negated "doesn't have" becomes "has" (the check asks how many slots there are). Generic, never business-specific.
+ */
+const AFFIRMATIVE: Record<string, string> = { "doesn't": 'has', 'does not': 'has' };
+function deliverer(sentence: string): { who: string; verb: string } | null {
   const m = sentence.match(SUBJECT);
-  const who = m?.[1]?.trim() ?? '';
-  if (!who || who.split(/\s+/u).length > 8 || CAPACITY.test(who)) return '';
+  const who = (m?.[1] ?? '').trim().replace(/^(?:dac[ăa]|if|se|wenn)\s+/iu, ''); // a trigger starts with "if"
+  if (!who || !m?.[2] || who.split(/\s+/u).length > 8 || CAPACITY.test(who)) return null;
   const first = who.split(/\s+/u)[0]!;
-  return ARTICLE_NOUN.test(first) ? who.charAt(0).toLowerCase() + who.slice(1) : who;
+  const neg = sentence.match(/\s(doesn't|does not)\s/iu)?.[1]?.toLowerCase();
+  const verb = neg ? AFFIRMATIVE[neg]! : m[2].toLowerCase();
+  return { who: ARTICLE_NOUN.test(first) ? who.charAt(0).toLowerCase() + who.slice(1) : who, verb };
 }
-const PREREQUISITE: Record<string, { named: (who: string) => string; generic: string }> = {
-  ro: { named: (who) => `Înainte să aduci cerere nouă, verifici câte locuri libere pe săptămână are ${who}.`, generic: 'Înainte să aduci cerere nouă, verifici câtă capacitate liberă pe săptămână ai pentru acest serviciu.' },
-  en: { named: (who) => `Before you bring in new demand, check how many free slots per week ${who} has.`, generic: 'Before you bring in new demand, check how much free capacity per week you have for this service.' },
-  it: { named: (who) => `Prima di portare nuova domanda, verifica quanti posti liberi a settimana ha ${who}.`, generic: 'Prima di portare nuova domanda, verifica quanta capacità libera a settimana hai per questo servizio.' },
-  de: { named: (who) => `Bevor du neue Nachfrage bringst, prüfe, wie viele freie Termine pro Woche ${who} hat.`, generic: 'Bevor du neue Nachfrage bringst, prüfe, wie viel freie Kapazität pro Woche du für dieses Angebot hast.' },
+const PREREQUISITE: Record<string, { named: (who: string, verb: string) => string; generic: string }> = {
+  ro: { named: (who, verb) => `Înainte să aduci cerere nouă, verifici câte locuri libere pe săptămână ${verb} ${who}.`, generic: 'Înainte să aduci cerere nouă, verifici câtă capacitate liberă pe săptămână ai pentru acest serviciu.' },
+  en: { named: (who, verb) => `Before you bring in new demand, check how many free slots per week ${who} ${verb}.`, generic: 'Before you bring in new demand, check how much free capacity per week you have for this service.' },
+  it: { named: (who, verb) => `Prima di portare nuova domanda, verifica quanti posti liberi a settimana ${verb} ${who}.`, generic: 'Prima di portare nuova domanda, verifica quanta capacità libera a settimana hai per questo servizio.' },
+  de: { named: (who, verb) => `Bevor du neue Nachfrage bringst, prüfe, wie viele freie Termine pro Woche ${who} ${verb}.`, generic: 'Bevor du neue Nachfrage bringst, prüfe, wie viel freie Kapazität pro Woche du für dieses Angebot hast.' },
 };
+/** The verb belongs to the sentence's language; one from another language (an English assumption in a Romanian
+ *  strategy) cannot be reused, so the generic line is used instead. */
+const VERBS: Record<string, Set<string>> = { ro: new Set(['are', 'au']), en: new Set(['has', 'have']), it: new Set(['ha', 'hanno']), de: new Set(['hat', 'haben']) };
 /** A sentence of the bet's resource reasoning that already makes capacity a check. */
 const hasCapacityCheck = (b: StrategyBundle): boolean => sentencesIn(b.core.coreBet?.resourceFit ?? '').some((s) => CAPACITY.test(s) && VALIDATING.test(s));
 
@@ -50,9 +60,10 @@ export function addCapacityPrerequisite(bundle: StrategyBundle, ctx: StrategyCon
   const named = [...(c.assumptions ?? []).map((a) => a.statement), ...(c.reconsiderTriggers ?? []).map((t) => t.condition), bet?.resourceFit ?? '', bet?.founderFit ?? '', bet?.priority ?? '']
     .flatMap(sentencesIn).find((s) => CAPACITY.test(s));
   if (!named) return { bundle, added: null };
-  const t = PREREQUISITE[language.slice(0, 2)] ?? PREREQUISITE['en']!;
-  const who = deliverer(named);
-  const added = who ? t.named(who) : t.generic;
+  const lang = PREREQUISITE[language.slice(0, 2)] ? language.slice(0, 2) : 'en';
+  const t = PREREQUISITE[lang]!;
+  const d = deliverer(named);
+  const added = d && VERBS[lang]!.has(d.verb) ? t.named(d.who, d.verb) : t.generic;
   // Shown on its own ("Before you start") and kept first in the bet's resource reasoning, where the judge and the plan read it.
   return { bundle: { ...bundle, core: { ...c, prerequisites: [...(c.prerequisites ?? []), added], coreBet: { ...bet, resourceFit: [added, bet.resourceFit ?? ''].filter(Boolean).join(' ') } } }, added };
 }

@@ -222,7 +222,7 @@ export function overstated(text: string, context: string, founderStatements: rea
  * that states one ("Decebal has capacity for kinetotherapy", "the engines that already work") needs the evidence to
  * contain it; otherwise it is something to check, or it goes.
  */
-export const CAPACITY = /(?<!\p{L})(capacitat\p{L}*|capacity|locuri libere|spa[țt]iu liber|sloturi libere|free slots|available slots|disponibilitat\p{L}*|grad de ocupare|ocupare|occupancy|utilization|utilisation|utiliz\p{L}* (sub|pe deplin)|neocupat\p{L}*|underbooked|not full|nu (e|este|sunt) plin\p{L}*)(?!\p{L})/iu;
+export const CAPACITY = /(?<!\p{L})(capacitat\p{L}*|capacit[àa]|kapazit[äa]t\p{L}*|posti liberi|freie termine|capacity|locuri libere|locuri disponibil\p{L}*|spa[țt]iu liber|sloturi libere|free slots|available slots|disponibilitat\p{L}*|grad de ocupare|ocupare|occupancy|utilization|utilisation|utiliz\p{L}* (sub|pe deplin)|neocupat\p{L}*|underbooked|not full|nu (e|este|sunt) plin\p{L}*)(?!\p{L})/iu;
 const PERFORMS = /(?<!\p{L})(motor\p{L}*|motoar\p{L}*|engines?|merg\p{L}* (deja|bine)|work(?:s|ing)? (?:well|already)|func[țt]ioneaz\p{L}* (deja|bine)|de succes|successful|performant\p{L}*|rentabil\p{L}*|profitab\p{L}*|cerere (mare|ridicat[ăa]|existent[ăa])|(?:strong|high|existing) demand)(?!\p{L})/iu;
 const PERFORMS_LICENSE = /(?<!\p{L})(venit\p{L}*|revenue|aduc\p{L}*|bring\p{L}*|genereaz\p{L}*|vânz\p{L}*|sales|clien[țt]i activi|active clients|plin\p{L}*|full|cerere|demand)(?!\p{L})/iu;
 const FACT_REPAIR = 'Remove the claim, or make it something to check ("check whether…").';

@@ -283,6 +283,15 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
     return view;
   }
 
+  // ── Strategy: the founder's explicit "try again" after BB could not build a strategy (2026-10-17). The ONLY way to
+  //    regenerate on unchanged inputs: the arc GET (and its polling) always returns the stored terminal result. ──
+  server.post('/v1/businesses/:id/arc/strategy/retry', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { founderId, business, language } = await requireBusiness(request);
+    if (!deps.arcService.running(business.id)) deps.arcService.requestStrategyRetry(business.id);
+    mark(founderId, business.id, 'arc_strategy_retry');
+    await reply.status(200).send(await viewFor(business.id, business.name, language, founderId));
+  });
+
   // An adopted strategy meets the re-read business: run the living-state impact check in the background (it is a
   // model call; the founder is already reviewing the new understanding). The verdict lands as an impact_evaluated
   // event, which the home "what changed" surfaces already read. Failures never reach the founder.

@@ -19,6 +19,9 @@ import { validateStrategy, omitUnsupportedSecondary, type StrategyContextForGate
 import { addCapacityPrerequisite, resolveJudgeFailures } from './judge-fallback';
 
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
+/** Everything a generation reads (incl. the founder's read and any assumed goal): equal inputs, equal hash. */
+const contextHashOf = (input: StrategyModelInput): string => sha256(JSON.stringify({ b: input.businessElements, f: input.founderState, o: input.observations, c: input.businessCorrections, r: input.observedResults ?? null, u: input.understandingRead ?? null }));
+type GenerateOpts = { assumedGoal?: string | null; observedResults?: readonly string[]; understandingRead?: StrategyUnderstandingRead | null };
 
 /** Flatten governed understanding into labelled business elements (B1..) the strategy can cite. */
 export function toBusinessElements(u: GovernedUnderstanding | null): { ref: string; text: string }[] {
@@ -46,6 +49,7 @@ export type StrategyEvent =
   | { type: 'judge_fallback'; resolved: { dimension: string; how: string }[] }
   | { type: 'judge_failed'; round: number; attempt: number; error: string }
   | { type: 'judge_unavailable'; error: string }
+  | { type: 'terminal_reused'; versionId: string }
   | { type: 'secondary_omitted'; omitted: string[] }
   | { type: 'failed_closed'; gate: string };
 
@@ -107,7 +111,11 @@ export class StrategyService {
    * conversation cap without stating one (operator, 2026-10-12). It joins the founder state as an explicitly assumed
    * goal and is recorded on the bundle (core.assumedGoal) so the card flags it. A held goal always wins.
    */
-  async generate(businessId: string, businessName: string, language: string, opts: { assumedGoal?: string | null; observedResults?: readonly string[]; understandingRead?: StrategyUnderstandingRead | null } = {}): Promise<StrategyVersionRecord> {
+  /**
+   * The inputs a generation would run on (business, founder state with any assumed goal, results, the read the founder
+   * saw) and their hash. The same inputs give the same hash, so a stored result can be recognised as already answered.
+   */
+  private async prepare(businessId: string, businessName: string, language: string, opts: GenerateOpts): Promise<{ input: StrategyModelInput; ctx: StrategyContextForGate; hasGoal: boolean; contextHash: string }> {
     const loaded = await this.loadInput(businessId, businessName, language);
     const { ctx } = loaded;
     // Observed results (Result Loop) join as their own R-refs: citable business evidence for the gates, never founder state.
@@ -124,10 +132,35 @@ export class StrategyService {
       input.founderState.push({ ref: `F${input.founderState.length + 1}`, kind: 'goal', statement: `ASSUMED (the founder did not state a goal): remove this constraint — ${assumed}` });
     }
     const hasGoal = loaded.hasGoal || Boolean(assumed);
+    return { input, ctx, hasGoal, contextHash: contextHashOf(input) };
+  }
+
+  /**
+   * TERMINAL RESULTS STAY TERMINAL (2026-10-17). What the arc shows for the strategy moment: the latest proposal, or the
+   * latest insufficient result when it was built from these same inputs (BB already tried this evidence and could not
+   * build a strategy safely: generating again would cost the same and fail the same). A generation runs only when there
+   * is no result yet, when the founder's own action changed the inputs (a goal, an answer), or on an explicit retry.
+   */
+  async currentOrGenerate(businessId: string, businessName: string, language: string, opts: GenerateOpts & { retry?: boolean } = {}): Promise<StrategyVersionRecord> {
+    if (!opts.retry) {
+      const proposal = await this.deps.strategy.latestProposal(businessId);
+      if (proposal) return proposal;
+      const latest = await this.deps.strategy.latest(businessId);
+      if (latest?.status === 'insufficient' && latest.contextHash && latest.contextHash === (await this.prepare(businessId, businessName, language, opts)).contextHash) {
+        this.deps.log?.({ type: 'terminal_reused', versionId: latest.id });
+        return latest;
+      }
+    }
+    return this.generate(businessId, businessName, language, opts);
+  }
+
+  async generate(businessId: string, businessName: string, language: string, opts: GenerateOpts = {}): Promise<StrategyVersionRecord> {
+    const { input, ctx, hasGoal, contextHash } = await this.prepare(businessId, businessName, language, opts);
+    const persist = (b: StrategyBundle, status: 'proposal' | 'insufficient', g: StrategyGateResult[], i: StrategyModelInput, l: string): Promise<StrategyVersionRecord> => this.persist(businessId, b, status, g, i, l, contextHash);
 
     // A goal-relative strategy needs a governed business + a founder goal. Honest insufficient otherwise.
     if (input.businessElements.length === 0 || !hasGoal) {
-      return this.persist(businessId, emptyBundle(input, language), 'insufficient',
+      return persist(emptyBundle(input, language), 'insufficient',
         [{ gate: 'inputs_sufficient', pass: false, detail: input.businessElements.length === 0 ? 'No governed business understanding.' : 'No founder goal captured yet.' }],
         input, language);
     }
@@ -139,7 +172,7 @@ export class StrategyService {
     } catch {
       // Malformed / failed generation → honest insufficient, never a 500 or a half-strategy.
       this.deps.log?.({ type: 'failed_closed', gate: 'model_generate' });
-      return this.persist(businessId, emptyBundle(input, language), 'insufficient', [{ gate: 'model_generate', pass: false, detail: 'The strategy generator returned an unusable response.' }], input, language);
+      return persist(emptyBundle(input, language), 'insufficient', [{ gate: 'model_generate', pass: false, detail: 'The strategy generator returned an unusable response.' }], input, language);
     }
 
     // ── deterministic repair loop: repair ONLY the failed component, bounded, fail closed ──
@@ -162,7 +195,7 @@ export class StrategyService {
     if (!v.pass) ({ bundle, v } = this.secondaryFallback(bundle, v, ctx, language));
     if (!v.pass) {
       this.deps.log?.({ type: 'failed_closed', gate: v.failures[0]?.gate ?? 'unknown' });
-      return this.persist(businessId, bundle, 'insufficient', v.gateResults, input, language);
+      return persist(bundle, 'insufficient', v.gateResults, input, language);
     }
 
     // A capacity the bet depends on and the evidence does not establish is checked first, never assumed (2026-10-17).
@@ -176,7 +209,7 @@ export class StrategyService {
     // judge-approved. It still passed every deterministic gate, so the founder is not blocked by an outage.
     const unjudged = (b: StrategyBundle, results: StrategyGateResult[], error: string): Promise<StrategyVersionRecord> => {
       this.deps.log?.({ type: 'judge_unavailable', error });
-      return this.persist(businessId, { ...b, core: { ...b.core, judge: 'unavailable' } }, 'proposal',
+      return persist({ ...b, core: { ...b.core, judge: 'unavailable' } }, 'proposal',
         [...results, { gate: 'judge', pass: false, detail: `The judge could not run after ${JUDGE_TRIES} attempts (${error}). Every deterministic gate passed; this strategy was not judged.` }], input, language);
     };
     let j = await this.judgeOnce(input, bundle, 1);
@@ -193,7 +226,7 @@ export class StrategyService {
       let rv = validateStrategy(bundle, ctx); // repair must not break deterministic gates
       if (!rv.pass) ({ bundle, v: rv } = this.secondaryFallback(bundle, rv, ctx, language));
       this.deps.log?.({ type: 'judge_repair_result', attempt: judgeAttempts, gatesPass: rv.pass });
-      if (!rv.pass) { this.deps.log?.({ type: 'failed_closed', gate: rv.failures[0]?.gate ?? 'judge_repair_broke_structure' }); return this.persist(businessId, bundle, 'insufficient', rv.gateResults, input, language); }
+      if (!rv.pass) { this.deps.log?.({ type: 'failed_closed', gate: rv.failures[0]?.gate ?? 'judge_repair_broke_structure' }); return persist(bundle, 'insufficient', rv.gateResults, input, language); }
       ({ bundle, v: rv } = this.capacityFirst(bundle, rv, ctx, language));
       gateResults = rv.gateResults;
       j = await this.judgeOnce(input, bundle, judgeAttempts + 1);
@@ -211,11 +244,11 @@ export class StrategyService {
     gateResults = [...gateResults, ...judged.verdicts.map((jv) => ({ gate: `judge:${jv.dimension}`, pass: jv.pass || how.has(jv.dimension), detail: jv.pass ? 'ok' : how.has(jv.dimension) ? `settled: ${how.get(jv.dimension)} (judge: ${jv.reason})` : jv.reason }))];
     if (gateResults.some((g) => g.gate.startsWith('judge:') && !g.pass)) {
       this.deps.log?.({ type: 'failed_closed', gate: `judge:${judged.verdicts.find((jv) => !jv.pass && !how.has(jv.dimension))!.dimension}` });
-      return this.persist(businessId, bundle, 'insufficient', gateResults, input, language);
+      return persist(bundle, 'insufficient', gateResults, input, language);
     }
 
     this.deps.log?.(attempts > 0 ? { type: 'repaired_ok', attempts } : { type: 'first_pass_ok' });
-    return this.persist(businessId, bundle, 'proposal', gateResults, input, language);
+    return persist(bundle, 'proposal', gateResults, input, language);
   }
 
   /** One judge round with a bounded retry: an error or an empty verdict list is logged and retried once, then reported. */
@@ -257,14 +290,14 @@ export class StrategyService {
     return { bundle: s.bundle, v: sv };
   }
 
-  private async persist(businessId: string, bundle: StrategyBundle, status: 'proposal' | 'insufficient', gateResults: StrategyGateResult[], input: StrategyModelInput, language: string): Promise<StrategyVersionRecord> {
+  private async persist(businessId: string, bundle: StrategyBundle, status: 'proposal' | 'insufficient', gateResults: StrategyGateResult[], input: StrategyModelInput, language: string, contextHash = contextHashOf(input)): Promise<StrategyVersionRecord> {
     // An assumed goal (see generate) is recorded on the bundle, so every surface that shows this version can flag it.
     const assumedRow = input.founderState.find((f) => f.kind === 'goal' && f.statement.startsWith('ASSUMED (the founder did not state a goal): remove this constraint — '));
     if (assumedRow) bundle = { ...bundle, core: { ...bundle.core, assumedGoal: assumedRow.statement.replace('ASSUMED (the founder did not state a goal): remove this constraint — ', '') } };
     const version = await this.deps.strategy.nextVersion(businessId);
     return this.deps.strategy.save({
       id: generateId(), businessId, version, status, bundle, gateResults,
-      contextHash: sha256(JSON.stringify({ b: input.businessElements, f: input.founderState, o: input.observations, c: input.businessCorrections })),
+      contextHash,
       modelId: 'anthropic', language,
     });
   }
