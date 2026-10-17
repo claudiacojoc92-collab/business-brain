@@ -514,6 +514,8 @@ export interface ArcView {
     founderRead?: { snapshotId: string; myRead: string; matters: { headline: string; body: string }[] };
     /** WHAT I UNDERSTAND ABOUT YOUR BUSINESS: governed facts, projected at view time (2026-10-17). */
     snapshot?: { text: string };
+    /** The understanding snapshot shown: a re-read that finished has a new one (2026-10-17). */
+    snapshotId?: string;
     stage?: { stage: 'validating' | 'growth' | 'plateau'; evidence: string[]; secondary?: { stage: 'validating' | 'growth' | 'plateau'; area: string } | null } | { stage: 'undetermined' } | null };
   correctionReflection?: { reflection: string; changes: string; holds: string };
   turns?: ArcTurn[];

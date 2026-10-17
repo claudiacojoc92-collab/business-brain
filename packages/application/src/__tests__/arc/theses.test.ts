@@ -184,6 +184,7 @@ describe('ArcService: the thesis pass runs once per snapshot (existing snapshots
     expect(v.understanding!.founderRead).toMatchObject({ snapshotId: 'snap1', myRead: 'This suggests you run one product through two buying motions.', matters: [{ headline: 'Two ways in' }] });
     expect(v.understanding!.read!.asks.map((a) => a.resolves ?? null)).toEqual([null, 'T1', null]);
     expect(v.internal?.theses?.snapshotId).toBe('snap1');
+    expect(v.understanding!.snapshotId).toBe('snap1'); // a re-read is recognised by a new snapshot id (2026-10-17)
     const again = await new ArcService(m.deps).view('B', 'Slotly', 'en', OFF, [], null, false, null, null, null, v.internal!.theses!);
     expect(again.understanding!.founderRead!.myRead).toBe('This suggests you run one product through two buying motions.');
     expect(again.internal).toBeUndefined(); // cached: nothing new to persist
@@ -194,6 +195,7 @@ describe('ArcService: the thesis pass runs once per snapshot (existing snapshots
     const m = deps(async () => { throw new Error('boom'); });
     const v = await new ArcService(m.deps).view('B', 'Slotly', 'en', OFF, [], null);
     expect(v.understanding!.founderRead).toBeUndefined();
+    expect(v.understanding!.snapshotId).toBe('snap1'); // the fallback card still says which snapshot it shows
     expect(v.internal).toBeUndefined();
     expect(v.understanding!.read!.asks[0]!.question).toBe('Which plans bring the most revenue today?');
   });

@@ -24,7 +24,7 @@ vi.mock('../api/client', () => ({
 }));
 
 import * as api from '../api/client';
-import { ArcSurface, joinWhy } from '../slice0/ArcSurface';
+import { ArcSurface, SourcesEditor, joinWhy } from '../slice0/ArcSurface';
 
 const v = (over: Partial<ArcView>): ArcView => ({ moment: 'pour_in', businessName: 'Body Move', ...over } as ArcView);
 const noTabs = () => { expect(document.querySelector('.s0-nav')).toBeNull(); expect(document.querySelector('.s0-tabbar')).toBeNull(); };
@@ -870,6 +870,71 @@ describe('long requests never look stuck (2026-10-17): the arc state is polled u
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
     await act(async () => { await vi.advanceTimersByTimeAsync(6_000); });
     expect(await screen.findByText('RECOVERED BET')).toBeInTheDocument();
+  });
+});
+
+describe('"Update my understanding" outlives the browser wait (2026-10-17): it polls the arc like the first read', () => {
+  const und = (snapshotId: string, text: string) => v({ moment: 'understanding', understanding: { does: '', serves: '', standsOut: '', tensions: [], confident: [], inferring: [], unanswered: [], snapshotId, snapshot: { text } } });
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.mocked(api.getArcSources).mockResolvedValue({ sources: [{ url: 'bodymovestudio.ro', type: 'website', detail: '10 pages read' }], igConnected: false });
+  });
+  afterEach(() => { vi.useRealTimers(); });
+  const click = async () => { fireEvent.click(await screen.findByText('arc.sources.update')); };
+
+  it('the request is cut at the edge (499) while the server finishes: the new understanding is handed over, no error', async () => {
+    vi.mocked(api.getArc)
+      .mockResolvedValueOnce(und('S1', 'OLD'))                            // what is shown before the click
+      .mockResolvedValueOnce(v({ moment: 'pour_in', pending: 'pour_in' })) // the read is still running
+      .mockResolvedValue(und('S2', 'NEW SNAPSHOT'));                     // saved: a new snapshot
+    let cut: (e: Error) => void = () => undefined;
+    vi.mocked(api.arcPourInDone).mockReturnValue(new Promise<ArcView>((_, reject) => { cut = reject; }));
+    const onUpdated = vi.fn();
+    render(<SourcesEditor businessId="b1" onUpdated={onUpdated} />);
+    await click();
+    await act(async () => { await vi.advanceTimersByTimeAsync(16_000); });
+    act(() => cut(new Error('499')));
+    await act(async () => { await vi.advanceTimersByTimeAsync(6_000); });
+    await waitFor(() => expect(onUpdated).toHaveBeenCalledTimes(1));
+    expect(onUpdated.mock.calls[0]![0].understanding.snapshot.text).toBe('NEW SNAPSHOT');
+    expect(api.arcPourInDone).toHaveBeenCalledTimes(1); // polling never starts a second read
+    expect(screen.queryByText('arc.error.pourinFailed')).toBeNull();
+  });
+
+  it('a real failure stays a failure: the read ended and the understanding is unchanged', async () => {
+    vi.mocked(api.getArc)
+      .mockResolvedValueOnce(und('S1', 'OLD'))
+      .mockResolvedValueOnce(v({ moment: 'pour_in', pending: 'pour_in' }))
+      .mockResolvedValue(und('S1', 'OLD'));
+    vi.mocked(api.arcPourInDone).mockReturnValue(new Promise<ArcView>(() => { /* the browser stopped waiting */ }));
+    const onUpdated = vi.fn();
+    render(<SourcesEditor businessId="b1" onUpdated={onUpdated} />);
+    await click();
+    await act(async () => { await vi.advanceTimersByTimeAsync(16_000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(6_000); });
+    expect(await screen.findByText('arc.error.pourinFailed')).toBeInTheDocument();
+    expect(onUpdated).not.toHaveBeenCalled();
+    expect(api.arcPourInDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('a quick answer is used as before: no polling, the error it carries is shown as is', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(und('S1', 'OLD'));
+    vi.mocked(api.arcPourInDone).mockResolvedValue(v({ moment: 'understanding', error: { kind: 'pourin_empty' } }));
+    const onUpdated = vi.fn();
+    render(<SourcesEditor businessId="b1" onUpdated={onUpdated} />);
+    await click();
+    expect(await screen.findByText('arc.error.pourinEmpty')).toBeInTheDocument();
+    expect(api.getArc).toHaveBeenCalledTimes(1); // only the "before" read
+    expect(onUpdated).not.toHaveBeenCalled();
+  });
+
+  it('a request that fails at once with nothing running is a failure, not an endless wait', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(und('S1', 'OLD'));
+    vi.mocked(api.arcPourInDone).mockRejectedValue(new TypeError('Failed to fetch'));
+    render(<SourcesEditor businessId="b1" onUpdated={vi.fn()} />);
+    await click();
+    await act(async () => { await vi.advanceTimersByTimeAsync(16_000); });
+    expect(await screen.findByText('arc.error.pourinFailed')).toBeInTheDocument();
   });
 });
 

@@ -20,12 +20,15 @@ export async function readThesisRecord(db: KyselyDB, businessId: string): Promis
   } catch { return null; }
 }
 
-/** Fire-and-forget: an unsaved record is simply composed again on the next view. */
-export function recordThesisRecord(db: KyselyDB, accountId: string, businessId: string, record: ThesisRecord): void {
+/**
+ * Never throws: an unsaved record is simply composed again on the next view. Awaited by the arc view (2026-10-17), so
+ * the read that composed the record has saved it before it ends: a poll that lands right after never composes again.
+ */
+export async function recordThesisRecord(db: KyselyDB, accountId: string, businessId: string, record: ThesisRecord): Promise<void> {
   let meta = '';
   try { meta = JSON.stringify(record); } catch { return; }
   if (meta.length > 20000) return;
-  void sql`
+  await sql`
     INSERT INTO app.founder_event (id, account_id, business_id, event_type, surface, occurred_at, metadata)
     VALUES (${generateId()}, ${accountId}, ${businessId}, ${THESES_EVENT}, 'arc', now(), ${meta}::jsonb)
   `.execute(db).catch(() => undefined);

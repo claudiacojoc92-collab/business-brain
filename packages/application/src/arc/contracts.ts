@@ -116,6 +116,8 @@ export interface ArcUnderstanding {
   readonly founderRead?: { readonly snapshotId: string; readonly myRead: string; readonly matters: { readonly headline: string; readonly body: string }[] };
   /** WHAT I UNDERSTAND ABOUT YOUR BUSINESS (2026-10-17): governed facts only, projected at view time (business-snapshot). */
   readonly snapshot?: { readonly text: string };
+  /** The understanding snapshot this card shows: lets the web tell a finished re-read (a new id) from one that failed. */
+  readonly snapshotId?: string;
   readonly stage: {
     readonly stage: 'validating' | 'growth' | 'plateau'; readonly evidence: string[];
     /** A named part of the business at a different stage than the core (e.g. "the medical channel": validating). */
