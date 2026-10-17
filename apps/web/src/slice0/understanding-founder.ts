@@ -1,3 +1,4 @@
+import { tidyPunctuation } from './punctuation';
 import type { ArcView } from '../api/client';
 
 type Read = NonNullable<NonNullable<ArcView['understanding']>['read']>;
@@ -45,7 +46,7 @@ export function composeFounderView(s: Structure, asks: Ask[], fallback: string, 
   const det = f && s.synthesis ? deterministic(s, f, asks, fallback, t) : null;
   if (composed?.myRead || composed?.matters.length) {
     // An empty composed read (every sentence failed its checks) falls back to the deterministic one, never a blank card.
-    return { firstRead: composed.myRead || det?.firstRead || '', matters: composed.matters, watching: '', composed: true, whyOf: (a) => a.why || neutralWhy(a) || '' };
+    return { firstRead: tidyPunctuation(composed.myRead || det?.firstRead || ''), matters: composed.matters.map((m) => ({ headline: tidyPunctuation(m.headline), body: tidyPunctuation(m.body) })), watching: '', composed: true, whyOf: (a) => a.why || neutralWhy(a) || '' };
   }
   return det;
 }

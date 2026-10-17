@@ -123,7 +123,7 @@ describe('strategy: the theses arrive with status and their answers; the core be
 
 // FINAL HARDENING (2026-10-16): founder evidence cannot create behaviour or causality; the mirror names open theses;
 // interpretive strength never exceeds the evidence.
-import { unsupportedBehaviourOrCause, overstated, inventedFact, omitUnsupportedSecondary } from '../../strategy/validation';
+import { unsupportedBehaviourOrCause, overstated, inventedFact, omitUnsupportedSecondary, thirdPersonFinding } from '../../strategy/validation';
 import { governReadUpdate } from '../../mirror/index';
 import { escalationsIn } from '../../bi/index';
 
@@ -322,5 +322,25 @@ describe('replay of the 2026-10-17 Body Move strategy through the final checks',
     const ch = out.bundle.branch!.channelPriorities[0]!;
     expect(ch.overAlternative).not.toMatch(/test/i);
     expect(ch.whyResource).not.toMatch(/test/i);
+  });
+});
+
+describe('replay of the 2026-10-17 prod strategy (launch-stability pass)', () => {
+  const said = ['Bună Ziua aduce venit mare din pilates, balet adulți și masaj', 'Decebal aduce venit mare din group training și masaj, mai puțin din kinetoterapie', 'activarea b2b medical si creșterea nr de clienți pe toate serviciile'];
+  const context = ['Studio de mișcare cu două locații: Bună Ziua și Decebal. Pilates, balet, masaj, kinetoterapie, group training.', ...said].join(' ');
+  it('whether ads run or work is a fact the evidence must hold', () => {
+    expect(inventedFact('Clasele și masajul merg deja bine fără reclame.', context, said)).toMatch(/advertising/);
+    expect(inventedFact('Testezi dacă reclamele funcționează pentru kinetoterapie.', context, said)).toBe('');
+    expect(inventedFact('Clasele merg deja bine fără reclame.', `${context} Nu facem reclame plătite.`, said)).toBe('');
+    expect(inventedFact('Lasă reclamele pentru kinetoterapie deoparte deocamdată.', context, said)).toBe(''); // a recommendation, not a claim
+  });
+  it('"what an ad cannot do" is an unsupported comparison', () => {
+    expect(overstated('Pentru kinetoterapie, testezi dacă o conversație directă cu un medic construiește un flux de trimiteri, ceea ce o reclamă pe Instagram nu poate face în același mod.', context, said)).toMatch(/compares/);
+    expect(overstated('Contactul direct cu medicii este primul lucru de testat.', context, said)).toBe('');
+  });
+  it('founder-facing copy speaks to the founder, never about them', () => {
+    expect(thirdPersonFinding('Fondatoarea vrea activare medicală B2B, iar kinetoterapia este serviciul legat de obiectiv.')?.reason).toMatch(/third person/);
+    expect(thirdPersonFinding('The founder named medical activation.')).toBeTruthy();
+    expect(thirdPersonFinding('Ai numit activarea medicală ca obiectiv.')).toBeNull();
   });
 });

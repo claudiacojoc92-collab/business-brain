@@ -18,7 +18,7 @@ function buildServer(moment: string, extra: any = {}) {
     founderAccountService: { getById: async () => ({ interfaceLocale: 'en' }) },
     conversationService: { startOrResume, submitResponse },
     strategyService: { recordFounderInput, adopt: vi.fn() },
-    arcService: { view: async (_id: string, name: string) => ({ moment, businessName: name }) },
+    arcService: { running: () => null, track: (_b: string, _op: string, run: () => Promise<unknown>) => run(), view: async (_id: string, name: string) => ({ moment, businessName: name }) },
     ...extra,
   } as any;
   const server = Fastify();

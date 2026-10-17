@@ -802,3 +802,68 @@ describe('joinWhy (stage evidence → one "Why: a; b." sentence)', () => {
     expect(`Why: ${why}.`).not.toMatch(/\.;|\.\.|,\./);
   });
 });
+
+describe('long requests never look stuck (2026-10-17): the arc state is polled until the result lands', () => {
+  const UND = v({ moment: 'understanding', understanding: { does: 'RECOVERED READ', serves: '', standsOut: '', tensions: [], confident: [], inferring: [], unanswered: [] } });
+  const STRAT = v({ moment: 'strategy', strategy: { bet: 'RECOVERED BET', over: 'everything at once', horizon: '3 months', tradeOffs: ['r1'], notNow: [], reconsider: [], proposalId: 'p1', adoptable: true } });
+  beforeEach(() => { vi.useFakeTimers({ shouldAdvanceTime: true }); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('the read: the connection drops, the server reports it pending, then the understanding appears without a reload', async () => {
+    vi.mocked(api.getArc)
+      .mockResolvedValueOnce(v({ moment: 'pour_in', sources: [{ url: 'x.ro', type: 'website' }] }))
+      .mockResolvedValueOnce(v({ moment: 'pour_in', pending: 'pour_in' }))
+      .mockResolvedValue(UND);
+    vi.mocked(api.arcPourInDone).mockRejectedValue(new TypeError('Failed to fetch'));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    fireEvent.click(await screen.findByText('home.empty.done'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(6_000); });
+    expect(await screen.findByText(/RECOVERED READ/)).toBeInTheDocument();
+    expect(screen.queryByText('arc.senderror')).toBeNull();
+  });
+
+  it('the strategy: the request never answers; after a while the poll finds the strategy and renders it', async () => {
+    vi.mocked(api.getArc)
+      .mockResolvedValueOnce(v({ moment: 'mirror', mirror: { founderWords: 'w', against: 'a', tension: 't' } }))
+      .mockResolvedValueOnce(v({ moment: 'pour_in', pending: 'strategy' }))
+      .mockResolvedValue(STRAT);
+    vi.mocked(api.arcMirrorSeen).mockReturnValue(new Promise<ArcView>(() => { /* the browser stopped waiting */ }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    fireEvent.click(await screen.findByText('arc.mirror.skip'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(16_000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(6_000); });
+    expect(await screen.findByText('RECOVERED BET')).toBeInTheDocument();
+    expect(screen.queryByText('arc.senderror')).toBeNull();
+  });
+
+  it('a real failure is explicit: the request failed, nothing is running and nothing changed', async () => {
+    const MIRROR = v({ moment: 'mirror', mirror: { founderWords: 'w', against: 'a', tension: 't' } });
+    vi.mocked(api.getArc).mockResolvedValue(MIRROR);
+    vi.mocked(api.arcMirrorSeen).mockRejectedValue(new Error('500'));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    fireEvent.click(await screen.findByText('arc.mirror.skip'));
+    expect(await screen.findByText('arc.senderror')).toBeInTheDocument();
+  });
+
+  it('opened while the strategy is still being written: the working state shows, then the strategy', async () => {
+    vi.mocked(api.getArc).mockResolvedValueOnce(v({ moment: 'pour_in', pending: 'strategy' })).mockResolvedValue(STRAT);
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(6_000); });
+    expect(await screen.findByText('RECOVERED BET')).toBeInTheDocument();
+  });
+});
+
+describe('strategy: what comes before the bet is visible (2026-10-17)', () => {
+  it('"Before you start" shows the capacity check above the reasons, without opening details', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'strategy', strategy: { bet: 'b', over: 'o', horizon: 'h', tradeOffs: ['r'], notNow: [], reconsider: [], proposalId: 'p', adoptable: true, before: ['Înainte să aduci cerere nouă, verifici câte locuri libere pe săptămână are kinetoterapeutul.'] } }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    expect(await screen.findByText('arc.strategy.before')).toBeInTheDocument();
+    expect(screen.getByText(/verifici câte locuri libere/)).toBeInTheDocument();
+  });
+  it('no prerequisite, no card', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'strategy', strategy: { bet: 'b', over: 'o', horizon: 'h', tradeOffs: ['r'], notNow: [], reconsider: [], proposalId: 'p', adoptable: true } }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    await screen.findByText('arc.strategy.eyebrow');
+    expect(screen.queryByText('arc.strategy.before')).toBeNull();
+  });
+});

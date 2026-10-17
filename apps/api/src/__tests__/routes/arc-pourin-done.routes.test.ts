@@ -19,7 +19,7 @@ function buildServer(bridge: () => Promise<any>) {
     founderAccountService: { getById: async () => ({ interfaceLocale: 'en' }) },
     learnBusinessService: { bridgePourIn: vi.fn(bridge) },
     conversationService: { startOrResume: vi.fn() },
-    arcService: { view: async (_id: string, name: string) => ({ moment: 'pour_in', businessName: name, sources: [] }) },
+    arcService: { running: () => null, track: (_b: string, _op: string, run: () => Promise<unknown>) => run(), view: async (_id: string, name: string) => ({ moment: 'pour_in', businessName: name, sources: [] }) },
     // recordFounderEvent writes via db; we assert the flag is/ isn't marked by watching the bridge + response.
   } as any;
   const server = Fastify();
@@ -57,5 +57,24 @@ describe('arc Moment 1 — pour-in/done guards a hollow understanding', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().error ?? null).toBeNull();
     await server.close();
+  });
+});
+
+describe('arc GET while a long operation runs (2026-10-17)', () => {
+  it('answers "pending" at once and never starts the operation again', async () => {
+    const { server, deps } = buildServer(async () => ({ state: 'empty' }));
+    deps.arcService.running = () => 'strategy';
+    deps.arcService.view = vi.fn();
+    const res = await server.inject({ method: 'GET', url: '/v1/businesses/b1/arc' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ pending: 'strategy', businessName: 'Body Move' });
+    expect(deps.arcService.view).not.toHaveBeenCalled();
+  });
+  it('the read runs as one tracked operation', async () => {
+    const { server, deps } = buildServer(async () => ({ state: 'empty' }));
+    const ops: string[] = [];
+    deps.arcService.track = (_b: string, op: string, run: () => Promise<unknown>) => { ops.push(op); return run(); };
+    await server.inject({ method: 'POST', url: '/v1/businesses/b1/arc/pour-in/done' });
+    expect(ops).toEqual(['pour_in']);
   });
 });

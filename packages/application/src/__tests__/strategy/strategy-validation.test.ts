@@ -27,10 +27,10 @@ function validBundle(): StrategyBundle {
       coreBet: {
         priority: 'Convert the existing warm referral network into retainer scoping conversations',
         deprioritized: 'Broad content-led inbound to a cold audience',
-        whyOverAlternative: 'The homepage conversion path is broken and the founder has limited hours, so warm referrals fit the hours and avoid rebuilding cold inbound first',
+        whyOverAlternative: 'The homepage conversion path is broken and you have limited hours, so warm referrals fit the hours and avoid rebuilding cold inbound first',
         relationToGoal: 'The goal is retainers, and warm healthcare software relationships are the first route to test',
         relationToBottleneck: 'It routes around the broken homepage next-action problem',
-        founderFit: 'Uses referrals, not daily personal video the founder ruled out',
+        founderFit: 'Uses referrals, not the daily personal video you ruled out',
         resourceFit: 'Fits 8 hours a week with a small budget',
       },
       offerDirection: 'Position bespoke Rails consulting as retainer engagements',

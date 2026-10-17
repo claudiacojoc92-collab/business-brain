@@ -344,3 +344,38 @@ describe('StrategyService — judged layer closes without another model call', (
     expect(rec.status).toBe('insufficient');
   });
 });
+
+describe('StrategyService — the judge never fails silently (2026-10-17)', () => {
+  it('a judge that throws is logged, retried once, then the strategy is persisted as explicitly UNJUDGED', async () => {
+    const events: any[] = [];
+    const m = makeDeps({ generate: async () => ({ strategy: validBundle() }), judge: async () => { throw new Error('STRATEGY_MALFORMED: no JSON'); } });
+    m.deps.log = (e) => events.push(e);
+    const rec = await new StrategyService(m.deps).generate(P.businessId, P.businessName, P.language);
+    expect(rec.status).toBe('proposal');                                   // every deterministic gate passed
+    expect(rec.bundle.core.judge).toBe('unavailable');                     // …but it is NOT judge-approved
+    const gate = rec.gateResults.find((g) => g.gate === 'judge')!;
+    expect(gate.pass).toBe(false);
+    expect(gate.detail).toMatch(/could not run after 2 attempts \(STRATEGY_MALFORMED: no JSON\)/);
+    expect(rec.gateResults.some((g) => g.gate.startsWith('judge:'))).toBe(false); // no invented verdicts
+    expect(events.filter((e) => e.type === 'judge_failed').map((e) => e.attempt)).toEqual([1, 2]);
+    expect(events.find((e) => e.type === 'judge_unavailable')).toMatchObject({ error: 'STRATEGY_MALFORMED: no JSON' });
+    expect(events.some((e) => e.type === 'judge_round')).toBe(false);
+  });
+  it('a judge that fails once and then answers is a normal judged proposal', async () => {
+    let n = 0;
+    const m = makeDeps({ generate: async () => ({ strategy: validBundle() }), judge: async () => { n += 1; if (n === 1) throw new Error('overloaded'); return { verdicts: [{ dimension: 'grounding', pass: true, component: 'coreBet', reason: '' }] }; } });
+    const rec = await new StrategyService(m.deps).generate(P.businessId, P.businessName, P.language);
+    expect(rec.status).toBe('proposal');
+    expect(rec.bundle.core.judge).toBeUndefined();
+    expect(rec.gateResults.find((g) => g.gate === 'judge:grounding')!.pass).toBe(true);
+  });
+  it('an empty verdict list is not a pass', async () => {
+    const m = makeDeps({ generate: async () => ({ strategy: validBundle() }), judge: async () => ({ verdicts: [] }) });
+    const rec = await new StrategyService(m.deps).generate(P.businessId, P.businessName, P.language);
+    expect(rec.bundle.core.judge).toBe('unavailable');
+  });
+  it('the capacity check is stored as a prerequisite for the card, not only inside the resource reasoning', () => {
+    const b = addCapacityPrerequisite({ ...validBundle(), core: { ...validBundle().core, assumptions: [{ statement: 'The team has capacity for new retainers.' }] } }, GATE_CTX, 'en').bundle;
+    expect(b.core.prerequisites).toEqual(['Before you bring in new demand, check how many free slots per week the team has.']);
+  });
+});

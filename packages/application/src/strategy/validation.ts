@@ -170,7 +170,7 @@ export function unsupportedBehaviourOrCause(text: string, founderStatements: rea
  * contain ("cel mai clar traseu"), or a comparison ("mai X decât", "better than"). Allowed when the clause is framed
  * as something to test, or the founder used the same words (never for an absolute, see overstatedFinding).
  */
-const COMPARATIVE = /(?<!\p{L})(mai \p{L}+ dec[âa]t|(?:more|less) \p{L}+ than|\p{L}+er than|better than|worse than|mai bun\p{L}*|mai bine|pi[ùu] \p{L}+ d[ie]|besser als|spre deosebire de|unlike|pe care (?:\p{L}+\s+){1,3}nu (?:[îi]l |o |le |i )?(?:are|au|ofer[ăa]|ofer[ăa]|d[ăa]|poate da)|(?:that|which) (?:\p{L}+\s+){1,3}(?:doesn't|don't|can't|cannot|lacks?) ?(?:have|give|offer|match)?)(?!\p{L})/iu;
+const COMPARATIVE = /(?<!\p{L})(mai \p{L}+ dec[âa]t|(?:more|less) \p{L}+ than|\p{L}+er than|better than|worse than|mai bun\p{L}*|mai bine|pi[ùu] \p{L}+ d[ie]|besser als|spre deosebire de|unlike|pe care (?:\p{L}+\s+){1,3}nu (?:[îi]l |o |le |i )?(?:are|au|ofer[ăa]|ofer[ăa]|d[ăa]|poate da)|(?:that|which) (?:\p{L}+\s+){1,3}(?:doesn't|don't|can't|cannot|lacks?) ?(?:have|give|offer|match)?|ceea ce (?:\p{L}+\s+){1,5}nu (?:\p{L}+\s+)?(?:poate|pot)|(?:what|something) (?:\p{L}+\s+){1,5}(?:can't|cannot|won't) (?:do|give|offer|match|replace))(?!\p{L})/iu;
 const STRENGTH_REPAIR = 'State only what is known, or what the test would establish, at that strength. If the comparison matters, make it something to test.';
 const ABSOLUTE = new Set(ABSOLUTES);
 /**
@@ -233,6 +233,12 @@ const FACT_REPAIR = 'Remove the claim, or make it something to check ("check whe
  */
 const RESOURCE_HELD = /(?<!\p{L})((?:ai|ave[țt]i|are|au) (?:deja )?(?:o |un )?(?:echip\p{L}*|spa[țt]iu\p{L}*|personal\p{L}*|oameni)|(?:has|have|you've got) (?:already )?(?:the |a |your )?(?:team|space|staff|people)|multidisciplinar\p{L}*|multidisciplinary|multi-disciplinary)(?!\p{L})/iu;
 const RESOURCE_NOUN = /echip|spa[țt]iu|personal|oameni|team|space|staff|people|multi-?disciplin/iu;
+/**
+ * ADVERTISING (2026-10-17): whether the business runs ads, and whether they work, is a fact about the business ("the
+ * classes do well without ads"). Without evidence that mentions advertising it is invented; as a test it is fine.
+ */
+const ADS_CLAIM = /(?<!\p{L})(f[ăa]r[ăa] (?:nicio |vreo )?(?:reclam\p{L}*|publicitate|campanii pl[ăa]tite)|without (?:any )?(?:paid )?(?:ads|advertising)|no (?:paid )?(?:ads|advertising)|nu (?:faci|face|facem|fac|ai|are|au) (?:\p{L}+ )?(?:reclam\p{L}*|publicitate)|(?:reclamele|ads|advertising|campaniile pl[ăa]tite) (?:nu )?(?:merg|func[țt]ioneaz\p{L}*|work|don't work|aren't working)|senza pubblicit\p{L}*|ohne werbung)(?!\p{L})/iu;
+const ADS_LICENSE = /(?<!\p{L})(reclam\p{L}*|publicit\p{L}*|advertis\p{L}*|ads|campanii pl[ăa]tite|paid social|werbung)(?!\p{L})/iu;
 export function inventedFactFinding(text: string, context: string, founderStatements: readonly string[]): CopyFinding | null {
   // The founder's own words are in the context, so they license a capacity or performance term; nothing else does.
   for (const s of sentencesIn(text)) {
@@ -242,6 +248,8 @@ export function inventedFactFinding(text: string, context: string, founderStatem
       const grounded = noun.startsWith('multi') ? context.toLowerCase().includes('multidisciplin') : founderStatements.some((f) => f.toLowerCase().includes(noun));
       if (!grounded) return { sentence: s, reason: `it states a resource ("${res}") that the founder never said they have for this`, repair: 'Do not say what team, space or people the founder has. Remove the claim, or make it something to check ("check who can take this on").' };
     }
+    const ads = ADS_LICENSE.test(context) ? undefined : s.match(ADS_CLAIM)?.[0];
+    if (ads && !framedAsTest(s, ads)) return { sentence: s, reason: `it says something about advertising ("${ads}") that no founder answer or business evidence mentions`, repair: FACT_REPAIR };
     const cap = CAPACITY.test(context) ? undefined : s.match(CAPACITY)?.[0];
     if (cap && !framedAsTest(s, cap)) return { sentence: s, reason: `it states a capacity ("${cap}") that no founder answer or business evidence mentions`, repair: FACT_REPAIR };
     const perf = PERFORMS_LICENSE.test(context) ? undefined : s.match(PERFORMS)?.[0];
@@ -249,6 +257,15 @@ export function inventedFactFinding(text: string, context: string, founderStatem
     if (VALIDATING.test(s)) continue;
     const inf = ungroundedInference(s, context, true);
     if (inf === 'economics' || inf === 'performance judgement') return { sentence: s, reason: `it states an ${inf === 'economics' ? 'economics' : 'performance'} judgement the evidence does not contain`, repair: FACT_REPAIR };
+  }
+  return null;
+}
+/** "Fondatoarea vrea…", "the founder named…": founder-facing copy addresses the founder as "you". */
+const FOUNDER_3P = /(?<!\p{L})(fondator(?:ul|ului)?|fondatoare(?:a|i)?|founderul|(?:the )?founder(?:'s)?|il fondatore|la fondatrice|der gr[üu]nder|die gr[üu]nderin)(?!\p{L})/iu;
+export function thirdPersonFinding(text: string): CopyFinding | null {
+  for (const s of sentencesIn(text)) {
+    const m = s.match(FOUNDER_3P)?.[0];
+    if (m) return { sentence: s, reason: `it talks about the founder in the third person ("${m}") while the founder is the one reading it`, repair: 'Address the founder directly as "you" (tu / du / tu), never as "the founder".' };
   }
   return null;
 }
@@ -286,7 +303,7 @@ export function omitUnsupportedSecondary(bundle: StrategyBundle, ctx: StrategyCo
   const omitted: string[] = [];
   const clean = (where: string, text: string | undefined, reasoning: boolean, central = false): string => {
     const kept = sentencesIn(text ?? '').filter((s) => {
-      const f = overstatedFinding(s, context, said) ?? inventedFactFinding(s, context, said) ?? behaviourFinding(s, said, reasoning) ?? (central ? centralFinding(s, context) : null);
+      const f = overstatedFinding(s, context, said) ?? inventedFactFinding(s, context, said) ?? behaviourFinding(s, said, reasoning) ?? thirdPersonFinding(s) ?? (central ? centralFinding(s, context) : null);
       if (f) omitted.push(`${where}: ${f.sentence}`);
       return !f;
     });
@@ -505,6 +522,11 @@ export function validateStrategy(bundle: StrategyBundle, ctx: StrategyContextFor
       if (assumption) continue;
       const f = behaviourFinding(text, said, reasoning);
       add(!f, 'no_unsupported_behaviour', component, f ? describeFinding(f) : 'ok');
+    }
+    // The founder reads this: it speaks to them, never about them (2026-10-17).
+    for (const [component, text] of [...fields, ['reconsider', (core.reconsiderTriggers ?? []).map((r) => r.condition).join(' '), true] as Field]) {
+      const f = thirdPersonFinding(text);
+      add(!f, 'founder_addressed_directly', component, f ? describeFinding(f) : 'ok');
     }
   }
 

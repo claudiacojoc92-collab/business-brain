@@ -518,7 +518,12 @@ export interface ArcView {
   coverage?: { key: string; covered: boolean }[]; // conversation — quiet progress map
   /** `read` (2026-10-16): the updated read after the founder's answers; the contrast is the fallback (may be empty). */
   mirror?: { founderWords: string; against: string; tension: string; read?: { now: string; changed?: string; matters?: string; next?: string } } | null;
-  strategy?: { bet: string; over: string; horizon: string; tradeOffs: string[]; notNow: string[]; reconsider: string[]; proposalId: string | null; adoptable: boolean; assumedGoal?: string | null };
+  strategy?: { bet: string; over: string; horizon: string; tradeOffs: string[]; notNow: string[]; reconsider: string[]; proposalId: string | null; adoptable: boolean; assumedGoal?: string | null;
+    /** What to check before the bet starts (e.g. free capacity); absent when nothing comes first. */
+    before?: string[] };
+  /** A long operation is still running on the server (the read, the theses, the mirror, the strategy): a placeholder
+   *  view, never a moment to render. The web polls until it is gone (2026-10-17). */
+  pending?: string | null;
   weekDay?: { week: string[]; today: string | null; canCreate: boolean; todayKind?: 'follow_up' | 'plan' | 'blocked' | null;
     // The week told as a chapter (2026-10-12); null/absent on an older api.
     story?: { planVersionId: string; context: string; statement: string; whyNow: string; chapters: { title: string; why: string }[];

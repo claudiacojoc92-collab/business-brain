@@ -12,6 +12,7 @@ import {
   arcSaveEmail, arcExportEmail, arcContainerSeen, arcConfirmGoal, arcSkipQuestion, type ArcView, type ArcSourceItem,
 } from '../api/client';
 import { composeFounderView } from './understanding-founder';
+import { endSentence, tidyPunctuation } from './punctuation';
 // Instagram is back in the pour-in (2026-10-08) via the DIRECT Instagram Login connector: it authorizes whatever
 // Instagram account the browser is logged into (no Business-vs-personal picker). The Page-picker flow via Facebook
 // Login for Business is the later Option B, see docs/sources/instagram-arc-connector-later.md.
@@ -44,8 +45,8 @@ function ArcMsg({ lines }: { lines: string[] }) {
 // → the open question for the founder. aria-hidden — the label carries the meaning for assistive tech.
 const U_ICON: Record<string, string> = { primary: '◆', evidence: '✓', inference: '~', question: '→' };
 function UCard({ label, kind, paragraph, bullets }: { label: string; kind: 'primary' | 'evidence' | 'inference' | 'question'; paragraph?: string; bullets?: string[] }) {
-  const items = (bullets ?? []).map((b) => (b ?? '').trim()).filter(Boolean);
-  const lead = (paragraph ?? '').trim();
+  const items = (bullets ?? []).map((b) => tidyPunctuation((b ?? '').trim())).filter(Boolean);
+  const lead = tidyPunctuation((paragraph ?? '').trim());
   if (!lead && items.length === 0) return null;
   return (
     <div className={`s0-u-card s0-u-card--${kind}`}>
@@ -203,7 +204,7 @@ function UnderstandingReadView({ u, t }: { u: NonNullable<ArcView['understanding
       {fv.matters.length ? (
         <div className="s0-u-card" data-understanding-matters-here="">
           <div className="s0-u-card-label">{t('arc.u6.h.matters')}</div>
-          <ul className="s0-u-list s0-u-hyps">{fv.matters.map((m, i) => <li key={i} data-understanding-thesis="">{m.headline ? <strong>{m.headline}. </strong> : null}{m.body}</li>)}</ul>
+          <ul className="s0-u-list s0-u-hyps">{fv.matters.map((m, i) => <li key={i} data-understanding-thesis="">{m.headline ? <strong>{endSentence(tidyPunctuation(m.headline))} </strong> : null}{tidyPunctuation(m.body)}</li>)}</ul>
         </div>
       ) : null}
       {fv.watching ? (
@@ -517,6 +518,12 @@ function ArcOpenerView({ opener, t, asQuestion }: { opener: ArcOpener; t: T; asQ
   );
 }
 
+// Recovery timing for long requests (see act): start polling after 15s, every 5s, give up after 15 min.
+const RECOVER_START_MS = 15_000;
+const RECOVER_POLL_MS = 5_000;
+const RECOVER_GIVE_UP_MS = 15 * 60_000;
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
 /**
  * DAY ONE — the arc, one surface. The strategist carries the founder through nine moments; the surface never
  * changes shape (context line · message · actions · input) — only the message does. No tabs, no panels, no
@@ -586,7 +593,14 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
   // (Deterministic generation failures come back as a view with error.kind, handled in renderMoment, not thrown.)
   const load = useCallback(async () => {
     setLoadErr(false);
-    try { apply(await getArc(businessId)); }
+    try {
+      // Opened while a long operation runs (a reload, a second tab): keep the working state and poll until it lands.
+      let v = await getArc(businessId);
+      const started = Date.now();
+      while (v.pending && Date.now() - started < RECOVER_GIVE_UP_MS) { await sleep(RECOVER_POLL_MS); v = await getArc(businessId); }
+      if (v.pending) { setLoadErr(true); return; }
+      apply(v);
+    }
     catch (e) { if (isNotFound(e)) { navigate('/home', { replace: true }); return; } setLoadErr(true); }
   }, [businessId, apply, navigate]);
   useEffect(() => { if (started.current) return; started.current = true; void load(); }, [load]);
@@ -595,21 +609,40 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
   // on error, surface a message and KEEP the founder's text; on success, clear the text and — when the moment
   // does not advance (a correction at Moment 3, a challenge at Moment 6) — acknowledge that BB received it, so
   // the founder always sees a response instead of "nothing happened".
+  //
+  // LONG REQUESTS NEVER LOOK STUCK (2026-10-17): the read and the strategy can outlive the browser's wait (~5 min) while
+  // the server keeps going and saves the durable result. So a request that is still open after a short while is joined
+  // by a poll of the arc state: whichever lands first renders. A dropped connection is not a failure while the server
+  // still reports the operation as pending or the moment has moved on; only "nothing running, nothing changed" is.
   async function act(run: () => Promise<ArcView>, workingKey = 'arc.working') {
     setBusy(true); setErr(null); setAck(null); setWork(workingKey);
     const prevMoment = view?.moment;
-    try {
-      const v = await run();
+    const started = Date.now();
+    let settled = false;
+    let failed = false;
+    const finish = (v: ArcView) => {
+      if (settled) return;
+      settled = true;
       // A same-moment send gets a light "noted" — UNLESS it carried a substantive reply (a Moment 3 correction
       // reflection), which is the acknowledgment and renders in the moment itself.
       if (v.moment !== 'done' && v.moment === prevMoment && !v.correctionReflection && !v.error && !v.strategyChange) setAck(t('arc.noted'));
       apply(v);
       setText('');
-    } catch {
-      setErr(t('arc.senderror'));
-    } finally {
-      setBusy(false); setWork(null);
+    };
+    const request = run().then(finish, () => { failed = true; });
+    await Promise.race([request, sleep(RECOVER_START_MS)]);
+    while (!settled && Date.now() - started < RECOVER_GIVE_UP_MS) {
+      let v: ArcView | null = null;
+      try { v = await getArc(businessId); } catch { /* a transient poll failure: try again */ }
+      if (settled) break;
+      if (v && !v.pending) {
+        if (v.moment !== prevMoment) { finish(v); break; }
+        if (failed) { settled = true; apply(v); setErr(t('arc.senderror')); break; } // nothing running, nothing changed
+      }
+      await Promise.race([request, sleep(RECOVER_POLL_MS)]);
     }
+    if (!settled) setErr(t('arc.senderror'));
+    setBusy(false); setWork(null);
   }
 
   // Initial load: a model may be generating this moment (understanding/mirror/strategy/plan run inside the GET),
@@ -844,6 +877,8 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
             ) : null}
             {/* Default view for a tired founder at 22:00: the bet + at most 2 reasons + the actions. The full
                 trade-offs and the minor cards (not-now / reconsider) live behind "Arată detalii". */}
+            {/* A check that has to come first (e.g. free capacity before bringing in demand), always visible (2026-10-17). */}
+            {s.before?.length ? <UCard label={t('arc.strategy.before')} kind="evidence" bullets={s.before} /> : null}
             <UCard label={t('arc.strategy.tradeoffs')} kind="primary" bullets={stratDetails ? s.tradeOffs : s.tradeOffs.slice(0, 2)} />
             {stratDetails ? (<>
               <UCard label={t('arc.strategy.notnow')} kind="inference" bullets={s.notNow} />

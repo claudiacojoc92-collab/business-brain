@@ -33,6 +33,7 @@ const PREREQUISITE: Record<string, { named: (who: string) => string; generic: st
   ro: { named: (who) => `Înainte să aduci cerere nouă, verifici câte locuri libere pe săptămână are ${who}.`, generic: 'Înainte să aduci cerere nouă, verifici câtă capacitate liberă pe săptămână ai pentru acest serviciu.' },
   en: { named: (who) => `Before you bring in new demand, check how many free slots per week ${who} has.`, generic: 'Before you bring in new demand, check how much free capacity per week you have for this service.' },
   it: { named: (who) => `Prima di portare nuova domanda, verifica quanti posti liberi a settimana ha ${who}.`, generic: 'Prima di portare nuova domanda, verifica quanta capacità libera a settimana hai per questo servizio.' },
+  de: { named: (who) => `Bevor du neue Nachfrage bringst, prüfe, wie viele freie Termine pro Woche ${who} hat.`, generic: 'Bevor du neue Nachfrage bringst, prüfe, wie viel freie Kapazität pro Woche du für dieses Angebot hast.' },
 };
 /** A sentence of the bet's resource reasoning that already makes capacity a check. */
 const hasCapacityCheck = (b: StrategyBundle): boolean => sentencesIn(b.core.coreBet?.resourceFit ?? '').some((s) => CAPACITY.test(s) && VALIDATING.test(s));
@@ -52,7 +53,8 @@ export function addCapacityPrerequisite(bundle: StrategyBundle, ctx: StrategyCon
   const t = PREREQUISITE[language.slice(0, 2)] ?? PREREQUISITE['en']!;
   const who = deliverer(named);
   const added = who ? t.named(who) : t.generic;
-  return { bundle: { ...bundle, core: { ...c, coreBet: { ...bet, resourceFit: [added, bet.resourceFit ?? ''].filter(Boolean).join(' ') } } }, added };
+  // Shown on its own ("Before you start") and kept first in the bet's resource reasoning, where the judge and the plan read it.
+  return { bundle: { ...bundle, core: { ...c, prerequisites: [...(c.prerequisites ?? []), added], coreBet: { ...bet, resourceFit: [added, bet.resourceFit ?? ''].filter(Boolean).join(' ') } } }, added };
 }
 
 /**

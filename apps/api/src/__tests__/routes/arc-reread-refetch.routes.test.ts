@@ -25,7 +25,7 @@ function build(ingest: () => Promise<any>) {
       ingestWebsiteForPourIn: vi.fn(async (p: any) => { calls.push(`ingest:${p.url}`); return ingest(); }),
       bridgePourIn: vi.fn(async () => { calls.push('bridge'); return { state: 'synced', understandingId: 'u2' }; }),
     },
-    arcService: { view: async (_id: string, name: string) => ({ moment: 'understanding', businessName: name }) },
+    arcService: { running: () => null, track: (_b: string, _op: string, run: () => Promise<unknown>) => run(), view: async (_id: string, name: string) => ({ moment: 'understanding', businessName: name }) },
   } as any;
   const server = Fastify();
   registerErrorHandler(server, { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() } as unknown as Logger);

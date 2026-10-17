@@ -35,12 +35,13 @@ function harness(steps: Partial<ConversationStepOutput>[]) {
 describe('conversation agenda fidelity', () => {
   it('asks the shown questions verbatim and in order, even when the model wants to ask something else (the goal)', async () => {
     const h = harness([
-      { opener: { lead: 'I read it all.', bullets: ['a'], notSure: 'n', invitation: 'What brings the most money?' } as any },
       { interpretation: 'So the studios earn differently. What do you want to grow?', nextQuestion: 'What do you want to grow this year?', nextNeedKey: 'goal', answeredNeedKeys: ['site_1', 'site_2', 'site_3'] },
       { interpretation: 'Referrals carry it.', nextQuestion: 'What is your goal?', nextNeedKey: 'goal' },
     ]);
     await h.svc.startOrResume('B', 'F', 'Northside', 'en');
-    expect(JSON.parse(h.turns[0].content).__arcOpener.invitation).toBe(Q[0]);
+    // the opener is fixed copy (2026-10-17): no model step, no diagnosis, no ranking; it asks question 1 verbatim
+    const opener = JSON.parse(h.turns[0].content).__arcOpener;
+    expect(opener).toEqual({ lead: 'I have a first read of your business. To go further, I need a few answers from you.', bullets: [], notSure: null, invitation: Q[0] });
     expect(h.turns[0].infoNeedKey).toBe('site_1');
     await h.svc.submitResponse('B', 'F', 'Northside', 'Pilates and massage at one, training at the other.', 'en');
     // the model's acknowledgement stays (its question sentence does not), then question 2 word for word
@@ -54,7 +55,6 @@ describe('conversation agenda fidelity', () => {
 
   it('a skip moves on (the question stays unanswered); after the third answer: one brief acknowledgement, then the goal step', async () => {
     const h = harness([
-      { opener: { lead: 'l', bullets: [], notSure: 'n', invitation: 'x' } as any },
       { interpretation: 'Got it.' },
       { interpretation: 'Noted.' },
       { interpretation: 'Sinteza:\n• Two studios, two logics.\n• Referrals carry it.\n\nDiagnostic: a clinical profile it does not activate.' },
