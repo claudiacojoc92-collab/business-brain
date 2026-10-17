@@ -568,6 +568,8 @@ export const arcConfirmUnderstanding = (b: string): Promise<ArcView> => arcPost(
 export const arcCorrectUnderstanding = (b: string, message: string): Promise<ArcView> => arcPost(b, 'understanding/correct', { message }); // Moment 3 correction — held, deterministic, no model step
 export const arcMirrorSeen = (b: string, answer?: string): Promise<ArcView> => arcPost(b, 'mirror/seen', { answer: answer ?? '' });
 export const arcAdoptStrategy = (b: string, versionId: string): Promise<ArcView> => arcPost(b, 'strategy/adopt', { versionId });
+// The founder's explicit "try again" after BB could not build a strategy: the only path that regenerates on unchanged inputs.
+export const arcRetryStrategy = (b: string): Promise<ArcView> => arcPost(b, 'strategy/retry');
 export const arcChallengeStrategy = (b: string, statement: string): Promise<ArcView> => arcPost(b, 'strategy/challenge', { statement });
 export const arcAdoptWeekDay = (b: string): Promise<ArcView> => arcPost(b, 'week-day/adopt');
 // Reflect-back goal confirmation — writes the (possibly edited) goal directly as kind='goal', then re-derives.

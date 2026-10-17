@@ -64,7 +64,8 @@ export type FounderEventType =
   | 'arc_container_built'    // Moment 9: which unknowns the founder already answered (persisted per input fingerprint)
   | 'arc_email_saved'        // Moment 8: the current email draft (subject+body in metadata)
   | 'arc_email_exported'     // Moment 8 → 9: the founder exported the email
-  | 'arc_container_seen';    // Moment 9 → done: the founder saw (or dismissed) the container
+  | 'arc_container_seen'     // Moment 9 → done: the founder saw (or dismissed) the container
+  | 'arc_strategy_retry';    // the founder asked BB to try the strategy again after it could not build one (2026-10-17)
 
 // Client-emittable events only (server-authoritative milestones are never accepted from the browser, so a
 // founder can't fake "I adopted a strategy / exported an asset / completed the loop").

@@ -344,3 +344,41 @@ describe('replay of the 2026-10-17 prod strategy (launch-stability pass)', () =>
     expect(thirdPersonFinding('Ai numit activarea medicală ca obiectiv.')).toBeNull();
   });
 });
+
+describe('mirror stays in thesis mode (2026-10-17): never the legacy contrast while theses exist', () => {
+  const answer = 'fiecare locație aduce venit mare din diferite servicii, buna ziua din pilates balet pt adulți si masaj iar Decebal din group training si masaj, mai puțin din kinetoterapie';
+  const input: any = { businessName: 'N', interfaceLanguage: 'ro', synthesis: 'S', hypotheses: [{ interpretation: 'a', question: 'q2', unknown: 'u' }, { interpretation: 'b', question: 'q3', unknown: 'u' }], questions: [], goal: 'activarea b2b medical si creșterea nr de clienți pe toate serviciile', observed: [], business: [],
+    exchanges: [{ asked: 'q1', answer }, { asked: 'q2', answer: '(skip)' }, { asked: 'q3', answer: '(skip)' }],
+    anchored: true, unresolved: [0, 1], headlines: ['Evaluarea: filtru util sau barieră de intrare?', 'Prenatal și postpartum: un traseu sau două oferte separate?'] };
+  const NOW = `Din ce mi-ai spus: ${answer}.`;
+  const NEXT = 'Rămân deschise: Evaluarea: filtru util sau barieră de intrare; Prenatal și postpartum: un traseu sau două oferte separate. Nu le folosesc ca bază pentru strategie până nu am răspunsul tău.';
+  it('the prod case: the model NOW is removed by governance → a fact-only NOW from the stored answer + the open theses', () => {
+    const g = governReadUpdate({ hypotheses: [], fields: [{ field: 'now', text: 'Kinetoterapia aduce mai puțin venit la Decebal, deși este singurul loc unde este listată.', answers: [0], evidence: ['F2'] }] }, input)!;
+    expect(g.read).toEqual({ now: NOW, next: NEXT });
+    expect(g.audit.dropped.map((d) => d.reason)).toContain('model NOW emptied: projected from the founder answers');
+  });
+  it('a NOW that only restates the founder\'s facts is kept in thesis mode (fact-only is its job)', () => {
+    const g = governReadUpdate({ hypotheses: [], fields: [{ field: 'now', text: 'Bună Ziua aduce venit mare din pilates, balet adulți și masaj, iar Decebal din group training și masaj, mai puțin din kinetoterapie.', answers: [0], evidence: ['F1'] }] }, input)!;
+    expect(g.read!.now).toMatch(/^Bună Ziua aduce venit mare/);
+  });
+  it('the read model failed → still a thesis-mode read, never null', () => {
+    expect(governReadUpdate(null, input)!.read).toEqual({ now: NOW, next: NEXT });
+  });
+  it('every question skipped → NOW is the goal the founder named, NEXT the open theses', () => {
+    const skipped = { ...input, exchanges: input.exchanges.map((e: any) => ({ ...e, answer: '(skip)' })), unresolved: [0, 1] };
+    expect(governReadUpdate(null, skipped)!.read).toEqual({ now: 'Obiectivul pe care l-ai numit: activarea b2b medical si creșterea nr de clienți pe toate serviciile.', next: NEXT });
+  });
+  it('without theses (legacy) a failed read is still no read: the contrast view stays for those businesses', () => {
+    expect(governReadUpdate(null, { ...input, anchored: false })).toBeNull();
+  });
+});
+
+describe('updatedReadInput in thesis mode with every question skipped (2026-10-17)', () => {
+  it('still builds the read input from the goal, so the mirror stays in thesis mode; without theses it does not', () => {
+    const skipped = EX.map((e: any) => ({ ...e, answer: '(skip)' }));
+    const goal = [{ id: 'g', kind: 'goal', statement: 'land 10 retainer clients', scope: null, temporary: false, status: 'active', sourceTurnId: null }] as any;
+    expect(updatedReadInput(U, goal, skipped, 'N', 'en', [], [], RECORD)?.anchored).toBe(true);
+    expect(updatedReadInput(U, [], skipped, 'N', 'en', [], [], RECORD)).toBeNull();       // nothing the founder said at all
+    expect(updatedReadInput(U, goal, skipped, 'N', 'en', [], [], null)).toBeNull();        // legacy: no answers, no read
+  });
+});

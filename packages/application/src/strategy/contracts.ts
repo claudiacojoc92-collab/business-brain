@@ -200,6 +200,8 @@ export interface StrategyVersionRecord {
   readonly gateResults: StrategyGateResult[];
   readonly language: string;
   readonly createdAt: string;
+  /** Hash of the inputs it was generated from (2026-10-17): an insufficient result for the same inputs is terminal. */
+  readonly contextHash?: string;
 }
 
 export interface SaveStrategyVersionInput {
@@ -219,6 +221,8 @@ export interface IStrategyRepository {
   nextVersion(businessId: string): Promise<number>;
   getById(businessId: string, id: string): Promise<StrategyVersionRecord | null>;
   latestProposal(businessId: string): Promise<StrategyVersionRecord | null>;
+  /** The latest version of any status (proposal or insufficient). */
+  latest(businessId: string): Promise<StrategyVersionRecord | null>;
 }
 
 export interface StrategyPointer {

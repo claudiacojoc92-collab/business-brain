@@ -34,7 +34,9 @@ export interface ArcDeps {
   mirror: { build(businessId: string, businessName: string, language: string, context?: { exchanges?: MirrorExchange[]; theses?: ThesisRecord }): Promise<{ contrasts: { founderWords: string; against: string; tension: string }[]; read?: MirrorRead; moves?: { thesisId: string; status: ThesisStatus; because: string }[] }> };
   strategy: {
     getCurrent(businessId: string): Promise<{ record: StrategyVersionRecord } | null>;
-    proposalOrGenerate(businessId: string, businessName: string, language: string, assumedGoal?: string | null, read?: StrategyUnderstandingRead | null): Promise<StrategyVersionRecord>;
+    /** The stored result for these inputs (proposal, or a terminal insufficient), else a generation. `retry` = the
+     *  founder explicitly asked to try again: generate even when an insufficient result exists for the same inputs. */
+    proposalOrGenerate(businessId: string, businessName: string, language: string, assumedGoal?: string | null, read?: StrategyUnderstandingRead | null, retry?: boolean): Promise<StrategyVersionRecord>;
   };
   plan: {
     getActive(businessId: string): Promise<{ plan: PlanVersion } | null>;
@@ -101,6 +103,11 @@ export class ArcService {
     this.inFlight.set(key, p);
     return p;
   }
+  /** A founder's explicit "try again" on a strategy BB could not build (2026-10-17): the next strategy view generates
+   *  anew instead of returning the stored insufficient result. One-shot. Polling never sets it. */
+  private readonly strategyRetry = new Set<string>();
+  requestStrategyRetry(businessId: string): void { this.strategyRetry.add(businessId); }
+
   /** The long operation running for this business right now, or null. */
   running(businessId: string): string | null {
     for (const key of this.inFlight.keys()) if (key.startsWith(`${businessId}:`)) return key.slice(businessId.length + 1);
@@ -198,7 +205,8 @@ export class ArcService {
         // Strategy continuity: the structural read, the answers and the updated read the founder just saw.
         const theses = snap && savedTheses?.snapshotId === snap.id ? savedTheses : null;
         const read = strategyRead(u, pairExchanges(await this.deps.conversation.turns(businessId).catch(() => [] as ArcTurn[])), savedMirror?.read ?? null, theses, savedMirror?.moves ?? []);
-        try { rec = await this.track(businessId, 'strategy', () => this.deps.strategy.proposalOrGenerate(businessId, businessName, language, assumedGoal, read)); }
+        const retry = this.strategyRetry.delete(businessId);
+        try { rec = await this.track(businessId, 'strategy', () => this.deps.strategy.proposalOrGenerate(businessId, businessName, language, assumedGoal, read, retry)); }
         catch (e) {
           this.deps.log?.({ type: 'arc_moment_threw', detail: JSON.stringify({ businessId, moment: 'strategy', err: errText(e) }) });
           return { ...base, error: { kind: 'generation' } }; // a real throw is genuinely transient — retry is right

@@ -78,9 +78,10 @@ function makeDeps(opts: {
     },
     strategy: {
       nextVersion: async () => versions.length + 1,
-      save: async (i: any) => { const rec = { id: i.id, businessId: i.businessId, version: i.version, status: i.status, bundle: i.bundle, gateResults: i.gateResults, language: i.language, createdAt: '1970' }; versions.push(rec); return rec; },
+      save: async (i: any) => { const rec = { id: i.id, businessId: i.businessId, version: i.version, status: i.status, bundle: i.bundle, gateResults: i.gateResults, language: i.language, createdAt: '1970', contextHash: i.contextHash }; versions.push(rec); return rec; },
       getById: async (_b: string, id: string) => versions.find((v) => v.id === id) ?? null,
       latestProposal: async () => [...versions].reverse().find((v) => v.status === 'proposal') ?? null,
+      latest: async () => versions[versions.length - 1] ?? null,
     },
     pointer: {
       get: async () => ({ businessId: 'B', currentVersionId: pointer.currentVersionId, adoptedAt: pointer.adoptedAt }),
@@ -377,5 +378,59 @@ describe('StrategyService — the judge never fails silently (2026-10-17)', () =
   it('the capacity check is stored as a prerequisite for the card, not only inside the resource reasoning', () => {
     const b = addCapacityPrerequisite({ ...validBundle(), core: { ...validBundle().core, assumptions: [{ statement: 'The team has capacity for new retainers.' }] } }, GATE_CTX, 'en').bundle;
     expect(b.core.prerequisites).toEqual(['Before you bring in new demand, check how many free slots per week the team has.']);
+  });
+});
+
+describe('StrategyService — a terminal result stays terminal (2026-10-17): polling never pays for a second run', () => {
+  const insufficient = (): StrategyBundle => { const b = validBundle(); return { ...b, core: { ...b.core, coreBet: { ...b.core.coreBet, priority: '' }, notNow: [] } }; };
+  it('1. a saved proposal is returned as is: no generation', async () => {
+    const m = makeDeps({ generate: async () => ({ strategy: validBundle() }) });
+    const svc = new StrategyService(m.deps);
+    const first = await svc.currentOrGenerate(P.businessId, P.businessName, P.language);
+    expect(first.status).toBe('proposal');
+    const again = await svc.currentOrGenerate(P.businessId, P.businessName, P.language);
+    expect(again.id).toBe(first.id);
+    expect(m.calls().generateCalls).toBe(1);
+  });
+  it('2. a saved insufficient result for the same inputs is returned as is: no generation', async () => {
+    const m = makeDeps({ generate: async () => ({ strategy: insufficient() }), repair: async () => ({ strategy: insufficient() }) });
+    const svc = new StrategyService(m.deps);
+    const first = await svc.currentOrGenerate(P.businessId, P.businessName, P.language);
+    expect(first.status).toBe('insufficient');
+    const before = m.calls();
+    for (let i = 0; i < 3; i++) expect((await svc.currentOrGenerate(P.businessId, P.businessName, P.language)).id).toBe(first.id); // three polls
+    expect(m.calls()).toEqual(before);                                                           // no model call at all
+    expect(m.versions).toHaveLength(1);
+  });
+  it('new inputs from the founder (a new goal) are a new question: generation is allowed', async () => {
+    const founder = [{ kind: 'goal', statement: 'land 10 recurring retainer clients' }, { kind: 'horizon', statement: '6 months' }, { kind: 'resource', statement: '8 hours a week and a small budget' }];
+    const m = makeDeps({ generate: async () => ({ strategy: insufficient() }), repair: async () => ({ strategy: insufficient() }), founder });
+    const svc = new StrategyService(m.deps);
+    await svc.currentOrGenerate(P.businessId, P.businessName, P.language);
+    founder.push({ kind: 'constraint', statement: 'must not depend on daily personal video' });
+    await svc.currentOrGenerate(P.businessId, P.businessName, P.language);
+    expect(m.calls().generateCalls).toBe(2);
+  });
+  it('4. the founder\'s explicit retry generates again on the same inputs', async () => {
+    const m = makeDeps({ generate: async () => ({ strategy: insufficient() }), repair: async () => ({ strategy: insufficient() }) });
+    const svc = new StrategyService(m.deps);
+    await svc.currentOrGenerate(P.businessId, P.businessName, P.language);
+    await svc.currentOrGenerate(P.businessId, P.businessName, P.language, { retry: true });
+    expect(m.calls().generateCalls).toBe(2);
+  });
+});
+
+describe('capacity check: the verb agrees with whoever delivers (2026-10-17)', () => {
+  const withA = (statement: string): StrategyBundle => ({ ...validBundle(), core: { ...validBundle().core, assumptions: [{ statement }] } });
+  it('plural and singular subjects keep the verb the evidence used', () => {
+    expect(addCapacityPrerequisite(withA('Kinetoterapeuții de la Decebal au capacitate disponibilă pentru pacienți noi.'), GATE_CTX, 'ro').added).toBe('Înainte să aduci cerere nouă, verifici câte locuri libere pe săptămână au kinetoterapeuții de la Decebal.');
+    expect(addCapacityPrerequisite(withA('Kinetoterapeutul de la Decebal are capacitate disponibilă.'), GATE_CTX, 'ro').added).toBe('Înainte să aduci cerere nouă, verifici câte locuri libere pe săptămână are kinetoterapeutul de la Decebal.');
+    expect(addCapacityPrerequisite(withA('Dacă kinetoterapeuții de la Decebal nu au locuri disponibile, testul se oprește.'), GATE_CTX, 'ro').added).toMatch(/pe săptămână au kinetoterapeuții de la Decebal\.$/);
+    expect(addCapacityPrerequisite(withA("The physios don't have free slots for new patients."), GATE_CTX, 'en').added).toBe('Before you bring in new demand, check how many free slots per week the physios have.');
+    expect(addCapacityPrerequisite(withA('The physio does not have capacity for new patients.'), GATE_CTX, 'en').added).toBe('Before you bring in new demand, check how many free slots per week the physio has.');
+    expect(addCapacityPrerequisite(withA('I fisioterapisti hanno capacità per nuovi pazienti.'), GATE_CTX, 'it').added).toBe('Prima di portare nuova domanda, verifica quanti posti liberi a settimana hanno i fisioterapisti.');
+  });
+  it('a verb from another language than the strategy is never mixed in: the generic line is used', () => {
+    expect(addCapacityPrerequisite(withA('The team has capacity for new retainers.'), GATE_CTX, 'ro').added).toBe('Înainte să aduci cerere nouă, verifici câtă capacitate liberă pe săptămână ai pentru acest serviciu.');
   });
 });

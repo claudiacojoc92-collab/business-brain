@@ -78,3 +78,20 @@ describe('arc GET while a long operation runs (2026-10-17)', () => {
     expect(ops).toEqual(['pour_in']);
   });
 });
+
+describe('arc strategy retry (2026-10-17)', () => {
+  it('asks the arc for ONE fresh strategy, then returns the view', async () => {
+    const { server, deps } = buildServer(async () => ({ state: 'empty' }));
+    deps.arcService.requestStrategyRetry = vi.fn();
+    const res = await server.inject({ method: 'POST', url: '/v1/businesses/b1/arc/strategy/retry' });
+    expect(res.statusCode).toBe(200);
+    expect(deps.arcService.requestStrategyRetry).toHaveBeenCalledWith('b1');
+  });
+  it('does not stack a retry on a run that is still going', async () => {
+    const { server, deps } = buildServer(async () => ({ state: 'empty' }));
+    deps.arcService.requestStrategyRetry = vi.fn();
+    deps.arcService.running = () => 'strategy';
+    await server.inject({ method: 'POST', url: '/v1/businesses/b1/arc/strategy/retry' });
+    expect(deps.arcService.requestStrategyRetry).not.toHaveBeenCalled();
+  });
+});

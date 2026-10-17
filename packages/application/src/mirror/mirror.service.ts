@@ -112,7 +112,8 @@ export class MirrorService {
       ? { bet: core.coreBet.priority, notNow: (core.notNow ?? []).map((n) => n.item).filter(Boolean), reconsider: (core.reconsiderTriggers ?? []).map((r) => r.condition).filter(Boolean) }
       : null;
 
-    // The UPDATED READ runs beside the contrast (never instead of it): its failure leaves the contrast standing.
+    // The UPDATED READ runs beside the contrast. Without theses its failure leaves the contrast standing; with theses
+    // (2026-10-17) the read always exists (deterministic NOW + the open theses) and the contrast is never the fallback.
     const readInput = updatedReadInput(snap?.understanding ?? null, states, context.exchanges ?? [], businessName, language, observed, business, context.theses ?? null);
     const readOut = readInput && this.deps.model.readUpdate
       ? this.deps.model.readUpdate(readInput).catch(() => null)
@@ -171,8 +172,10 @@ export function updatedReadInput(
 ): (MirrorReadInput & { thesisIds?: string[] }) | null {
   const st = u?.read?.structure;
   const answered = exchanges.filter((e) => e.answer.trim() && !/^\(skip\)$/i.test(e.answer.trim()));
-  if (!answered.length || (!theses && (!st || !st.synthesis.trim()))) return null;
   const goal = states.find((x) => isHeldGoal(x))?.statement.trim() || null;
+  // Thesis mode stays in thesis mode (2026-10-17): with theses held, a read is built even when every question was
+  // skipped (NOW then comes from the goal); the legacy contrast view is only for businesses without theses.
+  if (theses ? !answered.length && !goal : !answered.length || !st || !st.synthesis.trim()) return null;
   // A skipped question leaves the hypothesis it was asked to decide (its B tier `resolves`) unresolved.
   const skipped = exchanges.filter((e) => /^\(skip\)$/i.test(e.answer.trim()));
   // With strategic theses (2026-10-16): the readings to move ARE the top theses, asked through their own questions.
@@ -237,7 +240,8 @@ function restatesAnswers(text: string, answers: string): boolean {
  * Deterministic governance of the updated read. A field is kept only when it is real text (not a question, not a
  * label), grounded in at least one real founder answer, not a restatement of the answers, and uses no claim term
  * (trust, retention, unique…) the founder's own words did not license. "What changed" additionally needs a prior
- * hypothesis the answers actually moved. Without "now" there is no read (the contrast stays the fallback).
+ * hypothesis the answers actually moved. Without "now" there is no read (the contrast stays the fallback), except in
+ * thesis mode, where NOW is projected from the founder's answers instead.
  */
 /**
  * NOW IS FACT-ONLY (2026-10-16). It states what the founder said, at the same strength and scope: no dominance ("main
@@ -268,11 +272,29 @@ function factOnly(sentence: string, founder: string, dropped: { field: string; r
   return [`${text.charAt(0).toUpperCase()}${text.slice(1)}`.replace(/[,;:]?\s*$/, () => (/[.!?]$/.test(text) ? '' : '.'))];
 }
 
+/** Fact-only NOW in the content language, projected from what the founder already told BB (no model, no interpretation). */
+const FACTS_LEAD: Record<string, { said: string; goal: string }> = {
+  ro: { said: 'Din ce mi-ai spus: {facts}', goal: 'Obiectivul pe care l-ai numit: {facts}' },
+  en: { said: 'From what you told me: {facts}', goal: 'The goal you named: {facts}' },
+  it: { said: 'Da quello che mi hai detto: {facts}', goal: "L'obiettivo che hai indicato: {facts}" },
+  de: { said: 'Nach dem, was du mir gesagt hast: {facts}', goal: 'Das Ziel, das du genannt hast: {facts}' },
+};
+export function factsNow(input: MirrorReadInput): { text: string; answers: number[] } | null {
+  const lead = FACTS_LEAD[input.interfaceLanguage.slice(0, 2)] ?? FACTS_LEAD['en']!;
+  const answered = input.exchanges.map((e, i) => ({ a: e.answer.trim(), i })).filter((x) => x.a && !/^\(skip\)$/i.test(x.a));
+  const facts = (answered.length ? answered.map((x) => x.a) : [input.goal ?? '']).map((x) => x.trim().replace(/[.!;,\s]+$/u, '')).filter(Boolean).join('; ');
+  if (!facts) return null;
+  const capped = facts.length > 320 ? `${facts.slice(0, 320).replace(/\s+\S*$/u, '')}…` : facts;
+  return { text: `${(answered.length ? lead.said : lead.goal).replace('{facts}', capped)}${capped.endsWith('…') ? '' : '.'}`, answers: answered.map((x) => x.i) };
+}
+
 export function governReadUpdate(out: MirrorReadOutput | null, input: MirrorReadInput): { read?: MirrorRead; audit: NonNullable<MirrorView['readAudit']> } | null {
-  if (!out) return null;
+  // In thesis mode a failed read call still gives a read (deterministic NOW + the open theses), never the contrast.
+  if (!out && !input.anchored) return null;
+  const o: MirrorReadOutput = out ?? { fields: [], hypotheses: [] };
   const dropped: { field: string; reason: string }[] = [];
   // A hypothesis whose deciding question was skipped stays unresolved, whatever the model concluded.
-  const hypotheses: MirrorHypothesisUpdate[] = (out.hypotheses ?? [])
+  const hypotheses: MirrorHypothesisUpdate[] = (o.hypotheses ?? [])
     .filter((h) => Number.isInteger(h.index) && h.index >= 0 && h.index < input.hypotheses.length && STATUSES.has(h.status))
     .map((h) => ((input.unresolved ?? []).includes(h.index) && h.status !== 'unresolved' ? { ...h, status: 'unresolved' as const, because: `deciding question skipped (model said ${h.status}): ${h.because}` } : h));
   const valid = new Set(input.exchanges.map((e, i) => (e.answer.trim() && !/^\(skip\)$/i.test(e.answer.trim()) ? i : -1)).filter((i) => i >= 0));
@@ -283,7 +305,7 @@ export function governReadUpdate(out: MirrorReadOutput | null, input: MirrorRead
   const founderSaid = new Set(escalationsIn([...input.exchanges.map((e) => e.answer), input.goal ?? ''].join(' ')));
   const grounding: MirrorReadGrounding[] = [];
   const read: Partial<Record<MirrorReadField, string>> = {};
-  for (const f of out.fields ?? []) {
+  for (const f of o.fields ?? []) {
     if (!FIELD_ORDER.includes(f.field) || read[f.field]) continue;
     if (!MAX_SENTENCES[f.field]) { dropped.push({ field: f.field, reason: 'not shown at launch (folded into next)' }); continue; }
     // Conservative pass: drop only the sentences that escalate beyond what the founder said, then cap the length.
@@ -302,7 +324,8 @@ export function governReadUpdate(out: MirrorReadOutput | null, input: MirrorRead
       : /\?\s*$/.test(text) ? 'a question'
         : /\b(hypothes|ipotez|ipotes|hypothès)\p{L}*/iu.test(text) || /\b(strengthened|weakened|reversed|unresolved|sharpened)\b/i.test(text) ? 'exposes the reasoning labels'
           : !answers.length ? 'not grounded in a founder answer'
-            : restatesAnswers(text, input.exchanges.map((e) => e.answer).join(' ')) ? 'restates the answers'
+            // In thesis mode NOW is fact-only by design: restating the founder's facts is exactly its job.
+            : !(input.anchored && f.field === 'now') && restatesAnswers(text, input.exchanges.map((e) => e.answer).join(' ')) ? 'restates the answers'
               : f.field === 'changed' && !hypotheses.some((h) => MOVED.has(h.status)) ? 'no prior read actually moved'
                 // Anchored to the top theses: the next move must be about one of them, never a new topic.
                 // …and it must actually be ABOUT that thesis (shared substance), not just cite it.
@@ -318,6 +341,11 @@ export function governReadUpdate(out: MirrorReadOutput | null, input: MirrorRead
   // model "next" can only drift to another topic. The open-thesis line replaces it.
   const allSkipped = input.anchored && input.hypotheses.length > 0 && input.hypotheses.every((_, i) => (input.unresolved ?? []).includes(i));
   if (allSkipped && read.next) { dropped.push({ field: 'next', reason: 'every top thesis is still open: no new move until they are answered' }); delete read.next; grounding.splice(grounding.findIndex((g) => g.field === 'next'), 1); }
+  // Thesis mode: when every model NOW sentence was removed, NOW is projected from the founder's stored answers.
+  if (input.anchored && !read.now) {
+    const f = factsNow(input);
+    if (f) { read.now = f.text; grounding.push({ field: 'now', answers: f.answers, evidence: ['founder answers'] }); dropped.push({ field: 'now', reason: 'model NOW emptied: projected from the founder answers' }); }
+  }
   if (input.anchored && read.now && !read.next) {
     const open = [...new Set([...(input.unresolved ?? []), ...hypotheses.filter((h) => h.status === 'unresolved').map((h) => h.index)])].sort();
     const names = open.map((i) => (input.headlines?.[i] ?? '').replace(/[?.:]\s*$/, '').trim()).filter(Boolean);

@@ -27,6 +27,7 @@ function toRecord(r: any): StrategyVersionRecord {
     gateResults: parse<StrategyGateResult[]>(r.gate_results),
     language: r.language,
     createdAt: iso(r.created_at),
+    ...(r.context_hash ? { contextHash: r.context_hash } : {}),
   };
 }
 
@@ -54,6 +55,12 @@ export class PgStrategyRepository implements IStrategyRepository {
   async getById(businessId: string, id: string): Promise<StrategyVersionRecord | null> {
     const r = await (this.db as any).selectFrom('workspace.strategy_versions').selectAll()
       .where('business_id', '=', businessId).where('id', '=', id).executeTakeFirst();
+    return r ? toRecord(r) : null;
+  }
+
+  async latest(businessId: string): Promise<StrategyVersionRecord | null> {
+    const r = await (this.db as any).selectFrom('workspace.strategy_versions').selectAll()
+      .where('business_id', '=', businessId).orderBy('version', 'desc').executeTakeFirst();
     return r ? toRecord(r) : null;
   }
 

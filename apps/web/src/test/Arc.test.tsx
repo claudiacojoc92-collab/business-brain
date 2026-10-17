@@ -18,7 +18,7 @@ vi.mock('react-router-dom', async (orig) => {
 vi.mock('../api/client', () => ({
   getArc: vi.fn(), arcAddSource: vi.fn(), arcAddLink: vi.fn(), arcAddInstagram: vi.fn(), arcAddFile: vi.fn(),
   getInstagramConnectUrl: vi.fn(), arcPourInDone: vi.fn(), arcConversation: vi.fn(),
-  arcConfirmUnderstanding: vi.fn(), arcCorrectUnderstanding: vi.fn(), arcMirrorSeen: vi.fn(), arcAdoptStrategy: vi.fn(), arcChallengeStrategy: vi.fn(),
+  arcConfirmUnderstanding: vi.fn(), arcCorrectUnderstanding: vi.fn(), arcMirrorSeen: vi.fn(), arcAdoptStrategy: vi.fn(), arcRetryStrategy: vi.fn(), arcChallengeStrategy: vi.fn(),
   arcAdoptWeekDay: vi.fn(), arcGenerateEmail: vi.fn(), arcSaveEmail: vi.fn(), arcExportEmail: vi.fn(), arcContainerSeen: vi.fn(),
   getArcSources: vi.fn(), arcRemoveSource: vi.fn(),
 }));
@@ -865,5 +865,34 @@ describe('strategy: what comes before the bet is visible (2026-10-17)', () => {
     render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
     await screen.findByText('arc.strategy.eyebrow');
     expect(screen.queryByText('arc.strategy.before')).toBeNull();
+  });
+});
+
+describe('a terminal strategy result ends the wait; trying again is the founder\'s choice (2026-10-17)', () => {
+  beforeEach(() => { vi.useFakeTimers({ shouldAdvanceTime: true }); });
+  afterEach(() => { vi.useRealTimers(); });
+  const INSUFFICIENT = v({ moment: 'strategy', error: { kind: 'strategy_insufficient', detail: null } });
+  it('polling stops at "could not build a strategy" and makes no further requests', async () => {
+    vi.mocked(api.getArc)
+      .mockResolvedValueOnce(v({ moment: 'mirror', mirror: { founderWords: 'w', against: 'a', tension: 't' } }))
+      .mockResolvedValueOnce(v({ moment: 'pour_in', pending: 'strategy' }))
+      .mockResolvedValue(INSUFFICIENT);
+    vi.mocked(api.arcMirrorSeen).mockReturnValue(new Promise<ArcView>(() => { /* the browser stopped waiting */ }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    fireEvent.click(await screen.findByText('arc.mirror.skip'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(16_000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(6_000); });
+    expect(await screen.findByText('arc.error.strategyinsufficientNoDetail')).toBeInTheDocument();
+    const calls = vi.mocked(api.getArc).mock.calls.length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(vi.mocked(api.getArc).mock.calls.length).toBe(calls);                 // the wait is over: no more polls
+  });
+  it('"Try again" is the only path that asks for a new strategy', async () => {
+    vi.mocked(api.getArc).mockResolvedValue(INSUFFICIENT);
+    vi.mocked(api.arcRetryStrategy).mockResolvedValue(v({ moment: 'strategy', strategy: { bet: 'NEW BET', over: 'o', horizon: 'h', tradeOffs: ['r'], notNow: [], reconsider: [], proposalId: 'p2', adoptable: true } }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    fireEvent.click(await screen.findByText('common.retry'));
+    expect(await screen.findByText('NEW BET')).toBeInTheDocument();
+    expect(api.arcRetryStrategy).toHaveBeenCalledWith('b1');
   });
 });

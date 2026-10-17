@@ -527,7 +527,9 @@ export function buildCompositionRoot(db: KyselyDB): CompositionRoot {
     mirror: { build: (bid, name, lang, context) => mirrorService.build(bid, name, lang, context) },
     strategy: {
       getCurrent: (bid) => strategyService.getCurrent(bid),
-      proposalOrGenerate: async (bid, name, lang, assumedGoal, read) => (await strategyService.getProposal(bid)) ?? (await strategyService.generate(bid, name, lang, { assumedGoal, understandingRead: read })),
+      // Polling never regenerates a terminal result (2026-10-17): the stored proposal, or the insufficient result for the
+      // same inputs, is returned as is; a generation needs new inputs, no result yet, or the founder's explicit retry.
+      proposalOrGenerate: (bid, name, lang, assumedGoal, read, retry) => strategyService.currentOrGenerate(bid, name, lang, { assumedGoal, understandingRead: read, retry: Boolean(retry) }),
     },
     plan: {
       getActive: (bid) => planService.getActivePlan(bid),

@@ -8,7 +8,7 @@ import { parseOpenerTurn, type ArcOpener } from './parse-briefing';
 import {
   getArc, arcAddSource, arcAddLink, arcAddText, arcAddFile, arcAddInstagram, getInstagramConnectUrl, getArcSources, arcRemoveSource,
   arcPourInDone, arcConversation, arcConfirmUnderstanding, arcCorrectUnderstanding,
-  arcMirrorSeen, arcAdoptStrategy, arcChallengeStrategy, arcAdoptWeekDay, arcGenerateEmail,
+  arcMirrorSeen, arcAdoptStrategy, arcRetryStrategy, arcChallengeStrategy, arcAdoptWeekDay, arcGenerateEmail,
   arcSaveEmail, arcExportEmail, arcContainerSeen, arcConfirmGoal, arcSkipQuestion, type ArcView, type ArcSourceItem,
 } from '../api/client';
 import { composeFounderView } from './understanding-founder';
@@ -631,12 +631,16 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
     };
     const request = run().then(finish, () => { failed = true; });
     await Promise.race([request, sleep(RECOVER_START_MS)]);
+    let sawPending = false;
     while (!settled && Date.now() - started < RECOVER_GIVE_UP_MS) {
       let v: ArcView | null = null;
       try { v = await getArc(businessId); } catch { /* a transient poll failure: try again */ }
       if (settled) break;
+      if (v?.pending) sawPending = true;
       if (v && !v.pending) {
-        if (v.moment !== prevMoment) { finish(v); break; }
+        // The moment moved on, or the operation we watched running has ended (a retry lands on the same moment):
+        // either way this is its result — a proposal, a terminal insufficient, or an explicit error. Stop polling.
+        if (v.moment !== prevMoment || sawPending) { finish(v); break; }
         if (failed) { settled = true; apply(v); setErr(t('arc.senderror')); break; } // nothing running, nothing changed
       }
       await Promise.race([request, sleep(RECOVER_POLL_MS)]);
@@ -744,7 +748,10 @@ export function ArcSurface({ businessId, onDone }: { businessId: string; onDone:
       const lines = m.error.detail ? [t('arc.error.strategyinsufficient'), m.error.detail] : [t('arc.error.strategyinsufficientNoDetail')];
       return (<>
         <ArcMsg lines={lines} />
-        {!ro ? <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={() => navigate(`/b/${businessId}/talk`)}>{t('arc.error.tellmemore')} →</button><a href="/home" className="s0-btn-quiet">{t('home.tobusinesses')}</a></div> : null}
+        {!ro ? <div className="s0-strat-actions"><button type="button" className="s0-btn" disabled={busy} onClick={() => navigate(`/b/${businessId}/talk`)}>{t('arc.error.tellmemore')} →</button>
+          {/* A terminal result stays terminal while the page waits; trying again is the founder's explicit choice (2026-10-17). */}
+          <button type="button" className="s0-btn-ghost" disabled={busy} onClick={() => void act(() => arcRetryStrategy(businessId), 'arc.working.strategy')}>{t('common.retry')}</button>
+          <a href="/home" className="s0-btn-quiet">{t('home.tobusinesses')}</a></div> : null}
       </>);
     }
     if (m.error?.kind === 'generation') {
