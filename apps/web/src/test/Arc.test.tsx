@@ -321,6 +321,26 @@ describe('ArcSurface — one surface, eight moments', () => {
     expect(screen.queryByText('arc.u5.h.watching')).toBeNull();
   });
 
+  it('business snapshot (2026-10-17): "what I understand about your business" sits above my read; absent without text', async () => {
+    const und = (snapshot?: { text: string }) => ({
+      does: 'INVENTORY', serves: '', standsOut: '', tensions: [], confident: [], inferring: [], unanswered: [],
+      constraint: { decided: false } as const, diagnosis: null, stage: { stage: 'undetermined' } as const, ...(snapshot ? { snapshot } : {}),
+      founderRead: { snapshotId: 's1', myRead: 'One brand, two ways in.', matters: [{ headline: 'Two ways in', body: 'Two ways in may need two acquisition logics.' }] },
+      read: { model: [], unknownDimensions: [], notConcluding: [], untrusted: [], asks: [{ question: 'Which line carries it?', why: 'stored', tier: 'A' as const, dimension: 'performance' }],
+        structure: { synthesis: 'S.', hypotheses: [], stageNotNamed: true, founder: { mechanisms: ['group_timetable' as const] } } },
+    });
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: und({ text: 'Crux Hall has two locations in Ridgeport. You sell bouldering classes.' }) }));
+    const { unmount } = render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    expect(await screen.findByText('arc.u7.h.snapshot')).toBeInTheDocument();
+    expect(screen.getByText('Crux Hall has two locations in Ridgeport. You sell bouldering classes.')).toBeInTheDocument();
+    expect(screen.getByText('arc.u7.h.snapshot').compareDocumentPosition(screen.getByText('arc.u5.h.read')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    unmount();
+    vi.mocked(api.getArc).mockResolvedValue(v({ moment: 'understanding', understanding: und() }));
+    render(<ArcSurface businessId="b1" onDone={vi.fn()} />);
+    expect(await screen.findByText('arc.u5.h.read')).toBeInTheDocument();
+    expect(screen.queryByText('arc.u7.h.snapshot')).toBeNull();
+  });
+
   it('a synthesis that did not stand: verified mechanisms (or "not ready yet"), never the inventory as the first card', async () => {
     const base = {
       does: 'INVENTORY: You sell classes, physio and massage.', serves: '', standsOut: '', tensions: [], confident: [], inferring: [], unanswered: [],

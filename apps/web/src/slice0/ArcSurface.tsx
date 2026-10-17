@@ -184,6 +184,13 @@ function UnderstandingReadView({ u, t }: { u: NonNullable<ArcView['understanding
     </div>
   ) : null);
   const asks = asksCard();
+  // What the business IS (governed facts), before any interpretation (2026-10-17).
+  const snapshotCard = u.snapshot?.text ? (
+    <div className="s0-u-card" data-understanding-snapshot="">
+      <div className="s0-u-card-label">{t('arc.u7.h.snapshot')}</div>
+      <p className="s0-u-card-lead">{tidyPunctuation(u.snapshot.text)}</p>
+    </div>
+  ) : null;
 
   // Structural synthesis (2026-10-15): the founder sees what BB thinks the business IS, what it noticed (reversible
   // hypotheses with their alternative), what would change its read, and at most three questions. The business-model
@@ -195,6 +202,7 @@ function UnderstandingReadView({ u, t }: { u: NonNullable<ArcView['understanding
     // after the founder answers (the updated mirror). Alternatives and reversals stay in the stored read; the inventory stays under "What I read".
     const fv = composeFounderView(s, r.asks, u.does, t, u.founderRead);
     if (fv) return (<>
+      {snapshotCard}
       {fv.firstRead ? (
         <div className="s0-u-card s0-u-card--read" data-understanding-first-read="">
           <div className="s0-u-card-label">{t('arc.u5.h.read')}</div>
@@ -223,6 +231,7 @@ function UnderstandingReadView({ u, t }: { u: NonNullable<ArcView['understanding
       </details>
     </>);
     return (<>
+      {snapshotCard}
       <div className="s0-u-card s0-u-card--read" data-understanding-synthesis="">
         <div className="s0-u-card-label">{t('arc.u2.whatItIs')}</div>
         {s.synthesis ? <p className="s0-u-card-lead">{s.synthesis}</p>
@@ -282,6 +291,7 @@ function UnderstandingReadView({ u, t }: { u: NonNullable<ArcView['understanding
   }
 
   return (<>
+      {snapshotCard}
     <div className="s0-u-card s0-u-card--read">
       <div className="s0-u-card-label">{t('arc.u2.understand')}</div>
       {lead}

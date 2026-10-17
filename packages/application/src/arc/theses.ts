@@ -1,4 +1,4 @@
-import { businessEntities, claimTermsIn, escalationsIn, primacyUnlicensed, presupposesFuture, sameInsight, ungroundedInference, type GovernedUnderstanding, type ModelDimension } from '../bi/index';
+import { claimTermsIn, escalationsIn, primacyUnlicensed, presupposesFuture, sameInsight, ungroundedInference, type GovernedUnderstanding, type ModelDimension } from '../bi/index';
 import { behaviourFinding } from '../strategy/validation';
 
 /**
@@ -7,8 +7,9 @@ import { behaviourFinding } from '../strategy/validation';
  *   governed understanding (facts, model, synthesis, hypotheses)
  *   → ONE model call: a generic business-model sketch + 4–8 candidate theses + founder-facing copy
  *   → ELIGIBILITY (code): grounding is a gate, never a score
- *   → RANKING (code): decision leverage > consequence > non-obviousness > cross-dimension > specificity >
- *     reversibility > grounding (tie-breaker); an observation-only thesis can never be top-ranked
+ *   → RANKING (code): decision leverage > consequence > non-obviousness > cross-dimension > reversibility > model
+ *     priority > grounding (tie-breaker); an observation-only thesis can never be top-ranked. Grounding is eligibility,
+ *     strategic value is ranking: literal overlap with offer names never ranks a thesis
  *   → QUESTIONS (code): the current driver if unknown, then the top theses' discriminating questions
  *   → founder copy re-checked sentence by sentence.
  *
@@ -40,7 +41,7 @@ export interface StrategicThesis {
   readonly priority: number;           // the model's own ordinal (1 = most valuable): a late tie-breaker only
   readonly founder: { readonly headline: string; readonly body: string; readonly refs: string[] };
   readonly eligibility: { readonly pass: boolean; readonly reasons: string[]; readonly observationOnly: boolean };
-  readonly score?: readonly number[];  // lexicographic: leverage, consequence, nonObvious, crossDim, specificity, reversibility, −priority, grounding
+  readonly score?: readonly number[];  // lexicographic: leverage, consequence, nonObvious, crossDim, reversibility, −priority, grounding
   readonly rank?: number;
 }
 
@@ -246,7 +247,7 @@ function eligibility(t: ThesisModelOutput['theses'][number], input: ThesisInput,
 }
 
 /** Lexicographic score in the canonical order (higher is better). */
-function score(t: Omit<StrategicThesis, 'score' | 'rank'>, input: ThesisInput, entities: string[], others: Omit<StrategicThesis, 'score' | 'rank'>[]): number[] {
+function score(t: Omit<StrategicThesis, 'score' | 'rank'>, input: ThesisInput, others: Omit<StrategicThesis, 'score' | 'rank'>[]): number[] {
   const decisions = [...new Set(t.decisions.filter((d) => DECISION_AREAS.includes(d)))];
   const leverage = Math.min(3, decisions.filter((d) => HIGH_LEVERAGE.has(d)).length + (t.ifTrue.trim() ? 1 : 0));
   const consequence = Math.min(3, decisions.length);
@@ -254,10 +255,9 @@ function score(t: Omit<StrategicThesis, 'score' | 'rank'>, input: ThesisInput, e
   const overlap = Math.max(0, ...input.facts.map((f) => { const c = coveredBy(text, f.text); return c >= 0.6 ? 2 : c >= 0.4 ? 1 : 0; }), ...others.filter((o) => o.id !== t.id).map((o) => (sameInsight(text, `${o.relationship} ${o.implication}`, 0.6) ? 1 : 0)));
   const nonObvious = 2 - overlap;
   const crossDim = Math.min(3, new Set(t.dimensions).size);
-  const specificity = Math.min(2, entities.filter((e) => e.length >= 3 && text.toLowerCase().includes(e.toLowerCase())).length);
   const reversibility = t.weakenedBy.trim() && t.unknown.trim() ? 1 : 0;
   const grounding = Math.min(4, t.facts.length);
-  return [leverage, consequence, nonObvious, crossDim, specificity, reversibility, -Math.max(1, t.priority || 9), grounding];
+  return [leverage, consequence, nonObvious, crossDim, reversibility, -Math.max(1, t.priority || 9), grounding];
 }
 const compare = (a: readonly number[], b: readonly number[]): number => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return b[i]! - a[i]!; return 0; };
 
@@ -277,14 +277,13 @@ export function governTheses(out: ThesisModelOutput | null, input: ThesisInput, 
   const askable = (q: string): boolean => /\?\s*$/.test(q.trim()) && !presupposesFuture(q) && words(q) <= 45;
   const dropped: ThesisRecord['dropped'][number][] = [];
   const valid = new Set(input.facts.map((f) => f.ref));
-  const entities = businessEntities(u);
 
   // 1. Eligibility (a gate), then the canonical ranking among the eligible.
   const raw = (out.theses ?? []).slice(0, 10).map((t, i) => ({ ...t, id: `T${i + 1}`, facts: [...new Set((t.facts ?? []).filter((r) => valid.has(r)))], decisions: (t.decisions ?? []).filter((d) => DECISION_AREAS.includes(d)), dimensions: t.dimensions ?? [] }));
   const judged = raw.map((t) => ({ ...t, eligibility: eligibility(t, input, internal) }));
   for (const t of judged) if (!t.eligibility.pass) dropped.push({ part: `thesis ${t.id}`, text: t.headline, reason: t.eligibility.reasons.join('; ') });
   const eligible = judged.filter((t) => t.eligibility.pass);
-  const scored = eligible.map((t) => ({ ...t, score: score(t, input, entities, eligible) }));
+  const scored = eligible.map((t) => ({ ...t, score: score(t, input, eligible) }));
   // Hard rule: an observation-only thesis ranks after every thesis that carries interpretation and consequence.
   scored.sort((a, b) => (Number(a.eligibility.observationOnly) - Number(b.eligibility.observationOnly)) || compare(a.score, b.score));
   // De-duplicate: a thesis that makes the same point as a higher-ranked one is dropped.

@@ -4,6 +4,7 @@ import { canonicalTodayMove, deriveAllReadiness, selectToday, todayPlanAction } 
 import type { GovernedUnderstanding, ClaimEvidence, StructuralHypothesis } from '../bi/index';
 import type { MirrorExchange, MirrorRead } from '../mirror/contracts';
 import type { StrategyUnderstandingRead } from '../strategy/contracts';
+import { businessSnapshot } from './business-snapshot';
 import { compactRecord, governProjection, governTheses, projectionInput, thesisInput, thesesWithStatus, type IThesisModelPort, type ThesisRecord, type ThesisStatus } from './theses';
 import { clipQuote } from '../bi/evidence-anchor';
 import { normalizeUnderstandingShapes, stringList } from '../bi/model-shapes';
@@ -151,11 +152,15 @@ export class ArcService {
         const snapId = snap?.id ?? null;
         const cached = snapId && savedTheses?.snapshotId === snapId ? savedTheses : null;
         const record = cached ?? (snapId && u ? await this.track(businessId, 'understanding', () => this.composeTheses(businessId, businessName, language, u, snapId)) : null);
-        if (!record) return { ...base, understanding: card };
+        // Governed facts first (2026-10-17): what the business IS, projected now, so existing reads get it without a re-read.
+        const facts = businessSnapshot(u, record ?? (snapId && savedTheses?.snapshotId === snapId ? savedTheses : null), businessName, language);
+        const snapshot = facts?.text ? { snapshot: { text: facts.text } } : {};
+        if (!record) return { ...base, understanding: { ...card, ...snapshot } };
         return {
           ...base,
           understanding: {
             ...card,
+            ...snapshot,
             founderRead: { snapshotId: record.snapshotId, myRead: record.founder.myRead, matters: record.founder.matters.map((m) => ({ headline: m.headline, body: m.body })) },
             // The three questions come from the theses (the conversation asks exactly these, verbatim). A v1 snapshot
             // (no structured read) gets a minimal read so the card renders the same founder-facing layout.
