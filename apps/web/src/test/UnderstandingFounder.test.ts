@@ -44,6 +44,20 @@ describe('first read: Blind Test 4 signals (a routes clause and a team gap)', ()
   });
 });
 
+describe('founder-facing understanding from the top strategic theses', () => {
+  it('leads with my read and the top theses; the asks (already thesis-driven) keep their own rationale', () => {
+    const thesisAsks = [{ question: 'q1', why: 'De ce întreb 1.', tier: 'A' as const, dimension: 'performance' }, { question: 'q2', why: 'Răspunsul arată dacă e deliberat.', tier: 'B' as const, resolves: 'T1' }];
+    const fv = composeFounderView({ synthesis: 'S.', hypotheses: [hyp], stageNotNamed: true, founder: { mechanisms: ALL } }, thesisAsks, 'x', ro,
+      { myRead: 'Un singur brand, două trasee.', matters: [{ headline: 'Două trasee', body: 'Pot cere logici diferite.' }] })!;
+    expect(fv.composed).toBe(true);
+    expect(fv.firstRead).toBe('Un singur brand, două trasee.');
+    expect(fv.matters).toEqual([{ headline: 'Două trasee', body: 'Pot cere logici diferite.' }]);
+    expect(fv.watching).toBe('');
+    expect(fv.whyOf(thesisAsks[1]!)).toBe('Răspunsul arată dacă e deliberat.');
+    expect(fv.whyOf(thesisAsks[0]!)).toBe('De ce întreb 1.');
+  });
+});
+
 describe('first read, degraded signals', () => {
   it('no founder signals (older api) or no synthesis → null: the card keeps its earlier layout', () => {
     expect(composeFounderView({ synthesis: 'S', hypotheses: [], stageNotNamed: true }, asks, 'x', en)).toBeNull();

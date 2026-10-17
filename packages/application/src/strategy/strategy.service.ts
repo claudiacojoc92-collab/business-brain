@@ -14,12 +14,13 @@ import type {
   StrategyGateResult,
   StrategyUnderstandingRead,
 } from './contracts';
-import { validateStrategy, type StrategyContextForGate } from './validation';
+import { validateStrategy, omitUnsupportedSecondary, type StrategyContextForGate, type StrategyValidation } from './validation';
+import { addCapacityPrerequisite, resolveJudgeFailures } from './judge-fallback';
 
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
 
 /** Flatten governed understanding into labelled business elements (B1..) the strategy can cite. */
-function toBusinessElements(u: GovernedUnderstanding | null): { ref: string; text: string }[] {
+export function toBusinessElements(u: GovernedUnderstanding | null): { ref: string; text: string }[] {
   if (!u) return [];
   const raw: string[] = [];
   if (u.offer?.summary) raw.push(`Offer: ${u.offer.summary}`);
@@ -36,7 +37,13 @@ export type StrategyEvent =
   | { type: 'first_pass_ok' }
   | { type: 'repair_attempt'; component: string; gate: string; attempt: number }
   | { type: 'repaired_ok'; attempts: number }
-  | { type: 'judge_repair'; dimension: string; attempt: number }
+  | { type: 'repair_result'; attempt: number; failures: string[] }
+  | { type: 'judge_round'; round: number; verdicts: { dimension: string; pass: boolean; component: string; reason: string }[] }
+  | { type: 'judge_repair'; dimension: string; component: string; attempt: number }
+  | { type: 'judge_repair_result'; attempt: number; gatesPass: boolean }
+  | { type: 'capacity_prerequisite'; added: string }
+  | { type: 'judge_fallback'; resolved: { dimension: string; how: string }[] }
+  | { type: 'secondary_omitted'; omitted: string[] }
   | { type: 'failed_closed'; gate: string };
 
 export interface StrategyDeps {
@@ -52,6 +59,9 @@ export interface StrategyDeps {
 }
 
 const MAX_STRUCT_REPAIRS = 4;
+/** The founder-facing core that the secondary fallback never omits: repaired first. */
+const CENTRAL = ['diagnosis', 'coreBet', 'offerDirection', 'positioningDirection'];
+const centralRank = (c: string): number => (CENTRAL.includes(c) ? CENTRAL.indexOf(c) : CENTRAL.length);
 const MAX_JUDGE_REPAIRS = 2;
 
 export class StrategyService {
@@ -98,8 +108,10 @@ export class StrategyService {
     // Observed results (Result Loop) join as their own R-refs: citable business evidence for the gates, never founder state.
     const results = (opts.observedResults ?? []).map((s) => s.trim()).filter(Boolean).map((statement, i) => ({ ref: `R${i + 1}`, statement }));
     const withResults: StrategyModelInput = results.length ? { ...loaded.input, observedResults: results } : loaded.input;
-    // The read the founder just saw (2026-10-16): context to stay consistent with, never a new citable ref.
+    // The read the founder just saw (2026-10-16): context to stay consistent with, never a new citable ref. Its top
+    // theses join the gate context, so the strategy must trace to them (and never to a reversed one).
     const input: StrategyModelInput = opts.understandingRead ? { ...withResults, understandingRead: opts.understandingRead } : withResults;
+    if (opts.understandingRead?.theses?.length) ctx.theses = opts.understandingRead.theses.map((t) => ({ id: t.id, status: t.status, text: [t.headline, t.relationship, t.implication, t.question ?? ''].join(' ') }));
     if (results.length) ctx.business.push(...results.map((r) => ({ ref: r.ref, text: `Observed result: ${r.statement}` })));
     const assumed = !loaded.hasGoal ? (opts.assumedGoal ?? '').trim() : '';
     if (assumed) {
@@ -130,40 +142,61 @@ export class StrategyService {
     let attempts = 0;
     while (!v.pass && attempts < MAX_STRUCT_REPAIRS) {
       attempts += 1;
-      const f = v.failures[0]!;
-      this.deps.log?.({ type: 'repair_attempt', component: f.component, gate: f.gate, attempt: attempts });
+      // Every failing component in ONE repair (2026-10-17), the central choice first: one component per attempt ran out of
+      // attempts before the positioning was reached, and the central fields cannot be omitted afterwards.
+      const components = [...new Set(v.failures.map((x) => x.component))].sort((a, b) => centralRank(a) - centralRank(b));
+      this.deps.log?.({ type: 'repair_attempt', component: components.join(', '), gate: v.failures[0]!.gate, attempt: attempts });
       try {
-        const r = await this.deps.model.repair({ ...input, current: bundle, failedComponent: f.component, failureReason: `${f.gate}: ${f.detail}` });
+        const reasons = components.flatMap((c) => v.failures.filter((x) => x.component === c).map((x) => `[${c}] ${x.gate}: ${x.detail}`));
+        const r = await this.deps.model.repair({ ...input, current: bundle, failedComponent: components.join(', '), failureReason: [...new Set(reasons)].join('\n') });
         bundle = r.strategy;
       } catch { break; }
       v = validateStrategy(bundle, ctx);
+      this.deps.log?.({ type: 'repair_result', attempt: attempts, failures: v.failures.map((x) => `${x.gate}:${x.component}`) });
     }
+    if (!v.pass) ({ bundle, v } = this.secondaryFallback(bundle, v, ctx, language));
     if (!v.pass) {
       this.deps.log?.({ type: 'failed_closed', gate: v.failures[0]?.gate ?? 'unknown' });
       return this.persist(businessId, bundle, 'insufficient', v.gateResults, input, language);
     }
+
+    // A capacity the bet depends on and the evidence does not establish is checked first, never assumed (2026-10-17).
+    ({ bundle, v } = this.capacityFirst(bundle, v, ctx, language));
 
     // ── judged layer: grounding / genericity nuance / coherence / fit; repair failed dimensions ──
     let gateResults: StrategyGateResult[] = v.gateResults;
     let judgeAttempts = 0;
     try {
       let judged = await this.deps.model.judge({ ...input, strategy: bundle });
+      this.deps.log?.({ type: 'judge_round', round: 1, verdicts: judged.verdicts.map((jv) => ({ ...jv })) });
       while (judged.verdicts.some((jv) => !jv.pass) && judgeAttempts < MAX_JUDGE_REPAIRS) {
         judgeAttempts += 1;
         const bad = judged.verdicts.find((jv) => !jv.pass)!;
-        this.deps.log?.({ type: 'judge_repair', dimension: bad.dimension, attempt: judgeAttempts });
+        this.deps.log?.({ type: 'judge_repair', dimension: bad.dimension, component: bad.component, attempt: judgeAttempts });
         try {
           const r = await this.deps.model.repair({ ...input, current: bundle, failedComponent: bad.component, failureReason: `${bad.dimension}: ${bad.reason}` });
           bundle = r.strategy;
         } catch { break; }
-        const rv = validateStrategy(bundle, ctx); // repair must not break deterministic gates
+        let rv = validateStrategy(bundle, ctx); // repair must not break deterministic gates
+        if (!rv.pass) ({ bundle, v: rv } = this.secondaryFallback(bundle, rv, ctx, language));
+        this.deps.log?.({ type: 'judge_repair_result', attempt: judgeAttempts, gatesPass: rv.pass });
         if (!rv.pass) { this.deps.log?.({ type: 'failed_closed', gate: rv.failures[0]?.gate ?? 'judge_repair_broke_structure' }); return this.persist(businessId, bundle, 'insufficient', rv.gateResults, input, language); }
+        ({ bundle, v: rv } = this.capacityFirst(bundle, rv, ctx, language));
         gateResults = rv.gateResults;
         judged = await this.deps.model.judge({ ...input, strategy: bundle });
+        this.deps.log?.({ type: 'judge_round', round: judgeAttempts + 1, verdicts: judged.verdicts.map((jv) => ({ ...jv })) });
       }
-      gateResults = [...gateResults, ...judged.verdicts.map((jv) => ({ gate: `judge:${jv.dimension}`, pass: jv.pass, detail: jv.pass ? 'ok' : jv.reason }))];
-      if (judged.verdicts.some((jv) => !jv.pass)) {
-        this.deps.log?.({ type: 'failed_closed', gate: `judge:${judged.verdicts.find((jv) => !jv.pass)!.dimension}` });
+      // Failures left after the allowed repairs: settled deterministically when they point only at secondary parts.
+      const failedVerdicts = judged.verdicts.filter((jv) => !jv.pass);
+      const settled = failedVerdicts.length ? resolveJudgeFailures(bundle, failedVerdicts, ctx) : null;
+      if (settled && !settled.unresolved.length) {
+        bundle = settled.bundle;
+        this.deps.log?.({ type: 'judge_fallback', resolved: settled.resolved });
+      }
+      const how = new Map((settled && !settled.unresolved.length ? settled.resolved : []).map((r) => [r.dimension, r.how]));
+      gateResults = [...gateResults, ...judged.verdicts.map((jv) => ({ gate: `judge:${jv.dimension}`, pass: jv.pass || how.has(jv.dimension), detail: jv.pass ? 'ok' : how.has(jv.dimension) ? `settled: ${how.get(jv.dimension)} (judge: ${jv.reason})` : jv.reason }))];
+      if (gateResults.some((g) => g.gate.startsWith('judge:') && !g.pass)) {
+        this.deps.log?.({ type: 'failed_closed', gate: `judge:${judged.verdicts.find((jv) => !jv.pass && !how.has(jv.dimension))!.dimension}` });
         return this.persist(businessId, bundle, 'insufficient', gateResults, input, language);
       }
     } catch {
@@ -172,6 +205,26 @@ export class StrategyService {
 
     this.deps.log?.(attempts > 0 ? { type: 'repaired_ok', attempts } : { type: 'first_pass_ok' });
     return this.persist(businessId, bundle, 'proposal', gateResults, input, language);
+  }
+
+  /** Capacity checked before the bet (see addCapacityPrerequisite); kept only if every deterministic gate still passes. */
+  private capacityFirst(bundle: StrategyBundle, v: StrategyValidation, ctx: StrategyContextForGate, language: string): { bundle: StrategyBundle; v: StrategyValidation } {
+    const c = addCapacityPrerequisite(bundle, ctx, language);
+    if (!c.added) return { bundle, v };
+    const cv = validateStrategy(c.bundle, ctx);
+    if (!cv.pass) return { bundle, v };
+    this.deps.log?.({ type: 'capacity_prerequisite', added: c.added });
+    return { bundle: c.bundle, v: cv };
+  }
+
+  /** One unsupported sentence in secondary copy never sinks a valid strategy: omit it (see omitUnsupportedSecondary). */
+  private secondaryFallback(bundle: StrategyBundle, v: StrategyValidation, ctx: StrategyContextForGate, language: string): { bundle: StrategyBundle; v: StrategyValidation } {
+    const s = omitUnsupportedSecondary(bundle, ctx, language);
+    if (!s.omitted.length) return { bundle, v };
+    const sv = validateStrategy(s.bundle, ctx);
+    if (!sv.pass) return { bundle, v };
+    this.deps.log?.({ type: 'secondary_omitted', omitted: s.omitted });
+    return { bundle: s.bundle, v: sv };
   }
 
   private async persist(businessId: string, bundle: StrategyBundle, status: 'proposal' | 'insufficient', gateResults: StrategyGateResult[], input: StrategyModelInput, language: string): Promise<StrategyVersionRecord> {

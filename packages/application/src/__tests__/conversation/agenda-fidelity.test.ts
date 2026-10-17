@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect } from 'vitest';
-import { ConversationService, briefAck } from '../../conversation/conversation.service';
+import { ConversationService, briefAck, plainAck } from '../../conversation/conversation.service';
 import type { ConversationStepOutput } from '../../conversation/contracts';
 
 // AGENDA FIDELITY (2026-10-16): the three questions the understanding card showed are the three the conversation asks,
@@ -63,11 +63,20 @@ describe('conversation agenda fidelity', () => {
     await h.svc.submitResponse('B', 'F', 'Northside', 'a1', 'ro');
     await h.svc.declineCurrentNeed('B'); // the arc route does this on "skip"
     await h.svc.submitResponse('B', 'F', 'Northside', '(skip)', 'ro');
-    expect(h.turns[4].content).toBe(`Noted.\n\n${Q[2]}`);
+    expect(h.turns[4].content).toBe(Q[2]); // a skip is not an answer: no acknowledgement read into it
     await h.svc.submitResponse('B', 'F', 'Northside', 'a3', 'ro');
     const close = h.turns[h.turns.length - 1];
     expect(close.content).toBe('Mulțumesc, asta îmi completează imaginea.'); // no "Sinteza / Diagnostic" before the updated read
     expect(h.session().currentFocus).toBe('__awaiting_goal__');
+  });
+
+  it('an acknowledgement reflects what was said, without judgement, superlative or diagnosis', () => {
+    const said = 'massage brings strong revenue in both locations';
+    expect(plainAck('So the two places are really two businesses. Massage is probably your most consistent earner.', said, 'en')).toBe('Got it.');
+    expect(plainAck('Massage brings strong revenue at both locations. It is probably the most consistent earner.', said, 'en')).toBe('Massage brings strong revenue at both locations.');
+    expect(plainAck('', said, 'ro')).toBe('Înțeles.');
+    // the Body Move acceptance acknowledgement (2026-10-16): an interpretation dressed as an acknowledgement is refused
+    expect(plainAck('Masajul apare puternic în ambele, ceea ce înseamnă că e un motor de venit real, nu un serviciu secundar.', 'fiecare locație aduce venit mare din diferite servicii', 'ro')).toBe('Înțeles.');
   });
 
   it('briefAck keeps one plain sentence; headers, bullets and questions are not an acknowledgement', () => {

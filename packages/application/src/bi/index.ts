@@ -13,5 +13,6 @@ export {
 export * from './evidence-anchor';
 export * from './source-trust';
 export * from './understanding-governance';
+export { ABSOLUTES, escalationsIn, ESCALATIONS, PRIMACY, primacyUnlicensed, stemOverlap } from './escalations';
 export * from './numeric-grounding';
 export * from './model-shapes';

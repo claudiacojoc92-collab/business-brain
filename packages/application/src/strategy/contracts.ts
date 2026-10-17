@@ -51,6 +51,17 @@ export interface StrategyCore {
   readonly tradeOffs: StrategyTradeOff[];
   readonly notNow: StrategyNotNow[];
   readonly reconsiderTriggers: StrategyReconsider[];
+  /** Internal traceability (2026-10-16): which Understanding theses (T-ids) and founder evidence (F-refs) each core
+   *  choice relies on. Never shown to the founder; checked against the theses' status. */
+  readonly reliesOn?: { readonly component: string; readonly theses: string[]; readonly founderRefs: string[];
+    /** How the choice uses its theses: 'commit' treats them as established; 'validate' makes the choice a test or an
+     *  investigation of them. An unresolved thesis can only be validated. Default 'commit'. */
+    readonly use?: 'commit' | 'validate';
+    /** The part of the thesis this choice actually relies on (its relationship, decision or open question). */
+    readonly relationshipUsed?: string }[];
+  /** When no Understanding thesis yet justifies the core choices: why the strategy first validates a founder goal or
+   *  evidence path before the theses can be resolved. The honest alternative to citing a thesis for show. */
+  readonly thesisDeferral?: string;
 }
 
 export interface StrategyChannelPriority {
@@ -135,6 +146,9 @@ export interface StrategyUnderstandingRead {
   readonly readings: string[];
   readonly exchanges: { readonly question: string; readonly answer: string }[];
   readonly updatedRead?: { readonly now: string; readonly changed?: string; readonly matters?: string; readonly next?: string };
+  /** The top strategic theses from Understanding with their status after the founder's answers (2026-10-16). Every
+   *  core choice must rely on a non-reversed thesis and/or explicit founder evidence (`core.reliesOn`). */
+  readonly theses?: { readonly id: string; readonly headline: string; readonly relationship: string; readonly implication: string; readonly question?: string; readonly decisions: string[]; readonly status: string; readonly because: string; readonly answers: string[] }[];
 }
 
 export interface StrategyModelOutput { readonly strategy: StrategyBundle; }

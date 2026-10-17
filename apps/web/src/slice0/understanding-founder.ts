@@ -14,6 +14,10 @@ type T = (key: string, vars?: Record<string, string>) => string;
 export interface FounderView {
   /** My first read: the strongest structural relationship, then what BB needs to know (≤ 3 sentences). */
   readonly firstRead: string;
+  /** What I think matters (the top strategic theses): ≤ 2, each a short headline + a concise interpretation. */
+  readonly matters: { readonly headline: string; readonly body: string }[];
+  /** True when the first read came from the founder-facing synthesis call (vs the deterministic projection). */
+  readonly composed: boolean;
   /** One thing I'm watching: the fork the B question settles, not yet treated as strategy (≤ 2 sentences), or ''. */
   readonly watching: string;
   /** The rationale shown under a question (fixed, neutral ones for the strategy-critical questions). */
@@ -28,10 +32,25 @@ export function joinList(items: string[], t: T): string {
 const firstSentence = (x: string): string => (x.match(/^[^.!?]+[.!?]?/)?.[0] ?? x).trim();
 const capital = (x: string): string => x.charAt(0).toUpperCase() + x.slice(1);
 
+type Composed = { myRead: string; matters: { headline: string; body: string }[] };
+
 /** null when the api sent no founder signals (an older api or snapshot): the card keeps its earlier layout. */
-export function composeFounderView(s: Structure, asks: Ask[], fallback: string, t: T): FounderView | null {
+export function composeFounderView(s: Structure, asks: Ask[], fallback: string, t: T, composed?: Composed | null): FounderView | null {
   const f = s.founder;
-  if (!f || !s.synthesis) return null;
+  // The founder-facing understanding from the theses needs no deterministic signals (it also serves older snapshots).
+  if (!composed?.myRead && !composed?.matters.length && (!f || !s.synthesis)) return null;
+  const neutralWhy = (a: Ask): string | null => (a.tier === 'A' && (a.dimension === 'acquisition' || a.dimension === 'performance') ? t(`arc.u3.why.${a.dimension}`) : null);
+  // The founder-facing understanding from the top strategic theses (governed upstream) leads when present; its three
+  // questions and their rationales are already the asks.
+  const det = f && s.synthesis ? deterministic(s, f, asks, fallback, t) : null;
+  if (composed?.myRead || composed?.matters.length) {
+    // An empty composed read (every sentence failed its checks) falls back to the deterministic one, never a blank card.
+    return { firstRead: composed.myRead || det?.firstRead || '', matters: composed.matters, watching: '', composed: true, whyOf: (a) => a.why || neutralWhy(a) || '' };
+  }
+  return det;
+}
+
+function deterministic(s: Structure, f: NonNullable<Structure['founder']>, asks: Ask[], fallback: string, t: T): FounderView {
   const has = (k: (typeof f.mechanisms)[number]) => f.mechanisms.includes(k);
   const places = f.places && f.places.length === 2 ? { a: f.places[0]!, b: f.places[1]! } : null;
 
@@ -61,7 +80,7 @@ export function composeFounderView(s: Structure, asks: Ask[], fallback: string, 
     const fact = f.placeTeam ? t('arc.u3.places.team', f.placeTeam) : f.placeFacts?.[0] ?? '';
     if (fact) watching = `${fact} ${t('arc.u5.watch.fork')}`;
   } else if (b) {
-    const h = s.hypotheses[b.resolves!];
+    const h = typeof b.resolves === 'number' ? s.hypotheses[b.resolves] : undefined;
     if (h?.interpretation.trim()) watching = `${firstSentence(h.interpretation)} ${t('arc.u5.watch.forkGeneric')}`;
   }
 
@@ -70,5 +89,5 @@ export function composeFounderView(s: Structure, asks: Ask[], fallback: string, 
   const placesFork = (a: Ask) => a.tier === 'B' && places !== null && a.resolves === f.placeHypothesis;
   const whyOf = (a: Ask): string => (a.tier === 'A' && (a.dimension === 'acquisition' || a.dimension === 'performance') ? t(`arc.u3.why.${a.dimension}`)
     : placesFork(a) ? t('arc.u5.why.places') : a.why);
-  return { firstRead, watching, whyOf };
+  return { firstRead, matters: [], composed: false, watching, whyOf };
 }

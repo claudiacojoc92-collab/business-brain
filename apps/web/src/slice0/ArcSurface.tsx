@@ -170,9 +170,9 @@ function UnderstandingReadView({ u, t }: { u: NonNullable<ArcView['understanding
       <ul className="s0-u-list">{r.untrusted.map((x, i) => <li key={i}>{x.finding}{(x.reason || x.why) ? <span className="s0-talk-note"> — {x.reason ? t(`arc.u2.reason.${x.reason}`) : x.why}</span> : null}</li>)}</ul>
     </>) : null}
   </>);
-  const asksCard = (whyOf: (a: (typeof r.asks)[number]) => string = (a) => a.why) => (r.asks.length ? (
+  const asksCard = (whyOf: (a: (typeof r.asks)[number]) => string = (a) => a.why, heading = 'arc.u2.need') => (r.asks.length ? (
     <div className="s0-u-card s0-u-card--question">
-      <div className="s0-u-card-label"><span className="s0-u-ic" aria-hidden="true">→</span>{t('arc.u2.need')}</div>
+      <div className="s0-u-card-label"><span className="s0-u-ic" aria-hidden="true">→</span>{t(heading)}</div>
       <ul className="s0-u-list">{r.asks.slice(0, 3).map((a, i) => (
         <li key={i}>{a.question}
           {/* Metrics that can diverge stay separate answers (clients vs revenue): one line each. */}
@@ -192,19 +192,27 @@ function UnderstandingReadView({ u, t }: { u: NonNullable<ArcView['understanding
     const hyps = s.hypotheses;
     // First read (2026-10-16): a point of view + the one fork BB is watching + the questions; the deeper read comes
     // after the founder answers (the updated mirror). Alternatives and reversals stay in the stored read; the inventory stays under "What I read".
-    const fv = composeFounderView(s, r.asks, u.does, t);
+    const fv = composeFounderView(s, r.asks, u.does, t, u.founderRead);
     if (fv) return (<>
-      <div className="s0-u-card s0-u-card--read" data-understanding-first-read="">
-        <div className="s0-u-card-label">{t('arc.u5.h.read')}</div>
-        <p className="s0-u-card-lead">{fv.firstRead}</p>
-      </div>
+      {fv.firstRead ? (
+        <div className="s0-u-card s0-u-card--read" data-understanding-first-read="">
+          <div className="s0-u-card-label">{t('arc.u5.h.read')}</div>
+          <p className="s0-u-card-lead">{fv.firstRead}</p>
+        </div>
+      ) : null}
+      {fv.matters.length ? (
+        <div className="s0-u-card" data-understanding-matters-here="">
+          <div className="s0-u-card-label">{t('arc.u6.h.matters')}</div>
+          <ul className="s0-u-list s0-u-hyps">{fv.matters.map((m, i) => <li key={i} data-understanding-thesis="">{m.headline ? <strong>{m.headline}. </strong> : null}{m.body}</li>)}</ul>
+        </div>
+      ) : null}
       {fv.watching ? (
         <div className="s0-u-card" data-understanding-watching="">
           <div className="s0-u-card-label">{t('arc.u5.h.watching')}</div>
           <p className="s0-u-card-lead">{fv.watching}</p>
         </div>
       ) : null}
-      {asksCard(fv.whyOf)}
+      {asksCard(fv.whyOf, fv.composed ? 'arc.u6.h.next' : undefined)}
       <details className="s0-u-card s0-u-whatiread" data-understanding-what-i-read="">
         <summary className="s0-u-card-label">{t('arc.u2.whatIRead')}</summary>
         {lead}

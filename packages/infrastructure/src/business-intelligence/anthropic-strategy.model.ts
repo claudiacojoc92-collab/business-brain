@@ -32,7 +32,9 @@ const SHAPE = `{
     "assumptions": [{ "statement": "a load-bearing assumption named honestly" }],
     "tradeOffs": [{ "choosing": "", "over": "", "why": "" }],
     "notNow": [{ "item": "something deliberately NOT done now", "reason": "why not now" }],
-    "reconsiderTriggers": [{ "condition": "a real, checkable condition that would make BB reconsider the bet" }]
+    "reconsiderTriggers": [{ "condition": "a real, checkable condition that would make BB reconsider the bet" }],
+    "reliesOn": [{ "component": "coreBet | diagnosis | offerDirection | positioningDirection | channel:<name> | notNow", "theses": ["T-ids from THE TOP STRATEGIC THESES, if given"], "founderRefs": ["F-refs of founder evidence"], "use": "commit | validate", "relationshipUsed": "the part of the thesis this choice relies on (its relationship, decision or open question), in a few words" }],
+    "thesisDeferral": "ONLY if no thesis yet justifies the core choices: why this strategy first validates a founder goal or evidence path before the theses can be resolved" 
   },
   "branch": {
     "market": "", "language": "", "messagingDirection": "",
@@ -162,6 +164,34 @@ function readBlock(r: NonNullable<StrategyModelInput['understandingRead']>): str
     ...(u ? ['Updated read shown to the founder:', `- What I understand now: ${u.now}`,
       ...(u.changed ? [`- What changed my read: ${u.changed}`] : []), ...(u.matters ? [`- What matters most: ${u.matters}`] : []),
       ...(u.next ? [`- What I'd look at next: ${u.next}`] : [])] : []),
+    ...(r.theses?.length ? [
+      '', 'THE TOP STRATEGIC THESES FROM UNDERSTANDING (with their status after the founder\'s answers). Build the strategy ON them:',
+      'the core bet, the diagnosis and the main channel choice must each rely on at least one thesis that is NOT reversed',
+      'and/or on explicit founder evidence (F-refs), recorded in core.reliesOn with how you use it ("commit" or "validate").',
+      'STATUS DECIDES WHAT YOU MAY DO WITH A THESIS:',
+      '- strengthened: may support a committed recommendation ("commit").',
+      '- sharpened: may support a recommendation only within what the answer actually clarified.',
+      '- unresolved or open: ONLY an investigation, a validation, an experiment or an information-gathering move ("validate").',
+      '  Never state it as the diagnosis, "the bottleneck", "the priority" or "the highest potential". Write the choice as',
+      '  "test / validate / find out whether X first".',
+      '- weakened: cannot carry the core bet without new evidence. reversed: cannot support any choice.',
+      'CITE A THESIS ONLY WHERE THE CHOICE ACTUALLY RELIES ON IT, and name in "relationshipUsed" which part (its relationship,',
+      'decision or open question). A thesis that is merely nearby in topic must NOT be cited. If the core choices are driven',
+      'by the founder\'s goal or evidence rather than a thesis, say so in core.thesisDeferral (what is validated first, and',
+      'which thesis it leaves open) instead of attaching a thesis. No traceability for show.',
+      'FOUNDER FACTS AT THEIR OWN STRENGTH: "X brings less" never becomes WHY it brings less, nor what customers, patients or',
+      'referrers do, know, prefer or trust, unless the founder said it. An unestablished cause or behaviour is something to',
+      'validate ("test whether…"), never a fact. Certainty and magnitude never exceed the evidence.',
+      'No superlatives or potential claims (highest potential, biggest opportunity, strongest engine, central bottleneck, most',
+      'profitable, best channel, clearest path) or comparisons ("X is better than Y") unless the founder or business evidence',
+      'makes the comparison. A role is a behaviour too ("doctors are natural referrers"): say "test whether doctors refer".',
+      'Never say what customers, patients, doctors or buyers want, know, believe, trust, prefer, look for, expect, feel or',
+      'habitually do, unless the founder said it. Say the plan instead ("test whether doctors refer patients").',
+      'No absolutes ("the only way", "no other channel") and no contrast the evidence does not make. Capacity, economics',
+      'and performance are facts: never state them ("has capacity", "the engines that already work") unless the evidence does.',
+      'These apply to EVERY field: diagnosis, bet and its whys, offer, positioning, channels, not-now and rationales. Never mention thesis ids.',
+      ...r.theses.map((t) => `- ${t.id} [${t.status}${t.because ? `: ${t.because}` : ''}] ${t.headline}. ${t.relationship} ${t.implication} (decisions: ${t.decisions.join(', ')})${t.answers.length ? `\n  founder answered: ${t.answers.join(' | ')}` : ''}`),
+    ] : []),
   ];
 }
 
@@ -196,8 +226,8 @@ export class AnthropicStrategyModel implements IStrategyModelPort {
     const user = [
       userBlock(input),
       '', 'CURRENT STRATEGY (JSON):', JSON.stringify(input.current),
-      '', `A gate rejected the "${input.failedComponent}" component. REASON: ${input.failureReason}`,
-      '', `Repair ONLY the "${input.failedComponent}" part (and anything strictly required for coherence). Keep`,
+      '', `A gate rejected these component(s): ${input.failedComponent}. REASONS (each line names its component, the exact sentence and why):`, input.failureReason,
+      '', `Repair ONLY those part(s) (and anything strictly required for coherence). Keep`,
       'everything else. Preserve business-specificity and the cross-source grounding. Do NOT fall back to a',
       'generic sentence, do NOT choose an outcome prediction, do NOT claim market superiority, and do NOT',
       'upgrade a founder-state type. Return the COMPLETE strategy JSON in the same shape.',
@@ -215,6 +245,9 @@ export class AnthropicStrategyModel implements IStrategyModelPort {
       'audience↔channel, constraints↔execution, resources↔expectations, strategy↔CTA), goalFit, founderFit,',
       'prioritization (a real bet, not "do everything"), resourceFit, isStrategyNotTactics, oppositeIsAlsoAdvice',
       '(a real decision has a coherent opposite another business could choose; platitudes FAIL).',
+      'For oppositeIsAlsoAdvice only: a not-now item or decision whose reason ties it to the current goal or to what must be',
+      'validated first ("not X yet, because Y must be validated first") already engages its opposite; do not fail it for',
+      'not debating that opposite further. This does not change any other dimension.',
       'Be conservative: pass only what is genuinely satisfied. Name the component to repair when you fail one.',
     ].join('\n');
     const user = [userBlock(input), '', 'STRATEGY (JSON):', JSON.stringify(input.strategy)].join('\n');

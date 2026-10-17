@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect } from 'vitest';
-import { StrategyService, type StrategyDeps } from '../../strategy/index';
+import { StrategyService, addCapacityPrerequisite, resolveJudgeFailures, engagesBySequence, type StrategyDeps } from '../../strategy/index';
 import type { StrategyBundle, StrategyModelOutput, StrategyJudgeOutput } from '../../strategy/contracts';
 
 const UNDERSTANDING = {
@@ -19,8 +19,8 @@ function validBundle(): StrategyBundle {
       coreBet: {
         priority: 'Convert the warm healthcare software referral network into retainer scoping conversations',
         deprioritized: 'Broad content-led inbound to a cold audience',
-        whyOverAlternative: 'The homepage conversion path is broken and hours are limited, so warm referrals reach retainer buyers faster than rebuilding cold inbound',
-        relationToGoal: 'Retainer clients come fastest from warm healthcare relationships', relationToBottleneck: 'Routes around the broken homepage next-action',
+        whyOverAlternative: 'The homepage conversion path is broken and hours are limited, so warm referrals fit the hours and avoid rebuilding cold inbound first',
+        relationToGoal: 'The goal is retainers, and warm healthcare relationships are the first route to test', relationToBottleneck: 'Routes around the broken homepage next-action',
         founderFit: 'Uses referrals, not daily personal video', resourceFit: 'Fits 8 hours a week and a small budget',
       },
       offerDirection: 'Bespoke Rails consulting as retainers', positioningDirection: 'Senior engineering expertise for healthcare software teams',
@@ -34,7 +34,7 @@ function validBundle(): StrategyBundle {
     },
     branch: {
       market: 'US healthcare software consulting', language: 'en', messagingDirection: 'Delivery credibility through concrete healthcare software case studies',
-      channelPriorities: [{ channel: 'Warm referral outreach to past healthcare software contacts', whyGoal: 'Reaches retainer buyers who know the delivery track record', whyAudience: 'These are the engineering leaders who buy retainers', whyResource: 'Fits a few hours a week', overAlternative: 'Prioritized over cold content because the homepage path is broken', assumption: 'The past network is still reachable' }],
+      channelPriorities: [{ channel: 'Warm referral outreach to past healthcare software contacts', whyGoal: 'Reaches the past healthcare software contacts directly', whyAudience: 'These are the engineering leaders who buy retainers', whyResource: 'Fits a few hours a week', overAlternative: 'Prioritized over cold content because the homepage path is broken', assumption: 'The past network is still reachable' }],
       acquisitionApproach: 'Direct warm outreach to a scoping conversation', contentRole: 'Minimal — case studies as proof, no personal video',
       ctaDirection: 'One clear route to book a healthcare retainer scoping call',
     },
@@ -118,6 +118,18 @@ describe('StrategyService — lifecycle + repair + adoption', () => {
     const rec = await new StrategyService(m.deps).generate(P.businessId, P.businessName, P.language);
     expect(rec.status).toBe('proposal');
     expect(m.calls().repairCalls).toBeGreaterThanOrEqual(1);
+  });
+
+  it('repairs every failing component in one call, the central choice first (2026-10-17)', async () => {
+    const m = makeDeps({ generate: async () => ({ strategy: invalidBundle() }) });
+    const asked: any[] = [];
+    m.deps.model.repair = async (i: any) => { asked.push(i); return { strategy: validBundle() }; };
+    const rec = await new StrategyService(m.deps).generate(P.businessId, P.businessName, P.language);
+    expect(rec.status).toBe('proposal');
+    expect(asked).toHaveLength(1);
+    expect(asked[0].failedComponent).toBe('coreBet, notNow');
+    expect(asked[0].failureReason).toMatch(/^\[coreBet\]/);
+    expect(asked[0].failureReason).toMatch(/\[notNow\]/);
   });
 
   it('fails closed to insufficient when repair cannot fix it (invalid Candidate cannot become Proposal)', async () => {
@@ -248,5 +260,87 @@ describe('StrategyService — M3.5 founder correction consistency', () => {
     const m = makeDeps({ generate: async () => ({ strategy: validBundle() }) });
     await new StrategyService(m.deps).generate(P.businessId, P.businessName, P.language);
     expect(m.lastInput().businessCorrections).toEqual([]);
+  });
+});
+
+// ── NON-ITERATIVE CLOSE OF THE JUDGED LAYER (2026-10-17) ──
+
+function withSecondChannel(): StrategyBundle {
+  const b = validBundle();
+  return { ...b, branch: { ...b.branch!, channelPriorities: [...b.branch!.channelPriorities, { channel: 'Guest spots on healthcare engineering podcasts', whyGoal: 'Adds a second route to retainer conversations.', whyAudience: 'A generic podcast pitch sent to engineering shows.', whyResource: 'A few hours a month.', overAlternative: 'Kept second to warm referrals.', assumption: 'Shows accept guests.' }] } };
+}
+const GATE_CTX: any = {
+  business: [{ ref: 'B1', text: 'Offer: bespoke Rails consulting for healthcare software teams' }, { ref: 'B2', text: 'Conversion paths on the site: /hire-us page exists but the homepage gives no clear next action' }],
+  founder: [{ ref: 'F1', kind: 'goal', statement: 'land 10 recurring retainer clients' }, { ref: 'F2', kind: 'horizon', statement: '6 months' }, { ref: 'F3', kind: 'constraint', statement: 'must not depend on daily personal video' }, { ref: 'F4', kind: 'resource', statement: '8 hours a week and a small budget' }],
+  observation: [],
+};
+const fail = (dimension: string, reason: string, component = 'channelPriorities') => ({ dimension, pass: false, component, reason });
+
+describe('capacity precondition: verify delivery capacity before increasing demand', () => {
+  const withCapacityAssumption = (statement: string): StrategyBundle => { const b = validBundle(); return { ...b, core: { ...b.core, assumptions: [...b.core.assumptions, { statement }] } }; };
+  it('a capacity the bet depends on and the evidence does not establish becomes the first check, naming who delivers', () => {
+    const r = addCapacityPrerequisite(withCapacityAssumption('Kinetoterapeutul de la Decebal are capacitate disponibilă pentru pacienți noi.'), GATE_CTX, 'ro');
+    expect(r.added).toBe('Înainte să aduci cerere nouă, verifici câte locuri libere pe săptămână are kinetoterapeutul de la Decebal.');
+    expect(r.bundle.core.coreBet.resourceFit.startsWith(r.added!)).toBe(true);
+    expect(addCapacityPrerequisite(r.bundle, GATE_CTX, 'ro').added).toBeNull(); // idempotent
+  });
+  it('no deliverer in the sentence → the generic check; evidence that states capacity → nothing added', () => {
+    expect(addCapacityPrerequisite(withCapacityAssumption('There is spare capacity for new retainers.'), GATE_CTX, 'en').added).toBe('Before you bring in new demand, check how much free capacity per week you have for this service.');
+    const known = { ...GATE_CTX, business: [...GATE_CTX.business, { ref: 'B3', text: 'Two free slots per week; capacity for 4 more clients' }] };
+    expect(addCapacityPrerequisite(withCapacityAssumption('The team has capacity for new retainers.'), known, 'en').added).toBeNull();
+    const gap = { ...GATE_CTX, business: [...GATE_CTX.business, { ref: 'B3', text: 'Unknown: capacity of the team' }] };
+    expect(addCapacityPrerequisite(withCapacityAssumption('The team has capacity for new retainers.'), gap, 'en').added).toMatch(/^Before you bring in new demand, check how many free slots per week the team has\.$/);
+    expect(addCapacityPrerequisite(validBundle(), GATE_CTX, 'en').added).toBeNull(); // the bet names no capacity
+  });
+});
+
+describe('judge failures left after the repairs: secondary parts are dropped, the central choice never', () => {
+  it('a failure quoting a secondary channel (even paraphrased) drops that channel and keeps the first', () => {
+    const r = resolveJudgeFailures(withSecondChannel(), [fail('specificity', "The podcast channel is generic: 'a generic podcast pitch to engineering shows' fits any consultancy.")], GATE_CTX);
+    expect(r.unresolved).toEqual([]);
+    expect(r.bundle.branch!.channelPriorities.map((c) => c.channel)).toEqual(['Warm referral outreach to past healthcare software contacts']);
+    expect(r.resolved[0]!.how).toMatch(/dropped secondary channel "Guest spots/);
+  });
+  it('a failure on the diagnosis or the bet, on the only channel, or with nothing to trace still fails closed', () => {
+    expect(resolveJudgeFailures(withSecondChannel(), [fail('specificity', "'the homepage gives healthcare software buyers no clear next action' is vague", 'diagnosis')], GATE_CTX).unresolved).toHaveLength(1);
+    expect(resolveJudgeFailures(withSecondChannel(), [fail('specificity', "'warm referral outreach to past healthcare software contacts' is generic")], GATE_CTX).unresolved).toHaveLength(1);
+    expect(resolveJudgeFailures(withSecondChannel(), [fail('coherence', 'The strategy does not hang together.')], GATE_CTX).unresolved).toHaveLength(1);
+  });
+  it('a decision deferred until a validation engages its opposite; one that does not is dropped', () => {
+    const b = { ...validBundle(), decisions: [
+      { ...validBundle().decisions[0]!, key: 'no-paid-ads-now', rationale: 'Not yet: first find out whether warm referrals produce scoping calls.' },
+      { ...validBundle().decisions[0]!, key: 'podcast-later', rationale: 'Podcasts can wait.' },
+    ] };
+    const r = resolveJudgeFailures(b as StrategyBundle, [fail('oppositeIsAlsoAdvice', "The decision 'no-paid-ads-now' is a timing preference; 'podcast-later' never engages its opposite.", 'decisions')], GATE_CTX);
+    expect(r.unresolved).toEqual([]);
+    expect(r.bundle.decisions.map((d) => d.key)).toEqual(['no-paid-ads-now']);
+    expect(engagesBySequence('Lasă reclamele plătite pentru mai târziu. Nu știi încă dacă medicii trimit pacienți.')).toBe(true);
+    expect(engagesBySequence('Podcasts can wait.')).toBe(false);
+  });
+  it('a capacity resourceFit failure is settled once capacity is checked before the bet', () => {
+    const b = addCapacityPrerequisite({ ...validBundle(), core: { ...validBundle().core, assumptions: [{ statement: 'The team has capacity for new retainers.' }] } }, GATE_CTX, 'en').bundle;
+    expect(resolveJudgeFailures(b, [fail('resourceFit', 'The strategy assumes available capacity without checking it.', 'coreBet')], GATE_CTX).unresolved).toEqual([]);
+    expect(resolveJudgeFailures(validBundle(), [fail('resourceFit', 'The strategy assumes available capacity without checking it.', 'coreBet')], GATE_CTX).unresolved).toHaveLength(1);
+  });
+});
+
+describe('StrategyService — judged layer closes without another model call', () => {
+  const judgeAlways = (verdict: any) => async () => ({ verdicts: [{ dimension: 'grounding', pass: true, component: 'coreBet', reason: '' }, verdict] });
+  it('a judge that keeps failing a secondary channel → Proposal without that channel, the settlement recorded', async () => {
+    const events: any[] = [];
+    const m = makeDeps({ generate: async () => ({ strategy: withSecondChannel() }), repair: async () => ({ strategy: withSecondChannel() }), judge: judgeAlways(fail('specificity', "'a generic podcast pitch sent to engineering shows' fits any consultancy")) });
+    m.deps.log = (e) => events.push(e);
+    const rec = await new StrategyService(m.deps).generate(P.businessId, P.businessName, P.language);
+    expect(rec.status).toBe('proposal');
+    expect(rec.bundle.branch!.channelPriorities).toHaveLength(1);
+    expect(rec.gateResults.find((g) => g.gate === 'judge:specificity')!.detail).toMatch(/^settled: dropped secondary channel/);
+    expect(events.filter((e) => e.type === 'judge_round')).toHaveLength(3); // every round traced
+    expect(events.find((e) => e.type === 'judge_repair')).toMatchObject({ component: 'channelPriorities' });
+    expect(events.filter((e) => e.type === 'judge_repair_result')).toHaveLength(2);
+  });
+  it('a judge that keeps failing the diagnosis → still insufficient', async () => {
+    const m = makeDeps({ generate: async () => ({ strategy: validBundle() }), repair: async () => ({ strategy: validBundle() }), judge: judgeAlways(fail('specificity', "'warm interest never converts to a scoping call' is vague", 'diagnosis')) });
+    const rec = await new StrategyService(m.deps).generate(P.businessId, P.businessName, P.language);
+    expect(rec.status).toBe('insufficient');
   });
 });

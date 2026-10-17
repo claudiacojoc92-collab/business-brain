@@ -4,6 +4,7 @@ import { canonicalTodayMove, deriveAllReadiness, selectToday, todayPlanAction } 
 import type { GovernedUnderstanding, ClaimEvidence, StructuralHypothesis } from '../bi/index';
 import type { MirrorExchange, MirrorRead } from '../mirror/contracts';
 import type { StrategyUnderstandingRead } from '../strategy/contracts';
+import { compactRecord, governTheses, thesisInput, thesesWithStatus, type IThesisModelPort, type ThesisRecord, type ThesisStatus } from './theses';
 import { clipQuote } from '../bi/evidence-anchor';
 import { normalizeUnderstandingShapes, stringList } from '../bi/model-shapes';
 import { agendaUnknowns, performanceEvidence, isHousekeeping, critiquesWording, factOnly, restatesNotShown, makesUnlicensedClaim, makesUnlicensedSoWhatClaim, sameInsight, firstSentence } from '../bi/index';
@@ -20,7 +21,7 @@ import { spokenView } from './spoken-view';
 
 /** Narrow ports onto the existing engines — the arc REUSES them, it does not reimplement them. */
 export interface ArcDeps {
-  understanding: { latest(businessId: string): Promise<{ understanding: GovernedUnderstanding; sourceLanguage?: string | null } | null> };
+  understanding: { latest(businessId: string): Promise<{ id?: string; understanding: GovernedUnderstanding; sourceLanguage?: string | null } | null> };
   aha1: { latest(businessId: string): Promise<{ findings: { finding: string }[] } | null> };
   conversation: {
     status(businessId: string): Promise<'active' | 'paused' | 'ready_for_aha2' | null>;
@@ -30,7 +31,7 @@ export interface ArcDeps {
     awaitingGoal(businessId: string): Promise<boolean>;
     coverage(businessId: string): Promise<{ key: string; covered: boolean }[]>;
   };
-  mirror: { build(businessId: string, businessName: string, language: string, context?: { exchanges?: MirrorExchange[] }): Promise<{ contrasts: { founderWords: string; against: string; tension: string }[]; read?: MirrorRead }> };
+  mirror: { build(businessId: string, businessName: string, language: string, context?: { exchanges?: MirrorExchange[]; theses?: ThesisRecord }): Promise<{ contrasts: { founderWords: string; against: string; tension: string }[]; read?: MirrorRead; moves?: { thesisId: string; status: ThesisStatus; because: string }[] }> };
   strategy: {
     getCurrent(businessId: string): Promise<{ record: StrategyVersionRecord } | null>;
     proposalOrGenerate(businessId: string, businessName: string, language: string, assumedGoal?: string | null, read?: StrategyUnderstandingRead | null): Promise<StrategyVersionRecord>;
@@ -49,6 +50,9 @@ export interface ArcDeps {
   founderContext: (businessId: string) => Promise<string[]>;
   email: IEmailModelPort;
   reflect: ICorrectionReflectionModel;
+  /** Strategic theses (2026-10-16): ONE call over the governed understanding, then eligibility, ranking, question
+   *  selection and founder copy in code. Absent ⇒ the card and the flow keep their existing behaviour. */
+  theses?: IThesisModelPort;
   /** Re-tells the week as a strategist's chapter. Absent (tests) ⇒ the plan's own wording in the same shape. */
   weekStory?: IWeekStoryModel;
   /** Everything the founder SAID (founder_state, any status but deleted): the container's "what you told me" lane
@@ -83,12 +87,12 @@ export class ArcService {
   constructor(private readonly deps: ArcDeps) {}
 
   /** Compose the whole-arc view for the current moment — durable flags + typed sources + igConnected + savedEmail from the route. */
-  async view(businessId: string, businessName: string, language: string, flags: ArcFlags, sources: ArcSource[], savedEmail: ArcEmail | null, igConnected = false, savedMirror: ArcMirror | null = null, savedWeekStory: ArcWeekStory | null = null, savedContainer: { answered: { index: number; answer: string }[]; answeredKey: string } | null = null): Promise<ArcView> {
+  async view(businessId: string, businessName: string, language: string, flags: ArcFlags, sources: ArcSource[], savedEmail: ArcEmail | null, igConnected = false, savedMirror: ArcMirror | null = null, savedWeekStory: ArcWeekStory | null = null, savedContainer: { answered: { index: number; answer: string }[]; answeredKey: string } | null = null, savedTheses: ThesisRecord | null = null): Promise<ArcView> {
     // ONE voice on every BB-written field (operator, 2026-10-12); founder words are never rewritten.
-    return spokenView(await this.viewRaw(businessId, businessName, language, flags, sources, savedEmail, igConnected, savedMirror, savedWeekStory, savedContainer));
+    return spokenView(await this.viewRaw(businessId, businessName, language, flags, sources, savedEmail, igConnected, savedMirror, savedWeekStory, savedContainer, savedTheses));
   }
 
-  private async viewRaw(businessId: string, businessName: string, language: string, flags: ArcFlags, sources: ArcSource[], savedEmail: ArcEmail | null, igConnected: boolean, savedMirror: ArcMirror | null, savedWeekStory: ArcWeekStory | null, savedContainer: { answered: { index: number; answer: string }[]; answeredKey: string } | null): Promise<ArcView> {
+  private async viewRaw(businessId: string, businessName: string, language: string, flags: ArcFlags, sources: ArcSource[], savedEmail: ArcEmail | null, igConnected: boolean, savedMirror: ArcMirror | null, savedWeekStory: ArcWeekStory | null, savedContainer: { answered: { index: number; answer: string }[]; answeredKey: string } | null, savedTheses: ThesisRecord | null = null): Promise<ArcView> {
     const snap = await this.deps.understanding.latest(businessId);
     const status = await this.deps.conversation.status(businessId);
     const current = await this.deps.strategy.getCurrent(businessId);
@@ -113,8 +117,28 @@ export class ArcService {
       case 'pour_in':
         return { ...base, sources, igConnected };
 
-      case 'understanding':
-        return { ...base, understanding: this.projectUnderstanding(u, (await this.deps.aha1.latest(businessId))?.findings ?? []) };
+      case 'understanding': {
+        const card = this.projectUnderstanding(u, (await this.deps.aha1.latest(businessId))?.findings ?? []);
+        // The theses for THIS snapshot: reused when cached, else composed once (the route persists the new record).
+        const snapId = snap?.id ?? null;
+        const cached = snapId && savedTheses?.snapshotId === snapId ? savedTheses : null;
+        const record = cached ?? (snapId && u ? await this.composeTheses(businessId, businessName, language, u, snapId) : null);
+        if (!record) return { ...base, understanding: card };
+        return {
+          ...base,
+          understanding: {
+            ...card,
+            founderRead: { snapshotId: record.snapshotId, myRead: record.founder.myRead, matters: record.founder.matters.map((m) => ({ headline: m.headline, body: m.body })) },
+            // The three questions come from the theses (the conversation asks exactly these, verbatim). A v1 snapshot
+            // (no structured read) gets a minimal read so the card renders the same founder-facing layout.
+            read: {
+              ...(card.read ?? { model: [], unknownDimensions: [], notConcluding: [], untrusted: [], structure: { synthesis: '', hypotheses: [], stageNotNamed: true } }),
+              asks: record.questions.map((q) => ({ question: q.question, why: q.why, tier: q.tier, ...(q.dimension ? { dimension: q.dimension } : {}), ...(q.resolves ? { resolves: q.resolves } : {}) })),
+            },
+          },
+          ...(cached ? {} : { internal: { theses: record } }),
+        };
+      }
 
       case 'conversation':
         // Gate close (Part 2): if the founder has engaged and every non-goal need is closed but no goal was
@@ -130,9 +154,10 @@ export class ArcService {
         try {
           // The founder's answers, paired to what BB asked: the updated read holds them against the prior read.
           const exchanges = pairExchanges(await this.deps.conversation.turns(businessId).catch(() => [] as ArcTurn[]));
-          const m = await this.deps.mirror.build(businessId, businessName, language, { exchanges });
+          const theses = snap && savedTheses?.snapshotId === snap.id ? savedTheses : null;
+          const m = await this.deps.mirror.build(businessId, businessName, language, { exchanges, ...(theses ? { theses } : {}) });
           const c = m.contrasts[0] ?? null;
-          const read = m.read ? { read: m.read } : {};
+          const read = { ...(m.read ? { read: m.read } : {}), ...(m.moves?.length ? { moves: m.moves } : {}) };
           return { ...base, mirror: c ? { founderWords: c.founderWords, against: c.against, tension: c.tension, ...read } : m.read ? { founderWords: '', against: '', tension: '', ...read } : null };
         } catch (e) {
           this.deps.log?.({ type: 'arc_moment_threw', detail: JSON.stringify({ businessId, moment: 'mirror', err: errText(e) }) });
@@ -150,7 +175,8 @@ export class ArcService {
         }
         let rec;
         // Strategy continuity: the structural read, the answers and the updated read the founder just saw.
-        const read = strategyRead(u, pairExchanges(await this.deps.conversation.turns(businessId).catch(() => [] as ArcTurn[])), savedMirror?.read ?? null);
+        const theses = snap && savedTheses?.snapshotId === snap.id ? savedTheses : null;
+        const read = strategyRead(u, pairExchanges(await this.deps.conversation.turns(businessId).catch(() => [] as ArcTurn[])), savedMirror?.read ?? null, theses, savedMirror?.moves ?? []);
         try { rec = await this.deps.strategy.proposalOrGenerate(businessId, businessName, language, assumedGoal, read); }
         catch (e) {
           this.deps.log?.({ type: 'arc_moment_threw', detail: JSON.stringify({ businessId, moment: 'strategy', err: errText(e) }) });
@@ -428,6 +454,16 @@ export class ArcService {
     return guardWeekStory(raw, input, plan.planVersionId);
   }
 
+  /** ONE thesis call over the governed understanding, governed here. Never throws; null ⇒ existing behaviour. */
+  private async composeTheses(businessId: string, businessName: string, language: string, u: GovernedUnderstanding, snapshotId: string): Promise<ThesisRecord | null> {
+    const input = thesisInput(u, businessName, language);
+    if (!input || !this.deps.theses) return null;
+    const out = await this.deps.theses.compose(input).catch(() => null);
+    const record = governTheses(out, input, u, snapshotId);
+    this.deps.log?.({ type: 'arc_theses', detail: JSON.stringify({ businessId, snapshotId, composed: Boolean(out), candidates: out?.theses?.length ?? 0, eligible: record?.theses.filter((t) => t.eligibility.pass).length ?? 0, top: record?.top ?? [], dropped: record?.dropped.length ?? 0 }) });
+    return record ? compactRecord(record) : null;
+  }
+
   async reflectCorrection(businessId: string, businessName: string, language: string, correction: string): Promise<CorrectionReflection> {
     const snap = await this.deps.understanding.latest(businessId);
     const u = this.projectUnderstanding(snap?.understanding ?? null, (await this.deps.aha1.latest(businessId))?.findings ?? []);
@@ -633,14 +669,26 @@ export function pairExchanges(turns: ArcTurn[]): MirrorExchange[] {
   return out;
 }
 
-/** What strategy needs to stay consistent with the read the founder just saw (null when there is no structural read). */
-export function strategyRead(u: GovernedUnderstanding | null, exchanges: MirrorExchange[], read: MirrorRead | null): StrategyUnderstandingRead | null {
+/**
+ * What strategy needs to stay consistent with the read the founder just saw (null when there is no structural read):
+ * the synthesis, the readings, the answers, the updated read, and the top theses with their current status and the
+ * founder answers paired to them (by the question each thesis was asked through).
+ */
+export function strategyRead(u: GovernedUnderstanding | null, exchanges: MirrorExchange[], read: MirrorRead | null, theses: ThesisRecord | null = null, moves: { thesisId: string; status: ThesisStatus; because: string }[] = []): StrategyUnderstandingRead | null {
   const st = u?.read?.structure;
-  if (!st?.synthesis.trim()) return null;
+  if (!st?.synthesis.trim() && !theses) return null;
+  const answered = exchanges.filter((e) => e.answer.trim() && !/^\(skip\)$/i.test(e.answer.trim()));
   return {
-    synthesis: st.synthesis.trim(),
-    readings: st.hypotheses.map((h) => h.interpretation.trim()).filter(Boolean),
-    exchanges: exchanges.filter((e) => e.answer.trim() && !/^\(skip\)$/i.test(e.answer.trim())).map((e) => ({ question: e.asked, answer: e.answer })),
+    synthesis: st?.synthesis.trim() ?? '',
+    readings: (st?.hypotheses ?? []).map((h) => h.interpretation.trim()).filter(Boolean),
+    exchanges: answered.map((e) => ({ question: e.asked, answer: e.answer })),
     ...(read ? { updatedRead: read } : {}),
+    ...(theses ? { theses: thesesWithStatus(theses, moves).map((t) => {
+      const asked = theses.questions.filter((q) => q.resolves === t.id).map((q) => q.question.trim());
+      return {
+        id: t.id, headline: t.headline, relationship: t.relationship, implication: t.implication, question: asked[0] ?? t.question, decisions: t.decisions, status: t.status, because: t.because,
+        answers: answered.filter((e) => asked.some((q) => e.asked.trim().endsWith(q))).map((e) => e.answer),
+      };
+    }) } : {}),
   };
 }

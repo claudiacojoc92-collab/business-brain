@@ -83,7 +83,7 @@ export interface ArcUnderstanding {
     readonly asks: { readonly question: string; readonly why: string; readonly parts?: string[];
       /** Why the question holds its place (A strategy-critical / B settles hypothesis `resolves` / C information value)
        *  and the dimension it fills: the founder view words "where I'd look first" from these, never from new facts. */
-      readonly tier?: 'A' | 'B' | 'C'; readonly dimension?: string; readonly resolves?: number }[];
+      readonly tier?: 'A' | 'B' | 'C'; readonly dimension?: string; readonly resolves?: number | string }[];
     /** Structural synthesis (2026-10-15; absent on older snapshots): what BB thinks the business is, the reversible
      *  hypotheses behind it (each with what else could explain it and what would change BB's mind), and whether BB is
      *  deliberately not naming a stage. When present, the card leads with it and the model above goes behind "What I read". */
@@ -111,6 +111,9 @@ export interface ArcUnderstanding {
       };
     };
   };
+  /** Founder-facing understanding (2026-10-16), written from the top strategic theses and re-checked: MY READ + WHAT I
+   *  THINK MATTERS. Absent ⇒ the card composes its deterministic first read. The questions are in `read.asks`. */
+  readonly founderRead?: { readonly snapshotId: string; readonly myRead: string; readonly matters: { readonly headline: string; readonly body: string }[] };
   readonly stage: {
     readonly stage: 'validating' | 'growth' | 'plateau'; readonly evidence: string[];
     /** A named part of the business at a different stage than the core (e.g. "the medical channel": validating). */
@@ -143,7 +146,9 @@ export interface ArcTurn { readonly id: string; readonly role: 'founder' | 'bb';
 export interface ArcMirror { readonly founderWords: string; readonly against: string; readonly tension: string;
   /** The UPDATED READ (2026-10-16): when present the card leads with it; the contrast stays the fallback (it may be
    *  empty when only the read stood). */
-  readonly read?: { readonly now: string; readonly changed?: string; readonly matters?: string; readonly next?: string } }
+  readonly read?: { readonly now: string; readonly changed?: string; readonly matters?: string; readonly next?: string };
+  /** Internal (persisted with the mirror, never rendered): how the founder's answers moved each strategic thesis. */
+  readonly moves?: { readonly thesisId: string; readonly status: 'open' | 'strengthened' | 'weakened' | 'reversed' | 'sharpened' | 'unresolved'; readonly because: string }[] }
 export interface ArcStrategy { readonly bet: string; readonly over: string; readonly horizon: string; readonly tradeOffs: string[]; readonly notNow: string[]; readonly reconsider: string[]; readonly proposalId: string | null; readonly adoptable: boolean;
   /** The constraint the strategy ASSUMED as the goal (the founder gave none before the cap); null when the goal is the founder's. */
   readonly assumedGoal?: string | null }
@@ -213,6 +218,9 @@ export interface ArcGoalCandidate {
 }
 
 export interface ArcView {
+  /** Internal (2026-10-16): a strategic-thesis record composed during this view, for the route to persist (per
+   *  snapshot) and strip before responding. Never rendered. */
+  readonly internal?: { readonly theses?: import('./theses').ThesisRecord };
   readonly moment: ArcMoment;
   readonly businessName: string;
   // per-moment status — never fails the whole surface. `need_goal` is a POSITIVE step (confirm your goal), not an

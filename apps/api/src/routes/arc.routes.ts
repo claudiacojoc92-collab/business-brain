@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import multipart from '@fastify/multipart';
 import type { ServerDeps } from '../server';
 import { AuthenticationError, NotFoundError, ValidationError } from '@bb/shared';
-import { fetchDocument, extractReadableText } from '@bb/infrastructure';
+import { fetchDocument, extractReadableText, readThesisRecord, recordThesisRecord } from '@bb/infrastructure';
 import { recordFounderEvent, recordFounderEventAwaited, readArcFlags, readArcSources, readArcEmail, recordArcCorrectionReflection, readArcCorrectionReflection, recordArcMirror, readArcMirror, recordArcWeekStory, readArcWeekStory, recordArcContainer, readArcContainer, recordArcEmail, type FounderEventType } from '../telemetry/founder-events';
 import { detectType, assertWithinBounds, MAX_BYTES } from '../connectors/upload/detect';
 import { extractPdf, extractDocx, extractText } from '../connectors/upload/extract';
@@ -38,7 +38,7 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
 
   async function viewFor(businessId: string, businessName: string, language: string, founderId: string) {
     const ig = getInstagramConnector();
-    const [flags, sources, email, reflection, savedMirror, savedWeekStory, savedContainer, igState] = await Promise.all([
+    const [flags, sources, email, reflection, savedMirror, savedWeekStory, savedContainer, igState, savedTheses] = await Promise.all([
       readArcFlags(deps.db, businessId, founderId),
       readArcSources(deps.db, businessId, founderId),
       readArcEmail(deps.db, businessId, founderId),
@@ -47,9 +47,14 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
       readArcWeekStory(deps.db, businessId, founderId),
       readArcContainer(deps.db, businessId, founderId),
       ig ? ig.status(founderId).catch(() => 'disconnected' as const) : Promise.resolve('disconnected' as const),
+      readThesisRecord(deps.db, businessId),
     ]);
     const connected = igState === 'connected';
-    let view = await deps.arcService.view(businessId, businessName, language, flags, sources, email, connected, savedMirror, savedWeekStory, savedContainer);
+    let view = await deps.arcService.view(businessId, businessName, language, flags, sources, email, connected, savedMirror, savedWeekStory, savedContainer, savedTheses);
+
+    // Strategic theses (2026-10-16): persist a freshly composed record per snapshot (composed once, stable across
+    // refresh), then strip the internal fields: the founder-facing payload never carries the thesis machinery.
+    if (view.internal?.theses) recordThesisRecord(deps.db, founderId, businessId, view.internal.theses);
 
     // Persist a freshly-built mirror contrast so it is STABLE across refresh and not re-generated on every view.
     if (view.moment === 'mirror' && !savedMirror && view.mirror) recordArcMirror(deps.db, founderId, businessId, view.mirror);
@@ -73,7 +78,11 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
 
     // The Moment 3 reply is durable: if the founder has corrected, re-attach the persisted reflection so a
     // refresh re-shows the reflection + its question (they clear only when the founder confirms → the moment advances).
-    return view.moment === 'understanding' && reflection ? { ...view, correctionReflection: reflection } : view;
+    // Internal state never leaves the api: the thesis record and the thesis movements are persisted, not rendered.
+    const out: typeof view = { ...view };
+    delete (out as { internal?: unknown }).internal;
+    if (out.mirror?.moves) { const mirror = { ...out.mirror }; delete (mirror as { moves?: unknown }).moves; (out as { mirror?: unknown }).mirror = mirror; }
+    return out.moment === 'understanding' && reflection ? { ...out, correctionReflection: reflection } : out;
   }
 
   const mark = (founderId: string, businessId: string, type: FounderEventType, metadata: Record<string, unknown> = {}) =>

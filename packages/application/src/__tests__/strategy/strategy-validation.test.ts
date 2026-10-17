@@ -27,8 +27,8 @@ function validBundle(): StrategyBundle {
       coreBet: {
         priority: 'Convert the existing warm referral network into retainer scoping conversations',
         deprioritized: 'Broad content-led inbound to a cold audience',
-        whyOverAlternative: 'The homepage conversion path is broken and the founder has limited hours, so warm referrals reach retainer buyers faster than rebuilding cold inbound',
-        relationToGoal: 'Retainer clients come fastest from warm healthcare software relationships',
+        whyOverAlternative: 'The homepage conversion path is broken and the founder has limited hours, so warm referrals fit the hours and avoid rebuilding cold inbound first',
+        relationToGoal: 'The goal is retainers, and warm healthcare software relationships are the first route to test',
         relationToBottleneck: 'It routes around the broken homepage next-action problem',
         founderFit: 'Uses referrals, not daily personal video the founder ruled out',
         resourceFit: 'Fits 8 hours a week with a small budget',
@@ -50,7 +50,7 @@ function validBundle(): StrategyBundle {
       messagingDirection: 'Show delivery credibility through concrete healthcare software case studies',
       channelPriorities: [{
         channel: 'Warm referral outreach to past healthcare software contacts',
-        whyGoal: 'Reaches retainer buyers who already trust the delivery track record',
+        whyGoal: 'Reaches past healthcare software contacts directly',
         whyAudience: 'These are the engineering leaders who buy retainers',
         whyResource: 'Fits a few hours a week, no budget needed',
         overAlternative: 'Prioritized over cold content because the homepage path is broken',
@@ -72,6 +72,7 @@ const clone = (b: StrategyBundle): any => JSON.parse(JSON.stringify(b));
 describe('validateStrategy — M1 deterministic gate stack', () => {
   it('passes a real, specific, coherent strategy', () => {
     const v = validateStrategy(validBundle(), CTX);
+    expect(v.failures).toEqual([]);
     expect(v.pass).toBe(true);
   });
 

@@ -44,6 +44,8 @@ export interface MirrorView {
   /** The UPDATED READ (2026-10-16): absent when the founder answered nothing, the model gave nothing usable, or every
    *  field failed governance. The single contrast above stays the fallback. */
   readonly read?: MirrorRead;
+  /** Internal (2026-10-16): how the answers moved each strategic thesis, by id (persisted with the mirror). */
+  readonly moves?: { readonly thesisId: string; readonly status: HypothesisMovement; readonly because: string }[];
   /** Internal only (log / audit, never on a surface): what grounded each field and how each hypothesis moved. */
   readonly readAudit?: { readonly grounding: MirrorReadGrounding[]; readonly hypotheses: MirrorHypothesisUpdate[]; readonly dropped: { readonly field: string; readonly reason: string }[] };
 }
@@ -83,6 +85,10 @@ export interface MirrorReadInput {
   readonly business: string[];
   /** Hypotheses whose deciding question the founder SKIPPED: they stay unresolved, whatever else moved. */
   readonly unresolved?: number[];
+  /** The readings are the founder's top strategic theses (2026-10-16): the read stays anchored to them. */
+  readonly anchored?: boolean;
+  /** Founder-facing headline of each anchored thesis (same order as `hypotheses`), for the open-thesis fallback. */
+  readonly headlines?: string[];
 }
 export interface MirrorReadOutput {
   readonly hypotheses: MirrorHypothesisUpdate[];
