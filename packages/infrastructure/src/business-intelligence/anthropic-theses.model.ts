@@ -1,6 +1,6 @@
 import { createAnthropicClient } from '../llm/anthropic-client';
-import { DECISION_AREAS, VOICE_RULES } from '@bb/application';
-import type { DecisionArea, IThesisModelPort, ThesisInput, ThesisModelOutput } from '@bb/application';
+import { AREA_LABEL, DECISION_AREAS, VOICE_RULES } from '@bb/application';
+import type { DecisionArea, FounderProjectionInput, FounderProjectionOutput, IThesisModelPort, ThesisInput, ThesisModelOutput } from '@bb/application';
 
 /**
  * STRATEGIC THESES adapter (2026-10-16): ONE call over an already governed understanding. It sketches how the business
@@ -113,6 +113,95 @@ export function thesisUserBlock(input: ThesisInput): string {
   ].join('\n');
 }
 
+// ── FOUNDER PROJECTION (2026-10-17): the founder-facing synthesis, written after ranking from the top theses only ──
+
+const PROJECTION_SHAPE = `{
+  "myRead": [{ "text": "one short sentence", "refs": ["F2", "T1"] }],
+  "matters": [{
+    "thesisId": "T1",
+    "headline": "at most 9 words; may frame the open fork as a question",
+    "relationship": "ONE sentence: the structural relationship you see, only what the facts show",
+    "domains": "ONE sentence: which strategic decision areas would change IF the relationship is real",
+    "unknown": "ONE sentence: what founder evidence you do not have yet that decides whether it is real"
+  }],
+  "questions": [{ "thesisId": "T1", "question": "ONE question that asks for the underlying behaviour directly" }]
+}`;
+
+/** Example phrases the model may echo, in the founder's language: never an English fragment inside other-language copy. */
+const PROJECTION_EXAMPLES: Record<string, { possibility: string; behaviour: string; unknown: string; notYou: string; howOften: string; absolute: string; conclusion: string; relation: string; effectFork: string }> = {
+  ro: { possibility: 'A și B pot forma un singur traseu', behaviour: 'clienții trec de la A la B', unknown: 'Nu știu încă dacă…', notYou: 'nu știi', howOften: 'în funcție de cât de des X duce la Y', absolute: 'singurul', conclusion: 'ceea ce înseamnă', relation: 'evaluarea schimbă parcursul de cumpărare', effectFork: 'poartă sau obstacol?' },
+  en: { possibility: 'A and B may form one path', behaviour: 'clients move from A to B', unknown: "I don't know yet whether…", notYou: "you don't know", howOften: 'depending on how often X leads to Y', absolute: 'the only', conclusion: 'which means', relation: 'the evaluation changes the buying path', effectFork: 'gateway or obstacle?' },
+  it: { possibility: 'A e B possono formare un unico percorso', behaviour: 'i clienti passano da A a B', unknown: 'Non so ancora se…', notYou: 'non sai', howOften: 'a seconda di quanto spesso X porta a Y', absolute: "l'unico", conclusion: 'il che significa', relation: "la valutazione cambia il percorso d'acquisto", effectFork: 'porta o ostacolo?' },
+  de: { possibility: 'A und B können einen gemeinsamen Weg bilden', behaviour: 'Kunden wechseln von A zu B', unknown: 'Ich weiß noch nicht, ob…', notYou: 'du weißt nicht', howOften: 'je nachdem, wie oft X zu Y führt', absolute: 'der einzige', conclusion: 'was bedeutet', relation: 'die Erstbewertung verändert den Kaufweg', effectFork: 'Tor oder Hürde?' },
+};
+
+export function projectionRules(l: string, code = 'en'): string {
+  const ex = PROJECTION_EXAMPLES[code.slice(0, 2)] ?? PROJECTION_EXAMPLES['en']!;
+  return [
+    'You are Business Brain, a top strategist. The strategic theses below are already chosen and ranked: write the',
+    'founder-facing synthesis of exactly these theses, as ONE reasoning chain: MY READ → WHAT I THINK MATTERS → QUESTIONS.',
+    `LANGUAGE: write every text in ${l}. Speak to the founder in the second person. Return ONLY valid JSON in exactly this shape:`,
+    PROJECTION_SHAPE,
+    '',
+    'MY READ: a business-level read, not the mechanics step by step: the forms of continuity the business has, a distinct',
+    'paid first step where there is one, and possible continuity as the customer\'s needs change.',
+    'MY READ: at most 3 short sentences, one paragraph. ONE sentence for EACH given thesis that names its own distinctive',
+    'relationship in the business\'s words (e.g. the two offers it connects, or the step it puts before another); a third',
+    'sentence only if it connects them. The experience: how customers may enter, continue and potentially move across the',
+    `business. A relationship nobody has confirmed stays a POSSIBILITY ("${ex.possibility}"), never stated behaviour`,
+    `("${ex.behaviour}").`,
+    'MY READ: HOW the business works, told through the SAME relationships as the given theses',
+    '(how customers enter, continue or move between offers; different buying motions; lifecycle relationships). You may add',
+    'grounded structure needed to connect them; never a different insight, never a catalogue, an inventory of locations or',
+    'an audience list. A reading reads as your reading, not as a fact. Every item cites the F-refs or thesis ids it rests on.',
+    '',
+    `HEADLINES name the relationship ("${ex.relation}"), never a fork of two effects nobody has established`,
+    `("${ex.effectFork}"). A continuity thesis is about keeping and growing the`,
+    'relationship (retention, expansion, customer journey, positioning), not about acquiring customers. A question about',
+    'what happens after a step asks whether people continue, not whether they buy one specific product.',
+    'WHAT I THINK MATTERS: one item per given thesis, in the given order, three sentences:',
+    '1. the relationship: what structure you see, only what the facts show;',
+    '2. the consequence: which strategic DECISION AREAS would change if the relationship is real, named with the',
+    '   decision-area labels given with each thesis (already in the founder\'s language).',
+    '   Conditional: it names areas, never an outcome, and never says the change has happened. No benchmark words',
+    `   ("almost everyone", "most", "a large share"): say "${ex.howOften}";`,
+    `3. the unknown: what YOU (Business Brain) do not know yet, in the first person ("${ex.unknown}"). The founder`,
+    `   knows their own customers: never "${ex.notYou}".`,
+    'Describe STRUCTURE from the business\'s side (what it offers, what comes before what, which offers sit next to each',
+    'other), never as what customers do, feel or intend ("customers continue", "clients enter with intent"). No conclusion',
+    `connectors ("${ex.conclusion}"): state the structure, then the open question.`,
+    'Describe what happens (what comes after a step, what sits next to what), never label a "role" or call',
+    'something "strategic". Name decision areas in the founder\'s language (the labels given), never internal codes.',
+    '"If it is real" is a condition, not a certainty: do not add "really", "completely" or similar intensity. No absolutes',
+    `("${ex.absolute}") and no rankings: the structure is enough.`,
+    '',
+    'NEVER CLAIM WHAT A RELATIONSHIP CAUSES: no economics (acquisition cost, "without a new acquisition", margin, revenue',
+    'effect), no behaviour (customers being serious, put off, loyal, choosing, trusting), no effect of a step (filtering,',
+    'selecting, protecting time, creating a barrier or friction, separating customers), no "because", no "which makes".',
+    'STAY ABOVE THE SOLUTION: a possible cross-use is not yet a package; a paid first step is not yet something to remove,',
+    'discount or promote. No recommendations of any kind.',
+    'QUESTIONS: one per thesis. Ask for the underlying behaviour directly. Never invent a sample size ("out of 10"), a time',
+    'window ("within two weeks"), a percentage or a benchmark the facts do not contain.',
+    'ACTOR OWNERSHIP: what a customer does stays the customer\'s (the customer pays, books, buys); what one location does is',
+    'not business-wide. Never turn a customer\'s action into the founder\'s ("you pay" when the client pays).',
+    'Facts only from the F list; no number that is not in it. Short sentences (at most 25 words). No refs, labels, or the',
+    'words "thesis" or "hypothesis" in the text. Generic: use the business\'s own words, never imported industry jargon.',
+  ].join('\n');
+}
+
+export function projectionUserBlock(input: FounderProjectionInput): string {
+  const labels = AREA_LABEL[input.language.slice(0, 2)] ?? AREA_LABEL['en']!; // the founder never reads an internal code
+  return [
+    `BUSINESS: ${input.businessName}`,
+    '', 'F — GOVERNED FACTS:', ...input.facts.map((f) => `${f.ref}: ${f.text}`),
+    '', 'HOW THE BUSINESS IS ENTERED AND CONTINUED:', ...(input.motions.length ? input.motions.map((m) => `- ${m.name}: entry ${m.entry.join('/') || '?'}, buying ${m.buying.join('/') || '?'}, continuation ${m.continuation.join('/') || '?'}`) : ['(none)']),
+    '', 'THE TOP THESES, IN RANK ORDER (internal reasoning; its claims are NOT facts):',
+    ...input.theses.flatMap((t) => [`${t.id}: ${t.headline}`, `  relationship: ${t.relationship}`, `  why it may matter: ${t.implication}`,
+      `  decision areas: ${t.decisions.map((d) => labels[d] ?? d).join(', ')}`, `  not known yet: ${t.unknown}`, `  its question: ${t.question}`, `  facts: ${t.facts.join(', ')}`]),
+    '', 'Write the founder-facing synthesis.',
+  ].join('\n');
+}
+
 function extractJson(text: string): unknown {
   const s = text.indexOf('{');
   const e = text.lastIndexOf('}');
@@ -163,6 +252,32 @@ export class AnthropicThesisModel implements IThesisModelPort {
           founder: { headline: str(t?.founder?.headline), body: str(t?.founder?.body), refs: strs(t?.founder?.refs) },
         })),
         ...(str(p?.driverQuestion?.text) ? { driverQuestion: { text: str(p.driverQuestion.text), why: str(p?.driverQuestion?.why) } } : {}),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async project(input: FounderProjectionInput): Promise<FounderProjectionOutput | null> {
+    if (!this.apiKey) return null;
+    try {
+      const client = createAnthropicClient(this.apiKey);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const resp: any = await client.messages.create({
+        model: this.modelId, max_tokens: 3000, temperature: 0,
+        system: `${projectionRules(LANG[input.language] ?? 'English', input.language)}\n\n${VOICE_RULES}`,
+        messages: [{ role: 'user', content: projectionUserBlock(input) }],
+      });
+      const block = Array.isArray(resp?.content) ? resp.content.find((c: { type?: string }) => c?.type === 'text') : null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const p = extractJson((block as { text?: string } | null)?.text ?? '') as any;
+      return {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        myRead: (Array.isArray(p?.myRead) ? p.myRead : []).map((x: any) => ({ text: str(x?.text), refs: strs(x?.refs) })).filter((x: { text: string }) => x.text),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        matters: (Array.isArray(p?.matters) ? p.matters : []).map((m: any) => ({ thesisId: str(m?.thesisId), headline: str(m?.headline), relationship: str(m?.relationship), domains: str(m?.domains), unknown: str(m?.unknown) })),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        questions: (Array.isArray(p?.questions) ? p.questions : []).map((q: any) => ({ thesisId: str(q?.thesisId), question: str(q?.question) })),
       };
     } catch {
       return null;
