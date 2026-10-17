@@ -70,7 +70,8 @@ function rulesBase(l: string): string {
     '     "referral medical" → "medici care trimit pacienți"; "segmente" → "clienți diferiți"; "brand unificat" →',
     '     "același mesaj pentru toți"; "canal" → "de unde vin oamenii"; "poziționare" → "cum te văd oamenii";',
     '     "flux B2B" / "B2B" / "parteneriat formal" → "un sistem prin care medicii îți trimit pacienți constant".',
-    '  4. SPEAK TO THE FOUNDER — second person, active voice, no passive ("va fi aplicat").',
+    '  4. SPEAK TO THE FOUNDER — second person, active voice, no passive ("va fi aplicat"). Never "the founder" /',
+    '     "fondatorul" / "fondatoarea" in founder-facing text: the founder is the one reading it ("you named…", "ai numit…").',
     '  5. CONCRETE IMAGES over categories. BAD: "două segmente distincte." GOOD: "femeia cu durere de spate și mama',
     '     care vrea să slăbească." If you cannot picture it, it is too abstract — name the real person/service.',
     '  6. SHORT: the bet ≤ 15 words; every other field 1–2 short sentences a person would actually speak.',
@@ -251,7 +252,7 @@ export class AnthropicStrategyModel implements IStrategyModelPort {
       'Be conservative: pass only what is genuinely satisfied. Name the component to repair when you fail one.',
     ].join('\n');
     const user = [userBlock(input), '', 'STRATEGY (JSON):', JSON.stringify(input.strategy)].join('\n');
-    const p = (await this.call(system, user, 1500)) as { verdicts?: unknown };
+    const p = (await this.call(system, user, 4000)) as { verdicts?: unknown }; // 1500 can cut ten verdicts with reasons into malformed JSON (2026-10-17)
     const verdicts = Array.isArray(p.verdicts) ? p.verdicts : [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return { verdicts: verdicts.map((v: any) => ({ dimension: String(v?.dimension ?? ''), pass: Boolean(v?.pass), component: String(v?.component ?? 'coreBet'), reason: String(v?.reason ?? '') })) };

@@ -86,6 +86,27 @@ const scrubJargon = (s: string): string => STRATEGY_JARGON.reduce((acc, [re, rep
 export class ArcService {
   constructor(private readonly deps: ArcDeps) {}
 
+  /**
+   * LONG OPERATIONS, ONE AT A TIME (2026-10-17). The business read, the theses, the mirror and the strategy can each
+   * outlive the browser's wait (~5 min); the server keeps going and saves the durable result. While one runs for a
+   * business, a concurrent request for the same operation joins it (never a second model run), and the arc GET answers
+   * "pending" instead of starting it again, so the web can poll until the durable result is there.
+   */
+  private readonly inFlight = new Map<string, Promise<unknown>>();
+  track<T>(businessId: string, op: string, run: () => Promise<T>): Promise<T> {
+    const key = `${businessId}:${op}`;
+    const existing = this.inFlight.get(key);
+    if (existing) return existing as Promise<T>;
+    const p = run().finally(() => { this.inFlight.delete(key); });
+    this.inFlight.set(key, p);
+    return p;
+  }
+  /** The long operation running for this business right now, or null. */
+  running(businessId: string): string | null {
+    for (const key of this.inFlight.keys()) if (key.startsWith(`${businessId}:`)) return key.slice(businessId.length + 1);
+    return null;
+  }
+
   /** Compose the whole-arc view for the current moment — durable flags + typed sources + igConnected + savedEmail from the route. */
   async view(businessId: string, businessName: string, language: string, flags: ArcFlags, sources: ArcSource[], savedEmail: ArcEmail | null, igConnected = false, savedMirror: ArcMirror | null = null, savedWeekStory: ArcWeekStory | null = null, savedContainer: { answered: { index: number; answer: string }[]; answeredKey: string } | null = null, savedTheses: ThesisRecord | null = null): Promise<ArcView> {
     // ONE voice on every BB-written field (operator, 2026-10-12); founder words are never rewritten.
@@ -122,7 +143,7 @@ export class ArcService {
         // The theses for THIS snapshot: reused when cached, else composed once (the route persists the new record).
         const snapId = snap?.id ?? null;
         const cached = snapId && savedTheses?.snapshotId === snapId ? savedTheses : null;
-        const record = cached ?? (snapId && u ? await this.composeTheses(businessId, businessName, language, u, snapId) : null);
+        const record = cached ?? (snapId && u ? await this.track(businessId, 'understanding', () => this.composeTheses(businessId, businessName, language, u, snapId)) : null);
         if (!record) return { ...base, understanding: card };
         return {
           ...base,
@@ -155,7 +176,7 @@ export class ArcService {
           // The founder's answers, paired to what BB asked: the updated read holds them against the prior read.
           const exchanges = pairExchanges(await this.deps.conversation.turns(businessId).catch(() => [] as ArcTurn[]));
           const theses = snap && savedTheses?.snapshotId === snap.id ? savedTheses : null;
-          const m = await this.deps.mirror.build(businessId, businessName, language, { exchanges, ...(theses ? { theses } : {}) });
+          const m = await this.track(businessId, 'mirror', () => this.deps.mirror.build(businessId, businessName, language, { exchanges, ...(theses ? { theses } : {}) }));
           const c = m.contrasts[0] ?? null;
           const read = { ...(m.read ? { read: m.read } : {}), ...(m.moves?.length ? { moves: m.moves } : {}) };
           return { ...base, mirror: c ? { founderWords: c.founderWords, against: c.against, tension: c.tension, ...read } : m.read ? { founderWords: '', against: '', tension: '', ...read } : null };
@@ -177,7 +198,7 @@ export class ArcService {
         // Strategy continuity: the structural read, the answers and the updated read the founder just saw.
         const theses = snap && savedTheses?.snapshotId === snap.id ? savedTheses : null;
         const read = strategyRead(u, pairExchanges(await this.deps.conversation.turns(businessId).catch(() => [] as ArcTurn[])), savedMirror?.read ?? null, theses, savedMirror?.moves ?? []);
-        try { rec = await this.deps.strategy.proposalOrGenerate(businessId, businessName, language, assumedGoal, read); }
+        try { rec = await this.track(businessId, 'strategy', () => this.deps.strategy.proposalOrGenerate(businessId, businessName, language, assumedGoal, read)); }
         catch (e) {
           this.deps.log?.({ type: 'arc_moment_threw', detail: JSON.stringify({ businessId, moment: 'strategy', err: errText(e) }) });
           return { ...base, error: { kind: 'generation' } }; // a real throw is genuinely transient — retry is right
@@ -216,6 +237,7 @@ export class ArcService {
             proposalId: rec.status === 'proposal' ? rec.id : null,
             assumedGoal: core.assumedGoal ?? null,
             adoptable: rec.status === 'proposal',
+            ...(core.prerequisites?.length ? { before: core.prerequisites.map(scrubJargon) } : {}),
           },
         };
       }

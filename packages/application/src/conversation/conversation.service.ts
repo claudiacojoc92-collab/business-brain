@@ -32,6 +32,18 @@ function openerTurnContent(out: ConversationStepOutput, firstAgenda?: string | n
   return joinReply(out.interpretation, out.nextQuestion) || (out.nextQuestion ?? '') || (out.interpretation ?? '');
 }
 
+/** The opener's one line, in the business's content language: a first read exists, a few answers are needed. */
+const OPENER_LEAD: Record<string, string> = {
+  ro: 'Am o primă citire a afacerii tale. Ca să merg mai departe, am nevoie de câteva răspunsuri de la tine.',
+  en: 'I have a first read of your business. To go further, I need a few answers from you.',
+  it: 'Ho una prima lettura della tua attività. Per andare avanti, mi servono alcune risposte da te.',
+  de: 'Ich habe einen ersten Eindruck von deinem Unternehmen. Um weiterzugehen, brauche ich ein paar Antworten von dir.',
+};
+export function neutralOpenerStep(language: string, firstQuestion: string): ConversationStepOutput {
+  const lead = OPENER_LEAD[language.slice(0, 2)] ?? OPENER_LEAD['en']!;
+  return { interpretation: '', nextQuestion: firstQuestion, readyForAha2: false, declarations: [], businessCorrections: [], observationCandidates: [], answeredNeedKeys: [], newNeeds: [], opener: { lead, bullets: [], notSure: null, invitation: firstQuestion }, nextNeedKey: 'site_1' };
+}
+
 /**
  * Faithful digest of the governed understanding for the conversation model. It carries not just the flat
  * summaries but the SPECIFICS the strategist must not re-ask: the explicit offer items, what positioning is
@@ -244,8 +256,10 @@ export class ConversationService {
     // empty first result strands the founder on a permanent "preparing…" that even a refresh can't clear.
     let turns = await this.deps.conversations.listTurns(session.id);
     if (turns.length === 0) {
-      const out = await this.deps.model.step(await this.buildStepInput(businessId, founderId, businessName, language, session.id, null));
       const first = (await this.agenda(businessId))[0] ?? null;
+      // The opener is not a strategy moment (2026-10-17): with the exact question agenda known, it is fixed copy that
+      // says BB has a first read, needs a few answers, and asks question 1. No model call, so no diagnosis or ranking.
+      const out = first ? neutralOpenerStep(language, first) : await this.deps.model.step(await this.buildStepInput(businessId, founderId, businessName, language, session.id, null));
       const opener = openerTurnContent(out, first);
       if (opener) {
         await this.deps.conversations.appendTurn({ id: generateId(), sessionId: session.id, businessId, role: 'bb', content: opener, language, infoNeedKey: first ? 'site_1' : null, surface });

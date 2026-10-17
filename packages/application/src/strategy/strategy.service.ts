@@ -12,6 +12,7 @@ import type {
   StrategyVersionRecord,
   StrategyModelInput,
   StrategyGateResult,
+  StrategyJudgeOutput,
   StrategyUnderstandingRead,
 } from './contracts';
 import { validateStrategy, omitUnsupportedSecondary, type StrategyContextForGate, type StrategyValidation } from './validation';
@@ -43,6 +44,8 @@ export type StrategyEvent =
   | { type: 'judge_repair_result'; attempt: number; gatesPass: boolean }
   | { type: 'capacity_prerequisite'; added: string }
   | { type: 'judge_fallback'; resolved: { dimension: string; how: string }[] }
+  | { type: 'judge_failed'; round: number; attempt: number; error: string }
+  | { type: 'judge_unavailable'; error: string }
   | { type: 'secondary_omitted'; omitted: string[] }
   | { type: 'failed_closed'; gate: string };
 
@@ -63,6 +66,8 @@ const MAX_STRUCT_REPAIRS = 4;
 const CENTRAL = ['diagnosis', 'coreBet', 'offerDirection', 'positioningDirection'];
 const centralRank = (c: string): number => (CENTRAL.includes(c) ? CENTRAL.indexOf(c) : CENTRAL.length);
 const MAX_JUDGE_REPAIRS = 2;
+/** Attempts per judge round before the strategy is persisted as explicitly unjudged. */
+const JUDGE_TRIES = 2;
 
 export class StrategyService {
   constructor(private readonly deps: StrategyDeps) {}
@@ -166,45 +171,70 @@ export class StrategyService {
     // ── judged layer: grounding / genericity nuance / coherence / fit; repair failed dimensions ──
     let gateResults: StrategyGateResult[] = v.gateResults;
     let judgeAttempts = 0;
-    try {
-      let judged = await this.deps.model.judge({ ...input, strategy: bundle });
-      this.deps.log?.({ type: 'judge_round', round: 1, verdicts: judged.verdicts.map((jv) => ({ ...jv })) });
-      while (judged.verdicts.some((jv) => !jv.pass) && judgeAttempts < MAX_JUDGE_REPAIRS) {
-        judgeAttempts += 1;
-        const bad = judged.verdicts.find((jv) => !jv.pass)!;
-        this.deps.log?.({ type: 'judge_repair', dimension: bad.dimension, component: bad.component, attempt: judgeAttempts });
-        try {
-          const r = await this.deps.model.repair({ ...input, current: bundle, failedComponent: bad.component, failureReason: `${bad.dimension}: ${bad.reason}` });
-          bundle = r.strategy;
-        } catch { break; }
-        let rv = validateStrategy(bundle, ctx); // repair must not break deterministic gates
-        if (!rv.pass) ({ bundle, v: rv } = this.secondaryFallback(bundle, rv, ctx, language));
-        this.deps.log?.({ type: 'judge_repair_result', attempt: judgeAttempts, gatesPass: rv.pass });
-        if (!rv.pass) { this.deps.log?.({ type: 'failed_closed', gate: rv.failures[0]?.gate ?? 'judge_repair_broke_structure' }); return this.persist(businessId, bundle, 'insufficient', rv.gateResults, input, language); }
-        ({ bundle, v: rv } = this.capacityFirst(bundle, rv, ctx, language));
-        gateResults = rv.gateResults;
-        judged = await this.deps.model.judge({ ...input, strategy: bundle });
-        this.deps.log?.({ type: 'judge_round', round: judgeAttempts + 1, verdicts: judged.verdicts.map((jv) => ({ ...jv })) });
-      }
-      // Failures left after the allowed repairs: settled deterministically when they point only at secondary parts.
-      const failedVerdicts = judged.verdicts.filter((jv) => !jv.pass);
-      const settled = failedVerdicts.length ? resolveJudgeFailures(bundle, failedVerdicts, ctx) : null;
-      if (settled && !settled.unresolved.length) {
-        bundle = settled.bundle;
-        this.deps.log?.({ type: 'judge_fallback', resolved: settled.resolved });
-      }
-      const how = new Map((settled && !settled.unresolved.length ? settled.resolved : []).map((r) => [r.dimension, r.how]));
-      gateResults = [...gateResults, ...judged.verdicts.map((jv) => ({ gate: `judge:${jv.dimension}`, pass: jv.pass || how.has(jv.dimension), detail: jv.pass ? 'ok' : how.has(jv.dimension) ? `settled: ${how.get(jv.dimension)} (judge: ${jv.reason})` : jv.reason }))];
-      if (gateResults.some((g) => g.gate.startsWith('judge:') && !g.pass)) {
-        this.deps.log?.({ type: 'failed_closed', gate: `judge:${judged.verdicts.find((jv) => !jv.pass && !how.has(jv.dimension))!.dimension}` });
-        return this.persist(businessId, bundle, 'insufficient', gateResults, input, language);
-      }
-    } catch {
-      // judge unavailable → deterministic pass stands (do not fail an otherwise-valid proposal).
+    // The judge never fails silently (2026-10-17): its error is logged, it gets one more try, and a strategy it could
+    // not judge is persisted as explicitly UNJUDGED (core.judge = 'unavailable', a failing `judge` gate) — never as
+    // judge-approved. It still passed every deterministic gate, so the founder is not blocked by an outage.
+    const unjudged = (b: StrategyBundle, results: StrategyGateResult[], error: string): Promise<StrategyVersionRecord> => {
+      this.deps.log?.({ type: 'judge_unavailable', error });
+      return this.persist(businessId, { ...b, core: { ...b.core, judge: 'unavailable' } }, 'proposal',
+        [...results, { gate: 'judge', pass: false, detail: `The judge could not run after ${JUDGE_TRIES} attempts (${error}). Every deterministic gate passed; this strategy was not judged.` }], input, language);
+    };
+    let j = await this.judgeOnce(input, bundle, 1);
+    if (!j.out) return unjudged(bundle, gateResults, j.error);
+    let judged = j.out;
+    while (judged.verdicts.some((jv) => !jv.pass) && judgeAttempts < MAX_JUDGE_REPAIRS) {
+      judgeAttempts += 1;
+      const bad = judged.verdicts.find((jv) => !jv.pass)!;
+      this.deps.log?.({ type: 'judge_repair', dimension: bad.dimension, component: bad.component, attempt: judgeAttempts });
+      try {
+        const r = await this.deps.model.repair({ ...input, current: bundle, failedComponent: bad.component, failureReason: `${bad.dimension}: ${bad.reason}` });
+        bundle = r.strategy;
+      } catch { break; }
+      let rv = validateStrategy(bundle, ctx); // repair must not break deterministic gates
+      if (!rv.pass) ({ bundle, v: rv } = this.secondaryFallback(bundle, rv, ctx, language));
+      this.deps.log?.({ type: 'judge_repair_result', attempt: judgeAttempts, gatesPass: rv.pass });
+      if (!rv.pass) { this.deps.log?.({ type: 'failed_closed', gate: rv.failures[0]?.gate ?? 'judge_repair_broke_structure' }); return this.persist(businessId, bundle, 'insufficient', rv.gateResults, input, language); }
+      ({ bundle, v: rv } = this.capacityFirst(bundle, rv, ctx, language));
+      gateResults = rv.gateResults;
+      j = await this.judgeOnce(input, bundle, judgeAttempts + 1);
+      if (!j.out) return unjudged(bundle, gateResults, j.error);
+      judged = j.out;
+    }
+    // Failures left after the allowed repairs: settled deterministically when they point only at secondary parts.
+    const failedVerdicts = judged.verdicts.filter((jv) => !jv.pass);
+    const settled = failedVerdicts.length ? resolveJudgeFailures(bundle, failedVerdicts, ctx) : null;
+    if (settled && !settled.unresolved.length) {
+      bundle = settled.bundle;
+      this.deps.log?.({ type: 'judge_fallback', resolved: settled.resolved });
+    }
+    const how = new Map((settled && !settled.unresolved.length ? settled.resolved : []).map((r) => [r.dimension, r.how]));
+    gateResults = [...gateResults, ...judged.verdicts.map((jv) => ({ gate: `judge:${jv.dimension}`, pass: jv.pass || how.has(jv.dimension), detail: jv.pass ? 'ok' : how.has(jv.dimension) ? `settled: ${how.get(jv.dimension)} (judge: ${jv.reason})` : jv.reason }))];
+    if (gateResults.some((g) => g.gate.startsWith('judge:') && !g.pass)) {
+      this.deps.log?.({ type: 'failed_closed', gate: `judge:${judged.verdicts.find((jv) => !jv.pass && !how.has(jv.dimension))!.dimension}` });
+      return this.persist(businessId, bundle, 'insufficient', gateResults, input, language);
     }
 
     this.deps.log?.(attempts > 0 ? { type: 'repaired_ok', attempts } : { type: 'first_pass_ok' });
     return this.persist(businessId, bundle, 'proposal', gateResults, input, language);
+  }
+
+  /** One judge round with a bounded retry: an error or an empty verdict list is logged and retried once, then reported. */
+  private async judgeOnce(input: StrategyModelInput, strategy: StrategyBundle, round: number): Promise<{ out: StrategyJudgeOutput; error: '' } | { out: null; error: string }> {
+    let error = '';
+    for (let attempt = 1; attempt <= JUDGE_TRIES; attempt++) {
+      try {
+        const out = await this.deps.model.judge({ ...input, strategy });
+        if (out.verdicts.length) {
+          this.deps.log?.({ type: 'judge_round', round, verdicts: out.verdicts.map((jv) => ({ ...jv })) });
+          return { out, error: '' };
+        }
+        error = 'the judge returned no verdicts';
+      } catch (e) {
+        error = e instanceof Error ? e.message : String(e);
+      }
+      this.deps.log?.({ type: 'judge_failed', round, attempt, error });
+    }
+    return { out: null, error };
   }
 
   /** Capacity checked before the bet (see addCapacityPrerequisite); kept only if every deterministic gate still passes. */

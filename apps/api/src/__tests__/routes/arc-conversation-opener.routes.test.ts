@@ -23,7 +23,7 @@ function buildServer(startWithTurns: boolean) {
     db: fakeDb,
     businessService: { getBusiness: async (id: string) => ({ id, name: 'Body Move' }) },
     founderAccountService: { getById: async () => ({ interfaceLocale: 'en' }) },
-    arcService: { view },
+    arcService: { running: () => null, track: (_b: string, _op: string, run: () => Promise<unknown>) => run(), view },
     conversationService: { startOrResume },
   } as any;
   const server = Fastify();

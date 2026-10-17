@@ -91,6 +91,10 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
   // ── the view ──
   server.get('/v1/businesses/:id/arc', async (request: FastifyRequest, reply: FastifyReply) => {
     const { founderId, business, language } = await requireBusiness(request);
+    // A long operation is still running for this business (2026-10-17): answer at once instead of starting it again;
+    // the web polls this until the durable result is there (no reload needed when the browser stopped waiting).
+    const running = deps.arcService.running(business.id);
+    if (running) { await reply.status(200).send({ moment: 'pour_in', pending: running, businessName: business.name, contentLanguage: language }); return; }
     await reply.status(200).send(await viewFor(business.id, business.name, language, founderId));
   });
 
@@ -234,6 +238,12 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
   // the union of every poured-in source, THEN the durable phase flag advances the arc.
   server.post('/v1/businesses/:id/arc/pour-in/done', async (request: FastifyRequest, reply: FastifyReply) => {
     const { founderId, business, language } = await requireBusiness(request);
+    // The read runs as one tracked operation (2026-10-17): it can take longer than the browser waits, so a second
+    // "start" joins it and the arc GET answers "pending" until the understanding is saved.
+    const out = await deps.arcService.track(business.id, 'pour_in', () => pourInDone(request, founderId, business, language));
+    await reply.status(200).send(out);
+  });
+  async function pourInDone(request: FastifyRequest, founderId: string, business: { id: string; name: string }, language: string): Promise<unknown> {
     // The bridge can THROW (synthesis malformed / model error) or return EMPTY (no readable text anywhere). In
     // BOTH cases the arc must NOT advance into a hollow understanding — stay at pour-in and tell the founder to
     // fix/retry their sources. The flag is marked ONLY on a real snapshot.
@@ -250,13 +260,11 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
       result = await deps.learnBusinessService.bridgePourIn({ businessId: business.id, founderId, businessName: business.name, interfaceLanguage: language });
     } catch {
       const view = await viewFor(business.id, business.name, language, founderId); // still pour_in (flag unmarked)
-      await reply.status(200).send({ ...view, error: { kind: 'pourin_failed' } });
-      return;
+      return { ...view, error: { kind: 'pourin_failed' } };
     }
     if (result.state === 'empty' || !result.understandingId) {
       const view = await viewFor(business.id, business.name, language, founderId);
-      await reply.status(200).send({ ...view, error: { kind: 'pourin_empty' } });
-      return;
+      return { ...view, error: { kind: 'pourin_empty' } };
     }
     // The FIRST understanding decides and stores the content language, so resolve it again: the one resolved before
     // the bridge ran was only the account-locale fallback.
@@ -272,8 +280,8 @@ export function registerArcRoutes(server: FastifyInstance, deps: ServerDeps): vo
     }
     const view = await viewFor(business.id, business.name, storedLanguage, founderId);
     if (before.pourInDone) void checkStrategyAgainstNewSources(founderId, business.id, business.name, storedLanguage, view);
-    await reply.status(200).send(view);
-  });
+    return view;
+  }
 
   // An adopted strategy meets the re-read business: run the living-state impact check in the background (it is a
   // model call; the founder is already reviewing the new understanding). The verdict lands as an impact_evaluated

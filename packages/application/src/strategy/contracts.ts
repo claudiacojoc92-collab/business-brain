@@ -38,6 +38,12 @@ export interface StrategyCore {
   /** Set when the founder gave NO goal before the conversation cap: the strategy was built on an ASSUMED goal (remove
    * the named constraint). Holds that constraint, so the card can say exactly what was assumed. */
   readonly assumedGoal?: string;
+  /** Checks that come before the bet (2026-10-17): set deterministically (e.g. free delivery capacity), shown as
+   *  "Before you start". Never written by the model. */
+  readonly prerequisites?: string[];
+  /** 'unavailable' when the model judge could not run after its bounded retry (2026-10-17): the strategy passed
+   *  every deterministic gate but was NOT judged. Absent = judged. */
+  readonly judge?: 'unavailable';
   readonly horizon: string;
   readonly diagnosis: string; // the central marketing problem/opportunity THIS strategy solves for the goal
   readonly coreBet: StrategyCoreBet;

@@ -151,7 +151,9 @@ export interface ArcMirror { readonly founderWords: string; readonly against: st
   readonly moves?: { readonly thesisId: string; readonly status: 'open' | 'strengthened' | 'weakened' | 'reversed' | 'sharpened' | 'unresolved'; readonly because: string }[] }
 export interface ArcStrategy { readonly bet: string; readonly over: string; readonly horizon: string; readonly tradeOffs: string[]; readonly notNow: string[]; readonly reconsider: string[]; readonly proposalId: string | null; readonly adoptable: boolean;
   /** The constraint the strategy ASSUMED as the goal (the founder gave none before the cap); null when the goal is the founder's. */
-  readonly assumedGoal?: string | null }
+  readonly assumedGoal?: string | null;
+  /** What has to be checked before the bet starts (2026-10-17), e.g. free delivery capacity. Grounded, never a model call. */
+  readonly before?: string[] }
 export interface ArcWeekDay { readonly week: string[]; readonly today: string | null; readonly canCreate: boolean;
   /** Which canonical Today this is (BUS-82): a due follow-up, the selected plan move, or the move to unblock. */
   readonly todayKind?: 'follow_up' | 'plan' | 'blocked' | null;
@@ -223,6 +225,9 @@ export interface ArcView {
   readonly internal?: { readonly theses?: import('./theses').ThesisRecord };
   readonly moment: ArcMoment;
   readonly businessName: string;
+  /** A long operation (the business read, the theses, the mirror, the strategy) is still running for this business
+   *  (2026-10-17): the view is a placeholder, poll again. Set only by the route, never rendered as a moment. */
+  readonly pending?: string | null;
   // per-moment status — never fails the whole surface. `need_goal` is a POSITIVE step (confirm your goal), not an
   // error; `goalCandidate` carries the founder's own words to reflect back (or null to ask cold); `detail` explains
   // a strategy_insufficient. The UI localizes chrome by kind but renders `goalCandidate.statement` verbatim.
