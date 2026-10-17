@@ -73,3 +73,6 @@ tools/bb-review-server.ts
 apps/web/bb-review.html
 apps/web/src/businessbrain/review-entry.tsx
 apps/api/src/routes/meta-dev.routes.ts
+
+# Understanding eval fixtures (2026-10-17): real client material, never tracked. The manifest in tools/understanding-eval/ is.
+.eval/

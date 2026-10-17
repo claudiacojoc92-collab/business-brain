@@ -1,0 +1,72 @@
+[
+  {
+    "slug": "bodymove",
+    "businessId": "01M549W56STYH2FD536GNP2KD4",
+    "recordName": "Another Body Move Test",
+    "contentLanguage": "ro",
+    "exportedAt": "2026-10-17T12:27:02.138Z",
+    "fragments": 510,
+    "fragmentIdsSha256": "254a8d86f570a0870e77a8d6ce946005821cc0432d2ccbdae5dc725546d51a5d",
+    "contentSha256": "6af900e8b0bd34a92a86990c1fe3ea60a2075e2c0a7fa88df06695c2a30ef9c8"
+  },
+  {
+    "slug": "qufi",
+    "businessId": "01M4SCDKSZBM2AVC65HNWBY489",
+    "recordName": "QuFi Network",
+    "contentLanguage": "en",
+    "exportedAt": "2026-10-17T12:27:06.415Z",
+    "fragments": 542,
+    "fragmentIdsSha256": "9fcdbc949e91207a8afb538a2939659a0f65f0efa55a9108a0a7b5aedc6994ac",
+    "contentSha256": "fa3fcb9b49250c04b7a48bc64dde7eaf5d6060e5a51518e65f4b878b12fae2c0"
+  },
+  {
+    "slug": "businessbrain",
+    "businessId": "01M2C94RMTGJBZGYHBBEXRGXEH",
+    "recordName": "Business Brain",
+    "contentLanguage": "en",
+    "exportedAt": "2026-10-17T12:27:10.713Z",
+    "fragments": 191,
+    "fragmentIdsSha256": "bad4829fb0f633789f4b3dde24aa10da9c12b87d079fb01f0c774ee90e3d8a45",
+    "contentSha256": "c89301416e1042ae7034ad40d628023febed79f9089af0f9cf8994576e2c706a"
+  },
+  {
+    "slug": "lfg",
+    "businessId": "01M4VYF9TXVPYXBX5PR1JMGYM8",
+    "recordName": "Lfg Final",
+    "contentLanguage": null,
+    "exportedAt": "2026-10-17T12:27:14.813Z",
+    "fragments": 758,
+    "fragmentIdsSha256": "f68a2b94a4dabfcfba939bb0341bc5a6b566cdb64c9032e46bafafd14da531b9",
+    "contentSha256": "e6c95c142daeeea62dc49afd191af40e9ad20da27c49b41f451f9292cb2ff4d9"
+  },
+  {
+    "slug": "immexpert",
+    "businessId": "01M4094ZWGE0YJNTKJGQ7EMVMQ",
+    "recordName": "Imm Expert",
+    "contentLanguage": null,
+    "exportedAt": "2026-10-17T12:27:19.142Z",
+    "fragments": 363,
+    "fragmentIdsSha256": "108b5a536ae4488a3e79a1e9c0c27a5f572ba2e815f95336c38bd4f85f134491",
+    "contentSha256": "44e94b076d5d72fe89e3a524f210c30c46879ff46aa015e1902cb132a870a9f5"
+  },
+  {
+    "slug": "eastfork",
+    "businessId": "01M27XGMW7X2GJF5D0WR0T96AD",
+    "recordName": "East Fork Pottery",
+    "contentLanguage": null,
+    "exportedAt": "2026-10-17T12:27:23.166Z",
+    "fragments": 373,
+    "fragmentIdsSha256": "d2e4bcf2df8fd33e648c644a6ca8aa2d7e82470778bff063974979e93b2fbef2",
+    "contentSha256": "38fc6a584010b5e91d71544cb2a4963a58599d21e2f3e858738bdb0c9925111e"
+  },
+  {
+    "slug": "basecamp",
+    "businessId": "01M27XANWJJN2H5JGQKD2G9YA2",
+    "recordName": "Basecamp",
+    "contentLanguage": null,
+    "exportedAt": "2026-10-17T12:27:27.206Z",
+    "fragments": 1180,
+    "fragmentIdsSha256": "44f8df820686af8be2ce368119a16fab62f34ef3dce0090704ea3c543a41ca3a",
+    "contentSha256": "858c15c538f94b7dfbe4e1c166d618b5914b6a043ee8578051b41cfa589569e7"
+  }
+]
