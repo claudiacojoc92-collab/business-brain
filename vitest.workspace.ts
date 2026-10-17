@@ -17,6 +17,8 @@ export default defineWorkspace([
         'packages/*/src/**/*.test.ts',
         'apps/api/src/**/*.test.ts',
         'apps/workers/src/**/*.test.ts',
+        // The understanding eval (2026-10-17): the scorer's unit tests always run; the paid stage A run is env-gated.
+        'tools/understanding-eval/**/*.test.ts',
       ],
     },
   },
